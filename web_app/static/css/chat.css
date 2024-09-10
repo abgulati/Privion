@@ -9,7 +9,7 @@ body {
     backdrop-filter: blur(8px);
     border-radius: 10px;
     border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.7);
 }
 
 .welcome-screen {
@@ -20,13 +20,7 @@ body {
     height: 100%;
     text-align: center;
     color: #D1CDC7;
-    opacity: 1;
     transition: opacity 0.5s ease-out;
-}
-
-.welcome-screen.hidden {
-    opacity: 0;
-    pointer-events: none;
 }
 
 .welcome-buttons {
