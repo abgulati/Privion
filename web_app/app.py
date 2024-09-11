@@ -2810,7 +2810,7 @@ def load_chat_history():
             regex_to_swap_multiple_spaces_with_newline = r' {2,}'
             user_message = re.sub(regex_to_swap_multiple_spaces_with_newline, '<br>', user_message)
 
-            user_message = '<div class="user-message">' + user_message + '</div>'
+            user_message = '<div class="user-message glassmorphism">' + user_message + '</div>'
 
             chat_history.append(user_message)
 

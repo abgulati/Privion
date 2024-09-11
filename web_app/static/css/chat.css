@@ -51,6 +51,15 @@ body {
     background-color: aliceblue;
 }
 
+.lars-logo {
+    width: 96px;
+    height: auto;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    box-shadow: 0 0 20px rgba(0, 0, 20, 0.7) !important;
+    transition: box-shadow 0.3s ease;
+}
+
 /* .welcome-button::before {
     content: '';
     position: absolute;
@@ -211,11 +220,11 @@ body {
 .user-message {
     font-weight: 500; /* Medium thickness */
     margin-bottom: 0.5rem; /* Spacing between messages */
-    background-color: darkslategray;
+    background-color: #2F2F2F;
     padding: 0.5rem;
     border-radius: 1rem;
     color: white;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    /* box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); */
 }
 
 .llm-response {

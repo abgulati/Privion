@@ -24,6 +24,7 @@
             
             <div class="nav-toggle" onclick="openNav()">
                 <span style="font-size:30px; cursor:pointer; color: #D1CDC7;">&#9776;</span>
+                <!-- <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo" style="width: 64px; height: auto; margin-bottom: 0px; margin-left: 10px;"> -->
                 <div class="app-title">
                     <span>L</span><span>A</span><span>R</span><span>S</span>
                 </div>
@@ -68,6 +69,7 @@
             <div class="chat-area" id="chat-area">
 
                 <div id="welcome-screen" class="welcome-screen">
+                    <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo">
                     <h2 style="font-style: italic;">Hello & welcome to LARS! How would you like to begin?</h2>
                     <div class="welcome-buttons">
                         <button class="welcome-button glassmorphism" onclick="document.getElementById('fileInputButton').click();">
@@ -104,14 +106,16 @@
             
         </div>
 
-        <div class="loader2" id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,0.9); z-index: 1000;">
-            <div style="position: absolute; top: 21%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
+        <div class="loader2" id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,1); z-index: 1000;">
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
+                <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo">
                 Processing New Document...
             </div>
         </div>
 
-        <div id="UploadingLlmOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,0.9); z-index: 1000;">
-            <div style="position: absolute; top: 21%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
+        <div id="UploadingLlmOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,1); z-index: 1000;">
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
+                <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo">
                 Uploading LLM to 'models' directory...
                 <div id="uploadProgress" style="display: none;">
                     <p>Upload Progress: <span id="progressPercentage">0%</span></p>
@@ -119,20 +123,23 @@
             </div>
         </div>
 
-        <div id="ModelAndDBLoading" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,0.9); z-index: 1000;">
-            <div style="position: absolute; top: 21%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
+        <div id="ModelAndDBLoading" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,1); z-index: 1000;">
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
+                <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo">
                 Loading Core Backend...
             </div>
         </div>
 
-        <div id="ReadyToChat" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,0.9); z-index: 1000;">
-            <div style="position: absolute; top: 21%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
+        <div id="ReadyToChat" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,1); z-index: 1000;">
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
+                <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo">
                 All loaded up & ready to chat!
             </div>
         </div>
 
-        <div id="SavingHfWaitressSettings" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,0.9); z-index: 1000;">
-            <div style="position: absolute; top: 21%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
+        <div id="SavingHfWaitressSettings" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,1); z-index: 1000;">
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
+                <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo">
                 Saving HF-Waitress Server Settings...
             </div>
         </div>
@@ -2997,7 +3004,7 @@
                 document.getElementById('user-input').value = '';
 
                 // Append user input to the chat area
-                document.getElementById('chat-area').innerHTML += '<div class="user-message">' + userInputForHtml + '</div>';
+                document.getElementById('chat-area').innerHTML += '<div class="user-message glassmorphism">' + userInputForHtml + '</div>';
 
                 document.getElementById('chat-area').scrollTop = document.getElementById('chat-area').scrollHeight;     //Scroll to the bottom of the page
 
