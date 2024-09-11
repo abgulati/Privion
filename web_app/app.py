@@ -2922,6 +2922,17 @@ def load_chat_history():
     return jsonify({'success': True, 'chat_history': chat_history, 'old_chat_model': old_chat_model})
 
 
+def add_column_if_not_exists(cursor, table_name, column_name, column_type):
+    try:
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        columns = cursor.fetchall()
+        column_names = [column[1] for column in columns]
+        if column_name not in column_names:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+    except Exception as e:
+        handle_error_no_return(f"Error adding column {column_name} to {table_name}: ", e)
+
+
 @app.route('/init_chat_history_db')
 def init_chat_history_db():
 
@@ -2958,6 +2969,21 @@ def init_chat_history_db():
         conn.commit()
     except Exception as e:
         return handle_api_error("Could not create new chat history db, encountered error: ", e)
+
+    try:
+        add_column_if_not_exists(c, 'chat_history', 'chat_id', 'INTEGER')
+        add_column_if_not_exists(c, 'chat_history', 'sequence_id', 'TEXT')
+        add_column_if_not_exists(c, 'chat_history', 'user_query', 'TEXT')
+        add_column_if_not_exists(c, 'chat_history', 'llm_response', 'TEXT')
+        add_column_if_not_exists(c, 'chat_history', 'user_rating', 'INTEGER')
+        add_column_if_not_exists(c, 'chat_history', 'llm_model', 'TEXT')
+        add_column_if_not_exists(c, 'chat_history', 'prompt_template', 'TEXT')
+        add_column_if_not_exists(c, 'chat_history', 'history_summary', 'TEXT')
+        add_column_if_not_exists(c, 'chat_history', 'local_llm_server', 'TEXT')
+        add_column_if_not_exists(c, 'chat_history', 'chat_name', 'TEXT')
+        add_column_if_not_exists(c, 'chat_history', 'date_time', 'TEXT')
+    except Exception as e:
+        return handle_api_error("Could not add necessary columns to chat history db, encountered error: ", e)
 
     try:
         c.execute("SELECT COALESCE(MAX(chat_id), 0) FROM chat_history")
