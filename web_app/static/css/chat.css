@@ -101,6 +101,11 @@ body {
     }
 }
 
+.progress-line {
+    color: lightsteelblue;
+    font-style: italic;
+}
+
 .sidenav {
     height: 100%;
     width: 0;

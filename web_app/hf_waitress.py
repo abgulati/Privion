@@ -454,15 +454,14 @@ def str_to_torch_dtype(dtype_str):
     return dtype_map.get(dtype_str, None)
 
 
-def initialize_model():
+def get_model_params():
 
-    print("\n\ninitializing model\n\n")
+    print("\n\ninitializing model parameters\n\n")
 
     global PIPE
 
     try:
-        read_return = read_config(['model_id', 'gguf', 'awq', 'gguf_model_id', 'gguf_filename', 'quantize', 'quant_level', 'hqq_group_size', 'push_to_hub', 'torch_device_map', 'torch_dtype', 'trust_remote_code', 'use_flash_attention_2', 'pipeline_task'])
-        model_id = str(read_return['model_id'])
+        read_return = read_config(['gguf', 'awq', 'gguf_model_id', 'gguf_filename', 'quantize', 'quant_level', 'hqq_group_size', 'torch_device_map', 'torch_dtype', 'trust_remote_code', 'use_flash_attention_2', 'pipeline_task'])
         gguf = str(read_return['gguf']).lower() == 'true'
         awq = str(read_return['awq']).lower() == 'true'
         gguf_model_id = str(read_return['gguf_model_id'])
@@ -470,7 +469,6 @@ def initialize_model():
         quantize = str(read_return['quantize'])
         quant_level = str(read_return['quant_level'])
         hqq_group_size = int(read_return['hqq_group_size'])
-        push_to_hub = str(read_return['push_to_hub']).lower() == 'true'
         torch_device_map = str(read_return['torch_device_map'])
         torch_dtype = str(read_return['torch_dtype'])
         trust_remote_code = str(read_return['trust_remote_code']).lower() == 'true'
@@ -597,7 +595,135 @@ def initialize_model():
                 quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size, quant_zero=False, quant_scale=False, axis=0)
                 model_params["quantization_config"] = quantization_config
 
-    print(f"model_params: {model_params}")
+    return model_params
+
+
+class CustomStream(io.StringIO):
+    def __init__(self, callback=None):  # this callback stream to handle written data is not thread-safe!
+        super().__init__()
+        self.callback = callback
+
+    def write(self, data):
+        # If we have a callback, call it
+        if self.callback:
+            self.callback(data)
+
+        return super().write(data)  # writing directly to the in-memory string buffer is not thread-safe!
+
+class ThreadSafeStream(io.StringIO):
+    def __init__(self, queue):  # Python's queue's are thread-safe as they are internally synchronized using locks (thread synchronized primitives) to ensure operations like get and put are atomic & thread-safe
+        super().__init__()
+        self.queue = queue
+
+    def write(self, data):
+        self.queue.put(data)    # bypassing the in-memory string buffer to avoid race-conditions and writing to the thread-safe queue directly instead!
+        # nothing returned as return-value is not directly used by the caller
+
+@app.route('/restart_server_stream')
+def restart_server_stream():
+
+    llm_semaphore.acquire()
+    print("\n\n/restart_server acquired llm_semaphore, proceeding...\n\n")
+    config_writer_semaphore.acquire()
+    print("\n\n/restart_server acquired config_writer_semaphore, proceeding...\n\n")
+    error_logging_semaphore.acquire()
+    print("\n\n/restart_server acquired error_logging_semaphore, proceeding...\n\n")
+
+    print("\n\nrestarting server with stream\n\n")
+
+    global PIPE
+    PIPE = None
+
+    try:
+        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task'])
+        model_id = str(read_return['model_id'])
+        push_to_hub = str(read_return['push_to_hub']).lower() == 'true'
+        quant_level = str(read_return['quant_level'])
+        pipeline_task = str(read_return['pipeline_task'])
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
+
+    model_params = get_model_params()
+
+    print(f"Restarting server and initializing model with parameters: {model_params}")
+    
+    stop_thread = threading.Event()
+
+    output_queue = queue.Queue()
+    
+    custom_stdout = ThreadSafeStream(output_queue)
+    custom_stderr = ThreadSafeStream(output_queue)
+
+    original_stdout = sys.stdout    # seperate stream objects!
+    original_stderr = sys.stderr
+
+    def model_initialization_task():
+
+        global PIPE
+
+        try:
+            sys.stdout = custom_stdout
+            sys.stderr = custom_stderr
+
+            logging.basicConfig(stream=custom_stdout, level=logging.INFO)   # logging level is set to INFO to ensure all logs are captured by the stream
+            model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
+            print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
+            tokenizer = AutoTokenizer.from_pretrained(model_id)
+            print("\nModel Loaded Successfully! Initializing inference pipeline...")
+            PIPE = pipeline(
+                pipeline_task,
+                model=model,
+                tokenizer=tokenizer,
+            )
+            print(f"\n{model_id} loaded successfully!")
+        except Exception as e:
+            handle_local_error("Model loading failed, encountered error: ", e)
+        finally:
+            output_queue.put(None)
+            sys.stdout = original_stdout
+            sys.stderr = original_stderr
+            logging.basicConfig(stream=sys.stderr, level=logging.WARNING)  # reset logging to the default WARNING level so only warnings and more severe messages (ERROR, CRITICAL, etc.) are logged, as is more appropriate for production for a production environment
+            llm_semaphore.release()
+            config_writer_semaphore.release()
+            error_logging_semaphore.release()
+            stop_thread.set()
+
+    def output_reader():
+        while True:
+            line = output_queue.get()
+            if line is None:
+                print("\nNone read, breaking and stopping thread\n")
+                break
+            yield f"data: {json.dumps(line)}\n\n"
+        
+        yield f"event: END\ndata: \"null\"\n\n"
+        print("\nrestart_server_stream done\n")
+
+    thread = threading.Thread(target=model_initialization_task)
+    thread.start()
+
+    print(f"\nModel Initialization Begins - Loading {model_id}\n")
+    return Response(output_reader(), content_type='text/event-stream')
+
+
+def initialize_model():
+
+    print("\n\ninitializing model\n\n")
+
+    global PIPE
+
+    try:
+        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task'])
+        model_id = str(read_return['model_id'])
+        push_to_hub = str(read_return['push_to_hub']).lower() == 'true'
+        quant_level = str(read_return['quant_level'])
+        pipeline_task = str(read_return['pipeline_task'])
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
+
+    model_params = get_model_params()
+
+    print(f"initializing {model_id} with model_params: {model_params}")
 
     try:
         model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
@@ -623,6 +749,8 @@ def initialize_model():
     except Exception as e:
         handle_local_error("Could not set AutoTokenizer, encountered error: ", e)
 
+    print("\n\nInitializing pipeline\n\n")
+
     try:
         PIPE = pipeline(
             pipeline_task,
@@ -631,6 +759,8 @@ def initialize_model():
         )
     except Exception as e:
         handle_local_error("Could not create model PIPELINE, encountered error: ", e)
+
+    print(f"\n{model_id} loaded successfully!\n")
 
     return True
 

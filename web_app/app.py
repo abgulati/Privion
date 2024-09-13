@@ -2982,6 +2982,7 @@ def init_chat_history_db():
         add_column_if_not_exists(c, 'chat_history', 'local_llm_server', 'TEXT')
         add_column_if_not_exists(c, 'chat_history', 'chat_name', 'TEXT')
         add_column_if_not_exists(c, 'chat_history', 'date_time', 'TEXT')
+        add_column_if_not_exists(c, 'chat_history', 'prompt_template_format', 'TEXT')
     except Exception as e:
         return handle_api_error("Could not add necessary columns to chat history db, encountered error: ", e)
 

@@ -5,7 +5,7 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>LLM Chat</title>
+        <title>LARS-Enterprise</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -88,7 +88,7 @@
                     <p style="font-style: italic; font-size: 23px;">Or jump straight into a conversation by submitting a query below!</p>
                 </div>
 
-                <!-- ###Messages appended here -->
+                <!-- ### Messages appended here ### -->
             </div>
 
             <i class="fa-solid fa-circle-down scroll-down-btn" id="scrollDownButton"></i>
@@ -138,9 +138,12 @@
         </div>
 
         <div id="SavingHfWaitressSettings" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,1); z-index: 1000;">
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500; width: 80%; max-width: 1920px; text-align: center;">
                 <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo">
                 Saving HF-Waitress Server Settings...
+                <div class="hf-model-loader-stream" id="hf-model-loader-stream">
+                     <!-- ### Status updates appended here ### -->
+                </div>
             </div>
         </div>
 
@@ -2812,8 +2815,91 @@
             }
 
 
+            async function fetchRestartEventStream() {                
+                const url = "http://localhost:9069/restart_server_stream";
+                const responseRestartContentElement = document.getElementById('hf-model-loader-stream');
+
+                try {
+                    const hfwResponse = await fetch(url, {
+                        method: 'GET',
+                        redirect: 'follow'
+                    });
+
+                    const hfwReader = hfwResponse.body.getReader();
+                    let hfwTotalContent = '';
+                    let hfwReceivedComplete = false;
+
+                    async function hfwProcessChunk() {
+                        let progressLine = '';
+                        let currentProgressLine = null;
+
+                        while (true) {
+                            const { done, value } = await hfwReader.read();
+                            if (done) {
+                                console.log("HF-Waitress Restart Stream complete");
+                                break;
+                            }
+                            
+                            const textChunk = new TextDecoder("utf-8").decode(value);
+                            const messages = textChunk.split('\n');
+                            
+                            messages.forEach(message => {
+                                
+                                if (message.startsWith('data: ')) {
+                                    const jsonStr = message.slice(7, -1);   // remove first 7 and last 1 chars to get rid of the 'data: "' prefix and " suffix!
+                                    // console.log("message: ", message);
+                                    
+                                    try {
+                                        let dataObj = String(jsonStr);
+                                        if (dataObj == "null") {
+                                            dataObj = "";
+                                        }
+                                        // console.log("dataObj: ", dataObj);
+                                        if (dataObj != "") {
+                                            
+                                            let streamed_content = dataObj.replace(/\\r/g, '\r').replace(/\\n/g, '\n');
+
+                                            // Check if the streamed content is a progress-line - \r tags indicate a carriage return, used to replace text in a command-line
+                                            if (streamed_content.startsWith('\r')) {
+                                                if (currentProgressLine) {
+                                                    currentProgressLine.innerHTML = streamed_content.trim().replace(/\r/g, '').replace(/\n/g, '<br>').replace(/([#+])/g, '');
+                                                } else {
+                                                    currentProgressLine = document.createElement('div');
+                                                    currentProgressLine.className = 'progress-line';
+                                                    currentProgressLine.innerHTML = streamed_content.trim().replace(/\r/g, '').replace(/\n/g, '<br>').replace(/([#+])/g, '');
+                                                    responseRestartContentElement.appendChild(currentProgressLine);
+                                                }
+                                            } else {
+                                                responseRestartContentElement.innerHTML += streamed_content.replace(/\n/g, '<br>');
+                                                currentProgressLine = null; // We've moved past the progress-line, so set it to null so a new one may be created should it be required
+                                            }
+                                        }
+
+                                    } catch (error) {
+                                        console.error('Error parsing message: ', error);
+                                    }
+                                } else if (message.startsWith('event: END') || message.startsWith('data: null')) {
+                                    console.log("Received null message from hf-waitress restart - stream complete");
+                                    hfwReceivedComplete = true;
+                                }
+                            });
+
+                            if (hfwReceivedComplete) break;
+                        }
+                    
+                    }
+
+                    await hfwProcessChunk();
+                    
+                } catch (error) {
+                    errorHandler("fetching HF-Waitress Restart event-streaming response", "localhost:9069/restart_server_stream", String(error))
+                }
+            }
+            
+
             function handleHfWaitressChanges(hf_config) {
                 return new Promise((resolve, reject) => {
+                    document.getElementById('hf-model-loader-stream').innerHTML = '';
                     document.getElementById('SavingHfWaitressSettings').style.display = 'block';
 
                     fetch('http://localhost:9069/hf_config_writer_api', {
@@ -2835,30 +2921,21 @@
                         console.log(data);
                         if (data.restart_required) {
                             // Restart HF-Waitress Server
-                            return fetch('http://localhost:9069/restart_server');
+                            return fetchRestartEventStream();
                         }
-                        return { ok: true, json: () => Promise.resolve({ success: true }) };
                     })
-                    .then(response => {
-                        if (!response.ok) {
-                            return response.json().then(err => { throw new Error(err.error) });
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        if (data.success) {
-                            document.getElementById('SavingHfWaitressSettings').style.display = 'none';
-                            resolve();  // Resolve the promise when everything is done
-                        } else {
-                            throw new Error('Internal Server Error: Check hf_server_log and HF-Waitress command-line for more details.');
-                        }
+                    .then(() => {
+                        console.log("HF-Waitress server changes saved successfully.");
+                        resolve();
                     })
                     .catch(error => {
                         errorHandler("handling HF-Waitress Server changes", "handleHfWaitressChanges", String(error.message));
                         reject(error);  // Reject the promise if there's an error
                     })
                     .finally(() => {
-                        document.getElementById('SavingHfWaitressSettings').style.display = 'none';
+                        setTimeout(() => {
+                            document.getElementById('SavingHfWaitressSettings').style.display = 'none';
+                        }, 5000);
                     });
                 });
             }
