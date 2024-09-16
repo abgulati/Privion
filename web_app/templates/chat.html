@@ -60,7 +60,7 @@
             <a href="javascript:void(0)" class="closebtn" onclick="closeNav()">&times;</a>
             <a href="javascript:void(0)" class="sortbtn" onclick="sortNavItems()">&#8597;</a>
             <div class="sidenav-content" id="sidenav-content">
-                <a href="#" id="dynamicChatLink" class="fas fa-plus" style="font-size: 18px;"> New Chat</a>
+                <a href="#" id="dynamicChatLink" class="fas fa-plus" style="font-size: 21px; padding: 3px 0px 10px 45px;;"> New Chat</a>
             </div>
         </div>
 
@@ -1051,6 +1051,73 @@
             }
 
 
+            async function renameChat(chat_id, new_chat_name) {
+                console.log("Renaming chat with ID: ", chat_id);
+                let formData = new FormData();
+                formData.append('chat_id', chat_id);
+                formData.append('new_chat_name', new_chat_name);
+
+                const response = await fetch('/rename_chat', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw new Error(err.error)});
+                    }
+                    return response.json()
+                })
+                .then(data => {
+                    if (data.success) { 
+                        console.log("Chat renamed successfully");
+                        // Update the chat name in the sidebar
+                        let chatItem = document.querySelector(`[data-chat-id="${chat_id}"]`);
+                        if (chatItem) {
+                            chatItem.querySelector('.chat-title').textContent = new_chat_name;
+                        }
+                    } else {
+                        throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+                    }
+                })
+                .catch(error => {
+                    errorHandler("renaming the specified chat", "/rename_chat", String(error.message))
+                });
+            }
+
+
+            async function deleteChat(chat_id) {
+                console.log("Deleting chat with ID: ", chat_id);
+                let formData = new FormData();
+                formData.append('chat_id', chat_id);
+
+                const response = await fetch('/delete_chat', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw new Error(err.error)});
+                    }
+                    return response.json()
+                })
+                .then(data => {
+                    if (data.success) {
+                        console.log("Chat deleted successfully");
+                        // Delete the nav-item from the sidebar
+                        let chatItem = document.querySelector(`[data-chat-id="${chat_id}"]`);
+                        if (chatItem) {
+                            chatItem.remove();
+                        }
+                    } else {
+                        throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+                    }
+                })
+                .catch(error => {
+                    errorHandler("deleting the specified chat", "/delete_chat", String(error.message))
+                });
+            }
+
+
             function loadChatHistoryMenu() {
                 
                 //Make a GET request to the server
@@ -1065,20 +1132,32 @@
                     if (data.success) {
 
                         history_list = data.history_list
-                        //console.log(data)
+                        // console.log(history_list)
 
                         let sidenav = document.getElementById('sidenav-content');
 
                         for(let i = 0; i < history_list.length; i++) {
                             let newDiv = document.createElement('div');
                             newDiv.className = 'nav-item';
-                            newDiv.textContent = `Chat ${history_list[i]}`
-                            newDiv.setAttribute('data-chat-id', history_list[i])
-                            newDiv.addEventListener('click', function() {
-                                console.log("clicked")
-                                let chatID = this.getAttribute('data-chat-id');
+                            newDiv.setAttribute('data-chat-id', history_list[i]['chat_id'])
+
+                            newDiv.innerHTML = `
+                                <span class="chat-title">${history_list[i]['date_time']}</span>
+                                <div class="three-dot-menu">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                    <div class="three-dot-menu-options">
+                                        <span class="three-dot-menu-option" onclick="deleteChat(${history_list[i]['chat_id']})">Delete Chat</span>
+                                    </div>
+                                </div>
+                            `;
+
+                            //<span class="three-dot-menu-option" onclick="renameChat(${history_list[i]['chat_id']})">Rename Chat</span>
+
+                            newDiv.querySelector('.chat-title').addEventListener('click', function() {
+                                let chatID = this.parentElement.getAttribute('data-chat-id');
                                 loadChatHistory(chatID);
                             });
+
                             sidenav.appendChild(newDiv);
                         }
                     } else {
@@ -2935,7 +3014,7 @@
                     .finally(() => {
                         setTimeout(() => {
                             document.getElementById('SavingHfWaitressSettings').style.display = 'none';
-                        }, 5000);
+                        }, 3000);
                     });
                 });
             }

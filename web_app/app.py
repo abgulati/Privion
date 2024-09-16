@@ -941,6 +941,17 @@ def extract_images_from_pdf(pdf_path):
         return images
 
 
+def add_column_if_not_exists(cursor, table_name, column_name, column_type):
+    try:
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        columns = cursor.fetchall()
+        column_names = [column[1] for column in columns]
+        if column_name not in column_names:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+    except Exception as e:
+        handle_error_no_return(f"Error adding column {column_name} to {table_name}: ", e)
+
+
 def store_images_to_db(images):
 
     print("\n\nStoring Images to Database\n\n")
@@ -965,13 +976,25 @@ def store_images_to_db(images):
                     image_data BLOB NOT NULL,
                     surrounding_text TEXT,
                     metadata TEXT,
-                    format TEXT
+                    format TEXT,
+                    document_name TEXT,
+                    page_number INTEGER
             )
         ''')
 
         conn.commit()
     except Exception as e:
         handle_local_error("Could not create Images DB, encountered error: ", e)
+
+    try:
+        add_column_if_not_exists(cursor, 'images', 'image_data', 'BLOB')
+        add_column_if_not_exists(cursor, 'images', 'surrounding_text', 'TEXT')
+        add_column_if_not_exists(cursor, 'images', 'metadata', 'TEXT')
+        add_column_if_not_exists(cursor, 'images', 'format', 'TEXT')
+        add_column_if_not_exists(cursor, 'images', 'document_name', 'TEXT')
+        add_column_if_not_exists(cursor, 'images', 'page_number', 'INTEGER')
+    except Exception as e:
+        return handle_api_error("Could not add necessary columns to chat history db, encountered error: ", e)
     
     try:
         for image_data, surrounding_text, format in images:
@@ -1020,6 +1043,15 @@ def record_doc_loaded_to_db(document_name, embedding_model, vectordb_used, chunk
         conn.commit()
     except Exception as e:
         handle_local_error("Could not create document_records DB, encountered error: ", e)
+    
+    try:
+        add_column_if_not_exists(cursor, 'document_records', 'document_name', 'TEXT')
+        add_column_if_not_exists(cursor, 'document_records', 'embedding_model', 'TEXT')
+        add_column_if_not_exists(cursor, 'document_records', 'vectordb_used', 'TEXT')
+        add_column_if_not_exists(cursor, 'document_records', 'chunk_size', 'INTEGER')
+        add_column_if_not_exists(cursor, 'document_records', 'chunk_overlap', 'INTEGER')
+    except Exception as e:
+        return handle_api_error("Could not add necessary columns to chat history db, encountered error: ", e)
     
     try:
         cursor.execute("INSERT INTO document_records (document_name, embedding_model, vectordb_used, chunk_size, chunk_overlap) VALUES (?, ?, ?, ?, ?)", (document_name, embedding_model, vectordb_used, chunk_size, chunk_overlap))
@@ -1352,7 +1384,7 @@ def determine_sequence_id_for_chat(chat_id):
     return int(current_sequence_id)
 
 
-def store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query_for_history_db, model_response_for_history_db, current_prompt_template):
+def store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query_for_history_db, model_response_for_history_db, fully_formatted_prompt, local_llm_server, local_llm_chat_template_format):
 
     global SEQUENCE_ID
 
@@ -1386,8 +1418,14 @@ def store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query_for_hist
     # print(type(model_response_for_history_db))
 
     try:
+        current_datetime = datetime.datetime.now()
+        formatted_datetime = current_datetime.strftime('%d %b %Y - %I:%M %p %Z')
+    except Exception as e:
+        return handle_api_error("Could not obtain timestamp in store_llama_cpp_chat_history_to_db, encountered error: ", e)
+
+    try:
         # Store conversation history into DB
-        cursor.execute("INSERT INTO chat_history (chat_id, sequence_id, user_query, llm_response, llm_model, prompt_template) VALUES (?, ?, ?, ?, ?, ?)", (int(chat_id), int(sequence_id), user_query_for_history_db, model_response_for_history_db, model_choice, str(current_prompt_template)))
+        cursor.execute("INSERT INTO chat_history (chat_id, sequence_id, user_query, llm_response, llm_model, prompt_template, local_llm_server, prompt_template_format, date_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (int(chat_id), int(sequence_id), user_query_for_history_db, model_response_for_history_db, model_choice, str(fully_formatted_prompt), str(local_llm_server), str(local_llm_chat_template_format), str(formatted_datetime)))
         conn.commit()
     except Exception as e:
         handle_local_error("Could not insert chat history into DB, encountered error: ", e)
@@ -2643,6 +2681,15 @@ def fetch_file_list_for_vector_db():
         handle_local_error("Could not create document_records DB, encountered error: ", e)
 
     try:
+        add_column_if_not_exists(c, 'document_records', 'document_name', 'TEXT')
+        add_column_if_not_exists(c, 'document_records', 'embedding_model', 'TEXT')
+        add_column_if_not_exists(c, 'document_records', 'vectordb_used', 'TEXT')
+        add_column_if_not_exists(c, 'document_records', 'chunk_size', 'INTEGER')
+        add_column_if_not_exists(c, 'document_records', 'chunk_overlap', 'INTEGER')
+    except Exception as e:
+        return handle_api_error("Could not add necessary columns to chat history db, encountered error: ", e)
+
+    try:
         c.execute("SELECT document_name, vectordb_used, chunk_size, chunk_overlap FROM document_records where vectordb_used LIKE ?", (vdb_for_select,))
     except Exception as e:
         return handle_api_error("Could not get document list from document_records db, encountered error: ", e)
@@ -2720,6 +2767,73 @@ def reset_vector_db_on_disk():
     return jsonify({'success': True, "restart_required": restart_required})
 
 
+@app.route('/delete_chat', methods=['POST'])
+def delete_chat():
+
+    print("\nDeleting chat\n")
+
+    try:
+        chat_id = request.form['chat_id']
+    except Exception as e:
+        return handle_api_error("Could not read chat_id from request form, encountered error: ", e)
+
+    try:
+        read_return = read_config(['sqlite_history_db'])
+        sqlite_history_db = read_return['sqlite_history_db']
+    except Exception as e:
+        return handle_api_error("Missing sqlite_history_db in config.json in method delete_chat. Error: ", e)
+    
+    try:
+        conn = sqlite3.connect(sqlite_history_db)
+        c = conn.cursor()
+    except Exception as e:
+        return handle_api_error("Could not connect to sqlite_history_db database to delete chat, encountered error: ", e)
+    
+    try:
+        c.execute("DELETE FROM chat_history WHERE chat_id = ?", (chat_id,))
+        conn.commit()
+        c.close()
+        conn.close()
+    except Exception as e:
+        return handle_api_error("Could not delete chat from chat history db, encountered error: ", e)
+
+    return jsonify({'success': True})
+
+
+@app.route('/rename_chat', methods=['POST'])
+def rename_chat():
+
+    print("\nRenaming chat\n")
+
+    try:
+        chat_id = request.form['chat_id']
+        new_chat_name = request.form['new_chat_name']
+    except Exception as e:
+        return handle_api_error("Could not read chat_id or new_chat_name from request form, encountered error: ", e)
+
+    try:
+        read_return = read_config(['sqlite_history_db'])
+        sqlite_history_db = read_return['sqlite_history_db']
+    except Exception as e:
+        return handle_api_error("Missing sqlite_history_db in config.json in method rename_chat. Error: ", e)
+
+    try:
+        conn = sqlite3.connect(sqlite_history_db)
+        c = conn.cursor()
+    except Exception as e:
+        return handle_api_error("Could not connect to sqlite_history_db database to rename chat, encountered error: ", e)
+
+    try:
+        c.execute("UPDATE chat_history SET chat_name = ? WHERE chat_id = ?", (new_chat_name, chat_id))
+        conn.commit()
+        c.close()
+        conn.close()
+    except Exception as e:
+        return handle_api_error("Could not rename chat in chat history db, encountered error: ", e)
+
+    return jsonify({'success': True})
+
+
 @app.route('/load_chat_history_list')
 def load_chat_history_list():
 
@@ -2731,7 +2845,7 @@ def load_chat_history_list():
     except Exception as e:
         return handle_api_error("Missing sqlite_history_db in config.json in method load_chat_history_list. Error: ", e)
 
-    history_id_list = []
+    history_list = []
     
     try:
         conn = sqlite3.connect(sqlite_history_db)
@@ -2740,21 +2854,35 @@ def load_chat_history_list():
         return handle_api_error("Could not connect to sqlite_history_db database to load chat history list, encountered error: ", e)
 
     try:
-        c.execute("SELECT DISTINCT chat_id FROM chat_history")
+        c.execute("""
+            SELECT DISTINCT chat_id,
+                local_llm_server,
+                chat_name,
+                date_time,
+                prompt_template_format
+            FROM chat_history
+            ORDER BY date_time DESC
+        """)
     except Exception as e:
         return handle_api_error("Could not get list from chat history db, encountered error: ", e)
     
     try:
         result = c.fetchall()
 
-        for list_item in result:
-            history_id_list.append(list_item)
+        for row in result:
+            history_list.append({
+                'chat_id': row[0],
+                'local_llm_server': row[1],
+                'chat_name': row[2],
+                'date_time': row[3],
+                'prompt_template_format': row[4]
+            })
     except Exception as e:
         return handle_api_error("Could not parse chat history list from db, encountered error: ", e)
 
     #print(f'returning chat hsitory list: {history_id_list}')
 
-    return jsonify({'success': True, 'history_list': history_id_list})
+    return jsonify({'success': True, 'history_list': history_list})
 
 
 @app.route('/load_chat_history', methods=['POST'])
@@ -2819,7 +2947,6 @@ def load_chat_history():
 
             result = str(result[0])
             result_parts = result.split("pdf_pane_data=",1)
-            # llm_response = '<div class="llm-wrapper"> <div class="llm-response">' + str(result[0]) + '</div>'
             llm_response = '<div class="response-and-viewer-container"><div class="llm-wrapper"> <div class="llm-response">' + result_parts[0]
 
         except Exception as e:
@@ -2922,17 +3049,6 @@ def load_chat_history():
     return jsonify({'success': True, 'chat_history': chat_history, 'old_chat_model': old_chat_model})
 
 
-def add_column_if_not_exists(cursor, table_name, column_name, column_type):
-    try:
-        cursor.execute(f"PRAGMA table_info({table_name})")
-        columns = cursor.fetchall()
-        column_names = [column[1] for column in columns]
-        if column_name not in column_names:
-            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
-    except Exception as e:
-        handle_error_no_return(f"Error adding column {column_name} to {table_name}: ", e)
-
-
 @app.route('/init_chat_history_db')
 def init_chat_history_db():
 
@@ -2963,7 +3079,11 @@ def init_chat_history_db():
                         user_rating INTEGER,
                         llm_model TEXT, 
                         prompt_template TEXT,
-                        history_summary TEXT
+                        history_summary TEXT,
+                        local_llm_server TEXT,
+                        chat_name TEXT,
+                        date_time TEXT,
+                        prompt_template_format TEXT
             )
         ''')
         conn.commit()
@@ -3491,6 +3611,7 @@ def get_references():
         elif local_llm_chat_template_format == 'gemma2':
             formatted_user_prompt += f"{llm_response}<end_of_turn>\n"
     elif local_llm_server == 'hf-waitress':
+        local_llm_chat_template_format = "hf-transformers"
         history_prompt_json = json.loads(formatted_user_prompt)
         new_response = {"role":"assistant", "content":llm_response}
         history_prompt_json['messages'].append(new_response)
@@ -3500,7 +3621,7 @@ def get_references():
     if not do_rag:
         print("\n\nSkipping RAG, storing chat history and returning\n\n")
         try:
-            store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query, llm_response, formatted_user_prompt)
+            store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
         except Exception as e:
             handle_error_no_return("Could not store_llama_cpp_chat_history_to_db in get_references(), encountered error: ", e)
         return jsonify({'success': True})
@@ -3696,7 +3817,7 @@ def get_references():
         handle_error_no_return("Could not prep data to store_chat_history_to_db in get_references(), encountered error: ", e)
 
     try:
-        store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query_for_history_db, model_response_for_history_db, formatted_user_prompt)
+        store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query_for_history_db, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
     except Exception as e:
         handle_error_no_return("Could not store_chat_history_to_db in get_references(), encountered error: ", e)
 
