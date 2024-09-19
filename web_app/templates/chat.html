@@ -1166,7 +1166,7 @@
                     addInput.style.display = 'block';
 
                     addInput.addEventListener('keypress', function(e) {
-                        console.log("Key pressed: ", e.key);
+                        // console.log("Key pressed: ", e.key);
                         if (e.key === 'Enter' && this.value) {
                             renameChat(chatID, this.value);
                             addInput.value = '';
@@ -1176,7 +1176,7 @@
                     });
 
                     addInput.addEventListener('keydown', function(e) {
-                        console.log("Key downed: ", e.key);
+                        // console.log("Key downed: ", e.key);
                         if (e.key === 'Escape' || e.key === 'Esc') {
                             addInput.value = '';
                             addInput.style.display = 'none';
@@ -3477,12 +3477,27 @@
                             if (do_rag) {
                                 document.getElementById('processingQnS').innerHTML = 'Fetching any references...';
                             }
+                            
+                            let model_choice = ""
+                            const useLocalLlmRadioButton = document.getElementById('local_llm_radio_button');
+                            if (useLocalLlmRadioButton.checked) {
+                                current_local_llm_server = document.getElementById('local_llm_server_select_dropdown').value;
+                                if (current_local_llm_server === "llama-cpp") {
+                                    model_choice = document.getElementById('modelDropdown').value;
+                                } else if (current_local_llm_server === "hf-waitress") {
+                                    const hf_waitress_server_status = document.getElementById('local_llm_server_status_indicator_text').style.color;
+                                    if (hf_waitress_server_status === "green") {
+                                        model_choice = document.getElementById('hf-waitress-llm-custom-dropdown-selected-value').textContent;
+                                    }
+                                }
+                            }
+                                    
                             fetch('/get_references', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json'
                                 },
-                                body: JSON.stringify({'chat_id':CHAT_ID, 'sequence_id': SEQUENCE_ID, 'stream_session_id': stream_session_id, 'user_query': userInput, 'llm_response': llm_response, 'formatted_user_prompt': formatted_user_prompt})
+                                body: JSON.stringify({'chat_id':CHAT_ID, 'sequence_id': SEQUENCE_ID, 'model_choice': model_choice, 'stream_session_id': stream_session_id, 'user_query': userInput, 'llm_response': llm_response, 'formatted_user_prompt': formatted_user_prompt})
                             }).then(response => {
                                 if (!response.ok) {
                                     return response.json().then(err => { throw new Error(err.error)});
@@ -3493,6 +3508,27 @@
                             .then(data => {
                                 
                                 if (data.success) {
+
+                                    if (parseInt(SEQUENCE_ID) == 1) {
+                                        const sidenav = document.getElementById('sidenav-content');
+
+                                        new_chat = {
+                                            'chat_id': CHAT_ID,
+                                            'local_llm_server': data.local_llm_server,
+                                            'chat_name': data.stored_datetime,
+                                            'date_time': data.stored_datetime,
+                                            'prompt_template_format': data.local_llm_chat_template_format
+                                        }
+
+                                        const newDiv = createChatHistoryMenuItem(new_chat);
+
+                                        const newChatLink = document.getElementById('dynamicChatLink');
+                                        if (newChatLink.nextSibling) {
+                                            sidenav.insertBefore(newDiv, newChatLink.nextSibling);
+                                        } else {
+                                            sidenav.appendChild(newDiv);
+                                        }
+                                    }
 
                                     console.log("get_references data: ", data);
 
