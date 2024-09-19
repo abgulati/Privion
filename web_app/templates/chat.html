@@ -1222,7 +1222,9 @@
 
             function hideWelcomeScreen() {
                 const welcomeScreen = document.getElementById('welcome-screen');
-                welcomeScreen.style.display = 'none';
+                if (welcomeScreen) {
+                    welcomeScreen.style.display = 'none';
+                }
             }
 
 
@@ -3416,20 +3418,28 @@
                                                 if (message.startsWith('data: ')) {
                                                     const jsonStr = message.slice(7, -1);   // remove first 7 and last 1 chars to get rid of the 'data: "' prefix and " suffix!
 
-                                                    //console.log("message: ", message);
+                                                    // console.log("message: ", message);
                                                     try {
                                                         let dataObj = String(jsonStr);
                                                         if (dataObj == "null") {
                                                             dataObj = "";
                                                         }
-                                                        // console.log("dataObj: ", dataObj);
-                                                        let streamed_content = dataObj.replace(/\\n\\n/g, '<br><br>').replace(/\\n/g, '<br>'); // /g - global - replace throughout string, not just the first occurance
+                                                        //console.log("dataObj: ", dataObj);
+
+                                                        // Escape HTML special characters
+                                                        let escaped_dataObj = dataObj.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+                                                        let streamed_content = escaped_dataObj.replace(/\\t/g, '    ').replace(/\\n\\n/g, '<br><br>').replace(/\\n/g, '<br>'); // /g - global - replace throughout string, not just the first occurance
+
+                                                        streamed_content = String(streamed_content);
 
                                                         hfwTotalContent += streamed_content;
                                                         let tempDiv = document.createElement('div');
 
-                                                        tempDiv.innerHTML = streamed_content;
+                                                        // tempDiv.textContent = streamed_content;
+                                                        // responseContentElement.appendChild(tempDiv);
 
+                                                        tempDiv.innerHTML = streamed_content;
                                                         while (tempDiv.firstChild) {
                                                             responseContentElement.appendChild(tempDiv.firstChild);
                                                         }
@@ -3477,27 +3487,13 @@
                             if (do_rag) {
                                 document.getElementById('processingQnS').innerHTML = 'Fetching any references...';
                             }
-                            
-                            let model_choice = ""
-                            const useLocalLlmRadioButton = document.getElementById('local_llm_radio_button');
-                            if (useLocalLlmRadioButton.checked) {
-                                current_local_llm_server = document.getElementById('local_llm_server_select_dropdown').value;
-                                if (current_local_llm_server === "llama-cpp") {
-                                    model_choice = document.getElementById('modelDropdown').value;
-                                } else if (current_local_llm_server === "hf-waitress") {
-                                    const hf_waitress_server_status = document.getElementById('local_llm_server_status_indicator_text').style.color;
-                                    if (hf_waitress_server_status === "green") {
-                                        model_choice = document.getElementById('hf-waitress-llm-custom-dropdown-selected-value').textContent;
-                                    }
-                                }
-                            }
                                     
                             fetch('/get_references', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json'
                                 },
-                                body: JSON.stringify({'chat_id':CHAT_ID, 'sequence_id': SEQUENCE_ID, 'model_choice': model_choice, 'stream_session_id': stream_session_id, 'user_query': userInput, 'llm_response': llm_response, 'formatted_user_prompt': formatted_user_prompt})
+                                body: JSON.stringify({'chat_id':CHAT_ID, 'sequence_id': SEQUENCE_ID, 'stream_session_id': stream_session_id, 'user_query': userInput, 'llm_response': llm_response, 'formatted_user_prompt': formatted_user_prompt})
                             }).then(response => {
                                 if (!response.ok) {
                                     return response.json().then(err => { throw new Error(err.error)});
