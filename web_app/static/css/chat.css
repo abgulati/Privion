@@ -233,6 +233,12 @@ body {
     bottom: 0;
 }
 
+.rename-chat-title-input {
+    width: 230px;
+    border-radius: 5px;
+    padding: 10px;
+}
+
 .chat-container {
     display: flex;
     flex-direction: column; /* Stack children vertically */

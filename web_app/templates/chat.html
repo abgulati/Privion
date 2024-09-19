@@ -1074,6 +1074,7 @@
                         let chatItem = document.querySelector(`[data-chat-id="${chat_id}"]`);
                         if (chatItem) {
                             chatItem.querySelector('.chat-title').textContent = new_chat_name;
+                            chatItem.setAttribute('data-chat-name', new_chat_name);
                         }
                     } else {
                         throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
@@ -1118,6 +1119,76 @@
             }
 
 
+            function createChatHistoryMenuItem(chat) {
+                const newDiv = document.createElement('div');
+                newDiv.className = 'nav-item';
+
+                const attributes = ['chat_id', 'local_llm_server', 'chat_name', 'date_time', 'prompt_template_format'];
+                attributes.forEach(attribute => {
+                    newDiv.setAttribute(`data-${attribute.replace('_', '-')}`, chat[attribute]);
+                });
+                
+                let chatTitle = chat['date_time'];
+                if (chat['chat_name'] != '' && chat['chat_name'] != null && chat['chat_name'] != "null") {
+                    chatTitle = chat['chat_name'];
+                }
+
+                const rename_chat_title_button_class = `rename-chat-title-button-for-chat-id-${chat['chat_id']}`;
+                const rename_chat_title_input_class = `rename-chat-title-input-for-chat-id-${chat['chat_id']}`;
+
+                newDiv.innerHTML = `
+                    <span class="chat-title">${chatTitle}</span>
+                    <div class="three-dot-menu">
+                        <i class="fas fa-ellipsis-v"></i>
+                        <div class="three-dot-menu-options">
+                            <span class="three-dot-menu-option" onclick="deleteChat(${chat['chat_id']})">Delete Chat</span>
+                            <span class="three-dot-menu-option rename-option ${rename_chat_title_button_class}" data-chat-id="${chat['chat_id']}">Rename Chat</span>
+                            <input type="text" class="rename-chat-title-input ${rename_chat_title_input_class}" style="display: none;" placeholder="Enter new chat name...">
+                        </div>
+                    </div>
+                `;
+
+                newDiv.querySelector('.chat-title').addEventListener('click', function() {
+                    let chatID = this.parentElement.getAttribute('data-chat-id');
+                    loadChatHistory(chatID);
+                });
+
+                // Event listener to rename the chat name/title:
+                const addBtnQuerySelectorName = '.' + rename_chat_title_button_class;
+                const addInputQuerySelectorName = '.' + rename_chat_title_input_class;
+                const addBtn = newDiv.querySelector(addBtnQuerySelectorName);
+                const addInput = newDiv.querySelector(addInputQuerySelectorName);
+
+                addBtn.addEventListener('click', function() {
+                    let chatID = this.getAttribute('data-chat-id');
+                    
+                    addBtn.style.display = 'none';
+                    addInput.style.display = 'block';
+
+                    addInput.addEventListener('keypress', function(e) {
+                        console.log("Key pressed: ", e.key);
+                        if (e.key === 'Enter' && this.value) {
+                            renameChat(chatID, this.value);
+                            addInput.value = '';
+                            addInput.style.display = 'none';
+                            addBtn.style.display = 'block';
+                        }
+                    });
+
+                    addInput.addEventListener('keydown', function(e) {
+                        console.log("Key downed: ", e.key);
+                        if (e.key === 'Escape' || e.key === 'Esc') {
+                            addInput.value = '';
+                            addInput.style.display = 'none';
+                            addBtn.style.display = 'block';
+                        }
+                    });
+                });
+                
+                return newDiv;
+            }
+
+
             function loadChatHistoryMenu() {
                 
                 //Make a GET request to the server
@@ -1131,35 +1202,83 @@
                 .then(data => {
                     if (data.success) {
 
-                        history_list = data.history_list
-                        // console.log(history_list)
+                        const history_list = data.history_list
+                        const sidenav = document.getElementById('sidenav-content');
 
-                        let sidenav = document.getElementById('sidenav-content');
-
-                        for(let i = 0; i < history_list.length; i++) {
-                            let newDiv = document.createElement('div');
-                            newDiv.className = 'nav-item';
-                            newDiv.setAttribute('data-chat-id', history_list[i]['chat_id'])
-
-                            newDiv.innerHTML = `
-                                <span class="chat-title">${history_list[i]['date_time']}</span>
-                                <div class="three-dot-menu">
-                                    <i class="fas fa-ellipsis-v"></i>
-                                    <div class="three-dot-menu-options">
-                                        <span class="three-dot-menu-option" onclick="deleteChat(${history_list[i]['chat_id']})">Delete Chat</span>
-                                    </div>
-                                </div>
-                            `;
-
-                            //<span class="three-dot-menu-option" onclick="renameChat(${history_list[i]['chat_id']})">Rename Chat</span>
-
-                            newDiv.querySelector('.chat-title').addEventListener('click', function() {
-                                let chatID = this.parentElement.getAttribute('data-chat-id');
-                                loadChatHistory(chatID);
-                            });
-
+                        history_list.forEach(chat => {
+                            const newDiv = createChatHistoryMenuItem(chat);
                             sidenav.appendChild(newDiv);
-                        }
+                        });
+
+                        // for(let i = 0; i < history_list.length; i++) {
+                        //     let newDiv = document.createElement('div');
+                        //     newDiv.className = 'nav-item';
+                        //     newDiv.setAttribute('data-chat-id', history_list[i]['chat_id'])
+                        //     newDiv.setAttribute('data-local-llm-server', history_list[i]['local_llm_server'])
+                        //     newDiv.setAttribute('data-chat-name', history_list[i]['chat_name'])
+                        //     newDiv.setAttribute('data-date-time', history_list[i]['date_time'])
+                        //     newDiv.setAttribute('data-prompt-template-format', history_list[i]['prompt_template_format'])
+
+                        //     let chat_sidenav_title = history_list[i]['date_time']
+                        //     if (history_list[i]['chat_name'] != '' && history_list[i]['chat_name'] != null && history_list[i]['chat_name'] != "null") {
+                        //         chat_sidenav_title = history_list[i]['chat_name']
+                        //     }
+
+                        //     let rename_chat_title_button_class = `rename-chat-title-button-for-chat-id-${history_list[i]['chat_id']}`;
+                        //     let rename_chat_title_input_class = `rename-chat-title-input-for-chat-id-${history_list[i]['chat_id']}`;
+
+                        //     newDiv.innerHTML = `
+                        //         <span class="chat-title">${chat_sidenav_title}</span>
+                        //         <div class="three-dot-menu">
+                        //             <i class="fas fa-ellipsis-v"></i>
+                        //             <div class="three-dot-menu-options">
+                        //                 <span class="three-dot-menu-option" onclick="deleteChat(${history_list[i]['chat_id']})">Delete Chat</span>
+                        //                 <span class="three-dot-menu-option rename-option ${rename_chat_title_button_class}" data-chat-id="${history_list[i]['chat_id']}">Rename Chat</span>
+                        //                 <input type="text" class="rename-chat-title-input ${rename_chat_title_input_class}" style="display: none;" placeholder="Enter new chat name...">
+                        //             </div>
+                        //         </div>
+                        //     `;
+
+                        //     newDiv.querySelector('.chat-title').addEventListener('click', function() {
+                        //         let chatID = this.parentElement.getAttribute('data-chat-id');
+                        //         loadChatHistory(chatID);
+                        //     });
+
+                        //     // Event listener to rename the chat name/title:
+                        //     let addBtnQuerySelectorName = '.' + rename_chat_title_button_class;
+                        //     let addInputQuerySelectorName = '.' + rename_chat_title_input_class;
+                        //     const addBtn = newDiv.querySelector(addBtnQuerySelectorName);
+
+                        //     addBtn.addEventListener('click', function() {
+                        //         const addInput = newDiv.querySelector(addInputQuerySelectorName);
+                        //         let chatID = this.getAttribute('data-chat-id');
+
+                        //         addBtn.style.display = 'none';
+                        //         addInput.style.display = 'block';
+
+                        //         addInput.addEventListener('keypress', function(e) {
+                        //             console.log("Key pressed: ", e.key);
+                        //             if (e.key === 'Enter' && this.value) {
+                        //                 renameChat(chatID, this.value);
+                        //                 addInput.value = '';
+                        //                 addInput.style.display = 'none';
+                        //                 addBtn.style.display = 'block';
+                        //             }
+                                    
+                        //         });
+                        //         addInput.addEventListener('keydown', function(e) {
+                        //             console.log("Key downed: ", e.key);
+                        //             if (e.key === 'Escape' || e.key === 'Esc') {
+                        //                 addInput.value = '';
+                        //                 addInput.style.display = 'none';
+                        //                 addBtn.style.display = 'block';
+                        //             }
+                        //         });
+                        //     });
+
+                        //     sidenav.appendChild(newDiv);
+                        // }
+
                     } else {
                         throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
                     }
