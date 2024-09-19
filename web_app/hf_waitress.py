@@ -669,7 +669,7 @@ def restart_server_stream():
             model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
             print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
             tokenizer = AutoTokenizer.from_pretrained(model_id)
-            print("\nModel Loaded Successfully! Initializing inference pipeline...")
+            print("\nInitializing inference pipeline...")
             PIPE = pipeline(
                 pipeline_task,
                 model=model,
