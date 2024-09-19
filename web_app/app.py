@@ -2855,13 +2855,20 @@ def load_chat_history_list():
 
     try:
         c.execute("""
-            SELECT DISTINCT chat_id,
-                local_llm_server,
-                chat_name,
-                date_time,
-                prompt_template_format
-            FROM chat_history
-            ORDER BY date_time DESC
+            WITH RankedChats AS (
+                SELECT
+                    chat_id,
+                    local_llm_server,
+                    chat_name,
+                    date_time,
+                    prompt_template_format,
+                    ROW_NUMBER() OVER (PARTITION BY chat_id ORDER BY date_time ASC) AS rn
+                FROM chat_history
+            )
+            SELECT chat_id, local_llm_server, chat_name, date_time, prompt_template_format
+            FROM RankedChats
+            WHERE rn = 1
+            ORDER BY date_time DESC;
         """)
     except Exception as e:
         return handle_api_error("Could not get list from chat history db, encountered error: ", e)
