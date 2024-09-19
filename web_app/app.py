@@ -1384,16 +1384,15 @@ def determine_sequence_id_for_chat(chat_id):
     return int(current_sequence_id)
 
 
-def store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query_for_history_db, model_response_for_history_db, fully_formatted_prompt, local_llm_server, local_llm_chat_template_format):
+def store_llama_cpp_chat_history_to_db(chat_id, sequence_id, model_choice, user_query_for_history_db, model_response_for_history_db, fully_formatted_prompt, local_llm_server, local_llm_chat_template_format):
 
     global SEQUENCE_ID
 
     print(f"\n\nStoring chat history for chat with CHAT_ID: {chat_id}")
 
     try:
-        read_return = read_config(['sqlite_history_db', 'model_choice', 'base_template'])
+        read_return = read_config(['sqlite_history_db'])
         sqlite_history_db = read_return['sqlite_history_db']
-        model_choice = read_return['model_choice']
     except Exception as e:
         handle_local_error("Missing keys in config.json for method store_chat_history_to_db. Error: ", e)
 
@@ -1430,6 +1429,7 @@ def store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query_for_hist
     except Exception as e:
         handle_local_error("Could not insert chat history into DB, encountered error: ", e)
 
+    return formatted_datetime
 
 
 def store_chat_history_to_db(user_query_for_history_db, model_response_for_history_db, current_historical_summary):
@@ -3593,6 +3593,7 @@ def get_references():
         formatted_user_prompt = request.json['formatted_user_prompt']
         chat_id = request.json['chat_id']
         sequence_id = request.json['sequence_id']
+        model_choice = request.json['model_choice']
     except Exception as e:
         return handle_api_error("Could not read request content in method get_references, encountered error: ", e)
 
@@ -3628,10 +3629,10 @@ def get_references():
     if not do_rag:
         print("\n\nSkipping RAG, storing chat history and returning\n\n")
         try:
-            store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+            stored_datetime = store_llama_cpp_chat_history_to_db(chat_id, sequence_id, model_choice, user_query, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
         except Exception as e:
             handle_error_no_return("Could not store_llama_cpp_chat_history_to_db in get_references(), encountered error: ", e)
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format})
         
     try:
         key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
@@ -3824,11 +3825,11 @@ def get_references():
         handle_error_no_return("Could not prep data to store_chat_history_to_db in get_references(), encountered error: ", e)
 
     try:
-        store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query_for_history_db, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+        stored_datetime = store_llama_cpp_chat_history_to_db(chat_id, sequence_id, model_choice, user_query_for_history_db, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
     except Exception as e:
         handle_error_no_return("Could not store_chat_history_to_db in get_references(), encountered error: ", e)
 
-    return jsonify({'success': True, 'response': reference_response, 'pdf_frame':download_link_html})
+    return jsonify({'success': True, 'response': reference_response, 'pdf_frame':download_link_html, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format})
 
 
 if __name__ == '__main__':
