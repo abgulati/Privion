@@ -1202,10 +1202,10 @@
                 .then(data => {
                     if (data.success) {
 
-                        const history_list = data.history_list
+                        const historyList = data.history_list
                         const sidenav = document.getElementById('sidenav-content');
 
-                        history_list.forEach(chat => {
+                        historyList.forEach(chat => {
                             const newDiv = createChatHistoryMenuItem(chat);
                             sidenav.appendChild(newDiv);
                         });
