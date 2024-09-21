@@ -63,6 +63,13 @@ import re
 from logging.handlers import RotatingFileHandler
 from nltk.corpus import stopwords
 
+import whoosh
+from whoosh.index import create_in, open_dir
+from whoosh.fields import Schema, TEXT, ID
+from whoosh.qparser import QueryParser, OrGroup
+from whoosh.query import Term, Or
+from whoosh import scoring
+
 
 
 app = Flask(__name__)
@@ -264,6 +271,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'vectordb_openai_folder':base_directory + '/chroma_db_openai_embeddings',
                 'vectordb_bge_large_folder':base_directory + '/chroma_db_bge_large_embeddings',
                 'vectordb_bge_base_folder':base_directory + '/chroma_db_bge_base_embeddings',
+                'whoosh_index_folder':base_directory + '/whoosh_index',
                 'sqlite_images_db':base_directory + '/images_database_main.db',
                 'sqlite_history_db':base_directory + '/chat_history.db',
                 'sqlite_docs_loaded_db':base_directory + '/docs_loaded.db',
@@ -304,6 +312,10 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'local_llm_n_keep':0,
                 'server_timeout_seconds':10,
                 'server_retry_attempts':3,
+                'whoosh_search_weighting':'BM25F',
+                'fetch_top_k_results_from_whoosh':75,
+                'fetch_top_k_results_from_vectordb':75,
+                'filter_top_k_results_by_reranking':20,
                 'base_template':"Answer the user's question in as much detail as possible. Be as accurate as possible. Do not make up answers or fabricate false information! Whenever additional context is provided, mention the document names and page numbers the user should reference as per your best judgement.",
             }.get(key, 'undefined')
 
@@ -456,14 +468,15 @@ if not os.path.exists(BASE_DIRECTORY):
         handle_local_error("Failed to create Base App Directory, encountered error: ", e)
         
 try:
-    read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts'])
+    read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 'whoosh_index_folder'])
     model_dir = read_return['model_dir']
     highlighted_docs = read_return['highlighted_docs']
     upload_folder = read_return['upload_folder']
     ocr_pdfs = read_return['ocr_pdfs']
     pdfs_to_txts = read_return['pdfs_to_txts']
+    whoosh_index_folder = read_return['whoosh_index_folder']
 except Exception as e:
-    handle_local_error("Could not read paths for app directories (model_dir, highlighted_docs, upload_folder) from config.json on boot, encountered error: ", e)
+    handle_local_error("Could not read paths for app directories (model_dir, highlighted_docs, upload_folder, etc.) from config.json on boot, encountered error: ", e)
 
 
 # If the base directory does not currently exist...
@@ -516,6 +529,29 @@ if not os.path.exists(pdfs_to_txts):
         handle_local_error("Failed to create txt-docs Directory (pdfs_to_txts), encountered error: ", e)
 
 
+# Create the Whoosh index folder if it doesn't exist
+if not os.path.exists(whoosh_index_folder):
+
+    # Define the index schema
+    schema = Schema(
+        content=TEXT(stored=True),
+        source=ID(stored=True),
+        page_number=ID(stored=True)
+    )
+
+    # Create a directory for persistent storage of the index to disk
+    try:
+        os.makedirs(whoosh_index_folder)
+    except Exception as e:
+        handle_local_error("Failed to create Whoosh Index Directory (whoosh_index_folder), encountered error: ", e)
+
+    # Create the index based on the schema definted above
+    try:
+        create_in(whoosh_index_folder, schema)
+    except Exception as e:
+        handle_local_error("Failed to create Whoosh Index, encountered error: ", e)
+
+
 app.config['UPLOAD_FOLDER'] = upload_folder
 app.config['DOWNLOAD_FOLDER'] = highlighted_docs
 
@@ -535,6 +571,102 @@ def clean_text_string(text_to_be_cleaned):
     clean_text = re.sub(r'\s+', ' ', clean_text).strip()
 
     return clean_text
+
+
+def whoosh_indexer(new_chunks):
+
+    print("\n\nWhoosh Indexing Chunks\n\n")
+    try:
+        read_return = read_config(['whoosh_index_folder'])
+        whoosh_index_folder = read_return['whoosh_index_folder']
+    except Exception as e:
+        handle_local_error("Missing whoosh_index_folder in config.json for whoosh_indexer. Error: ", e)
+    
+    # Define the Index schema: what fields it contains
+    schema = Schema(
+        content=TEXT(stored=True),
+        source=ID(stored=True),
+        page_number=ID(stored=True)
+    )
+
+    # If the index does not currently exist...
+    if not os.path.exists(whoosh_index_folder):
+        
+        # Create a directory for persistent storage of the index to disk
+        try:
+            os.mkdir(whoosh_index_folder)
+        except Exception as e:
+            handle_local_error("Failed to create directory for the Whoosh Index, encountered error: ", e)
+        # Create the index based on the schema definted above
+        try:
+            ix = create_in(whoosh_index_folder, schema)
+        except Exception as e:
+            handle_local_error("Failed to create Whoosh Index, encountered error: ", e)
+            
+    else:
+        try:
+            ix = open_dir(whoosh_index_folder)
+        except Exception as e:
+            handle_local_error("Failed to open Whoosh Index, encountered error: ", e)
+        
+    # init writer and write to the index:
+    try:
+        writer = ix.writer()
+        for chunk in new_chunks:
+            writer.add_document(
+                content=chunk['content'], 
+                source=chunk['source'], 
+                page_number=str(chunk['page_number'])
+            )
+        
+        writer.commit()
+        print(f"Added {len(new_chunks)} chunks to Whoosh Index")
+        
+    except Exception as e:
+        handle_local_error("Failed to write to Whoosh Index, encountered error: ", e)
+
+
+def search_whoosh_index(query):
+
+    print("Searching Whoosh Index")
+    
+    try:
+        read_return = read_config(['whoosh_index_folder', 'fetch_top_k_results_from_whoosh', 'whoosh_search_weighting'])
+        whoosh_index_folder = read_return['whoosh_index_folder']
+        fetch_top_k_results_from_whoosh = read_return['fetch_top_k_results_from_whoosh']
+        whoosh_search_weighting = read_return['whoosh_search_weighting']
+    except Exception as e:
+        handle_local_error("Missing whoosh_index_folder in config.json for method search_whoosh_index. Error: ", e)
+
+    try:
+        ix = open_dir(whoosh_index_folder)
+    except Exception as e:
+        handle_local_error("Failed to open Whoosh Index, encountered error: ", e)
+
+    whoosh_weighting = scoring.BM25F()
+    if whoosh_search_weighting == "TF-IDF":
+        whoosh_weighting = scoring.TF_IDF()
+    
+    try:
+        with ix.searcher(weighting=whoosh_weighting) as searcher:
+            query_parser = QueryParser("content", schema=ix.schema, group=OrGroup)
+            parsed_query = query_parser.parse(query)
+            #print(f"parsed_query: {parsed_query}")
+
+            results = searcher.search(parsed_query, limit=fetch_top_k_results_from_whoosh)
+            print(f"number of results: {len(results)}")
+
+            # if no results, let's try a more lenient search:
+            if len(results) == 0:
+                terms = [Term("content", word) for word in query.lower().split()]
+                or_query = Or(terms)
+                results = searcher.search(or_query, limit=fetch_top_k_results_from_whoosh)
+                print(f"number of results after very lenient search: {len(results)}")
+            
+            return [{'content': result['content'], 'source': result['source'], 'page_number': result['page_number']} for result in results]
+
+    except Exception as e:
+        handle_local_error("Failed to search Whoosh Index, encountered error: ", e)
 
 
 def PDFtoAzureDocAiTXT(input_filepath):
@@ -923,31 +1055,35 @@ def chunk_docs_with_page_numbers(input_file, chunk_size=250):
     current_chunk = ""
     current_page = 1
 
-    def add_chunk(chunk, page):
+    def add_chunk(chunk, page): 
         if chunk:
-            documents.append(Document(
-                page_content=chunk.strip(),
-                metadata={'source': input_file, 'page_number': page}
-            ))
-
+            # documents.append(Document(
+            #     page_content=chunk.strip(),
+            #     metadata={'source': input_file, 'page_number': page}
+            # ))
+            documents.append({
+                'content': chunk.strip(),
+                'source': input_file,
+                'page_number': page
+            })
     try:
         with open(input_file, 'r', encoding='utf-8') as file:
             for line in file:
                 if line.startswith('[PAGE:'):
-                    new_page = int(line.strip()[6:-1])
-                    if new_page != current_page:
+                    new_page = int(line.strip()[6:-1])  #strip() removes leading and trailing whitespace, [6:-1] removes the [PAGE: and ]
+                    if new_page != current_page:    #if the new page is not the same as the current page, then add the current chunk to the documents list and reset the current chunk and current page
                         add_chunk(current_chunk, current_page)
                         current_chunk = ""
                         current_page = new_page
                     continue
 
-                if len(current_chunk) + len(line) > chunk_size:
+                if len(current_chunk) + len(line) > chunk_size:  #if the current chunk plus the line is greater than the chunk size, then add the current chunk to the documents list and reset the current chunk and current page
                     add_chunk(current_chunk, current_page)
                     current_chunk = line
-                else:
+                else: #if the current chunk plus the line is less than the chunk size, then add the line to the current chunk
                     current_chunk += line
 
-                if len(current_chunk) >= chunk_size:
+                if len(current_chunk) >= chunk_size:  #it's necessary to check again here as the last bit of content may be more than the chunk size
                     add_chunk(current_chunk, current_page)
                     current_chunk = ""
         
@@ -961,7 +1097,7 @@ def chunk_docs_with_page_numbers(input_file, chunk_size=250):
 
 
 # Document vectorization and chunking
-def LoadNewDocument(input_file):
+def whoosh_and_embed_doc_chunks(input_file):
 
     global VECTOR_STORE
     
@@ -979,7 +1115,7 @@ def LoadNewDocument(input_file):
         vectordb_bge_base_folder = read_return['vectordb_bge_base_folder']
         vectordb_bge_large_folder = read_return['vectordb_bge_large_folder']
     except Exception as e:
-        handle_local_error("Missing values in config.json, could not LoadNewDocument. Error: ", e)
+        handle_local_error("Missing values in config.json, could not whoosh_and_embed_doc_chunks. Error: ", e)
 
     chunk_sz = 250
     chunk_olp = 0
@@ -987,13 +1123,18 @@ def LoadNewDocument(input_file):
     ### L2 - Chunk Source Data ###
     print("Chunking Doc")
     try:
-        numbered_splits = chunk_docs_with_page_numbers(input_file, chunk_sz)
-
+        chunks = chunk_docs_with_page_numbers(input_file, chunk_sz)
+        whoosh_indexer(chunks)
         # print(f"\n\nnumbered_splits sample: {numbered_splits[:3]}\n\n")
         # print(f"\n\nnumbered_splits type: {type(numbered_splits[3])}\n\n")
-        
     except Exception as e:
         handle_local_error("Failed to chunk document for storage to VectorDB, encountered error: ", e)
+
+    # convert chunks dictionary to Document objects:
+    try:
+        numbered_splits = [Document(page_content=chunk['content'], metadata={'source': chunk['source'], 'page_number': chunk['page_number']}) for chunk in chunks]
+    except Exception as e:
+        handle_local_error("Failed to convert chunks to Document objects for storage to VectorDB, encountered error: ", e)
 
     ### L3 - Store Chunks in VectorDB ###
     print("Storing to VectorDB: ChromaDB")
@@ -1116,7 +1257,7 @@ def highlighter_interface(reference_pages, stream_session_id):
     highlight_list = {}
     docs_have_relevant_info = False
 
-    print(f"\n\nreference_pages: {reference_pages}\n\n")
+    # print(f"\n\nreference_pages: {reference_pages}\n\n")
 
     for file_path, content in reference_pages.items():
         source_filename = os.path.basename(file_path)
@@ -1536,9 +1677,9 @@ def download_folder(service, folder_id, path, indent=''):
                     f.write(file_content)
 
                 try:
-                    vector_embed_filepath(filename_with_extension, filepath)
+                    document_extractor_and_loader(filename_with_extension, filepath)
                 except Exception as e:
-                    return handle_api_error("Could not vector_embed_filepath() in the download_folder() method, encountered error: ", e)
+                    return handle_api_error("Could not document_extractor_and_loader() in the download_folder() method, encountered error: ", e)
 
             except Exception as e:
                 return handle_api_error("Server-side error - could not save Google Drive file in the download_folder() method: ", e)
@@ -1647,9 +1788,9 @@ def google_drive_loader():
                 f.write(file_content)
 
             try:
-                vector_embed_filepath(filename_with_extension, filepath)
+                document_extractor_and_loader(filename_with_extension, filepath)
             except Exception as e:
-                return handle_api_error("Could not vector_embed_filepath() in the google_drive_loader() method, encountered error: ", e)
+                return handle_api_error("Could not document_extractor_and_loader() in the google_drive_loader() method, encountered error: ", e)
 
         except Exception as e:
             return handle_api_error("Server-side error - could not save file downloaded from Google Drive in the google_drive_loader() method: ", e)
@@ -1819,7 +1960,7 @@ def convert_non_pdf_to_pdf_with_unoconv(filename, filepath):
         return handle_api_error("Unexpected error when converting file to PDF, encountered error: ", e)
 
 
-def vector_embed_filepath(filename, filepath):
+def document_extractor_and_loader(filename, filepath):
     print("Vector Embedding Document")
 
     if not filename.lower().endswith('.pdf'):
@@ -1854,14 +1995,14 @@ def vector_embed_filepath(filename, filepath):
             handle_local_error("Failed to extract text from the PDF document, even via fallback PyPDF2, encountered error: ", e)
     
     try:
-        chunk_size, chunk_overlap = LoadNewDocument(input_file)
+        chunk_size, chunk_overlap = whoosh_and_embed_doc_chunks(input_file)
     except Exception as e:
         handle_local_error("Failed to extract text from PDF: ", e)
     
     try:
         embedding_model_choice, vectordb_used = reload_vector_store()
     except Exception as e:
-        handle_local_error("Could not reload vector store when attempting to vector_embed_filepath(), encountered error: ", e)
+        handle_local_error("Could not reload vector store when attempting to document_extractor_and_loader(), encountered error: ", e)
 
     try:
         record_doc_loaded_to_db(filename, embedding_model_choice, vectordb_used, chunk_size, chunk_overlap)
@@ -1897,9 +2038,9 @@ def process_new_file():
         return handle_api_error("Failed to save document to app folder, encountered error: ", e)
 
     try:
-        vector_embed_filepath(filename, filepath)
+        document_extractor_and_loader(filename, filepath)
     except Exception as e:
-        return handle_api_error("Could not vector_embed_filepath() in the process_new_file() method, encountered error: ", e)
+        return handle_api_error("Could not document_extractor_and_loader() in the process_new_file() method, encountered error: ", e)
 
     return jsonify(success=True)
 
@@ -2435,10 +2576,10 @@ def fetch_file_list_for_vector_db():
             vdb_for_select = read_return['vectordb_openai_folder']
 
         vdb_for_select = '%' + os.path.basename(vdb_for_select)
-        print(f'vdb_for_select: {vdb_for_select}')
+        #print(f'vdb_for_select: {vdb_for_select}')
 
     except Exception as e:
-        return handle_api_error("Could not create new VectorDB in reset_vector_db_on_disk, encountered error: ", e)
+        return handle_api_error("Could not determine vectorDB folder in method fetch_file_list_for_vector_db, encountered error: ", e)
 
     try:
         read_return = read_config(['sqlite_docs_loaded_db'])
@@ -2541,6 +2682,13 @@ def reset_vector_db_on_disk():
     except Exception as e:
         return handle_api_error("Could not create new VectorDB in reset_vector_db_on_disk, encountered error: ", e)
 
+    # create new whoosh_index directory too:
+    try:
+        whoosh_index_folder = base_directory + '/whoosh_index' + '-' + formatted_datetime
+        write_config({'whoosh_index_folder':whoosh_index_folder})
+    except Exception as e:
+        return handle_api_error("Could not create new whoosh_index in reset_vector_db_on_disk, encountered error: ", e)
+    
     restart_required = True
     global VECTORDB_CHANGE_RELOAD_TRIGGER_SET
     VECTORDB_CHANGE_RELOAD_TRIGGER_SET = True
@@ -3004,6 +3152,8 @@ def filter_relevant_documents(query, search_results, threshold=1):
 
 
 def rerank_results_ml(query, documents, top_n=5):
+    print("\n\nReranking results with SBERT: all-MiniLM-L6-v2\n\n")
+
     # Load pre-trained SBERT model
     model = SentenceTransformer('all-MiniLM-L6-v2')
     
@@ -3193,6 +3343,47 @@ def format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence
     return formatted_prompt
 
 
+def combine_whoosh_and_vector_results(whoosh_results, vector_results):
+    print("\n\nCombining whoosh and vector results\n\n")
+
+    combined_results = []
+
+    # Convert whoosh results to Document objects
+    for result in whoosh_results:
+        combined_results.append(Document(
+            page_content=result['content'].strip().replace('\n', ' '),
+            metadata={
+                'source': result['source'],
+                'page_number': result['page_number']
+            }
+        ))
+
+    # Add the vector results to the combined results
+    combined_results.extend(vector_results)
+
+    # Filter out any duplicate documents based on page_content
+    try:
+        seen = {}
+        unique_results = []
+        for doc in combined_results:
+            # if isinstance(doc, Document):
+            #     content = doc.page_content
+            # elif isinstance(doc, tuple):
+            #     content = doc[0]
+            # else:
+            #     content = str(doc) # fallback for unexpected types
+
+            if doc.page_content not in seen:
+                seen[doc.page_content] = True
+                unique_results.append(doc)
+
+        combined_results = unique_results
+    except Exception as e:
+        handle_error_no_return("Could not filter out duplicate documents in method combine_whoosh_and_vector_results. Returning all results. Encountered error: ", e)
+    
+    return combined_results
+
+
 @app.route('/setup_for_llama_cpp_response', methods=['POST'])
 def setup_for_llama_cpp_response():
 
@@ -3214,7 +3405,7 @@ def setup_for_llama_cpp_response():
 
     # Determine do_rag
     try:
-        read_return = read_config(['local_llm_server', 'use_sbert_embeddings', 'use_openai_embeddings', 'use_bge_base_embeddings', 'use_bge_large_embeddings', 'force_enable_rag', 'force_disable_rag', 'local_llm_chat_template_format', 'base_template'])
+        read_return = read_config(['local_llm_server', 'use_sbert_embeddings', 'use_openai_embeddings', 'use_bge_base_embeddings', 'use_bge_large_embeddings', 'force_enable_rag', 'force_disable_rag', 'local_llm_chat_template_format', 'base_template', 'fetch_top_k_results_from_vectordb', 'filter_top_k_results_by_reranking'])
         use_sbert_embeddings = read_return['use_sbert_embeddings']
         use_openai_embeddings = read_return['use_openai_embeddings']
         use_bge_base_embeddings = read_return['use_bge_base_embeddings']
@@ -3224,6 +3415,8 @@ def setup_for_llama_cpp_response():
         local_llm_chat_template_format = read_return['local_llm_chat_template_format']
         base_template = read_return['base_template']
         local_llm_server = read_return['local_llm_server']
+        fetch_top_k_results_from_vectordb = read_return['fetch_top_k_results_from_vectordb']
+        filter_top_k_results_by_reranking = read_return['filter_top_k_results_by_reranking']
 
     except Exception as e:
         return handle_api_error("Missing values in config.json when attempting to setup_for_streaming_response. Error: ", e)
@@ -3258,15 +3451,26 @@ def setup_for_llama_cpp_response():
     try:
         # docs = VECTOR_STORE.similarity_search(user_query, embedding_fn=embedding_function)
         # docs_with_relevance_score = VECTOR_STORE.similarity_search_with_relevance_scores(user_query, 10, embedding_fn=embedding_function)
-        docs_list_with_cosine_distance = VECTOR_STORE.similarity_search_with_score(user_query, 11, embedding_fn=embedding_function)
+        docs_list_with_cosine_distance = VECTOR_STORE.similarity_search_with_score(user_query, fetch_top_k_results_from_vectordb, embedding_fn=embedding_function)
     except Exception as e:
         handle_error_no_return("Could not perform similarity_search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
 
+    try:
+        whoosh_results = search_whoosh_index(user_query)
+        # print(f"Whoosh results: {whoosh_results}")
+    except Exception as e:
+        handle_error_no_return("Could not perform whoosh search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
+
     filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]
+    # print(f"Filtered docs: {filtered_docs}")
+
+    # Combine the whoosh and vector results
+    combined_docs = combine_whoosh_and_vector_results(whoosh_results, filtered_docs)
+    # print(f"Combined docs: {combined_docs}")
 
     docs = []
-    if filtered_docs:
-        docs = rerank_results_ml(user_query, filtered_docs, top_n=5)
+    if combined_docs:
+        docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
         do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
     
     print(f'Do RAG? {do_rag}')
@@ -3283,7 +3487,7 @@ def setup_for_llama_cpp_response():
         try:
             QUERIES[key_for_vector_results] = docs
             user_query += f"\n\nThe following context might be helpful in answering the user query above:\n{docs}"
-            print(f"RAG formatted user_query: \n{user_query}\n")
+            # print(f"RAG formatted user_query: \n{user_query}\n")
         except Exception as e:
             try:
                 write_config({'do_rag':False})
