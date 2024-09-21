@@ -3366,13 +3366,6 @@ def combine_whoosh_and_vector_results(whoosh_results, vector_results):
         seen = {}
         unique_results = []
         for doc in combined_results:
-            # if isinstance(doc, Document):
-            #     content = doc.page_content
-            # elif isinstance(doc, tuple):
-            #     content = doc[0]
-            # else:
-            #     content = str(doc) # fallback for unexpected types
-
             if doc.page_content not in seen:
                 seen[doc.page_content] = True
                 unique_results.append(doc)
@@ -3461,7 +3454,7 @@ def setup_for_llama_cpp_response():
     except Exception as e:
         handle_error_no_return("Could not perform whoosh search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
 
-    filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]
+    filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc,score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of a Document object and a float score!
     # print(f"Filtered docs: {filtered_docs}")
 
     # Combine the whoosh and vector results
