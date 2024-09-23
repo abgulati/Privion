@@ -1085,10 +1085,11 @@ def chunk_docs_with_page_numbers(input_file, chunk_size=250):
             for line in file:
                 if line.startswith('[PAGE:'):   # Our text-extraction method adds '[PAGE:' to the beginning of each page, and these are on a separate line, so this line will only contain the added page number. Example: [PAGE:1]
                     new_page = int(line.strip()[6:-1])  #strip() removes leading and trailing whitespace, [6:-1] removes the [PAGE: and ]
-                    if new_page != current_page and current_chunk.strip():    #if the new page is not the same as the current page & the current chunk is not empty, then add the current chunk to the documents list and reset the current chunk and current page
-                        add_chunk(current_chunk, current_page)
-                        current_chunk = ""
+                    if new_page != current_page:    # update page_number if necessary
                         current_page = new_page
+                        if current_chunk.strip():   # if the current chunk is not empty, add it to the documents list as we're starting a new page
+                            add_chunk(current_chunk, current_page)
+                            current_chunk = ""
                 else:   # non-page-number, normal line of text
                     current_chunk += line
                     while len(current_chunk) >= chunk_size:
