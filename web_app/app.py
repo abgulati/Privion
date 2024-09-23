@@ -1046,49 +1046,57 @@ class Document:
         self.metadata = metadata
 
     def __repr__(self): #to provide string-representation of an object
-        return f"Document(page_content='{self.page_content[:50]}...', metadata={self.metadata})"
+        # return f"Document(page_content='{self.page_content[:50]}...', metadata={self.metadata})"    # Does not truncate the actual page_content or even str(doc.page_content), rather it only comes into play for display purposes when we print the entire object as a string!
+        return f"Document(page_content='{self.page_content}', metadata={self.metadata})"
 
-
-
+# Consider turning this into a generator function in the future for efficiency when dealing with large files!
 def chunk_docs_with_page_numbers(input_file, chunk_size=250):
     documents = []
     current_chunk = ""
     current_page = 1
 
-    def add_chunk(chunk, page): 
-        if chunk:
-            # documents.append(Document(
-            #     page_content=chunk.strip(),
-            #     metadata={'source': input_file, 'page_number': page}
-            # ))
+    def add_chunk(chunk, page):
+        if chunk.strip():   #if chunk is not empty!
+            #print(f"\n\nAdding chunk from page {page}: {chunk.strip()}\n\n")
             documents.append({
                 'content': chunk.strip(),
                 'source': input_file,
                 'page_number': page
             })
+    
+    def provide_chunk_space(chunk_size, current_chunk_for_eval):
+        available_chunk_space = chunk_size - len(current_chunk_for_eval)
+                    
+        if available_chunk_space < 0:   # negative space means the current chunk is too big for the chunk_size, so we need to split it, add the first part to the documents list, and keep the rest in current_chunk
+            space = current_chunk_for_eval[:chunk_size].rfind(" ")
+            if space == -1 or space == 0: # if by any chance no space is found or it's at the beginning of the chunk, we'll force a split at chunk_size
+                space = chunk_size    
+            add_chunk(current_chunk_for_eval[:space], current_page)
+            current_chunk_for_eval = current_chunk_for_eval[space:].lstrip()
+        
+        elif available_chunk_space == 0:   # zero space means the current chunk is exactly the chunk_size, so we add it and reset the current chunk
+            add_chunk(current_chunk_for_eval, current_page)
+            current_chunk_for_eval = ""
+
+        return current_chunk_for_eval
+    
     try:
         with open(input_file, 'r', encoding='utf-8') as file:
             for line in file:
-                if line.startswith('[PAGE:'):
+                if line.startswith('[PAGE:'):   # Our text-extraction method adds '[PAGE:' to the beginning of each page, and these are on a separate line, so this line will only contain the added page number. Example: [PAGE:1]
                     new_page = int(line.strip()[6:-1])  #strip() removes leading and trailing whitespace, [6:-1] removes the [PAGE: and ]
-                    if new_page != current_page:    #if the new page is not the same as the current page, then add the current chunk to the documents list and reset the current chunk and current page
+                    if new_page != current_page and current_chunk.strip():    #if the new page is not the same as the current page & the current chunk is not empty, then add the current chunk to the documents list and reset the current chunk and current page
                         add_chunk(current_chunk, current_page)
                         current_chunk = ""
                         current_page = new_page
-                    continue
-
-                if len(current_chunk) + len(line) > chunk_size:  #if the current chunk plus the line is greater than the chunk size, then add the current chunk to the documents list and reset the current chunk and current page
-                    add_chunk(current_chunk, current_page)
-                    current_chunk = line
-                else: #if the current chunk plus the line is less than the chunk size, then add the line to the current chunk
+                else:   # non-page-number, normal line of text
                     current_chunk += line
+                    while len(current_chunk) >= chunk_size:
+                        current_chunk = provide_chunk_space(chunk_size, current_chunk)
 
-                if len(current_chunk) >= chunk_size:  #it's necessary to check again here as the last bit of content may be more than the chunk size
-                    add_chunk(current_chunk, current_page)
-                    current_chunk = ""
-        
         # Add any remaining content
-        add_chunk(current_chunk, current_page)
+        if current_chunk.strip():
+            add_chunk(current_chunk, current_page)
 
     except Exception as e:
         handle_local_error("Could not chunk document, encountered error: ", e)
@@ -3174,6 +3182,8 @@ def rerank_results_ml(query, documents, top_n=5):
     
     # Reorder the original documents based on the sorted indexes
     ranked_documents = [documents[idx] for idx, _ in sorted_indexes[:top_n]]
+
+    print(f"\n\nReturning Top {len(ranked_documents)} Ranked Documents: {ranked_documents}\n\n")
     
     return ranked_documents
 
