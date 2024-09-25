@@ -1,8 +1,9 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel, CLIPTextModel
 from huggingface_hub import login
 import torch
 
-from diffusers import FluxPipeline
+from diffusers import FluxPipeline, FluxTransformer2DModel
+from optimum.quanto import freeze, qfloat8, quantize
 
 import subprocess
 import threading
@@ -131,7 +132,7 @@ def write_config(config_updates, filename='hf_config.json'):
 
         #restart logic in write_config() might be unnecessary, circle back later
         restart_required = False
-        triggers_for_hf_restart = ['torch_device_map', 'torch_dtype', 'model_id', 'awq', 'attn_implementation', 'pipeline_task', 'quantize', 'quant_level', 'port', 'use_flash_attention_2', 'hqq_group_size']
+        triggers_for_hf_restart = ['torch_device_map', 'torch_dtype', 'model_id', 'awq', 'attn_implementation', 'pipeline_task', 'quantize', 'quant_level', 'port', 'use_flash_attention_2', 'hqq_group_size', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux']
         for key in config_updates:
             if key in triggers_for_hf_restart and config_updates[key] != hf_config.get(key):
                 restart_required = True
@@ -177,6 +178,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'awq':False,
                     'flux_diffusers':False,
                     'flux_low_vram_optimizations':False,
+                    'load_quantized_flux':False,
                     'gguf_model_id':None,
                     'gguf_filename':None,
                     'quantize':"quanto",
@@ -326,7 +328,7 @@ def parse_arguments():
 
     # Even if a parser object could not be created, a read_request will write & return defaults 
     try:
-        read_return = read_config(['access_gated', 'access_token', 'model_id',  'gguf', 'awq', 'gguf_model_id', 'gguf_filename', 'quantize', 'quant_level', 'hqq_group_size', 'push_to_hub', 'torch_device_map', 'torch_dtype', 'trust_remote_code', 'use_flash_attention_2', 'pipeline_task', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'port', 'flux_diffusers', 'flux_low_vram_optimizations'])
+        read_return = read_config(['access_gated', 'access_token', 'model_id',  'gguf', 'awq', 'gguf_model_id', 'gguf_filename', 'quantize', 'quant_level', 'hqq_group_size', 'push_to_hub', 'torch_device_map', 'torch_dtype', 'trust_remote_code', 'use_flash_attention_2', 'pipeline_task', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'port', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux'])
         access_gated = str(read_return['access_gated']).lower() == 'true'
         access_token = str(read_return['access_token'])
         model_id = str(read_return['model_id'])
@@ -360,6 +362,7 @@ def parse_arguments():
         parser.add_argument("--awq", action="store_true", default=False, help="Add this flag when loading AWQ-quantized models directly off the HF-Hub.")
         parser.add_argument("--flux_diffusers", action="store_true", default=False, help="Add this flag when loading FLUX-diffusers models directly off the HF-Hub.")
         parser.add_argument("--flux_low_vram_optimizations", action="store_true", default=False, help="Save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power")
+        parser.add_argument("--load_quantized_flux", action="store_true", default=False, help="Add this flag when loading quantized FLUX models directly off the HF-Hub.")
         parser.add_argument("--gguf_model_id", type=str, default=None, help="GGUF model_id of the target repo. Defaults to None")
         parser.add_argument("--gguf_filename", type=str, default=None, help="GGUF filename from the target repo. Defaults to None")
         parser.add_argument("--quantize", type=str, default=quantize, help="Quantization method to be utilized. Simply type 'n' to not use quantization. Remembers previously set value and falls-back to bitsandbytes as the default.")
@@ -394,7 +397,7 @@ def parse_arguments():
                 config_writer_semaphore.release()
                 
                 # Set defaults
-                read_config(['access_gated', 'access_token', 'model_id',  'gguf', 'awq', 'flux_diffusers', 'flux_low_vram_optimizations', 'gguf_model_id', 'gguf_filename', 'quantize', 'quant_level', 'hqq_group_size', 'push_to_hub', 'torch_device_map', 'torch_dtype', 'trust_remote_code', 'use_flash_attention_2', 'pipeline_task', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'port'])
+                read_config(['access_gated', 'access_token', 'model_id',  'gguf', 'awq', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux', 'gguf_model_id', 'gguf_filename', 'quantize', 'quant_level', 'hqq_group_size', 'push_to_hub', 'torch_device_map', 'torch_dtype', 'trust_remote_code', 'use_flash_attention_2', 'pipeline_task', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'port'])
 
             except Exception as e:
                 handle_local_error("Could not reset hf_config.json, encountered error: ", e)
@@ -418,6 +421,7 @@ def parse_arguments():
                     'use_flash_attention_2':args.use_flash_attention_2, 
                     'flux_diffusers':args.flux_diffusers,
                     'flux_low_vram_optimizations':args.flux_low_vram_optimizations,
+                    'load_quantized_flux':args.load_quantized_flux,
                     'pipeline_task':args.pipeline_task, 
                     'max_new_tokens':args.max_new_tokens, 
                     'return_full_text':args.return_full_text, 
@@ -613,24 +617,60 @@ def load_flux_pipeline(pipeline):
     print("\n\nLoading Flux Pipeline\n\n")
 
     try:
-        read_return = read_config(['model_id', 'flux_low_vram_optimizations'])
+        read_return = read_config(['model_id', 'flux_low_vram_optimizations', 'load_quantized_flux'])
         model_id = str(read_return['model_id'])
         flux_low_vram_optimizations = str(read_return['flux_low_vram_optimizations']).lower() == 'true'
+        load_quantized_flux = str(read_return['load_quantized_flux']).lower() == 'true'
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
 
-    try:
-        pipeline = FluxPipeline.from_pretrained(model_id, torch_dtype=torch.bfloat16)
-        if flux_low_vram_optimizations:
-            pipeline.enable_sequential_cpu_offload()
-            pipeline.vae.enable_slicing()
-            pipeline.vae.enable_tiling()
-            pipeline.to(torch.float16)  # Casting here instead of in the pipeline constructor because doing so in the constructor loads all models into CPU memory at once
-        print(f"\n{model_id} loaded successfully!\n")
-    except Exception as e:
-        handle_local_error("Could not load Flux Pipeline, encountered error: ", e)
-        return False
+    if load_quantized_flux:
+        print("Loading quantized Flux Pipeline")
+        bfl_repo = model_id
+        dtype = torch.bfloat16
+
+        quantized_checkpoint = ""
+        if "schnell" in model_id.lower():
+            quantized_checkpoint = "https://huggingface.co/Kijai/flux-fp8/blob/main/flux1-schnell-fp8-e4m3fn.safetensors"
+        elif "dev" in model_id.lower():
+            quantized_checkpoint = "https://huggingface.co/Kijai/flux-fp8/blob/main/flux1-dev-fp8.safetensors"
+        
+        print(f"\n\nLoading FLUX FP8 Quantized Checkpoint from: {quantized_checkpoint}\n\n")
+
+        try:
+            print(f"\n\nSetting and quantizing Transformer for Quantized Flux Pipeline from {bfl_repo}\n\n")
+            transformer = FluxTransformer2DModel.from_single_file(quantized_checkpoint, torch_dtype=dtype)
+            quantize(transformer, weights=qfloat8)
+            freeze(transformer)
+
+            print(f"\n\nSetting and quantizing Text Encoder 2 for Quantized Flux Pipeline from {bfl_repo}\n\n")
+            text_encoder_2 = T5EncoderModel.from_pretrained(bfl_repo, subfolder="text_encoder_2", torch_dtype=dtype)
+            quantize(text_encoder_2, weights=qfloat8)
+            freeze(text_encoder_2)
+
+            print(f"\n\nQuatization complete! Loading Quantized Flux Pipeline...\n\n")
+            pipeline = FluxPipeline.from_pretrained(bfl_repo, transformer=transformer, text_encoder_2=text_encoder_2, torch_dtype=dtype)
+            pipeline.transformer = transformer
+            pipeline.text_encoder_2 = text_encoder_2
+
+            print(f"\n\nEnabling model CPU offload for Quantized Flux Pipeline\n\n")
+            pipeline.enable_model_cpu_offload()
+        except Exception as e:
+            handle_local_error("Could not load quantized Flux Pipeline, encountered error: ", e)
+            return False
+    else:    
+        try:
+            pipeline = FluxPipeline.from_pretrained(model_id, torch_dtype=torch.bfloat16)
+            if flux_low_vram_optimizations:
+                pipeline.enable_sequential_cpu_offload()
+                pipeline.vae.enable_slicing()
+                pipeline.vae.enable_tiling()
+                pipeline.to(torch.float16)  # Casting here instead of in the pipeline constructor because doing so in the constructor loads all models into CPU memory at once
+        except Exception as e:
+            handle_local_error("Could not load Flux Pipeline, encountered error: ", e)
+            return False
     
+    print(f"\n{model_id} loaded successfully!\n")
     return pipeline
 
 
@@ -682,7 +722,8 @@ def restart_server_stream():
 
     model_params = get_model_params()
 
-    print(f"Restarting server and initializing model with parameters: {model_params}")
+    if not flux_diffusers:
+        print(f"Restarting server and initializing model with parameters: {model_params}")
     
     stop_thread = threading.Event()
 
@@ -840,6 +881,7 @@ def generate_flux_image(request):
             "width": int(request.headers.get('X-Width', 1360)),
             "num_inference_steps": int(request.headers.get('X-Num-Inference-Steps', 5)),
             "max_sequence_length": int(request.headers.get('X-Max-Sequence-Length', 256)),
+            "num_images_per_prompt": int(request.headers.get('X-Num-Images-Per-Prompt', 1))
         }
         image = PIPE(
             messages[0]["prompt"],
@@ -877,6 +919,7 @@ def generate_flux_image(request):
         #         document.body.appendChild(img);
         #         }
         #     });
+
 
 def empty_cuda_cache():
     print("\n\nEmptying CUDA cache\n\n")
