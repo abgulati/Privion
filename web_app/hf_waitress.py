@@ -2,11 +2,14 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextStre
 from huggingface_hub import login
 import torch
 
+from diffusers import FluxPipeline
+
 import subprocess
 import threading
 import traceback
 import argparse
 import logging
+import base64
 import queue
 import time
 import json
@@ -169,8 +172,11 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'access_gated':False,
                     'access_token':"",
                     'model_id':"microsoft/Phi-3-mini-4k-instruct",
+                    'generated_images_folder':"M:/Storage/lars_storage/generated_images",
                     'gguf':False,
                     'awq':False,
+                    'flux_diffusers':False,
+                    'flux_low_vram_optimizations':False,
                     'gguf_model_id':None,
                     'gguf_filename':None,
                     'quantize':"quanto",
@@ -320,7 +326,7 @@ def parse_arguments():
 
     # Even if a parser object could not be created, a read_request will write & return defaults 
     try:
-        read_return = read_config(['access_gated', 'access_token', 'model_id',  'gguf', 'awq', 'gguf_model_id', 'gguf_filename', 'quantize', 'quant_level', 'hqq_group_size', 'push_to_hub', 'torch_device_map', 'torch_dtype', 'trust_remote_code', 'use_flash_attention_2', 'pipeline_task', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'port'])
+        read_return = read_config(['access_gated', 'access_token', 'model_id',  'gguf', 'awq', 'gguf_model_id', 'gguf_filename', 'quantize', 'quant_level', 'hqq_group_size', 'push_to_hub', 'torch_device_map', 'torch_dtype', 'trust_remote_code', 'use_flash_attention_2', 'pipeline_task', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'port', 'flux_diffusers', 'flux_low_vram_optimizations'])
         access_gated = str(read_return['access_gated']).lower() == 'true'
         access_token = str(read_return['access_token'])
         model_id = str(read_return['model_id'])
@@ -352,6 +358,8 @@ def parse_arguments():
         parser.add_argument("--model_id", type=str, default=model_id, help="model_id for for LLM in HF-Transformers format obtained from the model card. Remembers previously set value and falls-back to Phi3-mini-4k-instruct as the default.")
         parser.add_argument("--gguf", action="store_true", default=False, help="Add this flag if you'll be loading a GGUF LLM. Defaults to False.")
         parser.add_argument("--awq", action="store_true", default=False, help="Add this flag when loading AWQ-quantized models directly off the HF-Hub.")
+        parser.add_argument("--flux_diffusers", action="store_true", default=False, help="Add this flag when loading FLUX-diffusers models directly off the HF-Hub.")
+        parser.add_argument("--flux_low_vram_optimizations", action="store_true", default=False, help="Save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power")
         parser.add_argument("--gguf_model_id", type=str, default=None, help="GGUF model_id of the target repo. Defaults to None")
         parser.add_argument("--gguf_filename", type=str, default=None, help="GGUF filename from the target repo. Defaults to None")
         parser.add_argument("--quantize", type=str, default=quantize, help="Quantization method to be utilized. Simply type 'n' to not use quantization. Remembers previously set value and falls-back to bitsandbytes as the default.")
@@ -386,7 +394,7 @@ def parse_arguments():
                 config_writer_semaphore.release()
                 
                 # Set defaults
-                read_config(['access_gated', 'access_token', 'model_id',  'gguf', 'awq', 'gguf_model_id', 'gguf_filename', 'quantize', 'quant_level', 'hqq_group_size', 'push_to_hub', 'torch_device_map', 'torch_dtype', 'trust_remote_code', 'use_flash_attention_2', 'pipeline_task', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'port'])
+                read_config(['access_gated', 'access_token', 'model_id',  'gguf', 'awq', 'flux_diffusers', 'flux_low_vram_optimizations', 'gguf_model_id', 'gguf_filename', 'quantize', 'quant_level', 'hqq_group_size', 'push_to_hub', 'torch_device_map', 'torch_dtype', 'trust_remote_code', 'use_flash_attention_2', 'pipeline_task', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'port'])
 
             except Exception as e:
                 handle_local_error("Could not reset hf_config.json, encountered error: ", e)
@@ -408,6 +416,8 @@ def parse_arguments():
                     'torch_dtype':args.torch_dtype, 
                     'trust_remote_code':args.trust_remote_code, 
                     'use_flash_attention_2':args.use_flash_attention_2, 
+                    'flux_diffusers':args.flux_diffusers,
+                    'flux_low_vram_optimizations':args.flux_low_vram_optimizations,
                     'pipeline_task':args.pipeline_task, 
                     'max_new_tokens':args.max_new_tokens, 
                     'return_full_text':args.return_full_text, 
@@ -598,6 +608,32 @@ def get_model_params():
     return model_params
 
 
+def load_flux_pipeline(pipeline):
+
+    print("\n\nLoading Flux Pipeline\n\n")
+
+    try:
+        read_return = read_config(['model_id', 'flux_low_vram_optimizations'])
+        model_id = str(read_return['model_id'])
+        flux_low_vram_optimizations = str(read_return['flux_low_vram_optimizations']).lower() == 'true'
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
+
+    try:
+        pipeline = FluxPipeline.from_pretrained(model_id, torch_dtype=torch.bfloat16)
+        if flux_low_vram_optimizations:
+            pipeline.enable_sequential_cpu_offload()
+            pipeline.vae.enable_slicing()
+            pipeline.vae.enable_tiling()
+            pipeline.to(torch.float16)  # Casting here instead of in the pipeline constructor because doing so in the constructor loads all models into CPU memory at once
+        print(f"\n{model_id} loaded successfully!\n")
+    except Exception as e:
+        handle_local_error("Could not load Flux Pipeline, encountered error: ", e)
+        return False
+    
+    return pipeline
+
+
 class CustomStream(io.StringIO):
     def __init__(self, callback=None):  # this callback stream to handle written data is not thread-safe!
         super().__init__()
@@ -635,11 +671,12 @@ def restart_server_stream():
     PIPE = None
 
     try:
-        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task'])
+        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers'])
         model_id = str(read_return['model_id'])
         push_to_hub = str(read_return['push_to_hub']).lower() == 'true'
         quant_level = str(read_return['quant_level'])
         pipeline_task = str(read_return['pipeline_task'])
+        flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
 
@@ -664,17 +701,22 @@ def restart_server_stream():
         try:
             sys.stdout = custom_stdout
             sys.stderr = custom_stderr
-
             logging.basicConfig(stream=custom_stdout, level=logging.INFO)   # logging level is set to INFO to ensure all logs are captured by the stream
-            model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
-            print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
-            tokenizer = AutoTokenizer.from_pretrained(model_id)
-            print("\nInitializing inference pipeline...")
-            PIPE = pipeline(
-                pipeline_task,
-                model=model,
-                tokenizer=tokenizer,
-            )
+            
+            if flux_diffusers:
+                print("\n\nFlux Diffusers Selected - Loading Model\n\n")
+                PIPE = load_flux_pipeline(PIPE)
+            else:
+                model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
+                print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
+                tokenizer = AutoTokenizer.from_pretrained(model_id)
+                print("\nInitializing inference pipeline...")
+                PIPE = pipeline(
+                    pipeline_task,
+                    model=model,
+                    tokenizer=tokenizer,
+                )
+            
             print(f"\n{model_id} loaded successfully!")
         except Exception as e:
             handle_local_error("Model loading failed, encountered error: ", e)
@@ -713,20 +755,30 @@ def initialize_model():
     global PIPE
 
     try:
-        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task'])
+        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'flux_low_vram_optimizations'])
         model_id = str(read_return['model_id'])
         push_to_hub = str(read_return['push_to_hub']).lower() == 'true'
         quant_level = str(read_return['quant_level'])
         pipeline_task = str(read_return['pipeline_task'])
+        flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
+
+    if flux_diffusers:
+        print("\n\nFlux Diffusers Selected - Loading Model\n\n")
+        try:
+            PIPE = load_flux_pipeline(PIPE)
+            return True
+        except Exception as e:
+            handle_local_error("Could not load Flux Pipeline, encountered error: ", e)
+            return False
 
     model_params = get_model_params()
 
     print(f"initializing {model_id} with model_params: {model_params}")
 
     try:
-        model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
+        model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)  # unpacking is equivalent to passing each parameter individually, so for example you'll get `attn_implementation="flash_attention_2"`
     except Exception as e:
         handle_local_error("Could not create AutoModelForCausalLM, encountered error: ", e)
 
@@ -765,6 +817,81 @@ def initialize_model():
     return True
 
 
+def generate_flux_image(request):
+    print("\n\nFlux Diffusers Selected - Generating Image\n\n")
+
+    try:
+        data = request.json
+        messages = data.get('messages', [])
+    except Exception as e:
+        handle_local_error("Could not read POST-request messages for /completions, encountered error: ", e)
+        return False
+
+    generated_images_folder = "generated_images"
+    try:
+        generated_images_folder = read_config(['generated_images_folder'])['generated_images_folder']
+    except Exception as e:
+        handle_error_no_return("Could not read generated_images_folder from hf_config.json, using default: generated_images in the current working directory. Encountered error: ", e)
+
+    try:
+        flux_generation_args = {
+            "guidance_scale": float(request.headers.get('X-Guidance-Scale', 0)),
+            "height": int(request.headers.get('X-Height', 768)),
+            "width": int(request.headers.get('X-Width', 1360)),
+            "num_inference_steps": int(request.headers.get('X-Num-Inference-Steps', 5)),
+            "max_sequence_length": int(request.headers.get('X-Max-Sequence-Length', 256)),
+        }
+        image = PIPE(
+            messages[0]["prompt"],
+            **flux_generation_args
+        ).images[0]
+
+        stream_session_id = str(uuid.uuid4())
+        image_name = "output_" + stream_session_id + ".png"
+
+        try:
+            os.makedirs(generated_images_folder, exist_ok=True)
+            image.save(generated_images_folder + "/" + image_name)
+        except Exception as e:
+            handle_error_no_return("Could not store image in generated_images folder, saving in current working directory instead. Encountered error: ", e)
+            try:    
+                image.save(image_name)
+            except Exception as e:
+                handle_error_no_return("Could not store image in current working directory. Proceeding to simply return the image as a base64 encoded string. Encountered error: ", e)
+
+        buffered = io.BytesIO()
+        image.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        #return jsonify({"success": True, "response": img_str})
+        return img_str
+    except Exception as e:
+        handle_local_error("Could not generate image with FLUX Diffusers. Encountered error: ", e)
+        return False
+
+        # fetch('/your_endpoint')
+        #     .then(response => response.json())
+        #     .then(data => {
+        #         if (data.success) {
+        #         const img = new Image();
+        #         img.src = 'data:image/png;base64,' + data.response;
+        #         document.body.appendChild(img);
+        #         }
+        #     });
+
+def empty_cuda_cache():
+    print("\n\nEmptying CUDA cache\n\n")
+    # check if torch.cuda is available
+    if torch.cuda.is_available():
+        try:
+            torch.cuda.empty_cache()
+        except Exception as e:
+            handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
+    else:
+        print("\n\nCUDA is not available, skipping cache-emptying\n\n")
+        return
+
+
+
 @app.route('/completions', methods=['POST'])
 def completions():
 
@@ -781,7 +908,7 @@ def completions():
             handle_api_error("Could not read POST-request messages for /completions, encountered error: ", e)
 
         try:
-            read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep'])
+            read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'flux_diffusers'])
             max_new_tokens = int(read_return['max_new_tokens'])
             return_full_text = str(read_return['return_full_text']).lower() == 'true'
             temperature = float(read_return['temperature'])
@@ -790,8 +917,16 @@ def completions():
             top_p = float(read_return['top_p'])
             min_p = float(read_return['min_p'])
             n_keep = int(read_return['n_keep'])
+            flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
         except Exception as e:
             handle_local_error("Could not read values from hf_config.json when trying to parse_arguments(), encountered error: ", e)
+
+        if flux_diffusers:
+            try:
+                image_str = generate_flux_image(request)
+                return jsonify({"success": True, "response": image_str})
+            except Exception as e:
+                return handle_api_error("Could not generate image with FLUX Diffusers. Encountered error: ", e)
 
         try:
             generation_args = {
@@ -815,6 +950,11 @@ def completions():
             handle_api_error("Could not generate output, encountered error: ", e)
 
         print("\n\nCompletions done - releasing LLM semaphore\n\n")
+
+        try:
+            empty_cuda_cache()
+        except Exception as e:
+            handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
 
         return jsonify({"success": True, "response": output})
 
@@ -917,6 +1057,11 @@ def completions_stream():
             yield f"data: {json.dumps(line)}\n\n"
         
         yield f"event: END\ndata: \"null\"\n\n"
+
+        try:
+            empty_cuda_cache()
+        except Exception as e:
+            handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
             
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
