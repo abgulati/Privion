@@ -2344,6 +2344,10 @@ def hf_waitress_server_starter():
         with open('hf_config.json', 'r') as file:
             hf_config = json.load(file)
             is_awq = hf_config['awq']
+            use_flash_attention_2 = hf_config['use_flash_attention_2']
+            flux_diffusers = hf_config['flux_diffusers']
+            flux_low_vram_optimizations = hf_config['flux_low_vram_optimizations']
+            load_quantized_flux = hf_config['load_quantized_flux']
             model_choice = hf_config['model_id']
     except Exception as e:
         handle_error_no_return("Could not read hf_config.json in method hf_waitress_server_starter, encountered error: ", e)
@@ -2360,25 +2364,35 @@ def hf_waitress_server_starter():
     
     print("\n\nProceeding to launch HF-Waitress server\n\n")
 
+    launch_args = ' '
+    if is_awq:
+        launch_args += '--awq '
+    if use_flash_attention_2:
+        launch_args += '--use_flash_attention_2 '
+    if flux_diffusers:
+        launch_args += '--flux_diffusers '
+    if flux_low_vram_optimizations:
+        launch_args += '--flux_low_vram_optimizations '
+    if load_quantized_flux:
+        launch_args += '--load_quantized_flux '
+    
+    launch_args = launch_args.strip()
+    base_command = 'python' if platform.system() == 'Windows' else 'python3'
+    full_command = f"{base_command} hf_waitress.py {launch_args}"
+
     try:
         if platform.system() == 'Windows':
-            if not is_awq:
-                HF_WAITRESS_PROCESS = subprocess.Popen(['python', 'hf_waitress.py'], creationflags=subprocess.CREATE_NEW_CONSOLE)   #Popen is non-blocking, so the server will keep running in the background
-            else:
-                HF_WAITRESS_PROCESS = subprocess.Popen(['python', 'hf_waitress.py', '--awq'], creationflags=subprocess.CREATE_NEW_CONSOLE)
+            HF_WAITRESS_PROCESS = subprocess.Popen(full_command, creationflags=subprocess.CREATE_NEW_CONSOLE)   #Popen is non-blocking, so the server will keep running in the background
         else:
             # Platform & container agnostic:
             with open('hf_waitress_output_log.txt', 'w') as f:
-                if not is_awq:
-                    HF_WAITRESS_PROCESS = subprocess.Popen(['python3', 'hf_waitress.py'], stdout=f, stderr=subprocess.STDOUT, text=True)
-                else:
-                    HF_WAITRESS_PROCESS = subprocess.Popen(['python3', 'hf_waitress.py', '--awq'], stdout=f, stderr=subprocess.STDOUT, text=True)
+                HF_WAITRESS_PROCESS = subprocess.Popen(full_command, stdout=f, stderr=subprocess.STDOUT, text=True)
 
     except Exception as e:
         return handle_api_error("Could not launch HF-Waitress process, encountered error: ", e)
 
     timeout = 5   # seconds
-    attempts = 25
+    attempts = 120  # 120 * 5 = 600 seconds = 10 minutes
 
     try:
         for _ in range(attempts):
