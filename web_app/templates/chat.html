@@ -263,6 +263,75 @@
 
                                             <br>
 
+                                            <div id="hf_waitress_diffusers">
+                                                <label class="hf-select-settings-labels-group">Diffusers? (Enable for FLUX Inferencing)</label>
+                                                <input type="radio" id="hf_waitress_diffusers_yes" name="hf_use_diffusers" value="y" style="margin-left: 7px;"> Yes
+                                                <input type="radio" id="hf_waitress_diffusers_no" name="hf_use_diffusers" value="n" style="margin-left: 7px;"> No (Default)
+                                            </div>
+
+                                            <br>
+
+                                            <div class="hf-waitress-diffusers-configuration-div" id="hf-waitress-diffusers-configuration-div" style="display: none;">
+                                                
+                                                <div id="hf_waitress_diffusers_low_vram_optimizations">
+                                                    <label class="hf-select-settings-labels-group">Low VRAM Optimizations for FLUX Inferencing?</label>
+                                                    <input type="radio" id="hf_waitress_diffusers_low_vram_optimizations_yes" name="hf_diffusers_use_low_vram_optimizations" value="y" style="margin-left: 7px;"> Yes (Default)
+                                                    <input type="radio" id="hf_waitress_diffusers_low_vram_optimizations_no" name="hf_diffusers_use_low_vram_optimizations" value="n" style="margin-left: 7px;"> No
+                                                </div>
+    
+                                                <br>
+
+                                                <div id="hf_waitress_diffusers_fp8">
+                                                    <label class="hf-select-settings-labels-group">FP8 Quantized FLUX Inferencing?</label>
+                                                    <input type="radio" id="hf_waitress_diffusers_fp8_yes" name="hf_diffusers_use_fp8" value="y" style="margin-left: 7px;"> Yes
+                                                    <input type="radio" id="hf_waitress_diffusers_fp8_no" name="hf_diffusers_use_fp8" value="n" style="margin-left: 7px;"> No (Default)
+                                                </div>
+    
+                                                <br>
+
+                                                <div id="hf_waitress_diffusers_guidance_scale">
+                                                    <label for="HfDGuidanceScaleSlider" class="hf-select-settings-labels-group">Guidance Scale (Only for Guidance-Distilled Models, example: Flux-Dev (default: 7.0). Enable by setting > 1) (X-Guidance-Scale): </label>
+                                                    <input type="range" id="HfDGuidanceScaleSlider" min="0" max="2" step="0.1" value="0.0">
+                                                    <span id="HfDGuidanceScaleSliderValue">0.0</span>
+                                                </div>
+    
+                                                <br>
+
+                                                <div id="hf_waitress_diffusers_height" class="restart-settings-group">
+                                                    <label for="HfDHeight" class="hf-select-settings-labels-group">Height (X-Height): </label>
+                                                    <input type="number" id="HfDHeight" min="0" style="width: 15%;" value="1360">
+                                                </div>
+
+                                                <br>
+
+                                                <div id="hf_waitress_diffusers_width" class="restart-settings-group">
+                                                    <label for="HfDWidth" class="hf-select-settings-labels-group">Width (X-Width): </label>
+                                                    <input type="number" id="HfDWidth" min="0" style="width: 15%;" value="768">
+                                                </div>
+
+                                                <br>
+                                                
+                                                <div id="hf_waitress_diffusers_num_inference_steps" class="restart-settings-group">
+                                                    <label for="HfDNumInfSteps" class="hf-select-settings-labels-group">Number of Inference Steps (X-Num-Inference-Steps): </label>
+                                                    <input type="number" id="HfDNumInfSteps" min="0" style="width: 15%;" value="3">
+                                                </div>
+
+                                                <br>
+
+                                                <div id="hf_waitress_diffusers_sequence_length" class="restart-settings-group">
+                                                    <label for="HfDSeqLen" class="hf-select-settings-labels-group">Sequence Length (X-Max-Sequence-Length): </label>
+                                                    <input type="number" id="HfDSeqLen" min="0"  max="65535" style="width: 15%;" value="256">
+                                                </div>
+
+                                                <br>
+
+                                                <div id="hf_waitress_diffusers_num_images_per_prompt" class="restart-settings-group">
+                                                    <label for="HfDNumImgPerPrompt" class="hf-select-settings-labels-group">Number of Images per Prompt (X-Num-Images-Per-Prompt): </label>
+                                                    <input type="number" id="HfDNumImgPerPrompt" min="0"  max="10" style="width: 15%;" value="1">
+                                                </div>
+
+                                            </div>
+
                                             <!--Advanced Settings Section Begins-->
                                             <a href="#" class="btn btn-link btn-primary llm-adv-set-toggle" id="advancedHfLlmSettingsToggle" data-bs-toggle="collapse" data-bs-target="#advancedHfLlmSettings" aria-expanded="false" aria-controls="advancedHfLlmSettings" style="display: inline-block;">
                                                 Advanced Settings >>>
@@ -1829,6 +1898,20 @@
                 });
             }
 
+
+            function disableTransformersSettings() {
+                document.getElementById('advancedHfLlmSettingsToggle').style.display = 'none';
+                document.getElementById('hf_waitress_is_awq').style.display = 'none';
+                document.getElementById('hf_waitress_trust_remote_code').style.display = 'none';
+            }
+
+
+            function enableTransformersSettings() {
+                document.getElementById('advancedHfLlmSettingsToggle').style.display = 'inline-block';
+                document.getElementById('hf_waitress_is_awq').style.display = 'block';
+                document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
+            }
+
             
             ////////////////////////---------DOMContentLoaded Block Begins---------////////////////////////////
             function initializeChatLink() {
@@ -1935,7 +2018,10 @@
                     'quant_level',
                     'port',
                     'awq',
-                    'hqq_group_size'
+                    'hqq_group_size',
+                    'flux_diffusers',
+                    'flux_low_vram_optimizations',
+                    'load_quantized_flux'
                 ]
                 
                 return fetch('http://localhost:9069/hf_config_reader_api', {
@@ -2061,11 +2147,28 @@
                 document.getElementById('hf_waitress_trust_remote_code_yes').checked = all_values.trust_remote_code;
                 document.getElementById('hf_waitress_trust_remote_code_no').checked = !all_values.trust_remote_code;
 
+                document.getElementById('hf_waitress_diffusers_yes').checked = all_values.flux_diffusers;
+                document.getElementById('hf_waitress_diffusers_no').checked = !all_values.flux_diffusers;
+
+                document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').checked = all_values.flux_low_vram_optimizations;
+                document.getElementById('hf_waitress_diffusers_low_vram_optimizations_no').checked = !all_values.flux_low_vram_optimizations;
+
+                document.getElementById('hf_waitress_diffusers_fp8_yes').checked = all_values.load_quantized_flux;
+                document.getElementById('hf_waitress_diffusers_fp8_no').checked = !all_values.load_quantized_flux;
+
                 document.getElementById('hf_waitress_use_flash_attention_2_yes').checked = all_values.use_flash_attention_2;
                 document.getElementById('hf_waitress_use_flash_attention_2_no').checked = !all_values.use_flash_attention_2;
 
                 document.getElementById('hf_waitress_return_full_text_yes').checked = all_values.return_full_text;
                 document.getElementById('hf_waitress_return_full_text_no').checked = !all_values.return_full_text;
+
+                if (all_values.flux_diffusers) {
+                    document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'block';
+                    disableTransformersSettings();
+                } else {
+                    document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
+                    enableTransformersSettings();
+                }
             }
 
 
@@ -2237,6 +2340,18 @@
                 }
             }
 
+
+            function toggleHfwDiffusersConfig() {
+                var selection = document.querySelector('input[name="hf_use_diffusers"]:checked').value;
+                if (selection === 'y') {
+                    document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'block';
+                    disableTransformersSettings();
+                } else {
+                    document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
+                    enableTransformersSettings();
+                }
+            }
+
             
             function initializeEventListenersForLLMTab() {
                 // Event listener for Local LLM Server selection:
@@ -2256,6 +2371,10 @@
                 // Event Listener for toggle GPU:
                 document.getElementById('gpu_radio_yes').addEventListener('change', toggleNGL);
                 document.getElementById('gpu_radio_no').addEventListener('change', toggleNGL);
+
+                // Event listener for toggle Diffusers:
+                document.getElementById('hf_waitress_diffusers_yes').addEventListener('change', toggleHfwDiffusersConfig);
+                document.getElementById('hf_waitress_diffusers_no').addEventListener('change', toggleHfwDiffusersConfig);
 
                 // Event listener for Reset Defaults button:
                 document.getElementById('resetLlmAdvancedDefaults').addEventListener('click', resetLlmAdvancedDefaults);    //aparently, adding parenthesis () here will cause resetLlmAdvancedDefaults to run immediately when the script executes, not on button click. Removing them allows the function to be passed as a reference correctly on click.
@@ -2337,6 +2456,10 @@
 
                 document.getElementById('HfwMinpSlider').addEventListener('input', function() {
                     document.getElementById('HfwMinpSliderValue').textContent = this.value;
+                });
+
+                document.getElementById('HfDGuidanceScaleSlider').addEventListener('input', function() {
+                    document.getElementById('HfDGuidanceScaleSliderValue').textContent = this.value;
                 });
             }
             
@@ -2892,6 +3015,9 @@
                     'torch_dtype': document.getElementById('hf_waitress_torch_dtype_choice').value,
                     'use_flash_attention_2': document.getElementById('hf_waitress_use_flash_attention_2_yes').checked,
                     'trust_remote_code': document.getElementById('hf_waitress_trust_remote_code_yes').checked,
+                    'flux_diffusers': document.getElementById('hf_waitress_diffusers_yes').checked,
+                    'flux_low_vram_optimizations': document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').checked,
+                    'load_quantized_flux': document.getElementById('hf_waitress_diffusers_fp8_yes').checked,
                     'awq': document.getElementById('hf_waitress_is_awq_yes').checked,
                     'pipeline_task': document.getElementById('hf_waitress_pipeline_task_choice').value,
                     'max_new_tokens': parseInt(document.getElementById('HfwMaxNewToks').value),
