@@ -19,6 +19,8 @@
     </head>
 
     <body style="background-color: #181a1b;">
+
+        <div id="chatState" style="display: none;" data-ongoing-chat-id="" data-latest-sequence-id="" data-llm-model=""></div>
         
         <div class="header-container">
             
@@ -994,10 +996,32 @@
     
         <script>
 
-            let CHAT_ID;
-            let SEQUENCE_ID;
-            let ascending = true;
-            let LLM_MODEL;
+            function setChatId(id) {
+                document.getElementById('chatState').setAttribute('data-ongoing-chat-id', id);
+            }
+
+            function setSequenceId(id) {
+                document.getElementById('chatState').setAttribute('data-latest-sequence-id', id);
+            }
+
+            function setLlmModel(model) {
+                document.getElementById('chatState').setAttribute('data-llm-model', model);
+            }
+
+            function getChatId() {
+                return document.getElementById('chatState').getAttribute('data-ongoing-chat-id');
+            }
+
+            function getSequenceId() {
+                return document.getElementById('chatState').getAttribute('data-latest-sequence-id');
+            }
+
+            function getLlmModel() {
+                return document.getElementById('chatState').getAttribute('data-llm-model');
+            }
+
+            // let CHAT_ID;    //set by initChatHistoryDB and loadChatHistory; used by 1) handleSaveChanges after handleHfWaitressChanges 2) setup_for_llama_cpp_response API call and 3) get_references
+            // let SEQUENCE_ID;    //set by setup_for_llama_cpp_response, used exclusively for get_references
 
 
             function errorHandler(attempted_action, error_generator, error_message) {
@@ -2781,7 +2805,7 @@
                 .then(data => {
                     if (data.success) {
                         // If LLM, VectorDB and chat history DB initialized successfully, continue:
-                        CHAT_ID = data.chat_id;
+                        setChatId(data.chat_id);
                         updateUIWithChatInfo(data.chat_id, llm_model)
                     } else {
                         throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
@@ -2833,7 +2857,7 @@
                         }
                         setServerStatusIndicator("Online");
                         const llm_model = data.llm_model;
-                        LLM_MODEL = String(data.llm_model);
+                        setLlmModel(llm_model);
                         return loadVectorDB(llm_model);
                     } else {
                         setServerStatusIndicator("Error");
@@ -3263,7 +3287,7 @@
                             .then(() => {
                                 console.log("HF-Waitress server changes saved successfully.");
                                 
-                                chatID = CHAT_ID;
+                                let chatID = getChatId();
                                 chatID = " Chat ".concat(String(chatID))
                                 display_chatid_and_model = String(chatID).concat(": ", String(hf_config.model_id))
                                 document.getElementById('model_header').innerHTML = '';
@@ -3290,15 +3314,17 @@
 
             function loadChatHistory(chatID) {
 
-                CHAT_ID = chatID;
+                // console.log("Loading chat history")
+                console.log("Loading chat history for chatID: ", chatID);
+
+                setChatId(chatID);
+                let current_llm_model = getLlmModel();
 
                 document.getElementById('model_header').innerHTML = '';
                 history_chat_id = chatID
                 history_chat_id = " Chat ".concat(String(history_chat_id))
-                display_chatid_and_model = String(history_chat_id).concat(": ", String(LLM_MODEL))
+                display_chatid_and_model = String(history_chat_id).concat(": ", String(current_llm_model))
                 document.getElementById('model_header').innerHTML = display_chatid_and_model;
-
-                console.log("Loading chat history")
 
                 document.getElementById('chat-area').innerHTML = '';
 
@@ -3389,13 +3415,15 @@
 
                 document.getElementById('chat-area').scrollTop = document.getElementById('chat-area').scrollHeight;     //Scroll to the bottom of the page
 
+                let current_chat_id = getChatId();
+
                 // AJAX call to send user query and receive the formatted prompt
                 fetch('/setup_for_llama_cpp_response', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({'user_query': userInput, 'chat_id': CHAT_ID})
+                    body: JSON.stringify({'user_query': userInput, 'chat_id': current_chat_id})
                 }).then(response => {
                     if (!response.ok) {
                         return response.json().then(err => { throw new Error(err.error)});
@@ -3409,7 +3437,7 @@
                         do_rag = data.do_rag;
                         stream_session_id = data.stream_session_id;
                         formatted_user_prompt = data.formatted_user_prompt;
-                        SEQUENCE_ID = data.sequence_id;
+                        setSequenceId(data.sequence_id);
                         
                         console.log("do_rag: ", do_rag);
                         console.log("stream_session_id: ", stream_session_id);
@@ -3669,13 +3697,16 @@
                             if (do_rag) {
                                 document.getElementById('processingQnS').innerHTML = 'Fetching any references...';
                             }
+
+                            let latest_sequence_id = getSequenceId();
+                            let current_chat_id = getChatId();
                                     
                             fetch('/get_references', {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json'
                                 },
-                                body: JSON.stringify({'chat_id':CHAT_ID, 'sequence_id': SEQUENCE_ID, 'stream_session_id': stream_session_id, 'user_query': userInput, 'llm_response': llm_response, 'formatted_user_prompt': formatted_user_prompt})
+                                body: JSON.stringify({'chat_id':current_chat_id, 'sequence_id': latest_sequence_id, 'stream_session_id': stream_session_id, 'user_query': userInput, 'llm_response': llm_response, 'formatted_user_prompt': formatted_user_prompt})
                             }).then(response => {
                                 if (!response.ok) {
                                     return response.json().then(err => { throw new Error(err.error)});
@@ -3687,11 +3718,11 @@
                                 
                                 if (data.success) {
 
-                                    if (parseInt(SEQUENCE_ID) == 1) {
+                                    if (parseInt(latest_sequence_id) == 1) {
                                         const sidenav = document.getElementById('sidenav-content');
 
                                         new_chat = {
-                                            'chat_id': CHAT_ID,
+                                            'chat_id': current_chat_id,
                                             'local_llm_server': data.local_llm_server,
                                             'chat_name': data.stored_datetime,
                                             'date_time': data.stored_datetime,
@@ -3718,7 +3749,7 @@
                                     }
                                     
                                     document.getElementById(responseContentID).innerHTML += `
-                                    <div class="star-rating" data-rated="False" rating-chat-id=${CHAT_ID} rating-sequence-id=${SEQUENCE_ID}>
+                                    <div class="star-rating" data-rated="False" rating-chat-id=${current_chat_id} rating-sequence-id=${latest_sequence_id}>
                                         <i class="far fa-star" data-rate="1"></i>
                                         <i class="far fa-star" data-rate="2"></i>
                                         <i class="far fa-star" data-rate="3"></i>
