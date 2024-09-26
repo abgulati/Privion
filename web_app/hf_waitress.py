@@ -720,9 +720,10 @@ def restart_server_stream():
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
 
-    model_params = get_model_params()
+    model_params = {}
 
     if not flux_diffusers:
+        model_params = get_model_params()
         print(f"Restarting server and initializing model with parameters: {model_params}")
     
     stop_thread = threading.Event()
