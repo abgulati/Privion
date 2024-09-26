@@ -2347,7 +2347,7 @@
             }
 
 
-            function setFluxLowVram() {
+            function disableFluxQuantization() {
                 var lv_selection = document.querySelector('input[name="hf_diffusers_use_low_vram_optimizations"]:checked').value;
                 
                 if (lv_selection === 'y') {
@@ -2357,7 +2357,7 @@
             }
 
 
-            function setFluxQuantization() {
+            function disableFluxLowVram() {
                 var quant_selection = document.querySelector('input[name="hf_diffusers_use_fp8"]:checked').value;
 
                 if (quant_selection === 'y') {
@@ -2391,10 +2391,10 @@
                 document.getElementById('hf_waitress_diffusers_no').addEventListener('change', toggleHfwDiffusersConfig);
 
                 // Event listener for toggle Flux Low Vram:
-                document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').addEventListener('change', setFluxLowVram);
+                document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').addEventListener('change', disableFluxQuantization);
 
                 // Event listener for toggle Flux Quantization:
-                document.getElementById('hf_waitress_diffusers_fp8_yes').addEventListener('change', setFluxQuantization);
+                document.getElementById('hf_waitress_diffusers_fp8_yes').addEventListener('change', disableFluxLowVram);
 
                 // Event listener for Reset Defaults button:
                 document.getElementById('resetLlmAdvancedDefaults').addEventListener('click', resetLlmAdvancedDefaults);    //aparently, adding parenthesis () here will cause resetLlmAdvancedDefaults to run immediately when the script executes, not on button click. Removing them allows the function to be passed as a reference correctly on click.
