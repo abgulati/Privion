@@ -2150,6 +2150,8 @@
                 document.getElementById('hf_waitress_diffusers_yes').checked = all_values.flux_diffusers;
                 document.getElementById('hf_waitress_diffusers_no').checked = !all_values.flux_diffusers;
 
+                toggleHfwDiffusersConfig();
+
                 document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').checked = all_values.flux_low_vram_optimizations;
                 document.getElementById('hf_waitress_diffusers_low_vram_optimizations_no').checked = !all_values.flux_low_vram_optimizations;
 
@@ -2161,14 +2163,6 @@
 
                 document.getElementById('hf_waitress_return_full_text_yes').checked = all_values.return_full_text;
                 document.getElementById('hf_waitress_return_full_text_no').checked = !all_values.return_full_text;
-
-                if (all_values.flux_diffusers) {
-                    document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'block';
-                    disableTransformersSettings();
-                } else {
-                    document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
-                    enableTransformersSettings();
-                }
             }
 
 
@@ -2352,6 +2346,26 @@
                 }
             }
 
+
+            function setFluxLowVram() {
+                var lv_selection = document.querySelector('input[name="hf_diffusers_use_low_vram_optimizations"]:checked').value;
+                
+                if (lv_selection === 'y') {
+                    document.getElementById('hf_waitress_diffusers_fp8_yes').checked = false;
+                    document.getElementById('hf_waitress_diffusers_fp8_no').checked = true;
+                } 
+            }
+
+
+            function setFluxQuantization() {
+                var quant_selection = document.querySelector('input[name="hf_diffusers_use_fp8"]:checked').value;
+
+                if (quant_selection === 'y') {
+                    document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').checked = false;
+                    document.getElementById('hf_waitress_diffusers_low_vram_optimizations_no').checked = true;
+                }
+            }
+
             
             function initializeEventListenersForLLMTab() {
                 // Event listener for Local LLM Server selection:
@@ -2375,6 +2389,12 @@
                 // Event listener for toggle Diffusers:
                 document.getElementById('hf_waitress_diffusers_yes').addEventListener('change', toggleHfwDiffusersConfig);
                 document.getElementById('hf_waitress_diffusers_no').addEventListener('change', toggleHfwDiffusersConfig);
+
+                // Event listener for toggle Flux Low Vram:
+                document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').addEventListener('change', setFluxLowVram);
+
+                // Event listener for toggle Flux Quantization:
+                document.getElementById('hf_waitress_diffusers_fp8_yes').addEventListener('change', setFluxQuantization);
 
                 // Event listener for Reset Defaults button:
                 document.getElementById('resetLlmAdvancedDefaults').addEventListener('click', resetLlmAdvancedDefaults);    //aparently, adding parenthesis () here will cause resetLlmAdvancedDefaults to run immediately when the script executes, not on button click. Removing them allows the function to be passed as a reference correctly on click.
