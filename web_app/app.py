@@ -3483,7 +3483,10 @@ def setup_for_llama_cpp_response():
     # print(f"Filtered docs: {filtered_docs}")
 
     # Combine the whoosh and vector results
-    combined_docs = combine_whoosh_and_vector_results(whoosh_results, filtered_docs)
+    if whoosh_results:
+        combined_docs = combine_whoosh_and_vector_results(whoosh_results, filtered_docs)
+    else:
+        combined_docs = filtered_docs
     # print(f"Combined docs: {combined_docs}")
 
     docs = []
