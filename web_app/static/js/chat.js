@@ -281,6 +281,9 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
                             // 5. String.fromCharCode() converts the decimal number integer (now a Unicode code point) back to the corresponding character.
 
                             // Escape HTML special characters - /g implies global: replace throughout string, not just the first occurance
+                            // let streamed_content= dataObj.replace(/</g, '&lt;')   // Replace '<' unless it's part of a <br> tag
+                            //                                 .replace(/>/g, '&gt;'); // Replace '>' unless it's part of a <br> tag
+
                             let streamed_content = dataObj.replace(/\\t/g, '    ')
                                                             .replace(/\\n\\n/g, '<br><br>')
                                                             .replace(/\\n/g, '<br>');
@@ -453,23 +456,6 @@ async function requestFormattedPrompt() {
 }
 
 
-function goToPage(iframeId, url) {
-    var iframe = document.getElementById(iframeId)
-    
-    // Set src to blank and then to desired src to prevent the browser from ignoring clicks!
-    iframe.src = 'about:blank';
-    setTimeout(() => iframe.src = url, 100); // Set a slight delay to ensure the reload
-}
-
-function goToPageAndSwitchTab(iframeId, url, tabName, streamSessionId) {
-    // First, switch to the correct tab
-    openTab(null, tabName, streamSessionId);
-
-    // Then, navigate to the correct page
-    goToPage(iframeId, url);
-}   //set as an onclick trigger in app.py!
-
-
 // Call sendMessage() if the user presses the 'Enter' key
 const maxRows = 5; // Replace this value with the maximum allowed number of rows you want
 const inputTextAreaElement = document.getElementById("user-input");
@@ -563,136 +549,6 @@ document.getElementById('fileInput').addEventListener('change', function (event)
 });
 
 
-function handleUploadError(errorMessage) {
-    console.error('Error uploading file:', errorMessage);
-    alert("Error when trying to upload new LLM to models dir. Check console for more details.");
-    cleanupUpload();
-}
-
-function cleanupUpload() {
-    document.getElementById('UploadingLlmOverlay').style.display = 'none';
-    document.getElementById('uploadLlm').value = "";  // Clear the input value
-    document.getElementById('uploadProgress').style.display = 'none';
-    document.getElementById('progressPercentage').textContent = '0%';
-}
-
-// Upload LLMs to '/models' dir
-document.getElementById('uploadLlm').addEventListener('change', function (event) {
-    if (this.value) {    // Check if a file is selected
-
-        document.querySelector('.btn-close[data-bs-dismiss="modal"]').click();
-        document.getElementById('UploadingLlmOverlay').style.display = 'block';
-        document.getElementById('uploadProgress').style.display = 'block';
-        
-        let newFile = document.getElementById('uploadLlm');
-        let file = newFile.files[0]
-
-        if (file) {
-            let formData = new FormData();
-            formData.append('file', file);
-
-            let xhr = new XMLHttpRequest();
-            xhr.open('POST', '/upload_new_llm', true);
-
-            xhr.upload.onprogress = function(e) {
-                if (e.lengthComputable) {
-                    let percentComplete = (e.loaded / e.total) * 100;
-                    document.getElementById('progressPercentage').textContent = percentComplete.toFixed(2) + '%';
-                }
-            };
-
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    let response;
-                    try {
-                        response = JSON.parse(xhr.responseText);
-                    } catch(e) {
-                        handleUploadError('Invalide JSON response from server');
-                        return;
-                    }
-                    
-                    if (response.success) {
-                        
-                        const initKeysToRead = ['model_choice']
-                        fetch('/config_reader_api', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({keys: initKeysToRead})
-                        })
-                        .then(response => {
-                            if (!response.ok) {
-                                return response.json().then(err => { throw new Error(err.error)});
-                            }
-                            return response
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            var values = data.values;
-                            var model_choice = values.model_choice;
-
-                            fetch('/load_local_models')
-                            .then(response => {
-                                if (!response.ok) {
-                                    return response.json().then(err => { throw new Error(err.error)});
-                                }
-                                return response
-                            })
-                            .then(response => response.json())
-                            .then(data => {
-                                if (data.success) {
-
-                                    const dropdown = document.getElementById('modelDropdown');
-                                    dropdown.innerHTML = '';
-                                    data.models.forEach(model => {
-                                        const option = document.createElement('option');
-                                        option.value = model;
-                                        option.textContent = model;
-                                        //console.log('Model:', model);
-
-                                        if (typeof model !== 'undefined' && typeof model_choice !== 'undefined') {
-                                            if (model.toLowerCase() == model_choice.toLowerCase()) {
-                                                option.selected = true;
-                                            }
-                                        }
-                                        dropdown.appendChild(option);
-                                    });
-
-                                    cleanupUpload();
-                                
-                                } else {
-                                    throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
-                                }
-                            })
-                            .catch(error => {
-                                handleUploadError(`There was an error in fetching the model list: ${error.message}`)
-                            }); // END load_local_models
-
-                        })
-                        .catch(error => {
-                            handleUploadError(`There was an error in reading config.json: ${error.message}`)
-                        }); //END config_reader_api call
-
-                    } else {
-                        handleUploadError('Server-side response indicates failure')
-                    }
-                } else {
-                        handleUploadError(`Non-200 response: ${xhr.status} ${xhr.statusText}`);
-                    }
-            };
-
-            xhr.onerror = function() {
-                handleUploadError('Network error occured - xhr.onerror() triggered')
-            };
-
-            xhr.send(formData);
-
-        }
-    }
-});
-
-
 // Store user rating & update UI - confirm the associated route does not contain print() statements as the stdout is redirected during response generation!
 document.getElementById('chat-area').addEventListener('click', function(e) {
     if(e.target.classList.contains('fa-star')) {
@@ -731,13 +587,4 @@ document.getElementById('chat-area').addEventListener('click', function(e) {
     }
 });
 
-
-function toggleInfo() {
-    var infoBox = document.getElementById('info_box');
-    if (infoBox.style.display === 'none') {
-        infoBox.style.display = 'block';
-    } else {
-        infoBox.style.display = 'none';
-    }
-}
 
