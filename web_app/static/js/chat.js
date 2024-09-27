@@ -282,6 +282,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
 
                             let streamed_content = dataObj;
 
+                            // The robust parsing below is necessary as the LLM sees HTML <br> tags on subsequent questions, because it sees it's prior responses formatted as HTML!
                             // First, decode any HTML entities that might already be present - /g implies global: replace throughout string, not just the first occurance
                             streamed_content = streamed_content.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
@@ -299,9 +300,6 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
                                                             .replace(/</g, '&lt;')
                                                             .replace(/>/g, '&gt;')
                                                             .replace(/&lt;br&gt;/g, '<br>');
-
-                            // hfwTotalContent += streamed_content;
-                            // appendContentToResponse(responseContentID, streamed_content);
 
                             hfwTotalContent += streamed_content;
                             appendContentToResponse(responseContentID, streamed_content);
