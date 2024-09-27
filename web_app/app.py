@@ -2246,12 +2246,13 @@ def llama_cpp_server_starter():
         try:
             terminate_local_llm_server_process(LLAMA_CPP_PROCESS)
             LLAMA_CPP_PROCESS = None
+            LLM_CHANGE_RELOAD_TRIGGER_SET = False
         except Exception as e:
             LLM_LOADED_UP = True  # We know the llama.cpp server is running but there was an error terminating it, so we set LLM_LOADED_UP to True while leaving LLM_CHANGE_RELOAD_TRIGGER_SET to True as we know the server needs to be re-loaded.
             handle_error_no_return("Failed to terminate running llama.cpp process, server was likely launched by a previous session. Returning with the currently loaded LLM. To change, shutdown the previously launched server manually and reload this page. Technical error-details follow: ", e)
             return jsonify({'success': True, 'llm_model': 'undefined', 'other_server_running': other_server_running})   # We still return success:True as we've at least determined llama.cpp is running and loaded with a model, even if we cannot reload it.
                  
-    elif LLM_CHANGE_RELOAD_TRIGGER_SET:
+    elif LLM_CHANGE_RELOAD_TRIGGER_SET: # llama.cpp is not running, set flags to false and new settings will be loaded on next llama.cpp launch
         print("\n\nResetting the LLM_CHANGE_RELOAD_TRIGGER_SET flag and attemping to launch the server with the currently selected LLM.\n\n")
         LLM_CHANGE_RELOAD_TRIGGER_SET = False
         LLM_LOADED_UP = False
