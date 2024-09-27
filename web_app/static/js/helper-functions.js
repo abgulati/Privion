@@ -24,8 +24,32 @@ function getLlmModel() {
     return document.getElementById('chatState').getAttribute('data-llm-model');
 }
 
-// let CHAT_ID;    //set by initChatHistoryDB and loadChatHistory; used by 1) handleSaveChanges after handleHfWaitressChanges 2) setup_for_llama_cpp_response API call and 3) get_references
-// let SEQUENCE_ID;    //set by setup_for_llama_cpp_response, used exclusively for get_references
+
+function goToPage(iframeId, url) {
+    var iframe = document.getElementById(iframeId)
+    
+    // Set src to blank and then to desired src to prevent the browser from ignoring clicks!
+    iframe.src = 'about:blank';
+    setTimeout(() => iframe.src = url, 100); // Set a slight delay to ensure the reload
+}
+
+function goToPageAndSwitchTab(iframeId, url, tabName, streamSessionId) {
+    // First, switch to the correct tab
+    openTab(null, tabName, streamSessionId);
+
+    // Then, navigate to the correct page
+    goToPage(iframeId, url);
+}   //set as an onclick trigger in app.py!
+
+
+function toggleInfo() {
+    var infoBox = document.getElementById('info_box');
+    if (infoBox.style.display === 'none') {
+        infoBox.style.display = 'block';
+    } else {
+        infoBox.style.display = 'none';
+    }
+}
 
 
 function errorHandler(attempted_action, error_generator, error_message) {
@@ -286,6 +310,67 @@ function createChatHistoryMenuItem(chat) {
 }
 
 
+function loadChatHistory(chatID) {
+
+    // console.log("Loading chat history")
+    console.log("Loading chat history for chatID: ", chatID);
+
+    setChatId(chatID);
+    let current_llm_model = getLlmModel();
+
+    document.getElementById('model_header').innerHTML = '';
+    history_chat_id = chatID
+    history_chat_id = " Chat ".concat(String(history_chat_id))
+    display_chatid_and_model = String(history_chat_id).concat(": ", String(current_llm_model))
+    document.getElementById('model_header').innerHTML = display_chatid_and_model;
+
+    document.getElementById('chat-area').innerHTML = '';
+
+    let formData = new FormData();
+    formData.append('chat_id', chatID);
+
+    //Make a POST request to the server
+    fetch('/load_chat_history', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error)});
+        }
+        return response
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            
+            old_chat_model = data.old_chat_model
+            old_chat_model = " Last LLM on this chat: ".concat(String(old_chat_model))
+            document.getElementById('old_model_header').innerHTML = old_chat_model;
+            document.getElementById('old_model_header').style.display = 'block';
+
+            chat_history_data = data.chat_history
+            console.log(data)
+
+            for (let i = 0; i < chat_history_data.length; i++) {
+                document.getElementById('chat-area').innerHTML += chat_history_data[i]
+            }
+
+            var defaultTabs = document.getElementsByClassName("defaultTabs");
+            for (let i = 0; i < defaultTabs.length; i++) {
+                defaultTabs[i].click();
+            }
+            
+        } else {
+            throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+        }
+    })
+    .catch(error => {
+        errorHandler("fetching chat history data", "/load_chat_history", String(error.message))
+    });
+    closeNav();
+}
+
 function loadChatHistoryMenu() {
     
     //Make a GET request to the server
@@ -314,14 +399,6 @@ function loadChatHistoryMenu() {
     .catch(error => {
         errorHandler("fetching the history-menu list", "/load_chat_history_list", String(error.message))
     });
-}
-
-
-function hideWelcomeScreen() {
-    const welcomeScreen = document.getElementById('welcome-screen');
-    if (welcomeScreen) {
-        welcomeScreen.style.display = 'none';
-    }
 }
 
 
