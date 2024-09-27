@@ -280,15 +280,28 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
                             // 4. parseInt(..., 16) uses replace to remove the "\\u" prefix and convert the remaining 4-digit hexadecimal string to a decimal number, using the 16 argument to specify base 16.
                             // 5. String.fromCharCode() converts the decimal number integer (now a Unicode code point) back to the corresponding character.
 
-                            // Escape HTML special characters - /g implies global: replace throughout string, not just the first occurance
-                            // let streamed_content= dataObj.replace(/</g, '&lt;')   // Replace '<' unless it's part of a <br> tag
-                            //                                 .replace(/>/g, '&gt;'); // Replace '>' unless it's part of a <br> tag
+                            let streamed_content = dataObj;
 
-                            let streamed_content = dataObj.replace(/\\t/g, '    ')
-                                                            .replace(/\\n\\n/g, '<br><br>')
-                                                            .replace(/\\n/g, '<br>');
-                                                            // .replace(/<(?!br\s*\/?>)/g, '&lt;')   // Replace '<' unless it's part of a <br> tag
-                                                            // .replace(/>(?!br\s*\/?>)/g, '&gt;') // Replace '>' unless it's part of a <br> tag
+                            // First, decode any HTML entities that might already be present - /g implies global: replace throughout string, not just the first occurance
+                            streamed_content = streamed_content.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+                            // Then, replace newlines with <br> tags
+                            streamed_content = streamed_content.replace(/\\n\\n/g, '<br><br>')
+                                                            .replace(/\\n/g, '<br>')
+                                                            .replace(/\n\n/g, '<br><br>')
+                                                            .replace(/\n/g, '<br>');
+
+                            // Replace tabs with spaces
+                            streamed_content = streamed_content.replace(/\\t/g, '    ');
+
+                            // Finally, encode HTML special characters, but preserve <br> tags
+                            streamed_content = streamed_content.replace(/&/g, '&amp;')
+                                                            .replace(/</g, '&lt;')
+                                                            .replace(/>/g, '&gt;')
+                                                            .replace(/&lt;br&gt;/g, '<br>');
+
+                            // hfwTotalContent += streamed_content;
+                            // appendContentToResponse(responseContentID, streamed_content);
 
                             hfwTotalContent += streamed_content;
                             appendContentToResponse(responseContentID, streamed_content);
