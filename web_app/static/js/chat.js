@@ -1,67 +1,5 @@
 
 
-function loadChatHistory(chatID) {
-
-    // console.log("Loading chat history")
-    console.log("Loading chat history for chatID: ", chatID);
-
-    setChatId(chatID);
-    let current_llm_model = getLlmModel();
-
-    document.getElementById('model_header').innerHTML = '';
-    history_chat_id = chatID
-    history_chat_id = " Chat ".concat(String(history_chat_id))
-    display_chatid_and_model = String(history_chat_id).concat(": ", String(current_llm_model))
-    document.getElementById('model_header').innerHTML = display_chatid_and_model;
-
-    document.getElementById('chat-area').innerHTML = '';
-
-    let formData = new FormData();
-    formData.append('chat_id', chatID);
-
-    //Make a POST request to the server
-    fetch('/load_chat_history', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(err => { throw new Error(err.error)});
-        }
-        return response
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            
-            old_chat_model = data.old_chat_model
-            old_chat_model = " Last LLM on this chat: ".concat(String(old_chat_model))
-            document.getElementById('old_model_header').innerHTML = old_chat_model;
-            document.getElementById('old_model_header').style.display = 'block';
-
-            chat_history_data = data.chat_history
-            console.log(data)
-
-            for (let i = 0; i < chat_history_data.length; i++) {
-                document.getElementById('chat-area').innerHTML += chat_history_data[i]
-            }
-
-            var defaultTabs = document.getElementsByClassName("defaultTabs");
-            for (let i = 0; i < defaultTabs.length; i++) {
-                defaultTabs[i].click();
-            }
-            
-        } else {
-            throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
-        }
-    })
-    .catch(error => {
-        errorHandler("fetching chat history data", "/load_chat_history", String(error.message))
-    });
-    closeNav();
-}
-
-
 function formatTabsAndSpaces(text, tabSize = 4) {
     // Replace each tab with tabSize number of &nbsp;
     text = text.replace(/\t/g, '&nbsp;'.repeat(tabSize));
@@ -77,410 +15,441 @@ function formatTabsAndSpaces(text, tabSize = 4) {
 }
 
 
-function requestFormattedPrompt() {
+function hideWelcomeScreen() {
+    const welcomeScreen = document.getElementById('welcome-screen');
+    if (welcomeScreen) {
+        welcomeScreen.style.display = 'none';
+    }
+}
+
+function disableSendButton() {
+    document.getElementById('sendButton').disabled = true;
+}
+
+function enableSendButton() {
+    document.getElementById('sendButton').disabled = false;
+}
+
+function displayProcessingStatus(status) {
+    const processingQnS = document.getElementById('processingQnS');
+    processingQnS.innerHTML = status;
+    processingQnS.style.display = status ? 'block' : 'none';
+}
+
+function initializePromptRequest() {
     hideWelcomeScreen();
+    disableSendButton();
+    displayProcessingStatus('Reading documents...');
+}
 
-    //Firstly, immediately disable send functionality!
-    const sendButton = document.getElementById('sendButton');
-    sendButton.disabled = true;
+function scrollChatAreaToBottom() {
+    const chatArea = document.getElementById('chat-area');
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
 
-    let do_rag = true;
-    let stream_session_id = "";
-    let formatted_user_prompt = "";
-    let llm_response = "";
+function handleAutoScroll(chatContainer) {
+    const scrollThreshold = 100; //100px towards the bottom
+    const isNearBottom =  chatContainer.scrollHeight - chatContainer.clientHeight - chatContainer.scrollTop < scrollThreshold;   //by calculating this way, we're finding the difference between the total height of the chat area including the invisble part that's overflown (scrollHeight), the visible height of the chat area (clientHeight), and how far down the chat area has been scrolled (scrollTop). If less than the threshold, auto-scroll engages!
+    // For example: if the total height is 100px(scrollHeight), 70px is visible (clientHeight), scrollTop increases as we scroll down, so it's 0 at the top and at the very bottom, scrollTop will be equal to scrollHeight - clientHeight = 30px, so the math would equal to 0px and thus within the threshold!
+    if (isNearBottom) {
+        //console.log("is scrolled to bottom")
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+}
 
-    document.getElementById('processingQnS').innerHTML = 'Reading documents...';
-    document.getElementById('processingQnS').style.display  = 'block';
+function updateChatAreaWithUserInput(userInputForHtml) {
+    document.getElementById('chat-area').innerHTML += `<div class="user-message glassmorphism">${userInputForHtml}</div>`;
+    scrollChatAreaToBottom();
+}
 
-    var userInput = document.getElementById('user-input').value;
-    let userInputForHtml = formatTabsAndSpaces(userInput);
-
-    // Clear the input field
+function getUserInput() {
+    const userInput = document.getElementById('user-input').value;
     document.getElementById('user-input').value = '';
+    return userInput;
+}
 
-    // Append user input to the chat area
-    document.getElementById('chat-area').innerHTML += '<div class="user-message glassmorphism">' + userInputForHtml + '</div>';
+function shouldAppendContent(streamedContent) {
+    const excludeList = ['', '<|eot_id|>', '</s>', '<|im_end|>', '<|end_of_turn|>', '<|EOT|>', '|END_OF_TURN_TOKEN|>', '<|end|>'];
+    return !excludeList.includes(streamedContent)
+}
 
-    document.getElementById('chat-area').scrollTop = document.getElementById('chat-area').scrollHeight;     //Scroll to the bottom of the page
+function appendContentToResponse(responseContentID, content) {
+    const responseContentElement = document.getElementById(responseContentID);
 
-    let current_chat_id = getChatId();
+    // document.getElementById(responseContentID).innerHTML += event.data;
+                
+    // 'innerHTML' is very inefficent to do repeatedly, as it doesn't simply append but rather re-parses & rebuilds the entire inner content every time! 
+    // Instead, using the DOM API as below to create & append elements is much more efficient as it manipulates the DOM by adding a new node, leaving existing nodes untouched. 
+    // This is also better from a security perspective as recreating DOM elements via innerHTML can be exploited for XSS!
+    let tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
 
-    // AJAX call to send user query and receive the formatted prompt
-    fetch('/setup_for_llama_cpp_response', {
+    // streaming response from LLM starts, begin appending to chat-area
+    // The while loop below is used to append all child nodes of tempDiv to responseContentElement. This is necessary because tempDiv.innerHTML = streamed_content creates a new div for each chunk of streamed content, so we need to append each child node individually.
+    while (tempDiv.firstChild) {
+        responseContentElement.appendChild(tempDiv.firstChild); // If we used appendChild() directly, it would only append the first child node, and the rest would be lost. And we'd end up with a new div for each chunk of streamed content, rather than appending the streamed content directly to responseContentElement.
+    }
+}
+
+
+function setupLLMResponse(userInput, current_chat_id) { //no need to async-await here as fetch() inherently returns a promise, so by returning fetch() directly we're providing the same Promise that the async function with await would return.
+    return fetch('/setup_for_llama_cpp_response', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({'user_query': userInput, 'chat_id': current_chat_id})
-    }).then(response => {
-        if (!response.ok) {
-            return response.json().then(err => { throw new Error(err.error)});
-        }
-        return response
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
+    });
+}
 
-            do_rag = data.do_rag;
-            stream_session_id = data.stream_session_id;
-            formatted_user_prompt = data.formatted_user_prompt;
-            setSequenceId(data.sequence_id);
-            
-            console.log("do_rag: ", do_rag);
-            console.log("stream_session_id: ", stream_session_id);
-            console.log("formatted_user_prompt: ", formatted_user_prompt);
-
-                
-            const responseWrapperID = "ResponseWrapper" + String(stream_session_id);
-            const responseContentID = "ResponseContent" + String(stream_session_id)
-            const masterWrapperID = "MasterWrapper" + String(stream_session_id);
-
-            document.getElementById('chat-area').innerHTML += `
-            <div class="response-and-viewer-container" id="${masterWrapperID}">
-                <div class="llm-wrapper" style="display:none;" id="${responseWrapperID}">
-                
-                    <div class="llm-response" id="${responseContentID}">
-                    </div>
-                </div>
+function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, responseContentID) {
+    const chatArea = document.getElementById('chat-area');
+    chatArea.innerHTML += `
+        <div class="response-and-viewer-container" id="${masterWrapperID}">
+            <div class="llm-wrapper" style="display:none;" id="${responseWrapperID}">
+                <div class="llm-response" id="${responseContentID}"></div>
             </div>
-            `
+        </div>
+    `;
+    document.getElementById(responseWrapperID).style.display  = 'block';
+    scrollChatAreaToBottom();
+}
 
-            let chat_container = document.getElementById('chat-area');
-            let isResponseDisplayed = false;
-            const responseContentElement = document.getElementById(responseContentID);
+function handleSetupResponse(data) {
+    const {do_rag, stream_session_id, formatted_user_prompt, sequence_id} = data;   // using object=destructuring (ES6-2015) to extract and set specific values from the data object in a single step!
 
-            if (!isResponseDisplayed) {
-                document.getElementById('processingQnS').innerHTML = 'Generating...';
-                document.getElementById(responseWrapperID).style.display  = 'block';
-                isResponseDisplayed = true;
-            }
+    console.log("do_rag: ", do_rag);
+    console.log("stream_session_id: ", stream_session_id);
+    console.log("formatted_user_prompt: ", formatted_user_prompt);
+
+    setSequenceId(sequence_id);
+
+    const responseIDs = {
+        responseWrapperID: `ResponseWrapper${stream_session_id}`,
+        responseContentID: `ResponseContent${stream_session_id}`,
+        masterWrapperID: `MasterWrapper${stream_session_id}`
+    }
+
+    appendResponseContainerToChatArea(responseIDs.masterWrapperID, responseIDs.responseWrapperID, responseIDs.responseContentID);
+    displayProcessingStatus('Generating...');
+
+    return { do_rag, stream_session_id, formatted_user_prompt, responseIDs };
+}
 
 
-            async function fetchEventStream() {
-                current_llm_server = document.getElementById('local_llm_server_select_dropdown').value;
-                
-                if (current_llm_server == 'llama-cpp') {
+async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer) {
+    const url = "http://localhost:8080/completion";
+    const requestData = {
+        prompt: formattedPrompt,
+        stream: true,
+        temperature: parseFloat(document.getElementById('tempSlider').value),
+        top_k: parseInt(document.getElementById('topkSlider').value),
+        top_p: parseFloat(document.getElementById('toppSlider').value),
+        min_p: parseFloat(document.getElementById('minpSlider').value),
+        n_keep: parseInt(document.getElementById('nkeepSlider').value)
+    };
 
-                    const url = "http://localhost:8080/completion";
+    try {
 
-                    const requestData = {
-                        prompt: formatted_user_prompt,
-                        stream: true,
-                        temperature: parseFloat(document.getElementById('tempSlider').value),
-                        top_k: parseInt(document.getElementById('topkSlider').value),
-                        top_p: parseFloat(document.getElementById('toppSlider').value),
-                        min_p: parseFloat(document.getElementById('minpSlider').value),
-                        n_keep: parseInt(document.getElementById('nkeepSlider').value)
-                    };
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
 
-                    try {
+        scrollChatAreaToBottom();
 
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(requestData)
-                        });
+        const reader = response.body.getReader();   // To handle the Fetch API's 'Response' object when involving a ReadableStream.  By calling getReader(), a 'ReadableStreamDefaultReader' object is obtained
+        let totalContent = '';  //String to accumulate content
+        let receivedComplete = false;
 
-                        document.getElementById('chat-area').scrollTop = document.getElementById('chat-area').scrollHeight;     //Scroll to the bottom of the page
+        // Function to process each text chunk
+        async function processChunk() {
+            let partialData = '';   // Holds partially received JSON strings
 
-                        const reader = response.body.getReader();   // To handle the Fetch API's 'Response' object when involving a ReadableStream.  By calling getReader(), a 'ReadableStreamDefaultReader' object is obtained
-                        let totalContent = '';  //String to accumulate content
-                        let receivedComplete = false;
-
-                        // Function to process each text chunk
-                        async function processChunk() {
-                            let partialData = '';   // Holds partially received JSON strings
-
-                            while (true) {
-                                const { done, value } = await reader.read();
-                                if (done) {
-                                    console.log("Stream complete");
-                                    break;
-                                }
-
-                                const textChunk = new TextDecoder("utf-8").decode(value);   //When reading a stream with 'ReadableStreamDefaultReader', Uint8Array binary-data objects are received. TextDecoder decodes these byte streams into human readable text strings. UTF-8 encodes all possible chars in Unicode, and is the std text encoding in most network comms, thus is used here.
-                                const messages = textChunk.split('\n'); //one streamed data-message at a time, newlines are standard for seperating SSE-messages which may arrive bunched-up in chunks or partially
-                                messages.forEach(message => {
-
-                                    if (message.startsWith('data: ')) {
-                                        const jsonStr = message.slice(6);   // remove 6 chars to get rid of the 'data: ' prefix!
-                                        try {
-                                            const dataObj = JSON.parse(jsonStr);
-                                            //console.log(dataObj.content);   // Log only the content
-                                            let streamed_content = dataObj.content.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>'); // /g - global - replace throughout string, not just the first occurance
-
-                                            if (!['', '<|eot_id|>', '</s>', '<|im_end|>', '<|end_of_turn|>', '<|EOT|>', '|END_OF_TURN_TOKEN|>', '<|end|>'].includes(streamed_content)) {
-                                                totalContent += streamed_content;
-                                                let tempDiv = document.createElement('div');
-                                                tempDiv.innerHTML = streamed_content;
-
-                                                while (tempDiv.firstChild) {
-                                                    responseContentElement.appendChild(tempDiv.firstChild); // When 'appendChild' is used on an element already part of the DOM, a copy isn't created, rather it's moved to the new position thus removing that first child from tempDiv here!
-                                                }
-                                            }
-
-                                            const scrollThreshold = 100; //100px towards the bottom
-                                            const isNearBottom =  chat_container.scrollHeight - chat_container.clientHeight - chat_container.scrollTop < scrollThreshold;   //by calculating this way, we're finding the difference between the total height of the chat area including the invisble part that's overflown (scrollHeight), the visible height of the chat area (clientHeight), and how far down the chat area has been scrolled (scrollTop). If less than the threshold, auto-scroll engages!
-                                            // For example: if the total height is 100px(scrollHeight), 70px is visible (clientHeight), scrollTop increases as we scroll down, so it's 0 at the top and at the very bottom, scrollTop will be equal to scrollHeight - clientHeight = 30px, so the math would equal to 0px and thus within the threshold!
-                                            if (isNearBottom) {
-                                                //console.log("is scrolled to bottom")
-                                                chat_container.scrollTop = chat_container.scrollHeight;
-                                            }
-
-                                            if (dataObj.stop) {
-                                                receivedComplete = true;
-                                                llm_response = totalContent;
-                                                //console.log("Stop received, final content: ", totalContent);
-                                            }
-                                        } catch (error) {
-                                            console.error('Error parsing JSON: ', error);
-                                        }
-                                    }
-                                });
-
-                                responseContentElement.innerHTML = totalContent;
-
-                                if (receivedComplete) break;
-                            }
-                        }
-
-                        await processChunk();   // processChunk() is an async-Fn and thus returns a promise. Here, via await, we pause execution until the promise is resolved or rejected.
-                    } catch (error) {
-                        errorHandler("fetching event-streaming response", "localhost:8080/completions", String(error))
-                    }
-                } else if (current_llm_server == 'hf-waitress') {
-                    const url = "http://localhost:9069/completions_stream";
-
-                    const hfwHeaders = new Headers();
-                    hfwHeaders.append("Content-Type", "application/json");
-                    hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
-                    hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
-                    hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
-                    hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
-                    hfwHeaders.append("X-Min-P", document.getElementById('HfwMinpSlider').value);
-                    hfwHeaders.append("X-Do-Sample", document.getElementById('HfwTempSlider').value > 0 ? "True" : "False");
-                    
-                    const rawBodyJSONObj = JSON.parse(formatted_user_prompt);                                
-                    const rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
-
-                    // console.log("rawBodyJSONObj: ", rawBodyJSONObj);
-                    // console.log("rawBodyJSONStringified: ", rawBodyJSONStringified);
-
-                    try {
-                        const hfwResponse = await fetch(url, {
-                            method: 'POST',
-                            headers: hfwHeaders,
-                            body: rawBodyJSONStringified,
-                            redirect: 'follow'
-                        });
-
-                        document.getElementById('chat-area').scrollTop = document.getElementById('chat-area').scrollHeight;     //Scroll to the bottom of the page
-
-                        const hfwReader = hfwResponse.body.getReader();
-                        let hfwTotalContent = '';
-                        let hfwReceivedComplete = false;
-
-                        async function hfwProcessChunk() {
-                            let partialHfwData = '';
-
-                            while (true) {
-                                const { done, value } = await hfwReader.read();
-                                if (done) {
-                                    console.log("HF-Waitress Stream complete");
-                                    break;
-                                }
-                                
-                                const textChunk = new TextDecoder("utf-8").decode(value);
-                                const messages = textChunk.split('\n');
-                                
-                                messages.forEach(message => {
-                                    
-                                    if (message.startsWith('data: ')) {
-                                        const jsonStr = message.slice(7, -1);   // remove first 7 and last 1 chars to get rid of the 'data: "' prefix and " suffix!
-
-                                        // console.log("message: ", message);
-                                        try {
-                                            let dataObj = String(jsonStr);
-                                            if (dataObj == "null") {
-                                                dataObj = "";
-                                            }
-                                            //console.log("dataObj: ", dataObj);
-
-                                            dataObj = dataObj.replace(/\\u[\dA-F]{4}/gi, function(match) {
-                                                return String.fromCharCode(parseInt(match.replace(/\\u/g, ''), 16));
-                                            });
-                                            // Explanation:
-                                            // 0. This exists to handle the issue of unicode characters in the streamed response, which break the HTML.
-                                            // 1. The regular expression /\\u[\dA-F]{4}/gi matches a sequence of characters that starts with "\\u" followed by exactly four hexadecimal digits (\d for digits, A-F for uppercase letters).
-                                            // 2. The "gi" flags are used for global and case-insensitive matching.
-                                            // 3. The function(match) { ... } is an arrow function (An arrow function expression has a shorter syntax and lexically binds the 'this' value) that takes the matched string and converts it back to a character using the parseInt function.
-                                            // 4. parseInt(..., 16) uses replace to remove the "\\u" prefix and convert the remaining 4-digit hexadecimal string to a decimal number, using the 16 argument to specify base 16.
-                                            // 5. String.fromCharCode() converts the decimal number integer (now a Unicode code point) back to the corresponding character.
-
-                                            // Escape HTML special characters
-                                            let streamed_content = dataObj.replace(/</g, '&lt;')
-                                                                            .replace(/>/g, '&gt;')
-                                                                            .replace(/\\t/g, '    ')
-                                                                            .replace(/\\n\\n/g, '<br><br>')
-                                                                            .replace(/\\n/g, '<br>'); // /g - global - replace throughout string, not just the first occurance
-
-                                            // document.getElementById(responseContentID).innerHTML += event.data;
-                
-                                            // 'innerHTML' is very inefficent to do repeatedly, as it doesn't simply append but rather re-parses & rebuilds the entire inner content every time! 
-                                            // Instead, using the DOM API as below to create & append elements is much more efficient as it manipulates the DOM by adding a new node, leaving existing nodes untouched. 
-                                            // This is also better from a security perspective as recreating DOM elements via innerHTML can be exploited for XSS!
-                                            hfwTotalContent += streamed_content;
-                                            let tempDiv = document.createElement('div');
-                                            tempDiv.innerHTML = streamed_content;
-
-                                            // streaming response from LLM starts, begin appending to chat-area
-                                            // The while loop below is used to append all child nodes of tempDiv to responseContentElement. This is necessary because tempDiv.innerHTML = streamed_content creates a new div for each chunk of streamed content, so we need to append each child node individually.
-                                            while (tempDiv.firstChild) {
-                                                responseContentElement.appendChild(tempDiv.firstChild); // If we used appendChild() directly, it would only append the first child node, and the rest would be lost. And we'd end up with a new div for each chunk of streamed content, rather than appending the streamed content directly to responseContentElement.
-                                            }
-
-                                            const scrollThreshold = 100; //100px towards the bottom
-                                            const isNearBottom =  chat_container.scrollHeight - chat_container.clientHeight - chat_container.scrollTop < scrollThreshold;   //by calculating this way, we're finding the difference between the total height of the chat area including the invisble part that's overflown (scrollHeight), the visible height of the chat area (clientHeight), and how far down the chat area has been scrolled (scrollTop). If less than the threshold, auto-scroll engages!
-                                            // For example: if the total height is 100px(scrollHeight), 70px is visible (clientHeight), scrollTop increases as we scroll down, so it's 0 at the top and at the very bottom, scrollTop will be equal to scrollHeight - clientHeight = 30px, so the math would equal to 0px and thus within the threshold!
-                                            if (isNearBottom) {
-                                                //console.log("is scrolled to bottom")
-                                                chat_container.scrollTop = chat_container.scrollHeight;
-                                            }
-
-                                        } catch (error) {
-                                            console.error('Error parsing message: ', error);
-                                        }
-                                    } else if (message.startsWith('event: END') || message.startsWith('data: null')) {
-                                        console.log("Received null message from hf-waitress - stream complete");
-                                        hfwReceivedComplete = true;
-                                        llm_response = hfwTotalContent;
-                                    }
-                                });
-
-                                responseContentElement.innerHTML = hfwTotalContent;
-
-                                if (hfwReceivedComplete) break;
-                            }
-                        
-                        }
-
-                        await hfwProcessChunk();
-                        
-                    } catch (error) {
-                        errorHandler("fetching HF-Waitress event-streaming response", "localhost:9069/completions_stream", String(error))
-                    }
-
-                }
-            }
-
-            // Cannot use await here as fetchEventStream() is not within another async-Fn, but rather is the top-level async-Fn! Use .then() as with a fetch call if you must await fetchEventStream(), or else simply fire-and-forget!
-            fetchEventStream().then(() => {
-                console.log('Event stream has completed');
-                // /get_ref here!
-                console.log("llm_response post stream: ", llm_response);
-                // Having received the LLM response stream, fetch relevant pages, documents, and images, if any
-                if (do_rag) {
-                    document.getElementById('processingQnS').innerHTML = 'Fetching any references...';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    console.log("Stream complete");
+                    break;
                 }
 
-                let latest_sequence_id = getSequenceId();
-                let current_chat_id = getChatId();
-                        
-                fetch('/get_references', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({'chat_id':current_chat_id, 'sequence_id': latest_sequence_id, 'stream_session_id': stream_session_id, 'user_query': userInput, 'llm_response': llm_response, 'formatted_user_prompt': formatted_user_prompt})
-                }).then(response => {
-                    if (!response.ok) {
-                        return response.json().then(err => { throw new Error(err.error)});
+                const textChunk = new TextDecoder("utf-8").decode(value);   //When reading a stream with 'ReadableStreamDefaultReader', Uint8Array binary-data objects are received. TextDecoder decodes these byte streams into human readable text strings. UTF-8 encodes all possible chars in Unicode, and is the std text encoding in most network comms, thus is used here.
+                const messages = textChunk.split('\n'); //one streamed data-message at a time, newlines are standard for seperating SSE-messages which may arrive bunched-up in chunks or partially
+                
+                messages.forEach(message => {
+                    if (message.startsWith('data: ')) {
+                        const jsonStr = message.slice(6);   // remove 6 chars to get rid of the 'data: ' prefix!
+                        try {
+                            const dataObj = JSON.parse(jsonStr);
+                            //console.log(dataObj.content);   // Log only the content
+                            let streamed_content = dataObj.content.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>'); // /g - global - replace throughout string, not just the first occurance
+
+                            if (shouldAppendContent(streamed_content)) {
+                                totalContent += streamed_content;
+                                appendContentToResponse(responseContentID, streamed_content);
+                            }
+
+                            handleAutoScroll(chatContainer);
+
+                            if (dataObj.stop) {
+                                receivedComplete = true;
+                            }
+                        } catch (error) {
+                            console.error('Error parsing JSON: ', error);
+                        }
                     }
-                    return response
-                })
-                .then(response => response.json())
-                .then(data => {
-                    
-                    if (data.success) {
-
-                        if (parseInt(latest_sequence_id) == 1) {
-                            const sidenav = document.getElementById('sidenav-content');
-
-                            new_chat = {
-                                'chat_id': current_chat_id,
-                                'local_llm_server': data.local_llm_server,
-                                'chat_name': data.stored_datetime,
-                                'date_time': data.stored_datetime,
-                                'prompt_template_format': data.local_llm_chat_template_format
-                            }
-
-                            const newDiv = createChatHistoryMenuItem(new_chat);
-
-                            const newChatLink = document.getElementById('dynamicChatLink');
-                            if (newChatLink.nextSibling) {
-                                sidenav.insertBefore(newDiv, newChatLink.nextSibling);
-                            } else {
-                                sidenav.appendChild(newDiv);
-                            }
-                        }
-
-                        console.log("get_references data: ", data);
-
-                        if (do_rag) {
-                            document.getElementById(responseContentID).innerHTML += `
-                            </br> 
-                            ${data.response}
-                            ` 
-                        }
-                        
-                        document.getElementById(responseContentID).innerHTML += `
-                        <div class="star-rating" data-rated="False" rating-chat-id=${current_chat_id} rating-sequence-id=${latest_sequence_id}>
-                            <i class="far fa-star" data-rate="1"></i>
-                            <i class="far fa-star" data-rate="2"></i>
-                            <i class="far fa-star" data-rate="3"></i>
-                            <i class="far fa-star" data-rate="4"></i>
-                            <i class="far fa-star" data-rate="5"></i>
-                        </div>
-                        `
-                        if (do_rag) {
-                            document.getElementById(masterWrapperID).innerHTML += data.pdf_frame;
-                            // Open the first tab by default
-                            var defaultTabs = document.getElementsByClassName("defaultTabs");
-                            for (let i = 0; i < defaultTabs.length; i++) {
-                                if (defaultTabs[i].getAttribute('stream-session-id') === stream_session_id) {
-                                    defaultTabs[i].click();
-                                }
-                            }
-                        }
-                    } else {
-                        throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
-                    }
-                })
-                .catch(error => {
-                    errorHandler("fetching relevant reference material", "/get_references", String(error.message))
-                })
-                .finally(() => {
-                    document.getElementById('processingQnS').style.display  = 'none';
-                    document.getElementById('processingQnS').innerHTML = '';
                 });
 
-            }).catch(error => {
-                errorHandler("fetching event-streaming response", "async fetchEventStream()", String(error.message))
-            });
-
-        } else {
-            throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+                document.getElementById(responseContentID).innerHTML = totalContent;
+                if (receivedComplete) break;
+            }
         }
-    })
-    .catch(error => {
-        errorHandler("setting up the streaming response", "/setup_for_llama_cpp_response", String(error.message))
-    })
-    .finally(() => {
-        sendButton.disabled = false; // Re-enable the send button
-    });
+
+        await processChunk();   // processChunk() is an async-Fn and thus returns a promise. Here, via await, we pause execution until the promise is resolved or rejected.
+        return totalContent;
+
+    } catch (error) {
+        errorHandler("fetching llama.cpp event-streaming response", "localhost:8080/completions", String(error))
+    }
+}
+
+async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer) {
+    const url = "http://localhost:9069/completions_stream";
+
+    const hfwHeaders = new Headers();
+    hfwHeaders.append("Content-Type", "application/json");
+    hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
+    hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
+    hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
+    hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
+    hfwHeaders.append("X-Min-P", document.getElementById('HfwMinpSlider').value);
+    hfwHeaders.append("X-Do-Sample", document.getElementById('HfwTempSlider').value > 0 ? "True" : "False");
+    
+    const rawBodyJSONObj = JSON.parse(formattedPrompt);                                
+    const rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
+
+    // console.log("rawBodyJSONObj: ", rawBodyJSONObj);
+    // console.log("rawBodyJSONStringified: ", rawBodyJSONStringified);
+
+    try {
+
+        const hfwResponse = await fetch(url, {
+            method: 'POST',
+            headers: hfwHeaders,
+            body: rawBodyJSONStringified,
+            redirect: 'follow'
+        });
+
+        document.getElementById('chat-area').scrollTop = document.getElementById('chat-area').scrollHeight;     //Scroll to the bottom of the page
+
+        const hfwReader = hfwResponse.body.getReader();
+        let hfwTotalContent = '';
+        let hfwReceivedComplete = false;
+
+        async function hfwProcessChunk() {
+            while (true) {
+                const { done, value } = await hfwReader.read();
+                if (done) {
+                    console.log("HF-Waitress Stream complete");
+                    break;
+                }
+                
+                const textChunk = new TextDecoder("utf-8").decode(value);
+                const messages = textChunk.split('\n');
+                
+                messages.forEach(message => {
+                    
+                    if (message.startsWith('data: ')) {
+                        const jsonStr = message.slice(7, -1);   // remove first 7 and last 1 chars to get rid of the 'data: "' prefix and " suffix!
+
+                        // console.log("message: ", message);
+                        try {
+                            let dataObj = String(jsonStr);
+                            if (dataObj == "null") {
+                                dataObj = "";
+                            }
+                            //console.log("dataObj: ", dataObj);
+
+                            dataObj = dataObj.replace(/\\u[\dA-F]{4}/gi, function(match) {
+                                return String.fromCharCode(parseInt(match.replace(/\\u/g, ''), 16));
+                            });
+                            // Explanation:
+                            // 0. This exists to handle the issue of unicode characters in the streamed response, which break the HTML.
+                            // 1. The regular expression /\\u[\dA-F]{4}/gi matches a sequence of characters that starts with "\\u" followed by exactly four hexadecimal digits (\d for digits, A-F for uppercase letters).
+                            // 2. The "gi" flags are used for global and case-insensitive matching.
+                            // 3. The function(match) { ... } is an arrow function (An arrow function expression has a shorter syntax and lexically binds the 'this' value) that takes the matched string and converts it back to a character using the parseInt function.
+                            // 4. parseInt(..., 16) uses replace to remove the "\\u" prefix and convert the remaining 4-digit hexadecimal string to a decimal number, using the 16 argument to specify base 16.
+                            // 5. String.fromCharCode() converts the decimal number integer (now a Unicode code point) back to the corresponding character.
+
+                            // Escape HTML special characters - /g implies global: replace throughout string, not just the first occurance
+                            let streamed_content = dataObj.replace(/\\t/g, '    ')
+                                                            .replace(/\\n\\n/g, '<br><br>')
+                                                            .replace(/\\n/g, '<br>');
+                                                            // .replace(/<(?!br\s*\/?>)/g, '&lt;')   // Replace '<' unless it's part of a <br> tag
+                                                            // .replace(/>(?!br\s*\/?>)/g, '&gt;') // Replace '>' unless it's part of a <br> tag
+
+                            hfwTotalContent += streamed_content;
+                            appendContentToResponse(responseContentID, streamed_content);
+
+                            handleAutoScroll(chatContainer);
+
+                        } catch (error) {
+                            console.error('Error parsing message: ', error);
+                        }
+                    } else if (message.startsWith('event: END') || message.startsWith('data: null')) {
+                        console.log("Received null message from hf-waitress - stream complete");
+                        hfwReceivedComplete = true;
+                    }
+                });
+
+                document.getElementById(responseContentID).innerHTML = hfwTotalContent;
+                if (hfwReceivedComplete) break;
+            }
+        }
+
+        await hfwProcessChunk();
+        return hfwTotalContent;
+
+    } catch (error) {
+        errorHandler("fetching event-streaming response", "localhost:9069/completions_stream", String(error))
+    }
+
+}
+
+async function fetchEventStream(serverType, formattedPrompt, responseContentID, chatContainer) {
+    if (serverType == 'llama-cpp') {
+        return fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer);
+    } else if (serverType == 'hf-waitress') {
+        return fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer);
+    } else {
+        throw new Error(`Invalid server type: ${serverType}`);
+    }
+}
+
+
+function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, stream_session_id) {
+    const latest_sequence_id = getSequenceId();
+    const current_chat_id = getChatId();
+
+    if (parseInt(latest_sequence_id) == 1) { 
+        const sidenav = document.getElementById('sidenav-content');
+
+        new_chat = {
+            'chat_id': current_chat_id,
+            'local_llm_server': data.local_llm_server,
+            'chat_name': data.stored_datetime,
+            'date_time': data.stored_datetime,
+            'prompt_template_format': data.local_llm_chat_template_format
+        }
+
+        const newDiv = createChatHistoryMenuItem(new_chat);
+
+        const newChatLink = document.getElementById('dynamicChatLink');
+        if (newChatLink.nextSibling) {
+            sidenav.insertBefore(newDiv, newChatLink.nextSibling);
+        } else {
+            sidenav.appendChild(newDiv);
+        }
+    }
+
+    console.log("get_references data: ", data);
+
+    if (do_rag) {
+        document.getElementById(responseContentID).innerHTML += `
+        </br> 
+        ${data.response}
+        ` 
+    }
+    
+    document.getElementById(responseContentID).innerHTML += `
+    <div class="star-rating" data-rated="False" rating-chat-id=${current_chat_id} rating-sequence-id=${latest_sequence_id}>
+        <i class="far fa-star" data-rate="1"></i>
+        <i class="far fa-star" data-rate="2"></i>
+        <i class="far fa-star" data-rate="3"></i>
+        <i class="far fa-star" data-rate="4"></i>
+        <i class="far fa-star" data-rate="5"></i>
+    </div>
+    `
+    if (do_rag) {
+        document.getElementById(masterWrapperID).innerHTML += data.pdf_frame;
+        // Open the first tab by default
+        var defaultTabs = document.getElementsByClassName("defaultTabs");
+        for (let i = 0; i < defaultTabs.length; i++) {
+            if (defaultTabs[i].getAttribute('stream-session-id') === stream_session_id) {
+                defaultTabs[i].click();
+            }
+        }
+    }
+}
+
+async function getReferences(do_rag, params, responseContentID, masterWrapperID) {
+    try {
+        const response = await fetch('/get_references', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params)
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error);
+        }
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(`Internal Server Error: Check server-log and server command-line for more details. Error: ${data.error}`);
+        }
+
+        handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, params.stream_session_id);
+    } catch (error) {
+        errorHandler("fetching relevant reference material", "getReferences()", String(error))
+    }
+}
+
+
+async function requestFormattedPrompt() {
+    initializePromptRequest();
+
+    const current_chat_id = getChatId();
+    const userInput = getUserInput();
+    const userInputForHtml = formatTabsAndSpaces(userInput);
+    updateChatAreaWithUserInput(userInputForHtml);
+    
+    try {
+        // 1- setup_for_llama_cpp_response
+        const response = await setupLLMResponse(userInput, current_chat_id);
+        const data = await response.json();
+        const {do_rag, stream_session_id, formatted_user_prompt, responseIDs} = handleSetupResponse(data);
+
+        // 2- fetchEventStream()
+        const chatContainer = document.getElementById('chat-area');
+        const serverType = document.getElementById('local_llm_server_select_dropdown').value;
+        const totalContent = await fetchEventStream(serverType, formatted_user_prompt, responseIDs.responseContentID, chatContainer);
+
+        console.log("llm_response post stream: ", totalContent);
+
+        // 3- getReferences()
+        if (do_rag) {
+            displayProcessingStatus('Fetching any references...');
+        }
+
+        const getReferencesParams = {
+            'chat_id':current_chat_id,
+            'sequence_id': getSequenceId(),
+            'stream_session_id': stream_session_id,
+            'user_query': userInput,
+            'llm_response': totalContent,
+            'formatted_user_prompt': formatted_user_prompt
+        };
+
+        await getReferences(do_rag, getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID);
+
+    } catch (error) {
+        errorHandler("chatting with the LLM", "requestFormattedPrompt()", String(error.message))
+    } finally {
+        enableSendButton();
+        displayProcessingStatus(false);
+    }
 }
 
 
@@ -498,7 +467,7 @@ function goToPageAndSwitchTab(iframeId, url, tabName, streamSessionId) {
 
     // Then, navigate to the correct page
     goToPage(iframeId, url);
-}
+}   //set as an onclick trigger in app.py!
 
 
 // Call sendMessage() if the user presses the 'Enter' key
