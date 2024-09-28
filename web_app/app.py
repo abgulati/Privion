@@ -2339,17 +2339,21 @@ def hf_waitress_server_starter():
     except Exception as e:
         handle_error_no_return("Could not check if llama.cpp server is running. Proceeding to launch HF-Waitress server. Encountered error: ", e)
 
-    is_awq = False
     model_choice = 'microsoft/Phi-3-mini-4k-instruct'   # match default in hf_waitress.py as this will only be used in the very first run, as the hf_config.json file is created in the first run!
+    is_awq = False
+    use_flash_attention_2 = False
+    flux_diffusers = False
+    flux_low_vram_optimizations = False
+    load_quantized_flux = False
     try:
         with open('hf_config.json', 'r') as file:
             hf_config = json.load(file)
+            model_choice = hf_config['model_id']
             is_awq = hf_config['awq']
             use_flash_attention_2 = hf_config['use_flash_attention_2']
             flux_diffusers = hf_config['flux_diffusers']
             flux_low_vram_optimizations = hf_config['flux_low_vram_optimizations']
             load_quantized_flux = hf_config['load_quantized_flux']
-            model_choice = hf_config['model_id']
     except Exception as e:
         handle_error_no_return("Could not read hf_config.json in method hf_waitress_server_starter, encountered error: ", e)
 
