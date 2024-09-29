@@ -21,7 +21,7 @@ import io
 
 from functools import wraps
 from logging.handlers import RotatingFileHandler
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, send_from_directory
 from flask_cors import CORS
 
 from waitress import serve
@@ -859,6 +859,18 @@ def initialize_model():
     return True
 
 
+@app.route('/serve_generated_image/<path:filename>')
+def serve_generated_image(filename):
+    print(f"\n\nserving generated image: {filename}\n\n")
+    generated_images_folder = "generated_images"
+    try:
+        generated_images_folder = read_config(['generated_images_folder'])['generated_images_folder']
+    except Exception as e:
+        handle_error_no_return("Could not read generated_images_folder from hf_config.json, using default: generated_images in the current working directory. Encountered error: ", e)
+
+    return send_from_directory(generated_images_folder, filename)
+
+
 def generate_flux_image(request):
     print("\n\nFlux Diffusers Selected - Generating Image\n\n")
 
@@ -891,10 +903,11 @@ def generate_flux_image(request):
 
         stream_session_id = str(uuid.uuid4())
         image_name = "output_" + stream_session_id + ".png"
+        image_path = generated_images_folder + "/" + image_name
 
         try:
             os.makedirs(generated_images_folder, exist_ok=True)
-            image.save(generated_images_folder + "/" + image_name)
+            image.save(image_path)
         except Exception as e:
             handle_error_no_return("Could not store image in generated_images folder, saving in current working directory instead. Encountered error: ", e)
             try:    
@@ -906,7 +919,7 @@ def generate_flux_image(request):
         image.save(buffered, format="PNG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
         #return jsonify({"success": True, "response": img_str})
-        return img_str
+        return img_str, image_name
     except Exception as e:
         handle_local_error("Could not generate image with FLUX Diffusers. Encountered error: ", e)
         return False
@@ -967,8 +980,8 @@ def completions():
 
         if flux_diffusers:
             try:
-                image_str = generate_flux_image(request)
-                return jsonify({"success": True, "response": image_str})
+                image_str, image_name = generate_flux_image(request)
+                return jsonify({"success": True, "response": image_str, "image_name": image_name})
             except Exception as e:
                 return handle_api_error("Could not generate image with FLUX Diffusers. Encountered error: ", e)
 
