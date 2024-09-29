@@ -63,7 +63,7 @@ function loadAndSetCoreValues() {
         return data.values;
     })
     .catch(error => {
-        errorHandler("reading config.json", "/config_reader_api", String(error.message))
+        errorHandler("reading config.json", "/config_reader_api", String(error.message));
     });
 }
 
