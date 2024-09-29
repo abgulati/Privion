@@ -114,12 +114,12 @@ function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, r
 }
 
 function handleSetupResponse(data) {
-    const {do_rag, stream_session_id, formatted_user_prompt, sequence_id} = data;   // using object=destructuring (ES6-2015) to extract and set specific values from the data object in a single step!
+    const {do_rag, stream_session_id, formatted_user_prompt, sequence_id, server_type} = data;   // using object=destructuring (ES6-2015) to extract and set specific values from the data object in a single step!
 
     console.log("do_rag: ", do_rag);
     console.log("stream_session_id: ", stream_session_id);
     console.log("formatted_user_prompt: ", formatted_user_prompt);
-
+    console.log("server_type: ", server_type);
     setSequenceId(sequence_id);
 
     const responseIDs = {
@@ -131,7 +131,7 @@ function handleSetupResponse(data) {
     appendResponseContainerToChatArea(responseIDs.masterWrapperID, responseIDs.responseWrapperID, responseIDs.responseContentID);
     displayProcessingStatus('Generating...');
 
-    return { do_rag, stream_session_id, formatted_user_prompt, responseIDs };
+    return { do_rag, stream_session_id, formatted_user_prompt, responseIDs, server_type };
 }
 
 
@@ -324,9 +324,66 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         return hfwTotalContent;
 
     } catch (error) {
-        errorHandler("fetching event-streaming response", "localhost:9069/completions_stream", String(error))
+        errorHandler("fetching event-streaming response", "localhost:9069/completions_stream", String(error));
     }
 
+}
+
+async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, chatContainer) {
+    const url = "http://localhost:9069/completions";
+
+    const hfwHeaders = new Headers();
+    hfwHeaders.append("Content-Type", "application/json");
+    hfwHeaders.append("X-Guidance-Scale", document.getElementById('HfDGuidanceScaleSlider').value);
+    hfwHeaders.append("X-Height", document.getElementById('HfDHeight').value);
+    hfwHeaders.append("X-Width", document.getElementById('HfDWidth').value);
+    hfwHeaders.append("X-Num-Inference-Steps", document.getElementById('HfDNumInfSteps').value);
+    hfwHeaders.append("X-Max-Sequence-Length", document.getElementById('HfDSeqLen').value);
+    hfwHeaders.append("X-Num-Images-Per-Prompt", document.getElementById('HfDNumImgPerPrompt').value);
+
+    const rawBodyJSONObj = JSON.parse(formattedPrompt);                                
+    const rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
+
+    console.log("rawBodyJSONObj: ", rawBodyJSONObj);
+    console.log("rawBodyJSONStringified: ", rawBodyJSONStringified);
+
+    try {
+        const hfwResponse = await fetch(url, {
+            method: 'POST',
+            headers: hfwHeaders,
+            body: rawBodyJSONStringified,
+            redirect: 'follow'
+        });
+
+        if (!hfwResponse.ok) {
+            const err = await hfwResponse.json();
+            throw new Error(err.error);
+        }
+
+        const data = await hfwResponse.json();
+
+        if (data.success) {
+            console.log("Diffusers Image Generation Successful");
+            console.log("data: ", data);
+
+            // create image div with source = data.image_name (local file path) and append to responseContentID.innerHTML
+            const imageDiv = document.createElement('div');
+            const img = document.createElement('img');
+            img.alt = "Generated Image";
+            img.src = `http://localhost:9069/serve_generated_image/${data.image_name}`;
+            imageDiv.appendChild(img);
+            document.getElementById(responseContentID).appendChild(imageDiv);
+
+            handleAutoScroll(chatContainer);
+            console.log("returning imageDiv.outerHTML: ", imageDiv.outerHTML);
+            return imageDiv.outerHTML;
+        } else {
+            throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+        }
+    } catch (error) {
+        errorHandler("fetching diffusers response", "localhost:9069/completions", String(error));
+    }
+    
 }
 
 async function fetchEventStream(serverType, formattedPrompt, responseContentID, chatContainer) {
@@ -334,6 +391,8 @@ async function fetchEventStream(serverType, formattedPrompt, responseContentID, 
         return fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer);
     } else if (serverType == 'hf-waitress') {
         return fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer);
+    } else if (serverType == 'hfw-diffusers') {
+        return fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, chatContainer);
     } else {
         throw new Error(`Invalid server type: ${serverType}`);
     }
@@ -433,12 +492,11 @@ async function requestFormattedPrompt() {
         // 1- setup_for_llama_cpp_response
         const response = await setupLLMResponse(userInput, current_chat_id);
         const data = await response.json();
-        const {do_rag, stream_session_id, formatted_user_prompt, responseIDs} = handleSetupResponse(data);
+        const {do_rag, stream_session_id, formatted_user_prompt, responseIDs, server_type} = handleSetupResponse(data);
 
         // 2- fetchEventStream()
         const chatContainer = document.getElementById('chat-area');
-        const serverType = document.getElementById('local_llm_server_select_dropdown').value;
-        const totalContent = await fetchEventStream(serverType, formatted_user_prompt, responseIDs.responseContentID, chatContainer);
+        const totalContent = await fetchEventStream(server_type, formatted_user_prompt, responseIDs.responseContentID, chatContainer);
 
         console.log("llm_response post stream: ", totalContent);
 

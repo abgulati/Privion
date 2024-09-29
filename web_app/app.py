@@ -3346,29 +3346,39 @@ def format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_i
     return formatted_prompt
 
 
-def format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template):
+def format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, flux_diffusers):
 
     print("\n\nFormatting prompt for hf-waitress\n\n")
 
     # base_template += " Important: The user will be reading your responses in a web browser, so make sure to use <br> liberally to ensure the user can read your responses easily. When in doubt, add a <br> tag!"
-
-    if current_sequence_id > 0:
-        history_prompt_json = json.loads(formatted_prompt)
-        new_message = {"role":"user", "content":user_query}
-        history_prompt_json['messages'].append(new_message)
-        updated_history_prompt_json = json.dumps(history_prompt_json, indent=4)
-        formatted_prompt = str(updated_history_prompt_json)
-    else:
-        first_prompt_json = f'''
+    
+    # double curly braces necessitated by Python's f-string syntax, to escape the inner curly braces in the JSON string
+    if flux_diffusers:
+        formatted_prompt = f'''
         {{
-                "messages": [
-                    {{"role": "system", "content": {json.dumps(base_template)}}},
-                    {{"role": "user", "content": {json.dumps(user_query)}}}
-                ]
-            }}
+            "messages": [
+                {{"prompt": {json.dumps(user_query)}}}
+            ]
+        }}
         '''
+    else:
+        if current_sequence_id > 0:
+            history_prompt_json = json.loads(formatted_prompt)
+            new_message = {"role":"user", "content":user_query}
+            history_prompt_json['messages'].append(new_message)
+            updated_history_prompt_json = json.dumps(history_prompt_json, indent=4)
+            formatted_prompt = str(updated_history_prompt_json)
+        else:
+            first_prompt_json = f'''
+            {{
+                    "messages": [
+                        {{"role": "system", "content": {json.dumps(base_template)}}},
+                        {{"role": "user", "content": {json.dumps(user_query)}}}
+                    ]
+                }}
+            '''
 
-        formatted_prompt = str(first_prompt_json)
+            formatted_prompt = str(first_prompt_json)
 
     return formatted_prompt
 
@@ -3455,6 +3465,37 @@ def setup_for_llama_cpp_response():
         return handle_api_error("Could not obtain and/or store user_query in setup_for_streaming_response, encountered error: ", e)
 
     print("chat_id: ", chat_id)
+    
+    current_sequence_id = determine_sequence_id_for_chat(chat_id)
+    formatted_prompt = ""
+    print("current_sequence_id: ", current_sequence_id)
+
+    
+    if local_llm_server == 'hf-waitress':
+        flux_diffusers = False
+        try:
+            with open('hf_config.json', 'r') as file:
+                hf_config = json.load(file)
+                flux_diffusers = hf_config['flux_diffusers']
+        except Exception as e:
+            handle_error_no_return("Could not determine flux_diffusers from hf_config.json in method setup_for_llama_cpp_response. Continuing with Transformers. Encountered error: ", e)
+
+        if flux_diffusers:
+            try:
+                formatted_prompt = format_prompt_for_hf_waitress("", user_query, 0, "", True)
+                local_llm_server = 'hfw-diffusers'
+                new_sequence_id = int(current_sequence_id) + 1
+                
+                try:
+                    write_config({'do_rag':False})
+                except Exception as e:
+                    handle_error_no_return("Could not write do_rag to config during setup_for_streaming_response, encountered error: ", e)
+                
+                print("Returning diffusers formatted_prompt: ", formatted_prompt)
+                return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
+            except Exception as e:
+                return handle_api_error("Could not format prompt for hfw-diffusers in method setup_for_llama_cpp_response, encountered error: ", e)
+        
 
     # Perform similarity search on the vector DB
     print("\n\nPerforming similarity search to determine if RAG necessary\n\n")
@@ -3521,9 +3562,6 @@ def setup_for_llama_cpp_response():
                 handle_error_no_return("Could not write do_rag to config during setup_for_streaming_response, encountered error: ", e)
             handle_error_no_return("RAG Error: Could not update QUERIES dict and user_query during setup_for_streaming_response, proceeding without RAG. Encountered error: ", e)
 
-    current_sequence_id = determine_sequence_id_for_chat(chat_id)
-    formatted_prompt = ""
-    print("current_sequence_id: ", current_sequence_id)
     if current_sequence_id > 0:    # get the last prompt so we can continue the completions
         formatted_prompt = format_prompt_from_history(chat_id, current_sequence_id)
 
@@ -3535,13 +3573,13 @@ def setup_for_llama_cpp_response():
     if local_llm_server == 'llama-cpp':
         formatted_prompt = format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format)
     elif local_llm_server == 'hf-waitress':
-        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template)
+        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, False)
 
     print("Returning formatted_prompt: ", formatted_prompt)
 
     # Return a bunch of stuff
     new_sequence_id = int(current_sequence_id) + 1
-    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id})
+    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
 
 
 
@@ -3590,13 +3628,24 @@ def get_references():
             formatted_user_prompt += f"{llm_response}<|end_of_turn|>"
         elif local_llm_chat_template_format == 'gemma2':
             formatted_user_prompt += f"{llm_response}<end_of_turn>\n"
+    
     elif local_llm_server == 'hf-waitress':
         local_llm_chat_template_format = "hf-transformers"
-        history_prompt_json = json.loads(formatted_user_prompt)
-        new_response = {"role":"assistant", "content":llm_response}
-        history_prompt_json['messages'].append(new_response)
-        updated_history_prompt_json = json.dumps(history_prompt_json, indent=4)
-        formatted_user_prompt = str(updated_history_prompt_json)
+
+        flux_diffusers = False
+        try:
+            with open('hf_config.json', 'r') as file:
+                hf_config = json.load(file)
+                flux_diffusers = hf_config['flux_diffusers']
+        except Exception as e:
+            handle_error_no_return("Could not determine flux_diffusers from hf_config.json in method setup_for_llama_cpp_response. Continuing with Transformers. Encountered error: ", e)
+
+        if not flux_diffusers:
+            history_prompt_json = json.loads(formatted_user_prompt)
+            new_response = {"role":"assistant", "content":llm_response}
+            history_prompt_json['messages'].append(new_response)
+            updated_history_prompt_json = json.dumps(history_prompt_json, indent=4)
+            formatted_user_prompt = str(updated_history_prompt_json)
 
     if not do_rag:
         print("\n\nSkipping RAG, storing chat history and returning\n\n")
