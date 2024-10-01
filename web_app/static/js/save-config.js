@@ -159,6 +159,7 @@ function getHfWaitressConfig() {
         'flux_diffusers': document.getElementById('hf_waitress_diffusers_yes').checked,
         'flux_low_vram_optimizations': document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').checked,
         'load_quantized_flux': document.getElementById('hf_waitress_diffusers_fp8_yes').checked,
+        'vision': document.getElementById('hf_waitress_vision_yes').checked,
         'awq': document.getElementById('hf_waitress_is_awq_yes').checked,
         'pipeline_task': document.getElementById('hf_waitress_pipeline_task_choice').value,
         'max_new_tokens': parseInt(document.getElementById('HfwMaxNewToks').value),
