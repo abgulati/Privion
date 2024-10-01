@@ -1294,17 +1294,17 @@ def get_input_params_for_vision_model(request):
         handle_local_error("Could not apply chat template, encountered error: ", e)
         return False
 
-    return input_text, pil_image_object_list, generation_args
+    return input_text, pil_image_object_list, generation_args, filename
 
 
 def inference_with_vision_model(request):
     print("\n\nvision-completions route triggered") # No need to acquire LLM semaphore here, as the invoking method already has it!
     
-    input_text, pil_image_object_list, generation_args = get_input_params_for_vision_model(request)
+    input_text, pil_image_object_list, generation_args, filename = get_input_params_for_vision_model(request)
 
     inference_output = ""
     for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
-        print(f"\n\nProcessing Page: {page_number}\n\n")
+        print(f"\n\nProcessing Page: {page_number} from file: {filename}\n\n")
         
         try:
             print("\n\nLoading Input to Model\n\n")
@@ -1428,7 +1428,7 @@ def vision_stream():
 
     print("\n\nLLM semaphore acquired by /vision_stream\n\n")
 
-    input_text, pil_image_object_list, generation_args = get_input_params_for_vision_model(request)
+    input_text, pil_image_object_list, generation_args, filename = get_input_params_for_vision_model(request)
 
     stop_thread = threading.Event()
 
@@ -1438,7 +1438,9 @@ def vision_stream():
 
         try:
             for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
-                print(f"\n\nProcessing Page: {page_number}\n\n")
+                status_string = f"\nProcessing Page: {page_number} from file: {filename}\n"
+                data_queue.put(status_string)
+                print(status_string)
                 
                 print("\n\nLoading Input to Model\n\n")
                 inputs = PIPE(image, input_text, return_tensors="pt").to(MODEL.device)
