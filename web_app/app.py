@@ -450,12 +450,12 @@ except Exception as e:
 # 3. If this is the very first run:
 #   a. read_config does not find the directory data in config.json
 #   b. the else clause is triggered and defaults set for both, write_config and return
-# 4. If this isn't the very first run:
-#   a. read_config simply returns the OS specific directory - this allows the user to update the directory via config.json!
-# 4. On return, BASE_DIRECTORY is set and write_config has os specific directories set (windows_base_directory, unix_and_docker_base_directory, and mac_base_directory)
-# 5. write_config is invoked for BASE_DIRECTORY
-# 6. write_config detects a write-attempt for BASE_DIRECTORY and updates all related app directories too, which can be subsequently read as required
-# 7. This ensures that directories are set correctly at each run while also allowing the user to set their preferred directory via config.json
+# 4. If this isn't the very first run, read_config simply returns the OS specific directory
+# 5. On return, BASE_DIRECTORY is set and write_config has os specific directories are subsequently set (windows_base_directory, unix_and_docker_base_directory, and mac_base_directory)
+# 6. write_config is then invoked for BASE_DIRECTORY
+# 7. This setup ensures that:
+#   a. directories are set correctly at each run
+#   b. The user can set their preferred directory by easily editing config.json!
 
 
 # Having set the values for the directories above, proceed to actually create them on disk IF they don't alread exist!
@@ -811,7 +811,7 @@ def PDFtoAzureOCRTXT(input_filepath):
     # Convert PDF to  a list of images
     try:
         print("\n\nConverting PDF to a list of Images\n\n")
-        pages = convert_from_path(input_filepath, 300) # 300dpi - good balance between quality and performance
+        pages = convert_from_path(input_filepath, 300) # The convert_from_path() function from pdf2image lib intertnally uses Poppler to convert PDF pages to images, and then creates PIP Image objects from them. 300dpi - good balance between quality and performance
     except Exception as e:
         handle_local_error("Could not image PDF file, encountered error: ", e)
 
@@ -830,7 +830,7 @@ def PDFtoAzureOCRTXT(input_filepath):
 
     # Iterate over each page and apply OCR:
     print("\n\nBeginning image to Text OCR\n\n")
-    for page_number, image in enumerate(pages, start = 1):
+    for page_number, image in enumerate(pages, start = 1): # start=1 to match the page numbers in the PDF
         
         # Convert to bytes and create a stream
         try:
@@ -2345,6 +2345,7 @@ def hf_waitress_server_starter():
     flux_diffusers = False
     flux_low_vram_optimizations = False
     load_quantized_flux = False
+    vision = False
     try:
         with open('hf_config.json', 'r') as file:
             hf_config = json.load(file)
@@ -2354,6 +2355,7 @@ def hf_waitress_server_starter():
             flux_diffusers = hf_config['flux_diffusers']
             flux_low_vram_optimizations = hf_config['flux_low_vram_optimizations']
             load_quantized_flux = hf_config['load_quantized_flux']
+            vision = hf_config['vision']
     except Exception as e:
         handle_error_no_return("Could not read hf_config.json in method hf_waitress_server_starter, encountered error: ", e)
 
@@ -2380,7 +2382,8 @@ def hf_waitress_server_starter():
         launch_args += '--flux_low_vram_optimizations '
     if load_quantized_flux:
         launch_args += '--load_quantized_flux '
-    
+    if vision:
+        launch_args += '--vision '
     launch_args = launch_args.strip()
     base_command = 'python' if platform.system() == 'Windows' else 'python3'
     full_command = f"{base_command} hf_waitress.py {launch_args}"
