@@ -65,7 +65,9 @@ function updateChatAreaWithUserInput(userInputForHtml) {
 function getUserInput() {
     const userInput = document.getElementById('user-input').value;
     document.getElementById('user-input').value = '';
-    return userInput;
+    const file = document.getElementById('textAttachmentInput').files[0];
+    if (file) { removeTextAttachment(); }
+    return {userInput, file};
 }
 
 function shouldAppendContent(streamedContent) {
@@ -92,11 +94,11 @@ function appendContentToResponse(responseContentID, content) {
 }
 
 
-function setupLLMResponse(userInput, current_chat_id) { //no need to async-await here as fetch() inherently returns a promise, so by returning fetch() directly we're providing the same Promise that the async function with await would return.
+function setupLLMResponse(userInput, file_attached, current_chat_id) { //no need to async-await here as fetch() inherently returns a promise, so by returning fetch() directly we're providing the same Promise that the async function with await would return.
     return fetch('/setup_for_llama_cpp_response', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({'user_query': userInput, 'chat_id': current_chat_id})
+        body: JSON.stringify({'user_query': userInput, 'chat_id': current_chat_id, 'file_attached': file_attached})
     });
 }
 
@@ -212,30 +214,51 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
     }
 }
 
-async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer) {
-    const url = "http://localhost:9069/completions_stream";
+async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer, file=null) {
+    let url;
+    let hfwHeaders = new Headers();
+    let formdata = null;
+    let rawBodyJSONStringified = null;
 
-    const hfwHeaders = new Headers();
-    hfwHeaders.append("Content-Type", "application/json");
-    hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
-    hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
-    hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
-    hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
-    hfwHeaders.append("X-Min-P", document.getElementById('HfwMinpSlider').value);
-    hfwHeaders.append("X-Do-Sample", document.getElementById('HfwTempSlider').value > 0 ? "True" : "False");
+    if (file) {
+        console.log("Invoking vision_stream");
+        url = "http://localhost:9069/vision_stream";
+
+        hfwHeaders = new Headers();
+        hfwHeaders.append("X-DPI", "300");
+        hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
+
+        formdata = new FormData();
+
+        const parsedPrompt = JSON.parse(formattedPrompt);
+        formdata.append("messages", JSON.stringify(parsedPrompt.messages));
+        formdata.append("file", file);
+
+    } else {
+        console.log("Invoking completions_stream");
+        url = "http://localhost:9069/completions_stream";
+
+        hfwHeaders = new Headers();
+        hfwHeaders.append("Content-Type", "application/json");
+        hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
+        hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
+        hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
+        hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
+        hfwHeaders.append("X-Min-P", document.getElementById('HfwMinpSlider').value);
+        hfwHeaders.append("X-Do-Sample", document.getElementById('HfwTempSlider').value > 0 ? "True" : "False");
+        
+        rawBodyJSONObj = JSON.parse(formattedPrompt);                                
+        rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
+    }
     
-    const rawBodyJSONObj = JSON.parse(formattedPrompt);                                
-    const rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
-
-    // console.log("rawBodyJSONObj: ", rawBodyJSONObj);
-    // console.log("rawBodyJSONStringified: ", rawBodyJSONStringified);
-
     try {
+
+        const request_body = file ? formdata : rawBodyJSONStringified;
 
         const hfwResponse = await fetch(url, {
             method: 'POST',
             headers: hfwHeaders,
-            body: rawBodyJSONStringified,
+            body: request_body,
             redirect: 'follow'
         });
 
@@ -386,13 +409,15 @@ async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, 
     
 }
 
-async function fetchEventStream(serverType, formattedPrompt, responseContentID, chatContainer) {
+async function fetchEventStream(serverType, formattedPrompt, responseContentID, chatContainer, file=null) {
     if (serverType == 'llama-cpp') {
         return fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer);
     } else if (serverType == 'hf-waitress') {
         return fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer);
     } else if (serverType == 'hfw-diffusers') {
         return fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, chatContainer);
+    } else if (serverType == 'hfw-vision') {
+        return fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer, file);
     } else {
         throw new Error(`Invalid server type: ${serverType}`);
     }
@@ -484,19 +509,22 @@ async function requestFormattedPrompt() {
     initializePromptRequest();
 
     const current_chat_id = getChatId();
-    const userInput = getUserInput();
+    const {userInput, file} = getUserInput();
     const userInputForHtml = formatTabsAndSpaces(userInput);
     updateChatAreaWithUserInput(userInputForHtml);
-    
+
+    let file_attached = false;
+    if (file) { file_attached = true; }
+
     try {
         // 1- setup_for_llama_cpp_response
-        const response = await setupLLMResponse(userInput, current_chat_id);
+        const response = await setupLLMResponse(userInput, file_attached, current_chat_id);
         const data = await response.json();
         const {do_rag, stream_session_id, formatted_user_prompt, responseIDs, server_type} = handleSetupResponse(data);
 
         // 2- fetchEventStream()
         const chatContainer = document.getElementById('chat-area');
-        const totalContent = await fetchEventStream(server_type, formatted_user_prompt, responseIDs.responseContentID, chatContainer);
+        const totalContent = await fetchEventStream(server_type, formatted_user_prompt, responseIDs.responseContentID, chatContainer, file);
 
         console.log("llm_response post stream: ", totalContent);
 
@@ -558,6 +586,30 @@ inputTextAreaElement.addEventListener("keydown", function(event) {
         }
     }
 });
+
+
+const textAttachmentInput = document.getElementById("textAttachmentInput");
+const textAttachmentPreview = document.getElementById("textAttachmentPreview");
+const textAttachmentRemoveBtn = document.getElementById("textAttachmentRemoveBtn");
+const textAttachmentFileName = document.getElementById("textAttachmentFileName");
+
+textAttachmentInput.addEventListener('change', function(event) {
+    console.log("textAttachmentInput: ", event);
+    if (event.target.files.length > 0) {
+        console.log("file detected: ", event.target.files[0]);
+        const file = event.target.files[0];
+        textAttachmentFileName.textContent = `Attached: ${file.name}`;
+        textAttachmentPreview.style.display = 'block';
+    }
+});
+
+function removeTextAttachment() {
+    textAttachmentInput.value = "";
+    textAttachmentFileName.textContent = "";
+    textAttachmentPreview.style.display = 'none';
+}
+
+textAttachmentRemoveBtn.addEventListener('click', removeTextAttachment);
 
 
 function adjustTextareaRows() {
