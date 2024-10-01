@@ -3349,7 +3349,7 @@ def format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_i
     return formatted_prompt
 
 
-def format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, flux_diffusers):
+def format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, flux_diffusers, vision):
 
     print("\n\nFormatting prompt for hf-waitress\n\n")
 
@@ -3364,6 +3364,19 @@ def format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence
             ]
         }}
         '''
+    elif vision:
+        formatted_prompt = {
+            "messages": [
+                {
+                    "role": "user", 
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": user_query}
+                    ]
+                }
+            ]
+        }
+        formatted_prompt = json.dumps(formatted_prompt) # Convert to a JSON string
     else:
         if current_sequence_id > 0:
             history_prompt_json = json.loads(formatted_prompt)
@@ -3461,6 +3474,7 @@ def setup_for_llama_cpp_response():
         # Attempt to get query data
         user_query = request.json['user_query']
         chat_id = request.json['chat_id']
+        file_attached = request.json['file_attached']
 
         # Store the query associated with the ID
         QUERIES[stream_session_id] = user_query
@@ -3476,30 +3490,44 @@ def setup_for_llama_cpp_response():
     
     if local_llm_server == 'hf-waitress':
         flux_diffusers = False
+        vision = False
         try:
             with open('hf_config.json', 'r') as file:
                 hf_config = json.load(file)
                 flux_diffusers = hf_config['flux_diffusers']
+                vision = hf_config['vision']
         except Exception as e:
             handle_error_no_return("Could not determine flux_diffusers from hf_config.json in method setup_for_llama_cpp_response. Continuing with Transformers. Encountered error: ", e)
 
-        if flux_diffusers:
+        if flux_diffusers or vision or file_attached:
+            print("Invoking quick-return route for hfw-diffusers or hfw-vision")
+            new_sequence_id = int(current_sequence_id) + 1
+            
             try:
-                formatted_prompt = format_prompt_for_hf_waitress("", user_query, 0, "", True)
-                local_llm_server = 'hfw-diffusers'
-                new_sequence_id = int(current_sequence_id) + 1
-                
-                try:
-                    write_config({'do_rag':False})
-                except Exception as e:
-                    handle_error_no_return("Could not write do_rag to config during setup_for_streaming_response, encountered error: ", e)
-                
-                print("Returning diffusers formatted_prompt: ", formatted_prompt)
-                return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
+                write_config({'do_rag':False})
             except Exception as e:
-                return handle_api_error("Could not format prompt for hfw-diffusers in method setup_for_llama_cpp_response, encountered error: ", e)
+                handle_error_no_return("Could not write do_rag to config during setup_for_streaming_response, encountered error: ", e)
+            
+            if flux_diffusers:
+                print("Flux diffusers detected, preparing accordingly")
+                try:
+                    formatted_prompt = format_prompt_for_hf_waitress("", user_query, 0, "", True, False)
+                    local_llm_server = 'hfw-diffusers'
+                    print("Returning diffusers formatted_prompt: ", formatted_prompt)
+                    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
+                except Exception as e:
+                    return handle_api_error("Could not format prompt for hfw-diffusers in method setup_for_llama_cpp_response, encountered error: ", e)
         
-
+            if file_attached or vision:
+                print("File and vision detected, preparing accordingly")
+                try:
+                    formatted_prompt = format_prompt_for_hf_waitress("", user_query, 0, "", False, True)
+                    local_llm_server = 'hfw-vision'
+                    print("Returning vision formatted_prompt: ", formatted_prompt)
+                    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
+                except Exception as e:
+                    return handle_api_error("Could not format prompt for hfw-diffusers in method setup_for_llama_cpp_response, encountered error: ", e)
+            
     # Perform similarity search on the vector DB
     print("\n\nPerforming similarity search to determine if RAG necessary\n\n")
     embedding_function = None
@@ -3576,7 +3604,7 @@ def setup_for_llama_cpp_response():
     if local_llm_server == 'llama-cpp':
         formatted_prompt = format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format)
     elif local_llm_server == 'hf-waitress':
-        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, False)
+        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, False, False)
 
     print("Returning formatted_prompt: ", formatted_prompt)
 
