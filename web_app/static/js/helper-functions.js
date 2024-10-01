@@ -1008,6 +1008,7 @@ function disableTransformersSettings() {
     document.getElementById('advancedHfLlmSettingsToggle').style.display = 'none';
     document.getElementById('hf_waitress_is_awq').style.display = 'none';
     document.getElementById('hf_waitress_trust_remote_code').style.display = 'none';
+    document.getElementById('hf_waitress_vision').style.display = 'none';
 }
 
 
@@ -1015,4 +1016,5 @@ function enableTransformersSettings() {
     document.getElementById('advancedHfLlmSettingsToggle').style.display = 'inline-block';
     document.getElementById('hf_waitress_is_awq').style.display = 'block';
     document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
+    document.getElementById('hf_waitress_vision').style.display = 'block';
 }
