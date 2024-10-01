@@ -1300,7 +1300,10 @@ def get_input_params_for_vision_model(request):
 def inference_with_vision_model(request):
     print("\n\nvision-completions route triggered") # No need to acquire LLM semaphore here, as the invoking method already has it!
     
-    input_text, pil_image_object_list, generation_args, filename = get_input_params_for_vision_model(request)
+    try:
+        input_text, pil_image_object_list, generation_args, filename = get_input_params_for_vision_model(request)
+    except Exception as e:
+        handle_local_error("Could not get input params in vision-completions, encountered error: ", e)
 
     inference_output = ""
     for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
@@ -1422,13 +1425,17 @@ def completions():
 
 @app.route('/vision_stream', methods=['POST'])
 def vision_stream():
-    print("\n\vision_stream route triggered - attempting to acquire LLM semaphore\n\n")
+    print("\n\nvision_stream route triggered - attempting to acquire LLM semaphore\n\n")
 
     llm_semaphore.acquire()
 
     print("\n\nLLM semaphore acquired by /vision_stream\n\n")
 
-    input_text, pil_image_object_list, generation_args, filename = get_input_params_for_vision_model(request)
+    try:
+        input_text, pil_image_object_list, generation_args, filename = get_input_params_for_vision_model(request)
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not get input params in vision_stream, encountered error: ", e)
 
     stop_thread = threading.Event()
 
@@ -1438,7 +1445,7 @@ def vision_stream():
 
         try:
             for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
-                status_string = f"\nProcessing Page: {page_number} from file: {filename}\n"
+                status_string = f"Processing Page: {page_number} from file: {filename}\n\n"
                 data_queue.put(status_string)
                 print(status_string)
                 
@@ -1456,6 +1463,7 @@ def vision_stream():
 
                 print(f"\n\ndecoded_output: {decoded_output}\n\n")
                 data_queue.put(decoded_output)
+                data_queue.put("\n\n\n")
 
                 empty_cuda_cache()
         finally:
