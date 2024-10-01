@@ -99,10 +99,21 @@
             
             <h3 id="processingQnS" style="display: none;"></h3>
             
-            <div class="input-area d-flex justify-content-center align-items-center" id="input-area" style="background-color: #1e2021;">
-                <textarea rows="1" cols="50" class="form-control" id="user-input" onclick="closeNav()" placeholder="Type your prompts here..."></textarea>
+            <div class="input-area" id="input-area">
+                <div class="input-wrapper">
+                    <textarea rows="1" cols="50" class="form-control" id="user-input" onclick="closeNav()" placeholder="Type your prompts here..."></textarea>
+                    <input type="file" id="textAttachmentInput" style="display: none;">
+                    <button type="button" id="textAttachmentButton" class="btn btn-sm btn-outline-secondary" onclick="closeNav(); document.getElementById('textAttachmentInput').click();">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
+                    <div id="textAttachmentPreview" class="mt-2" style="display: none;">
+                        <span id="textAttachmentFileName"></span>
+                        <button id="textAttachmentRemoveBtn" class="btn btn-sm btn-danger"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                <!-- <textarea rows="1" cols="50" class="form-control" id="user-input" onclick="closeNav()" placeholder="Type your prompts here..."></textarea> -->
                 <input type="file" name="file" id="fileInput" style="display:none;">
-                <button type="button" id="fileInputButton" class="btn btn-primary upload-file-btn" onclick="closeNav(); document.getElementById('fileInput').click();"><i class="fas fa-paperclip"></i></button>
+                <button type="button" id="fileInputButton" class="btn btn-primary upload-file-btn" onclick="closeNav(); document.getElementById('fileInput').click();"><i class="fas fa-upload"></i></button>
                 <button class="btn btn-primary" id="sendButton" onclick="closeNav(); requestFormattedPrompt()">Send</button>
             </div>
             
