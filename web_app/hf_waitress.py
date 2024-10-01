@@ -1,14 +1,19 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel, CLIPTextModel
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel, CLIPTextModel, AutoProcessor, MllamaForConditionalGeneration
 from huggingface_hub import login
 import torch
 
 from diffusers import FluxPipeline, FluxTransformer2DModel
 from optimum.quanto import freeze, qfloat8, quantize
 
+from werkzeug.utils import secure_filename
+from pdf2image import convert_from_path
+from PIL import Image
+
 import subprocess
 import threading
 import traceback
 import argparse
+import platform
 import logging
 import base64
 import queue
@@ -30,6 +35,7 @@ app = Flask(__name__)
 CORS(app)
 
 PIPE = None
+MODEL = None
 
 llm_semaphore = threading.Semaphore(1)
 config_writer_semaphore = threading.Semaphore(1)
@@ -132,7 +138,7 @@ def write_config(config_updates, filename='hf_config.json'):
 
         #restart logic in write_config() might be unnecessary, circle back later
         restart_required = False
-        triggers_for_hf_restart = ['torch_device_map', 'torch_dtype', 'model_id', 'awq', 'attn_implementation', 'pipeline_task', 'quantize', 'quant_level', 'port', 'use_flash_attention_2', 'hqq_group_size', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux']
+        triggers_for_hf_restart = ['torch_device_map', 'torch_dtype', 'model_id', 'awq', 'attn_implementation', 'pipeline_task', 'quantize', 'quant_level', 'port', 'use_flash_attention_2', 'hqq_group_size', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux', 'vision']
         for key in config_updates:
             if key in triggers_for_hf_restart and config_updates[key] != hf_config.get(key):
                 restart_required = True
@@ -164,21 +170,27 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
         
         return_dict = {}
         update_config_dict = {}
+        base_directory = hf_config.get('base_directory', '/app/waitress_storage')   # specifying default if not found
 
         for key in keys:
             if key in hf_config:
                 return_dict[key] = hf_config[key]
             else:
                 default_value = {
+                    'windows_base_directory':'M:/Storage/waitress_storage',
+                    'unix_and_docker_base_directory':'/app/waitress_storage',
+                    'mac_base_directory':'waitress_storage',
+                    'upload_folder':base_directory + '/uploaded_files_for_vision_inferencing',
+                    'generated_images_folder':base_directory + '/generated_images',
                     'access_gated':False,
                     'access_token':"",
                     'model_id':"microsoft/Phi-3-mini-4k-instruct",
-                    'generated_images_folder':"M:/Storage/lars_storage/generated_images",
                     'gguf':False,
                     'awq':False,
                     'flux_diffusers':False,
                     'flux_low_vram_optimizations':False,
                     'load_quantized_flux':False,
+                    'vision':False,
                     'gguf_model_id':None,
                     'gguf_filename':None,
                     'quantize':"quanto",
@@ -282,6 +294,135 @@ def hf_config_writer_api():
 ############################----------------------------------------------###############################
 
 
+#########################------------Setup Directories-------------###############################
+BASE_DIRECTORY = ""
+
+if platform.system() == 'Windows':
+    try:
+        read_return = read_config(['windows_base_directory'])   #passing list of values to read
+        BASE_DIRECTORY = str(read_return['windows_base_directory']) #received dict of key:values
+    except Exception as e:
+        handle_local_error("Could not read windows_base_directory on boot, encountered error: ", e)
+
+elif platform.system() == 'Linux':
+    try:
+        read_return = read_config(['unix_and_docker_base_directory'])
+        BASE_DIRECTORY = str(read_return['unix_and_docker_base_directory'])
+    except Exception as e:
+        handle_local_error("Could not read unix_and_docker_base_directory on boot, encountered error: ", e)
+
+else:   #Likely 'Darwin' and hence MacOS
+    try:
+        read_return = read_config(['mac_base_directory'])
+        BASE_DIRECTORY = str(read_return['mac_base_directory'])
+    except Exception as e:
+        handle_local_error("Could not read mac_base_directory on boot, encountered error: ", e)
+
+try:
+    write_config({'base_directory':BASE_DIRECTORY})
+except Exception as e:
+    handle_local_error("Could not write OS BASE_DIRECTORY on boot, encountered error: ", e)
+
+
+###---Notes on the above workflow:---###
+# 1. Everytime the app runs, the OS platform is detected
+# 2. Following which the apporpriate base directory is requested as above
+# 3. If this is the very first run:
+#   a. read_config does not find the directory data in config.json
+#   b. the else clause is triggered and defaults set for both, write_config and return
+# 4. If this isn't the very first run, read_config simply returns the OS specific directory
+# 5. On return, BASE_DIRECTORY is set and write_config has os specific directories are subsequently set (windows_base_directory, unix_and_docker_base_directory, and mac_base_directory)
+# 6. write_config is then invoked for BASE_DIRECTORY
+# 7. This setup ensures that:
+#   a. directories are set correctly at each run
+#   b. The user can set their preferred directory by easily editing config.json!
+
+
+# Having set the values for the directories above, proceed to actually create them on disk IF they don't alread exist!
+
+try:
+    os.makedirs(BASE_DIRECTORY, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create Base App Directory, encountered error: ", e)
+
+try:
+    read_return = read_config(['upload_folder', 'generated_images_folder'])
+    upload_folder = read_return['upload_folder']
+    generated_images_folder = read_return['generated_images_folder']
+except Exception as e:
+    handle_local_error("Could not read paths for app directories (upload_folder, generated_images_folder) from config.json on boot, encountered error: ", e)
+
+try:
+    os.makedirs(upload_folder, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create Uploaded Files Directory (upload_folder), encountered error: ", e)
+
+try:
+    os.makedirs(generated_images_folder, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create Generated Images Directory (generated_images_folder), encountered error: ", e)
+
+
+app.config['UPLOAD_FOLDER'] = upload_folder
+
+############################----------------------------------------------###############################
+
+
+############################---------------Shutdown Methods----------------###############################
+
+def empty_cuda_cache():
+    print("\n\nEmptying CUDA cache\n\n")
+    # check if torch.cuda is available
+    if torch.cuda.is_available():
+        try:
+            print("Attempting to empty cuda cache")
+            torch.cuda.empty_cache()
+            print("CUDA cache successfully emptied")
+        except Exception as e:
+            handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
+    else:
+        print("\n\nCUDA is not available, skipping cache-emptying\n\n")
+        return
+
+
+def shutdown_model():
+    print("\n\nShutting down model\n\n")
+    global MODEL
+    if MODEL:
+        try:
+            print("Attempting graceful offload of model")
+            if hasattr(MODEL, 'cpu'):
+                MODEL.cpu() # Moving to CPU ensures that all GPU operations are completed and the model is fully synchronized before deletion.
+            del MODEL
+            print("Model graceful-offload successful")
+        except Exception as e:
+            handle_error_no_return("Could not gracefully offload model. Proceeding to directly force-offload. Encountered error: ", e)
+        finally:
+            MODEL = None
+            empty_cuda_cache()
+    print("\n\nModel offloading complete\n\n")
+
+
+def shutdown_pipe():
+    global PIPE
+    print("\n\nShutting down pipeline\n\n")
+    if PIPE:
+        try:
+            print("Attempting graceful offload of pipeline")
+            if hasattr(PIPE, 'model') and hasattr(PIPE.model, 'cpu'):
+                PIPE.model.cpu() # Moving to CPU ensures that all GPU operations are completed and the model is fully synchronized before deletion.
+            del PIPE
+            print("Pipeline graceful-offload successful")
+        except Exception as e:
+            handle_error_no_return("Could not gracefully offload pipeline. Proceeding to directly force-offload pipeline. Encountered error: ", e)
+        finally:
+            PIPE = None
+            empty_cuda_cache()
+    print("\n\nPipeline offloading complete\n\n")
+############################-----------------------------------------------###############################
+
+
+
 
 def safe_int(value, default):
     if value is None:
@@ -328,7 +469,37 @@ def parse_arguments():
 
     # Even if a parser object could not be created, a read_request will write & return defaults 
     try:
-        read_return = read_config(['access_gated', 'access_token', 'model_id',  'gguf', 'awq', 'gguf_model_id', 'gguf_filename', 'quantize', 'quant_level', 'hqq_group_size', 'push_to_hub', 'torch_device_map', 'torch_dtype', 'trust_remote_code', 'use_flash_attention_2', 'pipeline_task', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'port', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux'])
+        read_return = read_config([
+            'access_gated',
+            'access_token',
+            'model_id',
+            'gguf',
+            'awq',
+            'flux_diffusers',
+            'flux_low_vram_optimizations',
+            'load_quantized_flux',
+            'vision',
+            'gguf_model_id',
+            'gguf_filename',
+            'quantize',
+            'quant_level',
+            'hqq_group_size',
+            'push_to_hub',
+            'torch_device_map',
+            'torch_dtype',
+            'trust_remote_code',
+            'use_flash_attention_2',
+            'pipeline_task',
+            'max_new_tokens',
+            'return_full_text',
+            'temperature',
+            'do_sample',
+            'top_k',
+            'top_p',
+            'min_p',
+            'n_keep',
+            'port'
+        ])
         access_gated = str(read_return['access_gated']).lower() == 'true'
         access_token = str(read_return['access_token'])
         model_id = str(read_return['model_id'])
@@ -363,6 +534,7 @@ def parse_arguments():
         parser.add_argument("--flux_diffusers", action="store_true", default=False, help="Add this flag when loading FLUX-diffusers models directly off the HF-Hub.")
         parser.add_argument("--flux_low_vram_optimizations", action="store_true", default=False, help="Save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power")
         parser.add_argument("--load_quantized_flux", action="store_true", default=False, help="Add this flag when loading quantized FLUX models directly off the HF-Hub.")
+        parser.add_argument("--vision", action="store_true", default=False, help="Add this flag when loading vision models directly off the HF-Hub.")
         parser.add_argument("--gguf_model_id", type=str, default=None, help="GGUF model_id of the target repo. Defaults to None")
         parser.add_argument("--gguf_filename", type=str, default=None, help="GGUF filename from the target repo. Defaults to None")
         parser.add_argument("--quantize", type=str, default=quantize, help="Quantization method to be utilized. Simply type 'n' to not use quantization. Remembers previously set value and falls-back to bitsandbytes as the default.")
@@ -397,7 +569,37 @@ def parse_arguments():
                 config_writer_semaphore.release()
                 
                 # Set defaults
-                read_config(['access_gated', 'access_token', 'model_id',  'gguf', 'awq', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux', 'gguf_model_id', 'gguf_filename', 'quantize', 'quant_level', 'hqq_group_size', 'push_to_hub', 'torch_device_map', 'torch_dtype', 'trust_remote_code', 'use_flash_attention_2', 'pipeline_task', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'port'])
+                read_config([
+                    'access_gated',
+                    'access_token',
+                    'model_id',
+                    'gguf',
+                    'awq',
+                    'flux_diffusers',
+                    'flux_low_vram_optimizations',
+                    'load_quantized_flux',
+                    'vision',
+                    'gguf_model_id',
+                    'gguf_filename',
+                    'quantize',
+                    'quant_level',
+                    'hqq_group_size',
+                    'push_to_hub',
+                    'torch_device_map',
+                    'torch_dtype',
+                    'trust_remote_code',
+                    'use_flash_attention_2',
+                    'pipeline_task',
+                    'max_new_tokens',
+                    'return_full_text',
+                    'temperature',
+                    'do_sample',
+                    'top_k',
+                    'top_p',
+                    'min_p',
+                    'n_keep',
+                    'port'
+                ])
 
             except Exception as e:
                 handle_local_error("Could not reset hf_config.json, encountered error: ", e)
@@ -422,6 +624,7 @@ def parse_arguments():
                     'flux_diffusers':args.flux_diffusers,
                     'flux_low_vram_optimizations':args.flux_low_vram_optimizations,
                     'load_quantized_flux':args.load_quantized_flux,
+                    'vision':args.vision,
                     'pipeline_task':args.pipeline_task, 
                     'max_new_tokens':args.max_new_tokens, 
                     'return_full_text':args.return_full_text, 
@@ -475,7 +678,21 @@ def get_model_params():
     global PIPE
 
     try:
-        read_return = read_config(['gguf', 'awq', 'gguf_model_id', 'gguf_filename', 'quantize', 'quant_level', 'hqq_group_size', 'torch_device_map', 'torch_dtype', 'trust_remote_code', 'use_flash_attention_2', 'pipeline_task'])
+        read_return = read_config([
+            'gguf',
+            'awq',
+            'gguf_model_id',
+            'gguf_filename',
+            'quantize',
+            'quant_level',
+            'hqq_group_size',
+            'torch_device_map',
+            'torch_dtype',
+            'trust_remote_code',
+            'use_flash_attention_2',
+            'pipeline_task',
+            'vision'
+        ])
         gguf = str(read_return['gguf']).lower() == 'true'
         awq = str(read_return['awq']).lower() == 'true'
         gguf_model_id = str(read_return['gguf_model_id'])
@@ -488,6 +705,7 @@ def get_model_params():
         trust_remote_code = str(read_return['trust_remote_code']).lower() == 'true'
         use_flash_attention_2 = str(read_return['use_flash_attention_2']).lower() == 'true'
         pipeline_task = str(read_return['pipeline_task'])
+        vision = str(read_return['vision']).lower() == 'true'
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to parse_arguments(), encountered error: ", e)
 
@@ -526,6 +744,10 @@ def get_model_params():
         if torch_dtype_obj is None:
             handle_error_no_return("Could not obtain torch dtype object, check if the value passed is correct. Setting to auto and proceeding.")
             torch_dtype_obj = "auto"
+
+    if vision:
+        print("Vision model detected, setting torch_dtype=torch.float16")
+        torch_dtype_obj = torch.float16
 
     model_params = {
         "device_map": torch_device_map,
@@ -674,6 +896,38 @@ def load_flux_pipeline(pipeline):
     return pipeline
 
 
+def load_vision_pipeline(pipeline, model_params):
+
+    print("\n\nLoading Vision Pipeline\n\n")
+
+    global MODEL
+
+    try:
+        read_return = read_config(['model_id', 'torch_device_map'])
+        model_id = str(read_return['model_id'])
+        torch_device_map = str(read_return['torch_device_map'])
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
+
+    try:
+        print(f"\n\nInitializing vision model: {model_id} with device_map: {torch_device_map}\n\n")
+        MODEL = MllamaForConditionalGeneration.from_pretrained(
+            model_id,
+            torch_dtype=torch.bfloat16,
+            device_map=torch_device_map ,
+        )
+
+        print(f"\n\nInitializing processor for vision model: {model_id}\n\n")
+        pipeline = AutoProcessor.from_pretrained(model_id, **model_params)  # Using 'pipeline' instead of 'processor' to maintain consistency with the server code. AutoProcessor is used to process images and text inputs for the vision model.
+        
+        print(f"\n\nVision Model & Processor Loaded Successfully!\n\n")
+        return pipeline
+    except Exception as e:
+        handle_local_error("Could not load Vision Pipeline, encountered error: ", e)
+        return False
+
+
+
 class CustomStream(io.StringIO):
     def __init__(self, callback=None):  # this callback stream to handle written data is not thread-safe!
         super().__init__()
@@ -707,16 +961,18 @@ def restart_server_stream():
 
     print("\n\nrestarting server with stream\n\n")
 
-    global PIPE
-    PIPE = None
+    shutdown_pipe()
+    if MODEL is not None:
+        shutdown_model()
 
     try:
-        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers'])
+        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision'])
         model_id = str(read_return['model_id'])
         push_to_hub = str(read_return['push_to_hub']).lower() == 'true'
         quant_level = str(read_return['quant_level'])
         pipeline_task = str(read_return['pipeline_task'])
         flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
+        vision = str(read_return['vision']).lower() == 'true'
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
 
@@ -746,8 +1002,11 @@ def restart_server_stream():
             logging.basicConfig(stream=custom_stdout, level=logging.INFO)   # logging level is set to INFO to ensure all logs are captured by the stream
             
             if flux_diffusers:
-                print("\n\nFlux Diffusers Selected - Loading Model\n\n")
+                print("\n\nFlux Diffusers Selected - Loading...\n\n")
                 PIPE = load_flux_pipeline(PIPE)
+            elif vision:
+                print("\n\nVision Model Selected - Loading...\n\n")
+                PIPE = load_vision_pipeline(PIPE, model_params)
             else:
                 model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
                 print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
@@ -797,12 +1056,13 @@ def initialize_model():
     global PIPE
 
     try:
-        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'flux_low_vram_optimizations'])
+        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision'])
         model_id = str(read_return['model_id'])
         push_to_hub = str(read_return['push_to_hub']).lower() == 'true'
         quant_level = str(read_return['quant_level'])
         pipeline_task = str(read_return['pipeline_task'])
         flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
+        vision = str(read_return['vision']).lower() == 'true'
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
 
@@ -818,6 +1078,15 @@ def initialize_model():
     model_params = get_model_params()
 
     print(f"initializing {model_id} with model_params: {model_params}")
+
+    if vision:
+        print("\n\nVision Model Selected - Loading...\n\n")
+        try:
+            PIPE = load_vision_pipeline(PIPE, model_params)
+            return True
+        except Exception as e:
+            handle_local_error("Could not load Vision Pipeline, encountered error: ", e)
+            return False
 
     try:
         model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)  # unpacking is equivalent to passing each parameter individually, so for example you'll get `attn_implementation="flash_attention_2"`
@@ -918,34 +1187,166 @@ def generate_flux_image(request):
         buffered = io.BytesIO()
         image.save(buffered, format="PNG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
-        #return jsonify({"success": True, "response": img_str})
         return img_str, image_name
     except Exception as e:
         handle_local_error("Could not generate image with FLUX Diffusers. Encountered error: ", e)
         return False
 
-        # fetch('/your_endpoint')
-        #     .then(response => response.json())
-        #     .then(data => {
-        #         if (data.success) {
-        #         const img = new Image();
-        #         img.src = 'data:image/png;base64,' + data.response;
-        #         document.body.appendChild(img);
-        #         }
-        #     });
+
+def convert_pdf_to_images_list(filepath, dpi=300):
+    print(f"\n\nConverting PDF to images list\n\n")
+    try:
+        return convert_from_path(filepath, dpi)
+    except Exception as e:
+        handle_local_error("Could not convert PDF to images list, encountered error: ", e)
+        return False
 
 
-def empty_cuda_cache():
-    print("\n\nEmptying CUDA cache\n\n")
-    # check if torch.cuda is available
-    if torch.cuda.is_available():
+def convert_to_pdf_with_unoconv(input_file_path, output_file_path):
+    print("\n\nConverting non-PDF document to PDF format\n\n")
+    if platform.system() == 'Windows':
+        subprocess.run(['python', 'unoconv.py', '-f', 'pdf', '-o', output_file_path, input_file_path], check=True)
+    else:
+        subprocess.run(['unoconv', '-f', 'pdf', '-o', output_file_path, input_file_path], check=True)
+
+
+def convert_non_pdf_to_pdf_with_unoconv(filename, filepath):
+    print("Converting to PDF file")
+
+    try:
+        conv_filename = os.path.splitext(filename)[0] + '.pdf'
+        conv_filepath = os.path.join(app.config['UPLOAD_FOLDER'], conv_filename)
+
+        convert_to_pdf_with_unoconv(filepath, conv_filepath)
+
+        return conv_filename, conv_filepath
+    except subprocess.CalledProcessError as e:
+        return handle_api_error("Could not convert file to PDF, encountered error: ", e)
+    except Exception as e:
+        return handle_api_error("Unexpected error when converting file to PDF, encountered error: ", e)
+
+
+def get_pil_image_objects_for_file(filename, filepath, dpi=300):
+    print(f"\n\nGetting PIL image objects for file: {filename}\n\n")
+
+    if not filename.lower().endswith('.pdf'):
+        _, filepath = convert_non_pdf_to_pdf_with_unoconv(filename, filepath)
+
+    try:
+        pil_image_object_list = convert_pdf_to_images_list(filepath, dpi)
+        return pil_image_object_list
+    except Exception as e:
+        return handle_api_error("Could not get PIL image objects for file, encountered error: ", e)
+
+
+def inference_with_vision_model(request):
+    print("\n\nVision Model Selected - Generating Image\n\n")
+
+    try:
+        input_file = request.files['file']
+        messages = json.loads(request.form.get('messages', '[]'))
+    except Exception as e:
+        handle_local_error("Could not read POST-request messages for /completions, encountered error: ", e)
+        return False
+
+    try:
+        read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p'])
+        max_new_tokens = int(read_return['max_new_tokens'])
+        return_full_text = str(read_return['return_full_text']).lower() == 'true'
+        temperature = float(read_return['temperature'])
+        do_sample = str(read_return['do_sample']).lower() == 'true'
+        top_k = int(read_return['top_k'])
+        top_p = float(read_return['top_p'])
+        min_p = float(read_return['min_p'])
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when trying to inference_with_vision_model(), encountered error: ", e)
+
+    try:
+        dpi = int(request.headers.get('X-DPI', 300))
         try:
-            torch.cuda.empty_cache()
+            generation_args = {
+                "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
+            }
+        except Exception as e:
+            handle_error_no_return("Could not set generation-arguments for /completions, proceeding without them. Encountered error: ", e)
+    except Exception as e:
+        handle_error_no_return("Could not read DPI from request headers, proceeding with default: 300. Encountered error: ", e)
+
+    # Ensure the filename is secure
+    filename = secure_filename(input_file.filename)
+    if "PDF" in filename:
+        filename = filename.replace("PDF", "pdf")
+
+    try:
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        print("Loading new file - filename: ", filename)
+        print("Loading new file - filepath: ", filepath)
+
+        # Save the uploaded file to the specified path
+        input_file.save(filepath)
+    except Exception as e:
+        return handle_api_error("Failed to save document to app folder, encountered error: ", e)
+    
+    try:
+        pil_image_object_list = get_pil_image_objects_for_file(filename, filepath, dpi)
+    except Exception as e:
+        return handle_api_error("Could not get PIL image objects for file, encountered error: ", e)
+
+    try:
+        read_return = read_config(['model_id', 'torch_device_map'])
+        model_id = str(read_return['model_id'])
+        torch_device_map = str(read_return['torch_device_map'])
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
+
+    try:
+        print("\n\nApplying Chat Template\n\n")
+        input_text = PIPE.apply_chat_template(messages, add_generation_prompt=True)
+    except Exception as e:
+        handle_local_error("Could not apply chat template, encountered error: ", e)
+        return False
+
+    inference_output = ""
+    for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
+        print(f"\n\nProcessing Page: {page_number}\n\n")
+        
+        try:
+            print("\n\nLoading Input to Model\n\n")
+            inputs = PIPE(image, input_text, return_tensors="pt").to(MODEL.device)
+        except Exception as e:
+            handle_local_error("Could not load input to model, encountered error: ", e)
+            return False
+
+        try:
+            print("\n\nGenerating Output\n\n")
+            output = MODEL.generate(**inputs, **generation_args)    # `output` is a tensor and needs to be decoded!
+
+            # Get length of the input sequence as follows:
+            # 1. The `inputs` object returned by processor is typically a dictionary-like object containing various tensors needed for the model's forward pass (output generation).
+            # 2. The `input_ids` tensor is usually the most important one among them, representing the tokenized input to the model.
+            # 3. `inputs.input_ids.shape` is a tensor with shape: (batch_size, sequence_length) 
+            # 4. The `batch_size`, i.e. `inputs.input_ids.shape[0]` in our case is 1, indicating we're processing one image/prompt at a time
+            # 5. The `sequence_length`, i.e. `inputs.input_ids.shape[1]`, gives us the the length of the input sequence, i.e. the number of tokens in the input.
+            # 6. The model's `generate` method returns a tensor that includes both, the input tokens and the newly generated tokens.
+            # 7. By slicing from `input_length` onwards, we're effectively saying "give me all the tokens after the input sequence", which are the newly generated tokens.
+            input_length = inputs.input_ids.shape[1] 
+            
+            # Slice the tensor and decode only the output!
+            decoded_output = PIPE.decode(output[0][input_length:], skip_special_tokens=True)    # Setting skip_special_tokens=True to remove: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
+
+            print(f"\n\ndecoded_output: {decoded_output}\n\n")
+            inference_output += decoded_output
+        except Exception as e:
+            handle_local_error("Could not generate output, encountered error: ", e)
+            return False
+
+        try:
+            empty_cuda_cache()
         except Exception as e:
             handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
-    else:
-        print("\n\nCUDA is not available, skipping cache-emptying\n\n")
-        return
+    
+    return inference_output
 
 
 
@@ -959,13 +1360,7 @@ def completions():
         print("\n\nLLM semaphore acquired by /completions\n\n")
 
         try:
-            data = request.json
-            messages = data.get('messages', [])
-        except Exception as e:
-            handle_api_error("Could not read POST-request messages for /completions, encountered error: ", e)
-
-        try:
-            read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'flux_diffusers'])
+            read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'flux_diffusers', 'vision'])
             max_new_tokens = int(read_return['max_new_tokens'])
             return_full_text = str(read_return['return_full_text']).lower() == 'true'
             temperature = float(read_return['temperature'])
@@ -975,6 +1370,7 @@ def completions():
             min_p = float(read_return['min_p'])
             n_keep = int(read_return['n_keep'])
             flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
+            vision = str(read_return['vision']).lower() == 'true'
         except Exception as e:
             handle_local_error("Could not read values from hf_config.json when trying to parse_arguments(), encountered error: ", e)
 
@@ -984,6 +1380,19 @@ def completions():
                 return jsonify({"success": True, "response": image_str, "image_name": image_name})
             except Exception as e:
                 return handle_api_error("Could not generate image with FLUX Diffusers. Encountered error: ", e)
+
+        if vision:
+            try:
+                response = inference_with_vision_model(request)
+                return jsonify({"success": True, "response": response})
+            except Exception as e:
+                return handle_api_error("Could not generate image with Vision Model. Encountered error: ", e)
+
+        try:
+            data = request.json
+            messages = data.get('messages', [])
+        except Exception as e:
+            return handle_api_error("Could not read POST-request messages for /completions, encountered error: ", e)
 
         try:
             generation_args = {
@@ -1270,11 +1679,11 @@ def restart_server():
             print("\n\n/restart_server acquired config_writer_semaphore, proceeding...\n\n")
             with error_logging_semaphore:
                 print("\n\n/restart_server acquired error_logging_semaphore, proceeding...\n\n")
-    
-                global PIPE
 
                 try:
-                    PIPE = None
+                    shutdown_pipe()
+                    if MODEL is not None:
+                        shutdown_model()
                     initialize_model()
                 except Exception as e:
                     handle_api_error("Could not restart server, encountered error: ", e)
