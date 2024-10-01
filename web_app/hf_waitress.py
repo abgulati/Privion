@@ -746,8 +746,8 @@ def get_model_params():
             torch_dtype_obj = "auto"
 
     if vision:
-        print("Vision model detected, setting torch_dtype=torch.float16")
-        torch_dtype_obj = torch.float16
+        print("Vision model detected, setting torch_dtype=torch.bfloat16")
+        torch_dtype_obj = torch.bfloat16
 
     model_params = {
         "device_map": torch_device_map,
@@ -1239,27 +1239,21 @@ def get_pil_image_objects_for_file(filename, filepath, dpi=300):
         return handle_api_error("Could not get PIL image objects for file, encountered error: ", e)
 
 
-def inference_with_vision_model(request):
-    print("\n\nVision Model Selected - Generating Image\n\n")
+def get_input_params_for_vision_model(request):
+    print("\n\nGetting input params for vision model\n\n")
 
     try:
         input_file = request.files['file']
         messages = json.loads(request.form.get('messages', '[]'))
     except Exception as e:
-        handle_local_error("Could not read POST-request messages for /completions, encountered error: ", e)
+        handle_local_error("Could not read POST-request messages when attempting to get_input_params_for_vision_model, encountered error: ", e)
         return False
 
     try:
-        read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p'])
+        read_return = read_config(['max_new_tokens'])
         max_new_tokens = int(read_return['max_new_tokens'])
-        return_full_text = str(read_return['return_full_text']).lower() == 'true'
-        temperature = float(read_return['temperature'])
-        do_sample = str(read_return['do_sample']).lower() == 'true'
-        top_k = int(read_return['top_k'])
-        top_p = float(read_return['top_p'])
-        min_p = float(read_return['min_p'])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when trying to inference_with_vision_model(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when trying to get_input_params_for_vision_model(), encountered error: ", e)
 
     try:
         dpi = int(request.headers.get('X-DPI', 300))
@@ -1268,7 +1262,7 @@ def inference_with_vision_model(request):
                 "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
             }
         except Exception as e:
-            handle_error_no_return("Could not set generation-arguments for /completions, proceeding without them. Encountered error: ", e)
+            handle_error_no_return("Could not set generation-arguments when attempting to get_input_params_for_vision_model, proceeding without them. Encountered error: ", e)
     except Exception as e:
         handle_error_no_return("Could not read DPI from request headers, proceeding with default: 300. Encountered error: ", e)
 
@@ -1294,18 +1288,19 @@ def inference_with_vision_model(request):
         return handle_api_error("Could not get PIL image objects for file, encountered error: ", e)
 
     try:
-        read_return = read_config(['model_id', 'torch_device_map'])
-        model_id = str(read_return['model_id'])
-        torch_device_map = str(read_return['torch_device_map'])
-    except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
-
-    try:
         print("\n\nApplying Chat Template\n\n")
         input_text = PIPE.apply_chat_template(messages, add_generation_prompt=True)
     except Exception as e:
         handle_local_error("Could not apply chat template, encountered error: ", e)
         return False
+
+    return input_text, pil_image_object_list, generation_args
+
+
+def inference_with_vision_model(request):
+    print("\n\nvision-completions route triggered") # No need to acquire LLM semaphore here, as the invoking method already has it!
+    
+    input_text, pil_image_object_list, generation_args = get_input_params_for_vision_model(request)
 
     inference_output = ""
     for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
@@ -1347,7 +1342,6 @@ def inference_with_vision_model(request):
             handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
     
     return inference_output
-
 
 
 @app.route('/completions', methods=['POST'])
@@ -1426,6 +1420,73 @@ def completions():
 
 
 
+@app.route('/vision_stream', methods=['POST'])
+def vision_stream():
+    print("\n\vision_stream route triggered - attempting to acquire LLM semaphore\n\n")
+
+    llm_semaphore.acquire()
+
+    print("\n\nLLM semaphore acquired by /vision_stream\n\n")
+
+    input_text, pil_image_object_list, generation_args = get_input_params_for_vision_model(request)
+
+    stop_thread = threading.Event()
+
+    data_queue = queue.Queue()
+
+    def llm_task():
+
+        try:
+            for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
+                print(f"\n\nProcessing Page: {page_number}\n\n")
+                
+                print("\n\nLoading Input to Model\n\n")
+                inputs = PIPE(image, input_text, return_tensors="pt").to(MODEL.device)
+
+                print("\n\nGenerating Output\n\n")
+                output = MODEL.generate(**inputs, **generation_args)    # `output` is a tensor and needs to be decoded!
+
+                # Get length of the input sequence - look for detailed comment in inference_with_vision_model() !
+                input_length = inputs.input_ids.shape[1] 
+                
+                # Slice the tensor and decode only the output!
+                decoded_output = PIPE.decode(output[0][input_length:], skip_special_tokens=True)    # Setting skip_special_tokens=True to remove: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
+
+                print(f"\n\ndecoded_output: {decoded_output}\n\n")
+                data_queue.put(decoded_output)
+
+                empty_cuda_cache()
+        finally:
+            data_queue.put(None)
+            print("\n\nLLM stream done, releasing semaphore\n\n")
+            llm_semaphore.release()
+            stop_thread.set()
+    
+    def generate():        
+        
+        thread = threading.Thread(target=llm_task)
+        thread.start()
+
+        while True:
+            output = data_queue.get()
+            if output is None:
+                print("\n\nNone read, breaking and stopping thread\n\n")
+                thread.join()
+                break
+            yield f"data: {json.dumps(output)}\n\n"
+        
+        yield f"event: END\ndata: \"null\"\n\n"
+
+        try:
+            empty_cuda_cache()
+        except Exception as e:
+            handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
+            
+    print("\n\nInferencing Begins!\n\n")
+    return Response(generate(), content_type='text/event-stream')
+
+
+
 class CustomTextStreamer(TextStreamer):
     def __init__(self, tokenizer, skip_special_tokens=True, skip_prompt=True, **kwargs):
         super().__init__(tokenizer, skip_special_tokens=skip_special_tokens, skip_prompt=skip_prompt, **kwargs)
@@ -1439,7 +1500,6 @@ class CustomTextStreamer(TextStreamer):
     
     def flush(self):
         self.buffer.flush()
-
 
 @app.route('/completions_stream', methods=['POST'])
 def completions_stream():
