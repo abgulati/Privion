@@ -108,7 +108,8 @@ function loadCoreHfValues() {
         'hqq_group_size',
         'flux_diffusers',
         'flux_low_vram_optimizations',
-        'load_quantized_flux'
+        'load_quantized_flux',
+        'vision'
     ]
     
     return fetch('http://localhost:9069/hf_config_reader_api', {
@@ -236,6 +237,9 @@ function initializeHfRadioButtons(all_values) {
 
     document.getElementById('hf_waitress_diffusers_yes').checked = all_values.flux_diffusers;
     document.getElementById('hf_waitress_diffusers_no').checked = !all_values.flux_diffusers;
+
+    document.getElementById('hf_waitress_vision_yes').checked = all_values.vision;
+    document.getElementById('hf_waitress_vision_no').checked = !all_values.vision;
 
     toggleHfwDiffusersConfig();
 
@@ -434,6 +438,15 @@ function toggleHfwDiffusersConfig() {
 }
 
 
+function toggleHfwVisionConfig() {
+    var selection = document.querySelector('input[name="hf_use_vision"]:checked').value;
+    if (selection === 'y') {
+        document.getElementById('hf_waitress_diffusers_no').checked = true;
+        document.getElementById('hf_waitress_diffusers_yes').checked = false;
+    }
+}
+
+
 function disableFluxQuantization() {
     var lv_selection = document.querySelector('input[name="hf_diffusers_use_low_vram_optimizations"]:checked').value;
     
@@ -472,6 +485,10 @@ function initializeEventListenersForLLMTab() {
     // Event Listener for toggle GPU:
     document.getElementById('gpu_radio_yes').addEventListener('change', toggleNGL);
     document.getElementById('gpu_radio_no').addEventListener('change', toggleNGL);
+
+    // Event listener for toggle Vision:
+    document.getElementById('hf_waitress_vision_yes').addEventListener('change', toggleHfwVisionConfig);
+    document.getElementById('hf_waitress_vision_no').addEventListener('change', toggleHfwVisionConfig);
 
     // Event listener for toggle Diffusers:
     document.getElementById('hf_waitress_diffusers_yes').addEventListener('change', toggleHfwDiffusersConfig);
