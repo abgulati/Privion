@@ -946,7 +946,7 @@ function startLLMAndVectorDB() {
     })
     .catch(error => {
         setServerStatusIndicator("Offline");
-        errorHandler("loading the LLM", "/llama_cpp_server_starter", String(error.message))
+        errorHandler("loading the LLM", "/local_llm_server_starter", String(error.message))
     })
 }
 
@@ -971,6 +971,7 @@ document.addEventListener("DOMContentLoaded", function() {
         .then(() => {
             if (local_llm_server === "hf-waitress") {
                 initializeHfwServerConfig();
+                showStopGenerationButton();
             }
             loadChatHistoryMenu();  // should be done regardless of errors
         })
