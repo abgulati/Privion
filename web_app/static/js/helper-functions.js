@@ -1018,3 +1018,31 @@ function enableTransformersSettings() {
     document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
     document.getElementById('hf_waitress_vision').style.display = 'block';
 }
+
+
+function stopGeneration() {
+    console.log("Stop Generation button clicked");
+    displayProcessingStatus('Stopping...');
+    // GET fetch call to /stop_generation endpoint
+    fetch('http://localhost:9069/stop_generation')
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error)});
+        }
+        return response.json()
+    })
+    .then(data => {
+        console.log(data);
+    })
+    .catch(error => {
+        errorHandler("stopping generation", "/stop_generation", String(error.message));
+    });
+}
+
+function showStopGenerationButton() {
+    document.getElementById('stopGenerationButton').style.display = 'block';
+}
+
+function hideStopGenerationButton() {
+    document.getElementById('stopGenerationButton').style.display = 'none';
+}
