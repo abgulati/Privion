@@ -2435,7 +2435,7 @@ def check_local_llm_server_status():
 
 @app.route('/local_llm_server_starter')
 def local_llm_server_starter():
-    print("Starting Local LLM Server")
+    print("\n\nStarting Local LLM Server\n\n")
 
     try:
         read_return = read_config(['local_llm_server'])
