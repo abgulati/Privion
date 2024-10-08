@@ -386,10 +386,7 @@ function handleSaveChanges() {
                     console.log("HF-Waitress server changes saved successfully.");
                     
                     let chatID = getChatId();
-                    chatID = " Chat ".concat(String(chatID))
-                    display_chatid_and_model = String(chatID).concat(": ", String(hf_config.model_id))
-                    document.getElementById('model_header').innerHTML = '';
-                    document.getElementById('model_header').innerHTML = display_chatid_and_model;
+                    setModelHeaderInfoBox(chatID, hf_config.model_id);
                 })
                 .catch(error => {
                     errorHandler("saving HF-Waitress settings", "handleSaveChanges()", String(error.message));  // Catching the error will resolve the Promise and allow the rest of the code to continue!

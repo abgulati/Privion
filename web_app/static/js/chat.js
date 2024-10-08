@@ -426,7 +426,14 @@ async function fetchEventStream(serverType, formattedPrompt, responseContentID, 
 
 function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, stream_session_id) {
     const latest_sequence_id = getSequenceId();
-    const current_chat_id = getChatId();
+    const current_chat_id = data.chat_id;
+
+    const chatState_chat_id = document.getElementById('chatState').getAttribute('data-ongoing-chat-id');
+    if (chatState_chat_id != current_chat_id) {
+        console.log("Updating chatID in the InfoBox")
+        setChatId(current_chat_id);
+        setModelHeaderInfoBox(current_chat_id, getLlmModel());
+    }
 
     if (parseInt(latest_sequence_id) == 1) { 
         const sidenav = document.getElementById('sidenav-content');

@@ -24,6 +24,13 @@ function getLlmModel() {
     return document.getElementById('chatState').getAttribute('data-llm-model');
 }
 
+function setModelHeaderInfoBox(chat_id, model_id) {
+    chatID = " Chat ".concat(String(chat_id))
+    display_chatid_and_model = String(chatID).concat(": ", String(model_id))
+    document.getElementById('model_header').innerHTML = '';
+    document.getElementById('model_header').innerHTML = display_chatid_and_model;
+}
+
 
 function goToPage(iframeId, url) {
     var iframe = document.getElementById(iframeId)
@@ -318,13 +325,8 @@ function loadChatHistory(chatID) {
     setChatId(chatID);
     let current_llm_model = getLlmModel();
 
-    document.getElementById('model_header').innerHTML = '';
     history_chat_id = chatID
-    history_chat_id = " Chat ".concat(String(history_chat_id))
-    display_chatid_and_model = String(history_chat_id).concat(": ", String(current_llm_model))
-    document.getElementById('model_header').innerHTML = display_chatid_and_model;
-
-    document.getElementById('chat-area').innerHTML = '';
+    setModelHeaderInfoBox(history_chat_id, current_llm_model);
 
     let formData = new FormData();
     formData.append('chat_id', chatID);

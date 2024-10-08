@@ -856,11 +856,7 @@ function initializeSettingsModalTabCycleListener() {
 
 function updateUIWithChatInfo(chat_id, llm_model) {
     curr_chat_id = chat_id
-    curr_chat_id = " Chat ".concat(String(curr_chat_id))
-
-    display_chatid_and_model = String(curr_chat_id).concat(": ", String(llm_model))
-
-    document.getElementById('model_header').innerHTML = display_chatid_and_model;
+    setModelHeaderInfoBox(curr_chat_id, llm_model);
     document.getElementById('model_header').style.display = 'block';
     
     document.getElementById('ModelAndDBLoading').style.display = 'none';

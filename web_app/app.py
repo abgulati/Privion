@@ -70,7 +70,7 @@ from whoosh.qparser import QueryParser, OrGroup
 from whoosh.query import Term, Or
 from whoosh import scoring
 
-
+from waitress import serve
 
 app = Flask(__name__)
 
@@ -104,8 +104,6 @@ def pdf_viewer(filename):
 LLAMA_CPP_PROCESS = None
 HF_WAITRESS_PROCESS = None
 LLM = None
-CHAT_ID = None
-SEQUENCE_ID = None
 LOADED_UP = False
 LLM_LOADED_UP = False
 VECTORDB_LOADED_UP = False
@@ -1300,11 +1298,13 @@ def highlighter_interface(reference_pages, stream_session_id):
 
 def determine_sequence_id_for_chat(chat_id):
 
+    print(f"\n\nDetermining sequence ID for chat with chat_id: {chat_id}")
+
     try:
         read_return = read_config(['sqlite_history_db'])
         sqlite_history_db = read_return['sqlite_history_db']
     except Exception as e:
-        handle_local_error("Missing keys in config.json for method store_chat_history_to_db. Error: ", e)
+        handle_local_error("Missing keys in config.json for method determine_sequence_id_for_chat(). Error: ", e)
 
     # Connect to or create the DB
     try:
@@ -1317,7 +1317,7 @@ def determine_sequence_id_for_chat(chat_id):
         # Determine sequence_id
         cursor.execute("SELECT COALESCE(MAX(sequence_id), 0) FROM chat_history WHERE chat_id = ?", (int(chat_id),))
         # "The COALESCE function accepts two or more arguments and returns the first non-null argument."
-        # This accounts for a new chat!
+        # This query returns 0 for a new chat, and the last sequence_id for an existing chat.
         # Note that trailing comma! Without it, the simple select query will produce an error: "parameters are of unsupported type" !!
         # This is because the SQLite3 module can have trouble recognizing single-item tuples as tuples, so a trailing comma helps alleviate this! 
 
@@ -1330,11 +1330,9 @@ def determine_sequence_id_for_chat(chat_id):
     return int(current_sequence_id)
 
 
-def store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query_for_history_db, model_response_for_history_db, fully_formatted_prompt, local_llm_server, local_llm_chat_template_format):
+def store_local_llm_chat_history_to_db(chat_id, sequence_id, user_query_for_history_db, model_response_for_history_db, fully_formatted_prompt, local_llm_server, local_llm_chat_template_format):
 
-    global SEQUENCE_ID
-
-    print(f"\n\nStoring chat history for chat with CHAT_ID: {chat_id}")
+    print(f"\n\nStoring chat history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}")
 
     try:
         read_return = read_config(['sqlite_history_db', 'local_llm_server', 'model_choice'])
@@ -1342,7 +1340,7 @@ def store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query_for_hist
         local_llm_server = read_return['local_llm_server']
         model_choice = read_return['model_choice']
     except Exception as e:
-        handle_local_error("Missing keys in config.json for method store_chat_history_to_db. Error: ", e)
+        handle_local_error("Missing keys in config.json for method store_local_llm_chat_history_to_db. Error: ", e)
 
     if local_llm_server == "hf-waitress":
         model_choice = read_hf_config(['model_id'])['model_id']
@@ -1354,77 +1352,33 @@ def store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query_for_hist
     except Exception as e:
         handle_local_error("Could not establish connection to DB for chat history storage, encountered error: ", e)
 
+    if int(sequence_id) == 1:
+        try:
+            chat_id = determine_latest_chat_id(cursor)
+        except Exception as e:
+            handle_local_error("Could not determine latest chat ID, encountered error: ", e)
+    
     try:
         prev_sequence_id = determine_sequence_id_for_chat(chat_id)
-        #print("prev_sequence_id: ", prev_sequence_id)
-        SEQUENCE_ID = prev_sequence_id + 1
-        #print("current_sequence_id: ", SEQUENCE_ID)
+        sequence_id = prev_sequence_id + 1
     except Exception as e:
         handle_local_error("Could not determine sequence ID for storage to chat history DB, encountered error: ", e)
-       
-    # print(type(CHAT_ID))
-    # print(type(current_sequence_id))
-    # print(type(user_query_for_history_db))
-    # print(type(model_response_for_history_db))
 
     try:
         current_datetime = datetime.datetime.now()
         formatted_datetime = current_datetime.strftime('%d %b %Y - %I:%M %p %Z')
     except Exception as e:
-        return handle_api_error("Could not obtain timestamp in store_llama_cpp_chat_history_to_db, encountered error: ", e)
+        return handle_api_error("Could not obtain timestamp in store_local_llm_chat_history_to_db, encountered error: ", e)
 
     try:
         # Store conversation history into DB
         cursor.execute("INSERT INTO chat_history (chat_id, sequence_id, user_query, llm_response, llm_model, prompt_template, local_llm_server, prompt_template_format, date_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (int(chat_id), int(sequence_id), user_query_for_history_db, model_response_for_history_db, model_choice, str(fully_formatted_prompt), str(local_llm_server), str(local_llm_chat_template_format), str(formatted_datetime)))
         conn.commit()
+        print(f"\n\nInserted chat history into DB with chat_id: {chat_id}\n\n")
     except Exception as e:
         handle_local_error("Could not insert chat history into DB, encountered error: ", e)
 
-    return formatted_datetime
-
-
-def store_chat_history_to_db(user_query_for_history_db, model_response_for_history_db, current_historical_summary):
-
-    global SEQUENCE_ID
-
-    print(f"\n\nStoring chat history for chat with CHAT_ID: {CHAT_ID}")
-
-    try:
-        read_return = read_config(['sqlite_history_db', 'model_choice', 'base_template'])
-        sqlite_history_db = read_return['sqlite_history_db']
-        model_choice = read_return['model_choice']
-        base_template = read_return['base_template']
-    except Exception as e:
-        handle_local_error("Missing keys in config.json for method store_chat_history_to_db. Error: ", e)
-
-    # Connect to or create the DB
-    try:
-        conn = sqlite3.connect(sqlite_history_db)
-        cursor = conn.cursor()
-    except Exception as e:
-        handle_local_error("Could not establish connection to DB for chat history storage, encountered error: ", e)
-
-    try:
-        prev_sequence_id = determine_sequence_id_for_chat(CHAT_ID)
-        #print("prev_sequence_id: ", prev_sequence_id)
-        SEQUENCE_ID = prev_sequence_id + 1
-        #print("current_sequence_id: ", SEQUENCE_ID)
-    except Exception as e:
-        handle_local_error("Could not determine sequence ID for storage to chat history DB, encountered error: ", e)
-       
-    # print(type(CHAT_ID))
-    # print(type(current_sequence_id))
-    # print(type(user_query_for_history_db))
-    # print(type(model_response_for_history_db))
-
-    try:
-        # Store conversation history into DB
-        cursor.execute("INSERT INTO chat_history (chat_id, sequence_id, user_query, llm_response, llm_model, prompt_template, history_summary) VALUES (?, ?, ?, ?, ?, ?, ?)", (int(CHAT_ID), int(SEQUENCE_ID), user_query_for_history_db, model_response_for_history_db, model_choice, str(base_template), str(current_historical_summary)))
-        conn.commit()
-    except Exception as e:
-        handle_local_error("Could not insert chat history into DB, encountered error: ", e)
-
-    conn.close()
+    return formatted_datetime, chat_id
 
 
 @app.route('/login_to_google_drive')
@@ -2865,8 +2819,6 @@ def load_chat_history_list():
 @app.route('/load_chat_history', methods=['POST'])
 def load_chat_history():
 
-    global CHAT_ID
-    global SEQUENCE_ID
     global HISTORY_SUMMARY
     global HISTORY_MEMORY_WITH_BUFFER
 
@@ -2888,7 +2840,7 @@ def load_chat_history():
 
     try:
         chat_id_for_history_search = request.form['chat_id']
-        CHAT_ID = request.form['chat_id']
+        chat_id = request.form['chat_id']
     except Exception as e:
         return handle_api_error("Could not retrieve Chat ID from request form, encountered error: ", e)
 
@@ -2991,16 +2943,16 @@ def load_chat_history():
             return handle_api_error("Could not determine if next sequence exists in chat history DB, encountered error: ", e)
             
         if not exists:
-            SEQUENCE_ID = sequence_id_for_history_search - 1
+            sequence_id = sequence_id_for_history_search - 1
             retrieve_history = False
             try:
-                c.execute("SELECT llm_model FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (CHAT_ID, SEQUENCE_ID))
+                c.execute("SELECT llm_model FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (chat_id, sequence_id))
                 result = c.fetchone()
                 old_chat_model = str(result[0])
             except Exception as e:
                 handle_error_no_return("Could not determine previously used LLM in chat, encountered error: ", e)
             try:
-                c.execute("SELECT history_summary FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (CHAT_ID, SEQUENCE_ID))
+                c.execute("SELECT history_summary FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (chat_id, sequence_id))
                 result = c.fetchone()
                 history_summary_dict = str(result[0])
             except Exception as e:
@@ -3026,11 +2978,21 @@ def load_chat_history():
     return jsonify({'success': True, 'chat_history': chat_history, 'old_chat_model': old_chat_model})
 
 
+def determine_latest_chat_id(c):
+    print("Determining chat ID")
+    c.execute("SELECT COALESCE(MAX(chat_id), 0) FROM chat_history")
+    result = c.fetchone()
+    max_chat_id = result[0]
+    new_chat_id = max_chat_id + 1
+    print(f"Chat ID determined: {new_chat_id}")
+    return new_chat_id
+
+
 @app.route('/init_chat_history_db')
 def init_chat_history_db():
 
-    global CHAT_ID
-
+    print("Initializing chat history DB")
+    
     try:
         read_return = read_config(['sqlite_history_db'])
         sqlite_history_db = read_return['sqlite_history_db']
@@ -3084,25 +3046,25 @@ def init_chat_history_db():
         return handle_api_error("Could not add necessary columns to chat history db, encountered error: ", e)
 
     try:
-        c.execute("SELECT COALESCE(MAX(chat_id), 0) FROM chat_history")
-        # "The COALESCE function accepts two or more arguments and returns the first non-null argument."
-        # This accounts for an empty DB!
+        chat_id = determine_latest_chat_id(c)
+        # c.execute("SELECT COALESCE(MAX(chat_id), 0) FROM chat_history")
+        # # The COALESCE function accepts two or more arguments and returns the first non-null argument, returning 0 for a new chat.
 
-        result = c.fetchone()
+        # result = c.fetchone()
 
-        # 'result' will be a tuple, so extract the first element
-        max_chat_id = result[0]
+        # # 'result' will be a tuple, so extract the first element
+        # max_chat_id = result[0]
 
-        new_chat_id = max_chat_id + 1
-        CHAT_ID = new_chat_id
+        # new_chat_id = max_chat_id + 1
+        # CHAT_ID = new_chat_id
 
-        print(f"Chat history DB initialised with CHAT_ID: {CHAT_ID}")
+        # print(f"Chat history DB initialised with CHAT_ID: {CHAT_ID}")
     except Exception as e:
-        return handle_api_error("Could not set CHAT_ID, encountered error: ", e)
+        return handle_api_error("Could not set chat_id, encountered error: ", e)
 
     conn.close()
 
-    return jsonify({'success': True, 'chat_id': CHAT_ID})
+    return jsonify({'success': True, 'chat_id': chat_id})
 
 
 def extract_significant_phrases(query):
@@ -3240,13 +3202,15 @@ def determine_do_rag(query, docs, force_enable_rag, force_disable_rag):
 
 def format_prompt_from_history(chat_id, sequence_id):
 
+    print(f"\n\nFormatting prompt from history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}\n\n")
+
     formatted_prompt = ""
 
     try:
         read_return = read_config(['sqlite_history_db'])
         sqlite_history_db = read_return['sqlite_history_db']
     except Exception as e:
-        handle_error_no_return("Missing keys in config.json for method store_chat_history_to_db. Error: ", e)
+        handle_error_no_return("Missing keys in config.json for method format_prompt_from_history(). Error: ", e)
 
     # Connect to or create the DB
     try:
@@ -3681,10 +3645,10 @@ def get_references():
     if not do_rag:
         print("\n\nSkipping RAG, storing chat history and returning\n\n")
         try:
-            stored_datetime = store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+            stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, user_query, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
         except Exception as e:
-            handle_error_no_return("Could not store_llama_cpp_chat_history_to_db in get_references(), encountered error: ", e)
-        return jsonify({'success': True, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format})
+            handle_error_no_return("Could not store_local_llm_chat_history_to_db in get_references(), encountered error: ", e)
+        return jsonify({'success': True, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
         
     try:
         key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
@@ -3845,16 +3809,18 @@ def get_references():
 
         user_query_for_history_db = formatted_user_query
     except Exception as e:
-        handle_error_no_return("Could not prep data to store_chat_history_to_db in get_references(), encountered error: ", e)
+        handle_error_no_return("Could not prep data to store_local_llm_chat_history_to_db in get_references(), encountered error: ", e)
 
     try:
-        stored_datetime = store_llama_cpp_chat_history_to_db(chat_id, sequence_id, user_query_for_history_db, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+        stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, user_query_for_history_db, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
     except Exception as e:
-        handle_error_no_return("Could not store_chat_history_to_db in get_references(), encountered error: ", e)
+        handle_error_no_return("Could not store_local_llm_chat_history_to_db in get_references(), encountered error: ", e)
 
-    return jsonify({'success': True, 'response': reference_response, 'pdf_frame':download_link_html, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format})
+    return jsonify({'success': True, 'response': reference_response, 'pdf_frame':download_link_html, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
 
 
 if __name__ == '__main__':
     # app.run(debug=True)
-    app.run(host='0.0.0.0', port=5000)
+    # app.run(host='0.0.0.0', port=5000)
+    print("\n\nServing LARS-Enterprise on localhost port 5000\n\n")
+    serve(app, host='0.0.0.0', port=5000)
