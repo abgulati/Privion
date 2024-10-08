@@ -301,6 +301,14 @@ body {
     padding-right: 0.3rem;
 }
 
+#stopGenerationButton {
+    position: absolute;
+    right: 49px;
+    top: 5px;
+    font-size: small;
+    border-radius: 69px;
+}
+
 .input-area .form-control {
     margin-right: 0.5rem;
 }
@@ -759,8 +767,30 @@ a.list-group-item.list-group-item-action.active {
     color: #D1CDC7;
 }
 
+@keyframes slideIn {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(0);
+    }
+}
+
+@keyframes lightening {
+    0%, 100% {
+        background-color: rgba(31, 38, 135, 0.3);   /*At the start and end of the animation, the background color is set to a light blue color with 30% opacity (0.3 alpha value)*/
+    }
+    50% {
+        background-color: rgba(31, 38, 135, 0.7);   /*At the middle of the animation, the background color is set to a light blue color with 70% opacity (0.7 alpha value)*/
+    }
+}
+
+/*Add left-to-right constant background lightening animation with color rgba(31, 38, 135, 0.7) to processingQnS*/
 #processingQnS {
     color: #D1CDC7;
+    animation: 
+    slideIn 0.5s ease-out,
+    lightening 2s ease-in-out infinite; /* ease-out is used to slow down the animation at the end of the animation  while ease-in-out is used to speed up the animation at the beginning and end of the animation. The time provided is the duration of the complete animation.*/
 }
 
 #processingQ {
