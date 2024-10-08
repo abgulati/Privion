@@ -1,4 +1,5 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel, CLIPTextModel, AutoProcessor, MllamaForConditionalGeneration
+from transformers import StoppingCriteria, StoppingCriteriaList
 from huggingface_hub import login
 import torch
 
@@ -37,6 +38,7 @@ CORS(app)
 PIPE = None
 MODEL = None
 
+STOP_GENERATION = False
 llm_semaphore = threading.Semaphore(1)
 config_writer_semaphore = threading.Semaphore(1)
 error_logging_semaphore = threading.Semaphore(1)
@@ -1423,6 +1425,22 @@ def completions():
 
 
 
+class StopOnEvent(StoppingCriteria):    # custom StoppingCriteria to stop generation when an event is set - inherits from StoppingCriteria, which is an abstract class defined in Hugging Face's transformers library. StoppingCriteria is used to define custom stopping conditions for the generation process.
+    def __init__(self, event: threading.Event): # A threading.Event object is taken as an instantiating argument by our custom class's constructor.
+        self.event = event  # The inheritance of StoppingCriteria means our class is a type of StoppingCriteria, initialized with an event object.
+
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> bool:
+        return self.event.is_set()
+    # Note on input_ids: torch.LongTensor and scores: torch.FloatTensor:
+    # These type hints are specified by the StoppingCriteria class in the transformers library.
+    # input_ids: This is the input IDs tensor, which is a tensor of token IDs representing the current input sequence. Tokens are typically represented as integers, hence LongTensor (64-bit integer).
+    # scores: This is a tensor of scores (logits) output by the model for each token in the input sequence. These are floating-point values, hence FloatTensor.
+    # The __call__ method is called during the generation process, after each generated token, to check if the stopping condition is met. We must define this method in our concrete class because StoppingCriteria is an abstract class.
+    # It takes the input IDs, scores, and any additional keyword arguments (**kwargs) as arguments. However, it ignores the input IDs and scores, and only uses the keyword argument event to determine if the stopping condition is met.
+    # The method should return True if the stopping condition is met (e.g., if an event is set), and False otherwise.
+
+
+
 @app.route('/vision_stream', methods=['POST'])
 def vision_stream():
     print("\n\nvision_stream route triggered - attempting to acquire LLM semaphore\n\n")
@@ -1437,7 +1455,8 @@ def vision_stream():
         llm_semaphore.release()
         return handle_api_error("Could not get input params in vision_stream, encountered error: ", e)
 
-    stop_thread = threading.Event()
+    stop_event = threading.Event()
+    generation_args["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one StoppingCriteria object, which is our custom StoppingCriteria class, initialized with the stop_event object.
 
     data_queue = queue.Queue()
 
@@ -1470,14 +1489,22 @@ def vision_stream():
             data_queue.put(None)
             print("\n\nLLM stream done, releasing semaphore\n\n")
             llm_semaphore.release()
-            stop_thread.set()
+            # stop_thread.set()
     
-    def generate():        
-        
+    def generate():
+
+        global STOP_GENERATION
+        STOP_GENERATION = False
+
         thread = threading.Thread(target=llm_task)
         thread.start()
 
         while True:
+            if STOP_GENERATION:
+                print("\n\nStopping generation with stop_event\n\n")
+                stop_event.set()
+                thread.join()
+                break
             output = data_queue.get()
             if output is None:
                 print("\n\nNone read, breaking and stopping thread\n\n")
@@ -1486,6 +1513,8 @@ def vision_stream():
             yield f"data: {json.dumps(output)}\n\n"
         
         yield f"event: END\ndata: \"null\"\n\n"
+
+        STOP_GENERATION = False
 
         try:
             empty_cuda_cache()
@@ -1552,8 +1581,7 @@ def completions_stream():
     except Exception as e:
         handle_error_no_return("Could not set generation-arguments for /completions_stream, proceeding without them. Encountered error: ", e)
 
-
-    stop_thread = threading.Event()
+    stop_event = threading.Event()
 
     data_queue = queue.Queue()
 
@@ -1570,21 +1598,29 @@ def completions_stream():
         try:                
             if generation_args:
                 generation_args["streamer"] = custom_streamer
+                generation_args["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one StoppingCriteria object, which is our custom StoppingCriteria class, initialized with the stop_event object.
                 output = PIPE(messages, **generation_args)
             else:
-                output = PIPE(messages, streamer=custom_streamer)
+                output = PIPE(messages, streamer=custom_streamer, stopping_criteria=StoppingCriteriaList([StopOnEvent(stop_event)]))
         finally:
             data_queue.put(None)
             print("\n\nLLM stream done, releasing semaphore\n\n")
             llm_semaphore.release()
-            stop_thread.set()
 
     def generate():        
         
+        global STOP_GENERATION
+        STOP_GENERATION = False
+
         thread = threading.Thread(target=llm_task)
         thread.start()
 
         while True:
+            if STOP_GENERATION:
+                print("\n\nStopping generation with stop_event\n\n")
+                stop_event.set()
+                thread.join()
+                break
             line = data_queue.get()
             if line is None:
                 print("\n\nNone read, breaking and stopping thread\n\n")
@@ -1593,6 +1629,8 @@ def completions_stream():
             yield f"data: {json.dumps(line)}\n\n"
         
         yield f"event: END\ndata: \"null\"\n\n"
+
+        STOP_GENERATION = False
 
         try:
             empty_cuda_cache()
@@ -1760,6 +1798,12 @@ def restart_server():
                 
                 return jsonify(success=True)
 
+
+@app.route('/stop_generation')
+def stop_generation():
+    global STOP_GENERATION
+    STOP_GENERATION = True
+    return jsonify(success=True)
 
 if __name__ == '__main__':
     args = parse_arguments()
