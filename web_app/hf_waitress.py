@@ -1456,7 +1456,7 @@ def vision_stream():
         return handle_api_error("Could not get input params in vision_stream, encountered error: ", e)
 
     stop_event = threading.Event()
-    generation_args["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one StoppingCriteria object, which is our custom StoppingCriteria class, initialized with the stop_event object.
+    generation_args["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
 
     data_queue = queue.Queue()
 
@@ -1598,7 +1598,7 @@ def completions_stream():
         try:                
             if generation_args:
                 generation_args["streamer"] = custom_streamer
-                generation_args["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one StoppingCriteria object, which is our custom StoppingCriteria class, initialized with the stop_event object.
+                generation_args["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
                 output = PIPE(messages, **generation_args)
             else:
                 output = PIPE(messages, streamer=custom_streamer, stopping_criteria=StoppingCriteriaList([StopOnEvent(stop_event)]))

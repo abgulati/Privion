@@ -1023,7 +1023,7 @@ function enableTransformersSettings() {
 function stopGeneration() {
     console.log("Stop Generation button clicked");
     displayProcessingStatus('Stopping...');
-    // GET fetch call to /stop_generation endpoint
+    
     fetch('http://localhost:9069/stop_generation')
     .then(response => {
         if (!response.ok) {
