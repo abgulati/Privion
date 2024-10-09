@@ -2294,24 +2294,17 @@ def hf_waitress_server_starter():
         handle_error_no_return("Could not check if llama.cpp server is running. Proceeding to launch HF-Waitress server. Encountered error: ", e)
 
     model_choice = 'microsoft/Phi-3-mini-4k-instruct'   # match default in hf_waitress.py as this will only be used in the very first run, as the hf_config.json file is created in the first run!
-    is_awq = False
-    use_flash_attention_2 = False
-    flux_diffusers = False
-    flux_low_vram_optimizations = False
-    load_quantized_flux = False
-    vision = False
     try:
-        with open('hf_config.json', 'r') as file:
-            hf_config = json.load(file)
-            model_choice = hf_config['model_id']
-            is_awq = hf_config['awq']
-            use_flash_attention_2 = hf_config['use_flash_attention_2']
-            flux_diffusers = hf_config['flux_diffusers']
-            flux_low_vram_optimizations = hf_config['flux_low_vram_optimizations']
-            load_quantized_flux = hf_config['load_quantized_flux']
-            vision = hf_config['vision']
+        hf_read_return = read_hf_config(['model_id', 'awq', 'use_flash_attention_2', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux', 'vision'])
+        model_choice = hf_read_return['model_id']
+        is_awq = str(hf_read_return['awq']).lower() == 'true'
+        use_flash_attention_2 = str(hf_read_return['use_flash_attention_2']).lower() == 'true'
+        flux_diffusers = str(hf_read_return['flux_diffusers']).lower() == 'true'
+        flux_low_vram_optimizations = str(hf_read_return['flux_low_vram_optimizations']).lower() == 'true'
+        load_quantized_flux = str(hf_read_return['load_quantized_flux']).lower() == 'true'
+        vision = str(hf_read_return['vision']).lower() == 'true'
     except Exception as e:
-        handle_error_no_return("Could not read hf_config.json in method hf_waitress_server_starter, encountered error: ", e)
+        return handle_api_error("Could not read hf_config.json in method hf_waitress_server_starter, encountered error: ", e)
 
     if is_local_server_online('hf-waitress')['server_available']:
         print("\n\nHF-Waitress server already running. Resetting LLM_CHANGE_RELOAD_TRIGGER_SET and simply returning!\n\n")
@@ -3442,7 +3435,7 @@ def setup_for_llama_cpp_response():
 
         # Store the query associated with the ID
         QUERIES[stream_session_id] = user_query
-    except KeyError:
+    except Exception as e:
         return handle_api_error("Could not obtain and/or store user_query in setup_for_streaming_response, encountered error: ", e)
 
     print("chat_id: ", chat_id)
@@ -3456,12 +3449,11 @@ def setup_for_llama_cpp_response():
         flux_diffusers = False
         vision = False
         try:
-            with open('hf_config.json', 'r') as file:
-                hf_config = json.load(file)
-                flux_diffusers = hf_config['flux_diffusers']
-                vision = hf_config['vision']
+            hf_read_return = read_hf_config(['flux_diffusers', 'vision'])
+            flux_diffusers = str(hf_read_return['flux_diffusers']).lower() == 'true'
+            vision = str(hf_read_return['vision']).lower() == 'true'
         except Exception as e:
-            handle_error_no_return("Could not determine flux_diffusers from hf_config.json in method setup_for_llama_cpp_response. Continuing with Transformers. Encountered error: ", e)
+            return handle_api_error("Could not determine if flux_diffusers or vision model used from hf_config.json in method setup_for_llama_cpp_response. Continuing with Transformers. Encountered error: ", e)
 
         if flux_diffusers or vision or file_attached:
             print("Invoking quick-return route for hfw-diffusers or hfw-vision")
@@ -3581,12 +3573,11 @@ def setup_for_llama_cpp_response():
 @app.route('/get_references', methods=['POST'])
 def get_references():
 
-    print("\n\nGetting References\n\n")
+    print("\n\nStoring History Post-Response -- Determining if Citations are Necessary\n\n")
 
     try:
-        read_return = read_config(['local_llm_server', 'do_rag', 'upload_folder', 'local_llm_chat_template_format'])
+        read_return = read_config(['local_llm_server', 'upload_folder', 'local_llm_chat_template_format'])
         local_llm_server = read_return['local_llm_server']
-        do_rag = read_return['do_rag']
         upload_folder = read_return['upload_folder']
         local_llm_chat_template_format = read_return['local_llm_chat_template_format']
     except Exception as e:
@@ -3601,6 +3592,15 @@ def get_references():
         sequence_id = request.json['sequence_id']
     except Exception as e:
         return handle_api_error("Could not read request content in method get_references, encountered error: ", e)
+
+    do_rag = False
+    try:
+        key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
+        docs = QUERIES.pop(key_for_vector_results, None) # Combining the check for key existence, retrieval, and deletion into a single operation!
+        if docs is not None:
+            do_rag = True   # If the key exists, then RAG was used!
+    except Exception as e:
+        handle_error_no_return("Error determining if RAG was used in method get_references - Could not check the QUERIES dict. Proceeding without RAG. Encountered error: ", e)
 
     if local_llm_server == 'llama-cpp':
         if local_llm_chat_template_format == 'llama3':
@@ -3629,9 +3629,8 @@ def get_references():
 
         flux_diffusers = False
         try:
-            with open('hf_config.json', 'r') as file:
-                hf_config = json.load(file)
-                flux_diffusers = hf_config['flux_diffusers']
+            hf_read_return = read_hf_config(['flux_diffusers'])
+            flux_diffusers = str(hf_read_return['flux_diffusers']).lower() == 'true'
         except Exception as e:
             handle_error_no_return("Could not determine flux_diffusers from hf_config.json in method setup_for_llama_cpp_response. Continuing with Transformers. Encountered error: ", e)
 
@@ -3641,26 +3640,19 @@ def get_references():
             history_prompt_json['messages'].append(new_response)
             updated_history_prompt_json = json.dumps(history_prompt_json, indent=4)
             formatted_user_prompt = str(updated_history_prompt_json)
+        else:
+            do_rag = False
 
     if not do_rag:
-        print("\n\nSkipping RAG, storing chat history and returning\n\n")
+        print("\n\nRAG Citations unnecessary, storing chat history and returning\n\n")
         try:
             stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, user_query, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
         except Exception as e:
             handle_error_no_return("Could not store_local_llm_chat_history_to_db in get_references(), encountered error: ", e)
         return jsonify({'success': True, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
-        
-    try:
-        key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
-        docs = QUERIES[key_for_vector_results]
-    except Exception as e:
-        return handle_api_error("Could not obtain relevant data from QUERIES dict, encountered error: ", e)
+    
 
-    # Having obtained the relevant info, clear the QUERIES{} dict so as to not bloat it!
-    try:
-        del QUERIES[key_for_vector_results]
-    except Exception as e:
-        handle_error_no_return("Error clearing queries dict in method get_references: ", e)
+    print("\n\nFetching Citations\n\n")
 
     reference_response = ""
 
@@ -3678,10 +3670,6 @@ def get_references():
             continue
         
         relevant_page_text = relevant_page_text.replace('\n', ' ')
-
-        # relevant_page_text = relevant_page_text.split('\n', 1)[0]
-        # relevant_page_text = relevant_page_text.strip()
-        # relevant_page_text = re.sub(r'[\W_]+Page \d+[\W_]+', '', relevant_page_text)
         
         try:
             source_filename = os.path.basename(source_filepath)
@@ -3690,16 +3678,12 @@ def get_references():
             handle_error_no_return("Could not parse path with OS lib, encountered error: ", e)
             continue
 
-        # The source_filepath will likely always reference a TXT file because of how we're loading the VectorDB!
-        # Check if the PDF version of the source doc exists
-        if file_extension == '.txt':
+        if file_extension == '.txt':    # The source_filepath will likely always reference a TXT file because of how we're loading the VectorDB!
 
             #print("\n\ntxt file\n\n")
 
-            # Construct the path to the potential PDF version
-            pdf_version_path = os.path.join(upload_folder, os.path.basename(source_filepath).replace('.txt', '.pdf'))   # not catching an error here as os.path.basename(source_filepath) has already been caught just above!
+            pdf_version_path = os.path.join(upload_folder, os.path.basename(source_filepath).replace('.txt', '.pdf'))   # not catching an error here as os.path.basename(source_filepath) has already been caught just above! Construct the path to the potential PDF version.
 
-            # Check if PDF version of the source TXT exists!
             if os.path.exists(pdf_version_path):
 
                 #print("\n\pdf exists\n\n")
@@ -3708,21 +3692,16 @@ def get_references():
                 
                 if pdf_version_path in reference_pages:
                     reference_pages[pdf_version_path].extend([[relevant_page_text,relevant_page_number]])
-                    #reference_pages[pdf_version_path].extend({'page_content': relevant_page_text, 'page_number': relevant_page_number})
                 else:
                     reference_pages[pdf_version_path] = [[relevant_page_text,relevant_page_number]]
-                    #reference_pages[pdf_version_path] = {'page_content': relevant_page_text, 'page_number': relevant_page_number}
 
-                # Add this file to our sources dictionary if it's not already present
-                if source_filename not in all_sources:
+                if source_filename not in all_sources:  # Add this file to our sources dictionary if it's not already present
                     source_filepath = pdf_version_path
                     all_sources.update({source_filename: source_filepath})
 
-            # Else PDF does not exist, TXT is the source
             else:
-                print("\n\nNo PDF source doc found in the 'uploaded_pdfs' dir, RAG ACTIVE BUT REFERENCING WILL NOT DISPLAY!\n\n")
-                # Check if the TXT is already in the sources dict
-                if source_filename not in all_sources:
+                print("\n\nNo PDF source doc found (TXT Source) in the 'uploaded_pdfs' dir, RAG ACTIVE BUT REFERENCING WILL NOT DISPLAY!\n\n")
+                if source_filename not in all_sources: # Do not duplicate if the TXT file is already in the sources dict
                     try:
                         source_filepath = os.path.join(upload_folder, source_filename) # reconstructed path using the OS module just to be safe
                         all_sources.update({source_filename: source_filepath})
@@ -3730,10 +3709,9 @@ def get_references():
                         handle_error_no_return("Could not construct filepath for TXT file, encountered error: ", e)
 
 
-        # If file is not a TXT file
+        # If by any odd chance the file is not a TXT file
         else:
-            # Check if the TXT is already in the sources dict
-            if source_filename not in all_sources:
+            if source_filename not in all_sources: # Do not duplicate if the TXT file is already in the sources dict
                 try:
                     source_filepath = os.path.join(upload_folder, source_filename) # reconstructed path using the OS module just to be safe
                     all_sources.update({source_filename: source_filepath})
@@ -3795,11 +3773,9 @@ def get_references():
 
         download_link_html += "</div>"
     
-    # reference_response = refer_pages_string + download_link_html + images_iframe_html
     reference_response = refer_pages_string
 
     try:
-        # model_response_for_history_db = str(llm_response) + refer_pages_string
         model_response_for_history_db = str(llm_response)
         model_response_for_history_db += f"\n\n{reference_response}"
         model_response_for_history_db += f"\n\npdf_pane_data={download_link_html}"
@@ -3820,7 +3796,7 @@ def get_references():
 
 
 if __name__ == '__main__':
+    print("\n\nServing LARS-Enterprise on localhost port 5000\n\n")
     # app.run(debug=True)
     # app.run(host='0.0.0.0', port=5000)
-    print("\n\nServing LARS-Enterprise on localhost port 5000\n\n")
     serve(app, host='0.0.0.0', port=5000)

@@ -328,6 +328,8 @@ function loadChatHistory(chatID) {
     history_chat_id = chatID
     setModelHeaderInfoBox(history_chat_id, current_llm_model);
 
+    document.getElementById('chat-area').innerHTML = '';
+
     let formData = new FormData();
     formData.append('chat_id', chatID);
 

@@ -430,7 +430,7 @@ function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapper
 
     const chatState_chat_id = document.getElementById('chatState').getAttribute('data-ongoing-chat-id');
     if (chatState_chat_id != current_chat_id) {
-        console.log("Updating chatID in the InfoBox")
+        console.log("Updating chatID in the InfoBox");
         setChatId(current_chat_id);
         setModelHeaderInfoBox(current_chat_id, getLlmModel());
     }
