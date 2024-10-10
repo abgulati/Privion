@@ -8,7 +8,7 @@ from optimum.quanto import freeze, qfloat8, quantize
 
 from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 import subprocess
 import threading
@@ -1244,8 +1244,14 @@ def get_pil_image_objects_for_file(filename, filepath, dpi=300):
 def get_input_params_for_vision_model(request):
     print("\n\nGetting input params for vision model\n\n")
 
+    vision_file_present = False
+
+    input_file = None
     try:
-        input_file = request.files['file']
+        if 'file' in request.files:
+            print("\n\nVision file present in request\n\n")
+            input_file = request.files['file']
+            vision_file_present = True
         messages = json.loads(request.form.get('messages', '[]'))
     except Exception as e:
         handle_local_error("Could not read POST-request messages when attempting to get_input_params_for_vision_model, encountered error: ", e)
@@ -1268,48 +1274,86 @@ def get_input_params_for_vision_model(request):
     except Exception as e:
         handle_error_no_return("Could not read DPI from request headers, proceeding with default: 300. Encountered error: ", e)
 
-    # Ensure the filename is secure
-    filename = secure_filename(input_file.filename)
-    if "PDF" in filename:
-        filename = filename.replace("PDF", "pdf")
+    filename = ""
+    pil_image_object_list = []
+    if input_file:
+        filename = secure_filename(input_file.filename) # Ensure the filename is secure
+        if "PDF" in filename:
+            filename = filename.replace("PDF", "pdf")
+
+        try:
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+            print("Loading new file - filename: ", filename)
+            print("Loading new file - filepath: ", filepath)
+
+            # Save the uploaded file to the specified path
+            input_file.save(filepath)
+        except Exception as e:
+            return handle_api_error("Failed to save document to app folder, encountered error: ", e)
+        
+        try:
+            pil_image_object_list = get_pil_image_objects_for_file(filename, filepath, dpi)
+        except Exception as e:
+            return handle_api_error("Could not get PIL image objects for file, encountered error: ", e)
 
     try:
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
-        print("Loading new file - filename: ", filename)
-        print("Loading new file - filepath: ", filepath)
-
-        # Save the uploaded file to the specified path
-        input_file.save(filepath)
-    except Exception as e:
-        return handle_api_error("Failed to save document to app folder, encountered error: ", e)
-    
-    try:
-        pil_image_object_list = get_pil_image_objects_for_file(filename, filepath, dpi)
-    except Exception as e:
-        return handle_api_error("Could not get PIL image objects for file, encountered error: ", e)
-
-    try:
-        print("\n\nApplying Chat Template\n\n")
+        print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
         input_text = PIPE.apply_chat_template(messages, add_generation_prompt=True)
     except Exception as e:
         handle_local_error("Could not apply chat template, encountered error: ", e)
         return False
 
-    return input_text, pil_image_object_list, generation_args, filename
+    return input_text, pil_image_object_list, generation_args, filename, vision_file_present
+
+
+def get_font(size=16):
+    try:
+        return ImageFont.truetype("arial.ttf", size)    # Try to load Arial from the system
+    except IOError:
+        pass
+
+    try:
+        return ImageFont.truetype("DejaVuSans.ttf", size)    # Try to load a common sans-serif font available on most systems
+    except IOError:
+        pass
+    
+    print("\n\nCould not load a truetype font. Using default font\n\n")
+    return ImageFont.load_default()     # If all else fails, use the default font
+
+
+def get_blank_pil_image_object():
+    print("\n\nNo vision file present, generating sys-prompt image for text-only input\n\n")
+    img = Image.new('RGB', (800, 600), color='white')
+    d = ImageDraw.Draw(img)
+    font = get_font(16)
+    d.text((10,10), "Answer the user's question as accurately as possible.", fill=(0,0,0), font=font)   # (x, y) co-ordinate: start 10 pixels from the left and top of the image
+
+    img_path = os.path.join(os.getcwd(), "text_only_input_image.png")   # Save the image to the current directory
+    img.save(img_path)
+    print(f"\n\nImage saved to: {img_path}\n\n")
+
+    return img
 
 
 def inference_with_vision_model(request):
     print("\n\nvision-completions route triggered") # No need to acquire LLM semaphore here, as the invoking method already has it!
     
     try:
-        input_text, pil_image_object_list, generation_args, filename = get_input_params_for_vision_model(request)
+        input_text, pil_image_object_list, generation_args, filename, vision_file_present = get_input_params_for_vision_model(request)
     except Exception as e:
         handle_local_error("Could not get input params in vision-completions, encountered error: ", e)
 
+    if not vision_file_present:
+        pil_image_object_list.append(get_blank_pil_image_object())
+
     inference_output = ""
     for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
-        print(f"\n\nProcessing Page: {page_number} from file: {filename}\n\n")
+
+        if vision_file_present: 
+            print(f"\n\nProcessing Page: {page_number} from file: {filename}\n\n")
+        else:
+            print(f"\n\nProcessing text-only input\n\n")
         
         try:
             print("\n\nLoading Input to Model\n\n")
@@ -1450,10 +1494,13 @@ def vision_stream():
     print("\n\nLLM semaphore acquired by /vision_stream\n\n")
 
     try:
-        input_text, pil_image_object_list, generation_args, filename = get_input_params_for_vision_model(request)
+        input_text, pil_image_object_list, generation_args, filename, vision_file_present = get_input_params_for_vision_model(request)
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not get input params in vision_stream, encountered error: ", e)
+    
+    if not vision_file_present:
+        pil_image_object_list.append(get_blank_pil_image_object())
 
     stop_event = threading.Event()
     generation_args["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
@@ -1464,7 +1511,12 @@ def vision_stream():
 
         try:
             for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
-                status_string = f"Processing Page: {page_number} from file: {filename}\n\n"
+                
+                if vision_file_present: 
+                    status_string = f"Processing Page: {page_number} from file: {filename}\n\n"
+                else:
+                    status_string = f"Processing text-only input\n\n"
+                
                 data_queue.put(status_string)
                 print(status_string)
                 
@@ -1489,7 +1541,6 @@ def vision_stream():
             data_queue.put(None)
             print("\n\nLLM stream done, releasing semaphore\n\n")
             llm_semaphore.release()
-            # stop_thread.set()
     
     def generate():
 
