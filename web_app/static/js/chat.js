@@ -220,7 +220,8 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
     let formdata = null;
     let rawBodyJSONStringified = null;
 
-    if (file) {
+    const vision = document.getElementById('hf_waitress_vision_yes').checked;
+    if (vision) {
         console.log("Invoking vision_stream");
         url = "http://localhost:9069/vision_stream";
 
@@ -232,8 +233,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
 
         const parsedPrompt = JSON.parse(formattedPrompt);
         formdata.append("messages", JSON.stringify(parsedPrompt.messages));
-        formdata.append("file", file);
-
+        if (file) { formdata.append("file", file); }
     } else {
         console.log("Invoking completions_stream");
         url = "http://localhost:9069/completions_stream";
@@ -253,7 +253,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
     
     try {
 
-        const request_body = file ? formdata : rawBodyJSONStringified;
+        const request_body = vision ? formdata : rawBodyJSONStringified;
 
         const hfwResponse = await fetch(url, {
             method: 'POST',

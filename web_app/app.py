@@ -3193,7 +3193,7 @@ def determine_do_rag(query, docs, force_enable_rag, force_disable_rag):
     return do_rag
 
 
-def format_prompt_from_history(chat_id, sequence_id):
+def get_formatted_prompt_from_history_db(chat_id, sequence_id):
 
     print(f"\n\nFormatting prompt from history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}\n\n")
 
@@ -3203,7 +3203,7 @@ def format_prompt_from_history(chat_id, sequence_id):
         read_return = read_config(['sqlite_history_db'])
         sqlite_history_db = read_return['sqlite_history_db']
     except Exception as e:
-        handle_error_no_return("Missing keys in config.json for method format_prompt_from_history(). Error: ", e)
+        handle_error_no_return("Missing keys in config.json for method get_formatted_prompt_from_history_db(). Error: ", e)
 
     # Connect to or create the DB
     try:
@@ -3321,37 +3321,41 @@ def format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence
             ]
         }}
         '''
-    elif vision:
-        formatted_prompt = {
-            "messages": [
-                {
-                    "role": "user", 
-                    "content": [
-                        {"type": "image"},
-                        {"type": "text", "text": user_query}
-                    ]
-                }
-            ]
-        }
-        formatted_prompt = json.dumps(formatted_prompt) # Convert to a JSON string
     else:
         if current_sequence_id > 0:
             history_prompt_json = json.loads(formatted_prompt)
             new_message = {"role":"user", "content":user_query}
             history_prompt_json['messages'].append(new_message)
             updated_history_prompt_json = json.dumps(history_prompt_json, indent=4)
-            formatted_prompt = str(updated_history_prompt_json)
+            if vision:  
+                formatted_prompt = updated_history_prompt_json  # return json object
+            else:
+                formatted_prompt = str(updated_history_prompt_json)
         else:
-            first_prompt_json = f'''
-            {{
+            if vision:
+                formatted_prompt = {
                     "messages": [
-                        {{"role": "system", "content": {json.dumps(base_template)}}},
-                        {{"role": "user", "content": {json.dumps(user_query)}}}
+                        {
+                            "role": "user", 
+                            "content": [
+                                {"type": "image"},
+                                {"type": "text", "text": user_query}
+                            ]
+                        }
                     ]
-                }}
-            '''
+                }
+                formatted_prompt = json.dumps(formatted_prompt) # Convert to a JSON string
+            else:
+                first_prompt_json = f'''
+                {{
+                        "messages": [
+                            {{"role": "system", "content": {json.dumps(base_template)}}},
+                            {{"role": "user", "content": {json.dumps(user_query)}}}
+                        ]
+                    }}
+                '''
 
-            formatted_prompt = str(first_prompt_json)
+                formatted_prompt = str(first_prompt_json)
 
     return formatted_prompt
 
@@ -3444,6 +3448,12 @@ def setup_for_llama_cpp_response():
     formatted_prompt = ""
     print("current_sequence_id: ", current_sequence_id)
 
+    if current_sequence_id > 0:    # get the last prompt so we can continue the completions
+        formatted_prompt = get_formatted_prompt_from_history_db(chat_id, current_sequence_id)
+    
+    if formatted_prompt == "":  # could not be updated above
+        current_sequence_id = 0 # so reset chat sequence id
+
     
     if local_llm_server == 'hf-waitress':
         flux_diffusers = False
@@ -3475,14 +3485,14 @@ def setup_for_llama_cpp_response():
                     return handle_api_error("Could not format prompt for hfw-diffusers in method setup_for_llama_cpp_response, encountered error: ", e)
         
             if file_attached or vision:
-                print("File and vision detected, preparing accordingly")
+                print("File or vision detected, preparing accordingly")
                 try:
-                    formatted_prompt = format_prompt_for_hf_waitress("", user_query, 0, "", False, True)
+                    formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True)
                     local_llm_server = 'hfw-vision'
                     print("Returning vision formatted_prompt: ", formatted_prompt)
                     return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
                 except Exception as e:
-                    return handle_api_error("Could not format prompt for hfw-diffusers in method setup_for_llama_cpp_response, encountered error: ", e)
+                    return handle_api_error("Could not format prompt for Vision-LLM in method setup_for_llama_cpp_response, encountered error: ", e)
             
     # Perform similarity search on the vector DB
     print("\n\nPerforming similarity search to determine if RAG necessary\n\n")
@@ -3548,13 +3558,6 @@ def setup_for_llama_cpp_response():
             except Exception as e:
                 handle_error_no_return("Could not write do_rag to config during setup_for_streaming_response, encountered error: ", e)
             handle_error_no_return("RAG Error: Could not update QUERIES dict and user_query during setup_for_streaming_response, proceeding without RAG. Encountered error: ", e)
-
-    if current_sequence_id > 0:    # get the last prompt so we can continue the completions
-        formatted_prompt = format_prompt_from_history(chat_id, current_sequence_id)
-
-    
-    if formatted_prompt == "":  # could not be updated above
-        current_sequence_id = 0 # so reset chat sequence id
 
     
     if local_llm_server == 'llama-cpp':
@@ -3634,14 +3637,14 @@ def get_references():
         except Exception as e:
             handle_error_no_return("Could not determine flux_diffusers from hf_config.json in method setup_for_llama_cpp_response. Continuing with Transformers. Encountered error: ", e)
 
-        if not flux_diffusers:
+        if flux_diffusers:
+            do_rag = False
+        else:
             history_prompt_json = json.loads(formatted_user_prompt)
             new_response = {"role":"assistant", "content":llm_response}
             history_prompt_json['messages'].append(new_response)
             updated_history_prompt_json = json.dumps(history_prompt_json, indent=4)
             formatted_user_prompt = str(updated_history_prompt_json)
-        else:
-            do_rag = False
 
     if not do_rag:
         print("\n\nRAG Citations unnecessary, storing chat history and returning\n\n")
