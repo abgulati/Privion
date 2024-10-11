@@ -3545,13 +3545,14 @@ def setup_for_llama_cpp_response():
     except Exception as e:
         handle_error_no_return("Could not write do_rag to config during setup_for_streaming_response, encountered error: ", e)
 
-    
-    # Having determined do_rag, time to build the prompt template!
-    
-    if do_rag:  # add similarity search results for RAG!
+        
+    if do_rag:  # add similarity search results for RAG if necessary!
         try:
             QUERIES[key_for_vector_results] = docs
-            user_query += f"\n\nThe following context might be helpful in answering the user query above:\n{docs}"
+            if local_llm_server == 'hfw-vision':
+                user_query += f"\n\nWhenever possible, mention the document names and page numbers the user should reference as per your best judgement. The following context might be helpful in answering the user query above:\n{docs}"
+            else:
+                user_query += f"\n\nThe following context might be helpful in answering the user query above:\n{docs}"
             # print(f"RAG formatted user_query: \n{user_query}\n")
         except Exception as e:
             try:
