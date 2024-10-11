@@ -3486,13 +3486,14 @@ def setup_for_llama_cpp_response():
         
             if file_attached or vision:
                 print("File or vision detected, preparing accordingly")
-                try:
-                    formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True)
-                    local_llm_server = 'hfw-vision'
-                    print("Returning vision formatted_prompt: ", formatted_prompt)
+                local_llm_server = 'hfw-vision'
+                if file_attached:
+                    try:
+                        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True)
+                    except Exception as e:
+                        return handle_api_error("Could not format prompt for Vision-LLM in method setup_for_llama_cpp_response, encountered error: ", e)
+                    print("File attached to request, returning vision formatted_prompt: ", formatted_prompt)
                     return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
-                except Exception as e:
-                    return handle_api_error("Could not format prompt for Vision-LLM in method setup_for_llama_cpp_response, encountered error: ", e)
             
     # Perform similarity search on the vector DB
     print("\n\nPerforming similarity search to determine if RAG necessary\n\n")
@@ -3564,6 +3565,8 @@ def setup_for_llama_cpp_response():
         formatted_prompt = format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format)
     elif local_llm_server == 'hf-waitress':
         formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, False, False)
+    elif local_llm_server == 'hfw-vision':
+        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True)
 
     print("Returning formatted_prompt: ", formatted_prompt)
 
