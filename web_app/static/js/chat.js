@@ -201,7 +201,7 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
                     }
                 });
 
-                document.getElementById(responseContentID).innerHTML = totalContent;
+                document.getElementById(responseContentID).innerHTML = totalContent;    // Even though we have appendContentToResponse(), we still need to update the responseContentID div's innerHTML to reflect the latest content because the streamed content may not have any newlines in it!
                 if (receivedComplete) break;
             }
         }
@@ -213,6 +213,55 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
         errorHandler("fetching llama.cpp event-streaming response", "localhost:8080/completions", String(error))
     }
 }
+
+// modify to open the file in a new tab instead of downloading it
+function createDownloadLinkForFile(filename) {
+    const downloadLink = document.createElement('a');
+    downloadLink.href = `http://localhost:9069/serve_uploaded_file/${filename}`;
+    downloadLink.target = '_blank';
+    downloadLink.download = filename;   // HTML5 attribute that specifies that the linked resource should be downloaded when a user clicks on the hyperlink
+    downloadLink.innerHTML = `<i class="fa-solid fa-file-arrow-down"></i> ${filename} Appended to Conversation`;
+    downloadLink.classList.add('plain-text-download-link-for-vision-appended-file');
+    return downloadLink;
+}
+
+
+function createDownloadContainerForFile(filename) {
+    const downloadContainer = document.createElement('div');
+    downloadContainer.classList.add('download-container-for-vision-appended-file');
+
+    const downloadLink = document.createElement('a');
+    downloadLink.href = `http://localhost:9069/serve_uploaded_file/${filename}`;
+    downloadLink.target = '_blank';
+    downloadLink.download = filename;   // HTML5 attribute that specifies that the linked resource should be downloaded when a user clicks on the hyperlink
+    downloadLink.classList.add('download-link-for-vision-appended-file');
+
+    const iconContainer = document.createElement('div');
+    iconContainer.classList.add('download-icon-for-vision-appended-file');
+    iconContainer.innerHTML = '<i class="fa-solid fa-download"></i>';
+
+    const textContainer = document.createElement('div');
+    textContainer.classList.add('download-text-for-vision-appended-file');
+
+    const fileNameElement = document.createElement('div');
+    fileNameElement.classList.add('download-filename-for-vision-appended-file');
+    fileNameElement.innerHTML = filename;
+
+    const downnloadText = document.createElement('div');
+    downnloadText.classList.add('download-label-for-vision-appended-file');
+    downnloadText.innerHTML = 'Download';
+
+    textContainer.appendChild(fileNameElement);
+    textContainer.appendChild(downnloadText);
+
+    downloadLink.appendChild(iconContainer);
+    downloadLink.appendChild(textContainer);
+
+    downloadContainer.appendChild(downloadLink);
+
+    return downloadContainer;
+}
+
 
 async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer, file=null) {
     let url;
@@ -260,12 +309,18 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
             headers: hfwHeaders,
             body: request_body,
             redirect: 'follow'
-        });
+        }); // due to the async-await syntax, the fetch() call returns a promise, and we await its resolution here.
+
+        if (file) {
+            const downloadContainer = createDownloadContainerForFile(file.name);
+            document.getElementById(responseContentID).appendChild(downloadContainer);
+        }
 
         document.getElementById('chat-area').scrollTop = document.getElementById('chat-area').scrollHeight;     //Scroll to the bottom of the page
 
         const hfwReader = hfwResponse.body.getReader();
         let hfwTotalContent = '';
+        if (file) { hfwTotalContent += document.getElementById(responseContentID).innerHTML + '<br>'; } // Ensure the file download link generated above is appended to hfwTotalContent!
         let hfwReceivedComplete = false;
 
         async function hfwProcessChunk() {

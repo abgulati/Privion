@@ -1020,3 +1020,47 @@ body {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-10px); }
 }
+
+.download-container-for-vision-appended-file {
+    margin: 7px 0;
+    width: 100%;
+}
+
+.download-link-for-vision-appended-file {
+    display: flex;  /*flexbox layout is used because we want to stack the child elements vertically*/
+    align-items: center;
+    background-color: #2a2a2a;
+    border-radius: 10px;
+    padding: 10px;
+    text-decoration: none;
+    color: #e0e0e0;
+    transition: all 0.3s ease; /*all properties will transition over 0.3s with ease*/
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.download-link-for-vision-appended-file:hover {
+    background-color: #3a3a3a;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);  /*0 4px 8px: horizontal offset, vertical offset, blur radius, color*/
+}
+
+.download-icon-for-vision-appended-file {
+    font-size: 24px;
+    margin-right: 15px;
+    color: #4da6ff;
+}
+
+.download-text-for-vision-appended-file {
+    display: flex;  /*flexbox layout is used because we want to stack the child elements vertically*/
+    flex-direction: column; /*child elements are stacked vertically*/
+}
+
+.download-filename-for-vision-appended-file {
+    font-weight: bold;
+    margin-bottom: 3px;
+    color: #ffffff;
+}
+
+.download-label-for-vision-appended-file {
+    font-size: 0.9em; /*em unit is relative to the font size of the element*/
+    color: #b0b0b0;
+}
