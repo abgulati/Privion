@@ -213,29 +213,35 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'min_p':0.05, 
                     'n_keep':0,
                     'port':9069,
-                    'model_list': ['mistralai/Mistral-Nemo-Instruct-2407', 
-                                   'meta-llama/Meta-Llama-3.1-8B-Instruct', 
-                                   'meta-llama/Meta-Llama-3.1-70B-Instruct', 
-                                   'meta-llama/Meta-Llama-3.1-405B-Instruct-FP8',
-                                   'hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4',
-                                   'hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4',
-                                   'microsoft/Phi-3.5-mini-instruct',
-                                   'microsoft/Phi-3.5-MoE-instruct',
-                                   'microsoft/Phi-3-mini-4k-instruct',
-                                   'microsoft/Phi-3-mini-128k-instruct',
-                                   'microsoft/Phi-3-small-8k-instruct',
-                                   'microsoft/Phi-3-small-128k-instruct',
-                                   'microsoft/Phi-3-medium-4k-instruct',
-                                   'microsoft/Phi-3-medium-128k-instruct',
-                                   'CohereForAI/c4ai-command-r-plus',
-                                   'CohereForAI/c4ai-command-r-v01',
-                                   'google/gemma-2-2b-it',
-                                   'google/gemma-2-9b-it',
-                                   'google/gemma-2-27b-it',
-                                   'Qwen/Qwen2-7B-Instruct',
-                                   'Qwen/Qwen2-72B-Instruct',
-                                   'alpindale/goliath-120b',
-                                   'TheBloke/goliath-120b-AWQ'
+                    'model_list': [
+                                    'meta-llama/Llama-3.2-11B-Vision-Instruct',
+                                    'meta-llama/Llama-3.2-1B-Instruct',
+                                    'meta-llama/Llama-3.2-3B-Instruct',
+                                    'black-forest-labs/FLUX.1-schnell',
+                                    'black-forest-labs/FLUX.1-dev',
+                                    'mistralai/Mistral-Nemo-Instruct-2407', 
+                                    'meta-llama/Meta-Llama-3.1-8B-Instruct', 
+                                    'meta-llama/Meta-Llama-3.1-70B-Instruct', 
+                                    'meta-llama/Meta-Llama-3.1-405B-Instruct-FP8',
+                                    'hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4',
+                                    'hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4',
+                                    'microsoft/Phi-3.5-mini-instruct',
+                                    'microsoft/Phi-3.5-MoE-instruct',
+                                    'microsoft/Phi-3-mini-4k-instruct',
+                                    'microsoft/Phi-3-mini-128k-instruct',
+                                    'microsoft/Phi-3-small-8k-instruct',
+                                    'microsoft/Phi-3-small-128k-instruct',
+                                    'microsoft/Phi-3-medium-4k-instruct',
+                                    'microsoft/Phi-3-medium-128k-instruct',
+                                    'CohereForAI/c4ai-command-r-plus',
+                                    'CohereForAI/c4ai-command-r-v01',
+                                    'google/gemma-2-2b-it',
+                                    'google/gemma-2-9b-it',
+                                    'google/gemma-2-27b-it',
+                                    'Qwen/Qwen2-7B-Instruct',
+                                    'Qwen/Qwen2-72B-Instruct',
+                                    'alpindale/goliath-120b',
+                                    'TheBloke/goliath-120b-AWQ'
                                    ]
                 }.get(key, 'undefined')
 
@@ -368,6 +374,24 @@ except Exception as e:
 app.config['UPLOAD_FOLDER'] = upload_folder
 
 ############################----------------------------------------------###############################
+
+
+@app.route('/serve_generated_image/<path:filename>')
+def serve_generated_image(filename):
+    print(f"\n\nserving generated image: {filename}\n\n")
+    generated_images_folder = "generated_images"
+    try:
+        generated_images_folder = read_config(['generated_images_folder'])['generated_images_folder']
+    except Exception as e:
+        handle_error_no_return("Could not read generated_images_folder from hf_config.json, using default: generated_images in the current working directory. Encountered error: ", e)
+
+    return send_from_directory(generated_images_folder, filename)
+
+
+@app.route('/serve_uploaded_file/<path:filename>')
+def serve_uploaded_file(filename):
+    print(f"\n\nserving uploaded file: {filename}\n\n")
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
 ############################---------------Shutdown Methods----------------###############################
@@ -1130,17 +1154,6 @@ def initialize_model():
     return True
 
 
-@app.route('/serve_generated_image/<path:filename>')
-def serve_generated_image(filename):
-    print(f"\n\nserving generated image: {filename}\n\n")
-    generated_images_folder = "generated_images"
-    try:
-        generated_images_folder = read_config(['generated_images_folder'])['generated_images_folder']
-    except Exception as e:
-        handle_error_no_return("Could not read generated_images_folder from hf_config.json, using default: generated_images in the current working directory. Encountered error: ", e)
-
-    return send_from_directory(generated_images_folder, filename)
-
 
 def generate_flux_image(request):
     print("\n\nFlux Diffusers Selected - Generating Image\n\n")
@@ -1352,8 +1365,6 @@ def inference_with_vision_model(request):
 
         if vision_file_present: 
             print(f"\n\nProcessing Page: {page_number} from file: {filename}\n\n")
-        else:
-            print(f"\n\nProcessing text-only input\n\n")
         
         try:
             print("\n\nLoading Input to Model\n\n")
@@ -1514,11 +1525,8 @@ def vision_stream():
                 
                 if vision_file_present: 
                     status_string = f"Processing Page: {page_number} from file: {filename}\n\n"
-                else:
-                    status_string = f"Processing text-only input\n\n"
-                
-                data_queue.put(status_string)
-                print(status_string)
+                    data_queue.put(status_string)
+                    print(status_string)
                 
                 print("\n\nLoading Input to Model\n\n")
                 inputs = PIPE(image, input_text, return_tensors="pt").to(MODEL.device)
