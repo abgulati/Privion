@@ -748,11 +748,14 @@ function toggleOcrSelection() { //Show or hide OCR-Service selection:
     if (selection === 'pypdf') {    //Hide API-Details-Form 
         document.getElementById('azure_vision_api_form').style.display = 'none'; 
         document.getElementById('azure_doc_ai_api_form').style.display = 'none';
+        document.getElementById('local_vision_api_form').style.display = 'none';
     } else {
         if (document.getElementById('ocrApiDropdown').value != 'AzureVision') {
             document.getElementById('azure_vision_api_form').style.display = 'none'; //Hide API-Details-Form
         } else if (document.getElementById('ocrApiDropdown').value != 'AzureDocAi') {
             document.getElementById('azure_doc_ai_api_form').style.display = 'none';
+        } else if (document.getElementById('ocrApiDropdown').value != 'LocalVisionLLM') {
+            document.getElementById('local_vision_api_form').style.display = 'none';
         }
     }
 }
@@ -762,6 +765,7 @@ function toggleOcrApiForm() {   //Show or hide API form:
     var selection = document.getElementById('ocrApiDropdown').value;
     document.getElementById('azure_vision_api_form').style.display = selection === 'AzureVision' ? 'block' : 'none';
     document.getElementById('azure_doc_ai_api_form').style.display = selection === 'AzureDocAi' ? 'block' : 'none';
+    document.getElementById('local_vision_api_form').style.display = selection === 'LocalVisionLLM' ? 'block' : 'none';
     //Add more API form selectors here
 }
 
@@ -775,6 +779,9 @@ function initializeOCRTabListeners() {
     document.getElementById('update_azure_doc_ai').addEventListener('change', function() {
         document.getElementById('azure_doc_ai_api_url').disabled = !this.checked;   // !this.check -> logical NOT to flip boolean. this.checked will be true when the box is checked, so !this.checked will be false... 
         document.getElementById('azure_doc_ai_api_key').disabled = !this.checked;   // ...and so disabled will be false. So if Update-Config is checked, the fields are enabled.
+    });
+    document.getElementById('update_local_vision_config').addEventListener('change', function() {
+        document.getElementById('local_vision_api_url').disabled = !this.checked;
     });
 
     // Event listener for radio buttons:

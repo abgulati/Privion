@@ -864,6 +864,7 @@
                                             <option value="">Please select</option>
                                             <option value="AzureVision">Azure Vision Service OCR</option>
                                             <option value="AzureDocAi">Azure Document Intelligence AI OCR</option>
+                                            <option value="LocalVisionLLM">Local Vision OCR</option>
                                             <!-- Add more OCR services here!-->
                                         </select>
                                     </div>
@@ -904,6 +905,17 @@
                                             <input type="text" id="azure_doc_ai_api_key" name="azure_doc_ai_api_key" disabled>
                                         </div>
                                         <br>
+                                    </form>
+
+                                    <form action="" class="api_form" id="local_vision_api_form" style="display: none;">
+                                        <div class="form-group">
+                                            <input type="checkbox" id="update_local_vision_config" name="update_local_vision_config">
+                                            <label for="update_local_vision_config">Update Configuration</label>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="local_vision_api_url">Local Vision OCR Endpoint:</label>
+                                            <input type="text" id="local_vision_api_url" name="local_vision_api_url" disabled>
+                                        </div>
                                     </form>
 
                                 </div>

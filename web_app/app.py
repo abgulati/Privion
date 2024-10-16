@@ -279,6 +279,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'pdfs_to_txts':base_directory + '/pdfs_to_txts',
                 'local_llm_server':'hf-waitress',
                 'model_choice':'Meta-Llama-3-8B-Instruct.f16.gguf',
+                'vision_llm_local_url':"http://localhost:9069/completions",
                 'do_rag':True,
                 'force_enable_rag':False,
                 'force_disable_rag':False,
@@ -894,6 +895,144 @@ def PDFtoAzureOCRTXT(input_filepath):
                     handle_local_error("Could not write to output text file, encountered error: ", e)
 
     # Close all files
+    output_text_file.close()
+
+    return output_text_file_path
+
+
+def get_vision_llm_request_params():
+    try:
+        read_return = read_config(['vision_llm_local_url'])
+        vision_llm_local_url = read_return['vision_llm_local_url']
+    except Exception as e:
+        handle_local_error("Missing OCR PDFs directory for PDFtoVisionLLMOCRTXT, please provide required API config. Error: ", e)
+
+    ocr_prompt = f'''
+        Please OCR the attached image as accurately as possible and return the text extracted from it.
+        If the image contains a table, please include the cell-details, such as row and column indices, and column or row headers in the returned text.
+        The extracted text will be converted into embeddings and used for semantic search, so extracting as much detail as possible, while maintaining formatting integrity and tabular context is crucially important.
+        Please output only the text extracted from the image, without any other text, code, or markup. Please no yapping!
+        Don't even say stuff like "Here's the OCR'ed text from the image" or "Here's the text extracted from the image" or anything like that. Just output the text.
+        Thank you!
+    '''
+
+    vision_request_payload = {
+        'messages': json.dumps([
+            {
+                "role": "user", 
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": ocr_prompt}
+                ]
+            }
+        ])
+    }
+
+    headers = {
+        'X-DPI': '300',
+        'X-Max-New-Tokens': '5000'
+    }
+
+    return vision_llm_local_url, vision_request_payload, headers
+
+
+def PDFtoVisionLLMOCRTXT(input_filepath):
+    
+    print("\n\nProcessing Document - PDF to Vision LLM OCR TXT\n\n")
+
+    try:
+        print("\n\nChecking if HF-Waitress Server is Online\n\n")
+        if not is_local_server_online('hf-waitress')['server_available']:
+            return handle_local_error("HF-Waitress Server is Offline! Please start the HF-Waitress Server and try again.")
+        else:
+            print("\n\nHF-Waitress Server is Online\n\n")
+    except Exception as e:
+        handle_error_no_return("Could not check if HF-Waitress Server is Online, presuming online and proceeding. Encountered error: ", e)
+
+    try:
+        read_return = read_config(['ocr_pdfs', 'vision_llm_local_url'])
+        ocr_pdfs = read_return['ocr_pdfs']
+        vision_llm_local_url = read_return['vision_llm_local_url']
+    except Exception as e:
+        handle_local_error("Missing OCR PDFs directory for PDFtoVisionLLMOCRTXT, please provide required API config. Error: ", e)
+
+    try:
+        source_filename = os.path.basename(input_filepath)
+    except Exception as e:
+        handle_local_error("Could not extract filename, encountered error: ", e)
+
+    # Set output path
+    output_text_file_name = source_filename.replace(".pdf",".txt")
+    output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
+
+    # if os.path.exists(output_text_file_path):
+    #     print("OCR'ed doc already exists! Returning existing file.")
+    #     return output_text_file_path
+
+    # Convert PDF to  a list of images
+    pil_image_object_list = []
+    try:
+        print("\n\nConverting PDF to a list of Images\n\n")
+        pil_image_object_list = convert_from_path(input_filepath, 300) # The convert_from_path() function from pdf2image lib intertnally uses Poppler to convert PDF pages to images, and then creates PIP Image objects from them. 300dpi - good balance between quality and performance
+    except Exception as e:
+        handle_local_error("Could not image PDF file, encountered error: ", e)
+
+    # Initialize text output
+    try:
+        output_text_file = open(output_text_file_path, 'w', encoding='utf-8')
+    except Exception as e:
+        handle_local_error("Could not initialize/access output text file, encountered error: ", e)
+
+    try:
+        vision_llm_local_url, vision_request_payload, headers = get_vision_llm_request_params()
+    except Exception as e:
+        return handle_local_error("Could not get Vision LLM request parameters, encountered error: ", e)
+
+    for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
+
+        print(f"\n\nProcessing Page: {page_number} from file: {source_filename}\n\n")
+
+        try:
+            print("\n\nConverting PIL-image object to Byte-Stream\n\n")
+            img_stream = io.BytesIO()
+            image.save(img_stream, format='PNG')
+            img_stream.seek(0)
+        except Exception as e:
+            handle_error_no_return("Could not convert PIL-image object to Byte-Stream, encountered error: ", e)
+            continue
+
+        try:
+            print("\n\nPreparing file payload for Vision LLM\n\n")
+            file_payload = [
+                ('file', ('page-image.png', img_stream, 'image/png'))
+            ]
+        except Exception as e:
+            handle_error_no_return("Could not prepare file payload for Vision LLM, encountered error: ", e)
+            continue
+
+        try:
+            print("\n\nSending request to Vision LLM\n\n")
+            response = requests.post(vision_llm_local_url, headers=headers, data=vision_request_payload, files=file_payload)    # requests.post() is a convenience function specifically for sending POST requests with form-encoded or multipart data. It automatically sets the Content-Type header to multipart/form-data. It's more readable than the generic requests.request() function.
+            print(f"\n\nVision LLM response: {response.json()}\n\n")
+        except Exception as e:
+            handle_error_no_return("Could not send request to Vision LLM, encountered error: ", e)
+            continue
+
+        try:
+            print("\n\nExtracting inference output-text from Vision LLM Response\n\n")
+            vision_output = response.json()['response']
+        except Exception as e:
+            handle_error_no_return("Could not obtain inference output from Vision LLM, encountered error: ", e)
+            continue
+
+        try:
+            print(f"\n\nWriting output to output text file\n\n")
+            output_text_file.write(f"[PAGE:{page_number}]\n{vision_output}\n")
+        except Exception as e:
+            handle_error_no_return("Could not write to output text file, encountered error: ", e)
+            continue
+    
+     # Close all files
     output_text_file.close()
 
     return output_text_file_path
@@ -1945,6 +2084,8 @@ def document_extractor_and_loader(filename, filepath):
                 input_file = PDFtoAzureOCRTXT(filepath)
             elif ocr_service_choice == 'AzureDocAi':
                 input_file = PDFtoAzureDocAiTXT(filepath)
+            elif ocr_service_choice == 'LocalVisionLLM':
+                input_file = PDFtoVisionLLMOCRTXT(filepath)
         except Exception as e:
             handle_error_no_return("Failed to OCR text from PDF. Will now attempt to extract text via PyPDF2. Encountered error: ", e)
             try:

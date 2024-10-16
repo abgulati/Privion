@@ -112,8 +112,10 @@ function getRagConfig() {
 function getOcrConfig() {
     const azure_ocr_form = document.getElementById("azure_vision_api_form");
     const azure_doc_ai_form = document.getElementById("azure_doc_ai_api_form");
+    const local_vision_form = document.getElementById("local_vision_api_form");
     const update_azure_vision_config = document.getElementById('update_azure_vision').checked;
     const update_azure_doc_ai_config = document.getElementById('update_azure_doc_ai').checked;
+    const update_local_vision_config = document.getElementById('update_local_vision_config').checked;
 
     let config = {
         'ocr_service_choice': 'None',
@@ -134,6 +136,12 @@ function getOcrConfig() {
         if (update_azure_doc_ai_config) {
             config.azure_doc_ai_endpoint = document.getElementById("azure_doc_ai_api_url").value;
             config.azure_doc_ai_subscription_key = document.getElementById("azure_doc_ai_api_key").value;
+        }
+    } else if (window.getComputedStyle(local_vision_form).display != 'none') {
+        config.ocr_service_choice = 'LocalVisionLLM';
+        config.use_ocr = true;
+        if (update_local_vision_config) {
+            config.local_vision_endpoint = document.getElementById("local_vision_api_url").value;
         }
     }
 
