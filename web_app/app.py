@@ -950,9 +950,8 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
         handle_error_no_return("Could not check if HF-Waitress Server is Online, presuming online and proceeding. Encountered error: ", e)
 
     try:
-        read_return = read_config(['ocr_pdfs', 'vision_llm_local_url'])
+        read_return = read_config(['ocr_pdfs'])
         ocr_pdfs = read_return['ocr_pdfs']
-        vision_llm_local_url = read_return['vision_llm_local_url']
     except Exception as e:
         handle_local_error("Missing OCR PDFs directory for PDFtoVisionLLMOCRTXT, please provide required API config. Error: ", e)
 
