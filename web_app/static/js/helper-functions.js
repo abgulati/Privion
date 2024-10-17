@@ -97,7 +97,7 @@ function hideLoader() {
 }
 
 function openNav() {
-    document.getElementById("sidenav").style.width = "250px";
+    document.getElementById("sidenav").style.width = "275px";
     document.getElementById("sidenav").style.left = "0";
 }
 
@@ -978,10 +978,7 @@ function reverseSortCustomDropdown() {
 }
 
 
-function filterCustomDropdown(search_words) {
-    const customDropdownList = document.getElementById('hf-waitress-llm-custom-dropdown-items-list');
-    const items = customDropdownList.getElementsByClassName('hf-waitress-llm-custom-dropdown-item');
-
+function coreFilterFunction(search_words, items) {
     const searchQuery = search_words.toLowerCase();
 
     Array.from(items).forEach(item => {
@@ -993,6 +990,21 @@ function filterCustomDropdown(search_words) {
         }
     })
 }
+
+
+function filterCustomDropdown(search_words) {
+    const customDropdownList = document.getElementById('hf-waitress-llm-custom-dropdown-items-list');
+    const items = customDropdownList.getElementsByClassName('hf-waitress-llm-custom-dropdown-item');
+    coreFilterFunction(search_words, items);
+}
+
+
+function filterChatHistoryItems(search_words) {
+    const customDropdownList = document.getElementById('sidenav-content');
+    const items = customDropdownList.getElementsByClassName('nav-item');
+    coreFilterFunction(search_words, items);
+}
+
 
 function addNewHfwModel(model) {
     loadCoreHfValues()
