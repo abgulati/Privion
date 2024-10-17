@@ -113,7 +113,7 @@ body {
     z-index: 1;
     top: 0;
     left: -2px;
-    background-color: #111;
+    background-color: #1e2021; /*was #111 - changed to better style search bar*/
     transition: 0.5s;
     overflow-x: hidden;
     overflow-y: auto;
@@ -224,11 +224,22 @@ body {
     margin-left: 50px;
 }
 
+.chat-history-search-bar {
+    position: absolute;
+    top: 69px;
+    width: 100%;
+    padding: 13px;
+    color: #fff;
+    border: solid #383d3f;
+    border-width: thin;
+    background-color: #181a1b;
+}
+
 .sidenav-content {
     overflow-y: auto;
     position: absolute;
-    top: 69px;
-    left: 0;
+    top: 135px;
+    left: 10px;
     right: 0;
     bottom: 0;
 }
