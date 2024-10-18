@@ -269,7 +269,10 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'vectordb_openai_folder':base_directory + '/chroma_db_openai_embeddings',
                 'vectordb_bge_large_folder':base_directory + '/chroma_db_bge_large_embeddings',
                 'vectordb_bge_base_folder':base_directory + '/chroma_db_bge_base_embeddings',
-                'whoosh_index_folder':base_directory + '/whoosh_index',
+                'whooshIdx_for_sbert_folder':base_directory + '/whoosh_index_sbert',
+                'whooshIdx_for_openai_folder':base_directory + '/whoosh_index_openai',
+                'whooshIdx_for_bge_large_folder':base_directory + '/whoosh_index_bge_large',
+                'whooshIdx_for_bge_base_folder':base_directory + '/whoosh_index_bge_base',
                 'sqlite_images_db':base_directory + '/images_database_main.db',
                 'sqlite_history_db':base_directory + '/chat_history.db',
                 'sqlite_docs_loaded_db':base_directory + '/docs_loaded.db',
@@ -467,13 +470,12 @@ if not os.path.exists(BASE_DIRECTORY):
         handle_local_error("Failed to create Base App Directory, encountered error: ", e)
         
 try:
-    read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 'whoosh_index_folder'])
+    read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts'])
     model_dir = read_return['model_dir']
     highlighted_docs = read_return['highlighted_docs']
     upload_folder = read_return['upload_folder']
     ocr_pdfs = read_return['ocr_pdfs']
     pdfs_to_txts = read_return['pdfs_to_txts']
-    whoosh_index_folder = read_return['whoosh_index_folder']
 except Exception as e:
     handle_local_error("Could not read paths for app directories (model_dir, highlighted_docs, upload_folder, etc.) from config.json on boot, encountered error: ", e)
 
@@ -528,29 +530,6 @@ if not os.path.exists(pdfs_to_txts):
         handle_local_error("Failed to create txt-docs Directory (pdfs_to_txts), encountered error: ", e)
 
 
-# Create the Whoosh index folder if it doesn't exist
-if not os.path.exists(whoosh_index_folder):
-
-    # Define the index schema
-    schema = Schema(
-        content=TEXT(stored=True),
-        source=ID(stored=True),
-        page_number=ID(stored=True)
-    )
-
-    # Create a directory for persistent storage of the index to disk
-    try:
-        os.makedirs(whoosh_index_folder)
-    except Exception as e:
-        handle_local_error("Failed to create Whoosh Index Directory (whoosh_index_folder), encountered error: ", e)
-
-    # Create the index based on the schema definted above
-    try:
-        create_in(whoosh_index_folder, schema)
-    except Exception as e:
-        handle_local_error("Failed to create Whoosh Index, encountered error: ", e)
-
-
 app.config['UPLOAD_FOLDER'] = upload_folder
 app.config['DOWNLOAD_FOLDER'] = highlighted_docs
 
@@ -572,41 +551,90 @@ def clean_text_string(text_to_be_cleaned):
     return clean_text
 
 
-def whoosh_indexer(new_chunks):
+def determine_whoosh_index_folder():
+    print("Determining Whoosh Index Folder")
 
-    print("\n\nWhoosh Indexing Chunks\n\n")
     try:
-        read_return = read_config(['whoosh_index_folder'])
-        whoosh_index_folder = read_return['whoosh_index_folder']
+        read_return = read_config(['embedding_model_choice', 'whooshIdx_for_sbert_folder', 'whooshIdx_for_openai_folder', 'whooshIdx_for_bge_large_folder', 'whooshIdx_for_bge_base_folder'])
+        embedding_model_choice = read_return['embedding_model_choice']
+        whooshIdx_for_sbert_folder = read_return['whooshIdx_for_sbert_folder']
+        whooshIdx_for_openai_folder = read_return['whooshIdx_for_openai_folder']
+        whooshIdx_for_bge_large_folder = read_return['whooshIdx_for_bge_large_folder']
+        whooshIdx_for_bge_base_folder = read_return['whooshIdx_for_bge_base_folder']
     except Exception as e:
         handle_local_error("Missing whoosh_index_folder in config.json for whoosh_indexer. Error: ", e)
+
+    whoosh_index_folder = ""
+    if embedding_model_choice == "sbert_mpnet_base_v2":
+        whoosh_index_folder = whooshIdx_for_sbert_folder
+    elif embedding_model_choice == "openai_text_ada":
+        whoosh_index_folder = whooshIdx_for_openai_folder
+    elif embedding_model_choice == "bge_large":
+        whoosh_index_folder = whooshIdx_for_bge_large_folder
+    elif embedding_model_choice == "bge_base":
+        whoosh_index_folder = whooshIdx_for_bge_base_folder
+    else:
+        handle_local_error(f"Invalid embedding_model_choice of {embedding_model_choice} in config.json for method determine_whoosh_index_folder. Error: ", embedding_model_choice)
+
+    return whoosh_index_folder
+
+
+def create_whoosh_index_in_folder(whoosh_index_folder):
+
+    print(f"Creating Whoosh Index in folder: {whoosh_index_folder}")
     
-    # Define the Index schema: what fields it contains
+     # Define the Index schema: what fields it contains
     schema = Schema(
         content=TEXT(stored=True),
         source=ID(stored=True),
         page_number=ID(stored=True)
     )
 
-    # If the index does not currently exist...
+    # Create a directory for persistent storage of the index to disk
+    try:
+        os.mkdir(whoosh_index_folder)
+    except Exception as e:
+        handle_local_error("Failed to create directory for the Whoosh Index, encountered error: ", e)
+    # Create the index based on the schema definted above
+    try:
+        ix = create_in(whoosh_index_folder, schema)
+    except Exception as e:
+        handle_local_error("Failed to create Whoosh Index, encountered error: ", e)
+
+    return ix
+
+
+def get_whoosh_index_object_for_folder(whoosh_index_folder):
+
+    print(f"Getting Whoosh Index Object for folder: {whoosh_index_folder}")
+
     if not os.path.exists(whoosh_index_folder):
-        
-        # Create a directory for persistent storage of the index to disk
         try:
-            os.mkdir(whoosh_index_folder)
-        except Exception as e:
-            handle_local_error("Failed to create directory for the Whoosh Index, encountered error: ", e)
-        # Create the index based on the schema definted above
-        try:
-            ix = create_in(whoosh_index_folder, schema)
+            ix = create_whoosh_index_in_folder(whoosh_index_folder)
         except Exception as e:
             handle_local_error("Failed to create Whoosh Index, encountered error: ", e)
-            
     else:
         try:
             ix = open_dir(whoosh_index_folder)
         except Exception as e:
             handle_local_error("Failed to open Whoosh Index, encountered error: ", e)
+
+    return ix
+
+
+def whoosh_indexer(new_chunks):
+
+    print("\n\nWhoosh Indexing Chunks\n\n")
+    
+    try:
+        whoosh_index_folder = determine_whoosh_index_folder()
+    except Exception as e:
+        handle_local_error("Failed to determine Whoosh Index Folder, encountered error: ", e)
+    
+    try:
+        ix = get_whoosh_index_object_for_folder(whoosh_index_folder)
+    except Exception as e:
+        handle_local_error("Failed to get Whoosh Index Object, encountered error: ", e)
         
     # init writer and write to the index:
     try:
@@ -630,17 +658,21 @@ def search_whoosh_index(query):
     print("Searching Whoosh Index")
     
     try:
-        read_return = read_config(['whoosh_index_folder', 'fetch_top_k_results_from_whoosh', 'whoosh_search_weighting'])
-        whoosh_index_folder = read_return['whoosh_index_folder']
+        read_return = read_config(['fetch_top_k_results_from_whoosh', 'whoosh_search_weighting'])
         fetch_top_k_results_from_whoosh = read_return['fetch_top_k_results_from_whoosh']
         whoosh_search_weighting = read_return['whoosh_search_weighting']
     except Exception as e:
         handle_local_error("Missing whoosh_index_folder in config.json for method search_whoosh_index. Error: ", e)
 
     try:
-        ix = open_dir(whoosh_index_folder)
+        whoosh_index_folder = determine_whoosh_index_folder()
     except Exception as e:
-        handle_local_error("Failed to open Whoosh Index, encountered error: ", e)
+        handle_local_error("Failed to determine Whoosh Index Folder, encountered error: ", e)
+
+    try:
+        ix = get_whoosh_index_object_for_folder(whoosh_index_folder)
+    except Exception as e:
+        handle_local_error("Failed to get Whoosh Index Object, encountered error: ", e)
 
     whoosh_weighting = scoring.BM25F()
     if whoosh_search_weighting == "TF-IDF":
@@ -964,9 +996,9 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
     output_text_file_name = source_filename.replace(".pdf",".txt")
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
-    # if os.path.exists(output_text_file_path):
-    #     print("OCR'ed doc already exists! Returning existing file.")
-    #     return output_text_file_path
+    if os.path.exists(output_text_file_path):
+        print("OCR'ed doc already exists! Returning existing file.")
+        return output_text_file_path
 
     # Convert PDF to  a list of images
     pil_image_object_list = []
@@ -2779,33 +2811,30 @@ def reset_vector_db_on_disk():
     except Exception as e:
         return handle_api_error("Could not obtain timestamp in reset_vector_db_on_disk, encountered error: ", e)
 
-    # Now that we have all pre-requisite data to create a new VectorDB, proceed to do so by checking the model the user had currently picked from the dropdown: 
+    # Now that we have all pre-requisite data to create a new VectorDB, proceed to do so by checking the model the user had currently picked from the dropdown:
     try:
         if selected_embedding_model_choice == 'bge_large':
             vectordb_bge_large_folder = base_directory + '/chroma_db_bge_large_embeddings' + '-' + formatted_datetime
-            write_config({'vectordb_bge_large_folder':vectordb_bge_large_folder})
+            whooshIdx_for_bge_large_folder = base_directory + '/whoosh_index_bge_large' + '-' + formatted_datetime
+            write_config({'vectordb_bge_large_folder':vectordb_bge_large_folder, 'whooshIdx_for_bge_large_folder':whooshIdx_for_bge_large_folder})
             
         elif selected_embedding_model_choice == 'bge_base':
             vectordb_bge_base_folder = base_directory + '/chroma_db_bge_base_embeddings' + '-' + formatted_datetime
-            write_config({'vectordb_bge_base_folder':vectordb_bge_base_folder})
+            whooshIdx_for_bge_base_folder = base_directory + '/whoosh_index_bge_base' + '-' + formatted_datetime
+            write_config({'vectordb_bge_base_folder':vectordb_bge_base_folder, 'whooshIdx_for_bge_base_folder':whooshIdx_for_bge_base_folder})
 
         elif selected_embedding_model_choice == 'sbert_mpnet_base_v2':
             vectordb_sbert_folder = base_directory + '/chroma_db_sbert_embeddings' + '-' + formatted_datetime
-            write_config({'vectordb_sbert_folder':vectordb_sbert_folder})
+            whooshIdx_for_sbert_folder = base_directory + '/whoosh_index_sbert' + '-' + formatted_datetime
+            write_config({'vectordb_sbert_folder':vectordb_sbert_folder, 'whooshIdx_for_sbert_folder':whooshIdx_for_sbert_folder})
 
         elif selected_embedding_model_choice == 'openai_text_ada':
             vectordb_openai_folder = base_directory + '/chroma_db_openai_embeddings' + '-' + formatted_datetime
-            write_config({'vectordb_openai_folder':vectordb_openai_folder})
+            whooshIdx_for_openai_folder = base_directory + '/whoosh_index_openai' + '-' + formatted_datetime
+            write_config({'vectordb_openai_folder':vectordb_openai_folder, 'whooshIdx_for_openai_folder':whooshIdx_for_openai_folder})
 
     except Exception as e:
         return handle_api_error("Could not create new VectorDB in reset_vector_db_on_disk, encountered error: ", e)
-
-    # create new whoosh_index directory too:
-    try:
-        whoosh_index_folder = base_directory + '/whoosh_index' + '-' + formatted_datetime
-        write_config({'whoosh_index_folder':whoosh_index_folder})
-    except Exception as e:
-        return handle_api_error("Could not create new whoosh_index in reset_vector_db_on_disk, encountered error: ", e)
     
     restart_required = True
     global VECTORDB_CHANGE_RELOAD_TRIGGER_SET
@@ -2813,7 +2842,7 @@ def reset_vector_db_on_disk():
     try:
         read_return = read_config(['embedding_model_choice'])
         set_embedding_model_choice = read_return['embedding_model_choice']
-        if set_embedding_model_choice != selected_embedding_model_choice:
+        if set_embedding_model_choice != selected_embedding_model_choice:   # If the selected embedding model is different from the one currently set in config.json, then no restart is required
             restart_required = False
             VECTORDB_CHANGE_RELOAD_TRIGGER_SET = False
     except Exception as e:
@@ -3677,6 +3706,9 @@ def setup_for_llama_cpp_response():
     if combined_docs:
         docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
         do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
+    else:
+        print("No documents for citations, setting do_rag to False")
+        do_rag = False
     
     print(f'Do RAG? {do_rag}')
 
