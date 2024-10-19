@@ -25,6 +25,7 @@ function getLlmModel() {
 }
 
 function setModelHeaderInfoBox(chat_id, model_id) {
+    setLlmModel(model_id);
     chatID = " Chat ".concat(String(chat_id))
     display_chatid_and_model = String(chatID).concat(": ", String(model_id))
     document.getElementById('model_header').innerHTML = '';
