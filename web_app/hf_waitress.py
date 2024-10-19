@@ -68,7 +68,8 @@ except Exception as e:
     print(f"\n\nCould not establish logger, encountered error: {e}")
 
 
-def handle_api_error(message, exception=None):
+
+def central_error_logging(message, exception=None):
     with error_logging_semaphore:
         error_message = f"\n\n{message} {str(exception) if exception else '; No exception info.'}\n\n"
         traceback_details = traceback.format_exc()
@@ -79,36 +80,43 @@ def handle_api_error(message, exception=None):
             print(error_message)
         else:
             print(error_message)
-        
-        return jsonify(success=False, error=error_message), 500 #internal server error
+    
+    return error_message
+
+
+def handle_api_error(message, exception=None):
+    error_message = central_error_logging(message, exception)
+    return jsonify(success=False, error=error_message), 500 #internal server error
 
 
 def handle_local_error(message, exception=None):
-    with error_logging_semaphore:
-        error_message = f"\n\n{message} {str(exception) if exception else '; No exception info.'}\n\n"
-        traceback_details = traceback.format_exc()
-        full_message = f"\n\n{error_message}\n\nTraceback: {traceback_details}\n\n"
-
-        if logger:
-            logger.error(full_message)
-            print(error_message)
-        else:
-            print(error_message)
-        
-        raise Exception(exception)
+    _ = central_error_logging(message, exception)
+    raise Exception(exception)
 
 
 def handle_error_no_return(message, exception=None):
-    with error_logging_semaphore:
-        error_message = f"\n\n{message} {str(exception) if exception else '; No exception info.'}\n\n"
-        traceback_details = traceback.format_exc()
-        full_message = f"\n\n{error_message}\n\nTraceback: {traceback_details}\n\n"
+    _ = central_error_logging(message, exception)
 
-        if logger:
-            logger.error(full_message)
-            print(error_message)
-        else:
-            print(error_message)
+
+def set_load_safe_defaults():
+    try:
+        write_config({'load_safe_defaults': True})
+    except Exception as e:
+        handle_error_no_return("Could not set load_safe_defaults to true in hf_config.json, encountered error: ", e)
+
+def handle_model_loading_error(message, exception=None, target="local"):
+    
+    try:
+        set_load_safe_defaults()
+    except Exception as e:
+        handle_error_no_return("Could not set load_safe_defaults to true in hf_config.json, encountered error: ", e)
+    
+    if target == "local":
+        return handle_local_error(message, exception)
+    elif target == "api":
+        return handle_api_error(message, exception)
+
+
 
 ############################----------------------------------------------###############################
 
@@ -195,7 +203,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'vision':False,
                     'gguf_model_id':None,
                     'gguf_filename':None,
-                    'quantize':"quanto",
+                    'quantize':"n",
                     'quant_level':"int4",
                     'hqq_group_size':64,
                     'push_to_hub':False,
@@ -213,6 +221,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'min_p':0.05, 
                     'n_keep':0,
                     'port':9069,
+                    'load_safe_defaults':False,
                     'model_list': [
                                     'meta-llama/Llama-3.2-11B-Vision-Instruct',
                                     'meta-llama/Llama-3.2-1B-Instruct',
@@ -524,7 +533,8 @@ def parse_arguments():
             'top_p',
             'min_p',
             'n_keep',
-            'port'
+            'port',
+            'load_safe_defaults'
         ])
         access_gated = str(read_return['access_gated']).lower() == 'true'
         access_token = str(read_return['access_token'])
@@ -546,6 +556,7 @@ def parse_arguments():
         min_p = float(read_return['min_p'])
         n_keep = int(read_return['n_keep'])
         port = int(read_return['port'])
+        load_safe_defaults = str(read_return['load_safe_defaults']).lower() == 'true'
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to parse_arguments(), encountered error: ", e)
 
@@ -585,8 +596,8 @@ def parse_arguments():
         args = parser.parse_args()
         print(f"\n\nparser.parse_args():\n\n{args}\n\n")
 
-        if args.reset_to_defaults:
-
+        if args.reset_to_defaults or load_safe_defaults:
+            print("\n\nLoading Server with Safe Defaults\n\n")
             try:
                 # Empty hf_config.json
                 config_writer_semaphore.acquire()
@@ -924,8 +935,6 @@ def load_flux_pipeline(pipeline):
 
 def load_vision_pipeline(pipeline, model_params):
 
-    print("\n\nLoading Vision Pipeline\n\n")
-
     global MODEL
 
     try:
@@ -936,17 +945,22 @@ def load_vision_pipeline(pipeline, model_params):
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
 
     try:
-        print(f"\n\nInitializing vision model: {model_id} with device_map: {torch_device_map}\n\n")
+        print(f"\nInitializing vision model: {model_id} with device_map: {torch_device_map}\n")
         MODEL = MllamaForConditionalGeneration.from_pretrained(
             model_id,
             torch_dtype=torch.bfloat16,
             device_map=torch_device_map ,
         )
 
-        print(f"\n\nInitializing processor for vision model: {model_id}\n\n")
+        try:
+            print(f"Your vision-model's memory footprint is: {MODEL.get_memory_footprint()}")
+        except Exception as e:
+            handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
+
+        print(f"\nInitializing processor for vision model: {model_id}\n")
         pipeline = AutoProcessor.from_pretrained(model_id, **model_params)  # Using 'pipeline' instead of 'processor' to maintain consistency with the server code. AutoProcessor is used to process images and text inputs for the vision model.
         
-        print(f"\n\nVision Model & Processor Loaded Successfully!\n\n")
+        print(f"\nVision Model & Processor Loaded Successfully!\n")
         return pipeline
     except Exception as e:
         handle_local_error("Could not load Vision Pipeline, encountered error: ", e)
@@ -992,10 +1006,8 @@ def restart_server_stream():
         shutdown_model()
 
     try:
-        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision'])
+        read_return = read_config(['model_id', 'pipeline_task', 'flux_diffusers', 'vision'])
         model_id = str(read_return['model_id'])
-        push_to_hub = str(read_return['push_to_hub']).lower() == 'true'
-        quant_level = str(read_return['quant_level'])
         pipeline_task = str(read_return['pipeline_task'])
         flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
         vision = str(read_return['vision']).lower() == 'true'
@@ -1005,8 +1017,8 @@ def restart_server_stream():
     model_params = {}
 
     if not flux_diffusers:
-        model_params = get_model_params()
-        print(f"Restarting server and initializing model with parameters: {model_params}")
+        model_params = get_model_params()   # We need to do so before redirecting output-streams!
+        print(f"Setting model-parameters: {model_params}")
     
     stop_thread = threading.Event()
 
@@ -1028,14 +1040,13 @@ def restart_server_stream():
             logging.basicConfig(stream=custom_stdout, level=logging.INFO)   # logging level is set to INFO to ensure all logs are captured by the stream
             
             if flux_diffusers:
-                print("\n\nFlux Diffusers Selected - Loading...\n\n")
+                print("\nFlux Diffusers Selected - Loading...\n")
                 PIPE = load_flux_pipeline(PIPE)
             elif vision:
-                print("\n\nVision Model Selected - Loading...\n\n")
+                print("\nVision Model Selected - Loading...\n")
                 PIPE = load_vision_pipeline(PIPE, model_params)
             else:
                 model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
-                print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
                 tokenizer = AutoTokenizer.from_pretrained(model_id)
                 print("\nInitializing inference pipeline...")
                 PIPE = pipeline(
@@ -1043,10 +1054,15 @@ def restart_server_stream():
                     model=model,
                     tokenizer=tokenizer,
                 )
+
+                try:
+                    print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
+                except Exception as e:
+                    handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
             
-            print(f"\n{model_id} loaded successfully!")
+            print(f"\n{model_id} loaded successfully!\n")
         except Exception as e:
-            handle_local_error("Model loading failed, encountered error: ", e)
+            return handle_model_loading_error("Model loading failed, encountered error: ", e, "api")
         finally:
             output_queue.put(None)
             sys.stdout = original_stdout
@@ -1077,8 +1093,6 @@ def restart_server_stream():
 
 def initialize_model():
 
-    print("\n\ninitializing model\n\n")
-
     global PIPE
 
     try:
@@ -1091,68 +1105,44 @@ def initialize_model():
         vision = str(read_return['vision']).lower() == 'true'
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
+    
+    print(f"\n\nInitializing HF-Waitress LLM Server for {model_id}\n\n")
 
     if flux_diffusers:
-        print("\n\nFlux Diffusers Selected - Loading Model\n\n")
-        try:
-            PIPE = load_flux_pipeline(PIPE)
-            return True
-        except Exception as e:
-            handle_local_error("Could not load Flux Pipeline, encountered error: ", e)
-            return False
-
-    model_params = get_model_params()
-
-    print(f"initializing {model_id} with model_params: {model_params}")
-
-    if vision:
-        print("\n\nVision Model Selected - Loading...\n\n")
-        try:
+        print("\n\nFlux Diffusers Selected - Loading...\n\n")
+        PIPE = load_flux_pipeline(PIPE)
+    
+    else:
+        model_params = get_model_params()
+        print(f"Setting model-parameters: {model_params}")
+        
+        if vision:
+            print("\n\nVision Model Selected - Loading...\n\n")
             PIPE = load_vision_pipeline(PIPE, model_params)
-            return True
+        else:
+            model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
+            tokenizer = AutoTokenizer.from_pretrained(model_id)
+            print("\nInitializing inference pipeline...")
+            PIPE = pipeline(
+                pipeline_task,
+                model=model,
+                tokenizer=tokenizer,
+            )
+    
+        try:
+            print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
         except Exception as e:
-            handle_local_error("Could not load Vision Pipeline, encountered error: ", e)
-            return False
-
-    try:
-        model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)  # unpacking is equivalent to passing each parameter individually, so for example you'll get `attn_implementation="flash_attention_2"`
-    except Exception as e:
-        handle_local_error("Could not create AutoModelForCausalLM, encountered error: ", e)
-
-    try:
-        print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
-    except Exception as e:
-        handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
-
-    try:
-        if push_to_hub:
-            if quant_level == "int8":
-                model.push_to_hub(model_id + "-Int8")
-            elif quant_level == "int4":
-                model.push_to_hub(model_id + "-Int4")
-    except Exception as e:
-        handle_error_no_return("Could not push the model to your hub, encountered error: ", e)
-
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-    except Exception as e:
-        handle_local_error("Could not set AutoTokenizer, encountered error: ", e)
-
-    print("\n\nInitializing pipeline\n\n")
-
-    try:
-        PIPE = pipeline(
-            pipeline_task,
-            model=model,
-            tokenizer=tokenizer,
-        )
-    except Exception as e:
-        handle_local_error("Could not create model PIPELINE, encountered error: ", e)
-
+            handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
+    
     print(f"\n{model_id} loaded successfully!\n")
 
-    return True
+    if push_to_hub:
+        try:
+            model.push_to_hub(f"{model_id}-{quant_level}")
+        except Exception as e:
+            handle_error_no_return("Could not push the model to your hub, encountered error: ", e)
 
+    return True
 
 
 def generate_flux_image(request):
