@@ -148,41 +148,32 @@ except Exception as e:
     print(f"\n\nCould not establish logger, encountered error: {e}")
 
 
-def handle_api_error(message, exception=None):
+def central_error_logging(message, exception=None):
     error_message = f"{message} {str(exception) if exception else '; No exception info.'}".strip()
     #traceback_details = traceback.format_exc()
     #full_message = f"\n\n{error_message}\n\nTraceback: {traceback_details}\n\n"
     full_message = f"\n\n{error_message}\n\n"
-
     if logger:
         logger.error(full_message)
         print(full_message)
     else:
         print(full_message)
+
+    return error_message
+
+
+def handle_api_error(message, exception=None):
+    error_message = central_error_logging(message, exception)
     return jsonify(success=False, error=error_message), 500 #internal server error
 
 
 def handle_local_error(message, exception=None):
-    error_message = f"{message} {str(exception) if exception else '; No exception info.'}".strip()
-    #traceback_details = traceback.format_exc()
-    full_message = f"\n\n{error_message}\n\n"
-    if logger:
-        logger.error(full_message)
-        print(full_message)
-    else:
-        print(full_message)
+    _ = central_error_logging(message, exception)
     raise Exception(exception)
 
 
 def handle_error_no_return(message, exception=None):
-    error_message = f"{message} {str(exception) if exception else '; No exception info.'}".strip()
-    #traceback_details = traceback.format_exc()
-    full_message = f"\n\n{error_message}\n\n"
-    if logger:
-        logger.error(full_message)
-        print(full_message)
-    else:
-        print(full_message)
+    _ = central_error_logging(message, exception)
 
 #########################-------------------------------------###############################
 
@@ -940,8 +931,8 @@ def get_vision_llm_request_params():
         handle_local_error("Missing OCR PDFs directory for PDFtoVisionLLMOCRTXT, please provide required API config. Error: ", e)
 
     ocr_prompt = f'''
-        Please OCR the attached image as accurately as possible and return the text extracted from it.
-        If the image contains a table, please include the cell-details, such as row and column indices, and column or row headers in the returned text.
+        Please OCR the attached image line-by-line as accurately as possible.
+        If the image contains a table, output cell contents with their row and column indices. Include row and column name headers too. Follow this formatting example: "Row 0 (name:<header-name>), Column 0 (name:<header-name>): <cell-data>; Row 0 (name:<header-name>), Column 1 (name:<header-name>): <cell-data>;" etc.
         The extracted text will be converted into embeddings and used for semantic search, so extracting as much detail as possible, while maintaining formatting integrity and tabular context is crucially important.
         Please output only the text extracted from the image, without any other text, code, or markup. Please no yapping!
         Don't even say stuff like "Here's the OCR'ed text from the image" or "Here's the text extracted from the image" or anything like that. Just output the text.
