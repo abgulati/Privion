@@ -194,7 +194,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'generated_images_folder':base_directory + '/generated_images',
                     'access_gated':False,
                     'access_token':"",
-                    'model_id':"microsoft/Phi-3-mini-4k-instruct",
+                    'model_id':"meta-llama/Llama-3.2-1B-Instruct",
                     'gguf':False,
                     'awq':False,
                     'flux_diffusers':False,
