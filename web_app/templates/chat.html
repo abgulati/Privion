@@ -215,7 +215,7 @@
                                         <div id="local_llm_server_select_div">
                                             <label style="margin-bottom: 3px;">Select an LLM Server:</label>
                                             <br>
-                                            <select class="modal-selects" name="local_llm_server_selector" id="local_llm_server_select_dropdown">
+                                            <select name="local_llm_server_selector" id="local_llm_server_select_dropdown" style="width: 100%; padding: 5px;">
                                                 <option value="hf-waitress">HF-Waitress</option>
                                                 <option value="llama-cpp">llama.cpp</option>
                                                 <!-- Add future servers here!-->
@@ -297,7 +297,7 @@
                                             <div class="hf-waitress-diffusers-configuration-div" id="hf-waitress-diffusers-configuration-div" style="display: none;">
                                                 
                                                 <div id="hf_waitress_diffusers_low_vram_optimizations">
-                                                    <label class="hf-select-settings-labels-group">Low VRAM Optimizations for FLUX Inferencing?</label>
+                                                    <label class="hf-select-settings-labels-group">Low VRAM Optimizations for FLUX - Enable CPU Offload, VAE Slicing & Tiling?</label>
                                                     <input type="radio" id="hf_waitress_diffusers_low_vram_optimizations_yes" name="hf_diffusers_use_low_vram_optimizations" value="y" style="margin-left: 7px;"> Yes (Default)
                                                     <input type="radio" id="hf_waitress_diffusers_low_vram_optimizations_no" name="hf_diffusers_use_low_vram_optimizations" value="n" style="margin-left: 7px;"> No
                                                 </div>
@@ -305,7 +305,7 @@
                                                 <br>
 
                                                 <div id="hf_waitress_diffusers_fp8">
-                                                    <label class="hf-select-settings-labels-group">FP8 Quantized FLUX Inferencing?</label>
+                                                    <label class="hf-select-settings-labels-group">FP8 Quantized FLUX Inferencing - GPU Inferencing Under 16GB VRAM?</label>
                                                     <input type="radio" id="hf_waitress_diffusers_fp8_yes" name="hf_diffusers_use_fp8" value="y" style="margin-left: 7px;"> Yes
                                                     <input type="radio" id="hf_waitress_diffusers_fp8_no" name="hf_diffusers_use_fp8" value="n" style="margin-left: 7px;"> No (Default)
                                                 </div>
@@ -322,35 +322,35 @@
 
                                                 <div id="hf_waitress_diffusers_height" class="restart-settings-group">
                                                     <label for="HfDHeight" class="hf-select-settings-labels-group">Height (Y-Height): </label>
-                                                    <input type="number" id="HfDHeight" min="0" style="width: 15%;" value="768">
+                                                    <input type="number" id="HfDHeight" min="0" class="settings-input-fields" value="768">
                                                 </div>
 
                                                 <br>
 
                                                 <div id="hf_waitress_diffusers_width" class="restart-settings-group">
                                                     <label for="HfDWidth" class="hf-select-settings-labels-group">Width (X-Width): </label>
-                                                    <input type="number" id="HfDWidth" min="0" style="width: 15%;" value="1360">
+                                                    <input type="number" id="HfDWidth" min="0" class="settings-input-fields" value="1360">
                                                 </div>
 
                                                 <br>
                                                 
                                                 <div id="hf_waitress_diffusers_num_inference_steps" class="restart-settings-group">
                                                     <label for="HfDNumInfSteps" class="hf-select-settings-labels-group">Number of Inference Steps (X-Num-Inference-Steps): </label>
-                                                    <input type="number" id="HfDNumInfSteps" min="0" style="width: 15%;" value="3">
+                                                    <input type="number" id="HfDNumInfSteps" min="0" class="settings-input-fields" value="3">
                                                 </div>
 
                                                 <br>
 
                                                 <div id="hf_waitress_diffusers_sequence_length" class="restart-settings-group">
                                                     <label for="HfDSeqLen" class="hf-select-settings-labels-group">Sequence Length (X-Max-Sequence-Length): </label>
-                                                    <input type="number" id="HfDSeqLen" min="0"  max="65535" style="width: 15%;" value="256">
+                                                    <input type="number" id="HfDSeqLen" min="0"  max="65535" class="settings-input-fields" value="256">
                                                 </div>
 
                                                 <br>
 
                                                 <div id="hf_waitress_diffusers_num_images_per_prompt" class="restart-settings-group">
                                                     <label for="HfDNumImgPerPrompt" class="hf-select-settings-labels-group">Number of Images per Prompt (X-Num-Images-Per-Prompt): </label>
-                                                    <input type="number" id="HfDNumImgPerPrompt" min="0"  max="10" style="width: 15%;" value="1">
+                                                    <input type="number" id="HfDNumImgPerPrompt" min="0"  max="10" class="settings-input-fields" value="1">
                                                 </div>
 
                                             </div>
@@ -488,14 +488,14 @@
             
                                                         <div id="hf_waitress_hqq_group_size" class="restart-settings-group">
                                                             <label for="HfwHqqGroupSize" class="hf-select-settings-labels-group">HQQ Group Size (must be divisible by group_size) (--hqq_group_size): </label>
-                                                            <input type="number" id="HfwHqqGroupSize" min="0" style="width: 15%;" value="64">
+                                                            <input class="settings-input-fields" type="number" id="HfwHqqGroupSize" min="0" value="64">
                                                         </div>
 
                                                         <br>
         
                                                         <div id="hf_waitress_port" class="restart-settings-group">
                                                             <label for="HfwPort" class="hf-select-settings-labels-group">HF-Waitress Server Port (default: 9069) (--port): </label>
-                                                            <input type="number" id="HfwPort" min="0"  max="65535" style="width: 15%;" value="9069">
+                                                            <input class="settings-input-fields" type="number" id="HfwPort" min="0"  max="65535" value="9069">
                                                         </div>
         
                                                         <br>
@@ -510,7 +510,7 @@
             
                                                     <div id="hf_waitress_max_new_tokens">
                                                         <label for="HfwMaxNewToks" class="hf-select-settings-labels-group">Maximum New Tokens (X-Max-New-Tokens): </label>
-                                                        <input type="number" id="HfwMaxNewToks" min="100" style="width: 15%;" value="500">
+                                                        <input type="number" id="HfwMaxNewToks" min="100" class="settings-input-fields" value="500">
                                                     </div>
 
                                                     <br>
@@ -617,21 +617,21 @@
                                                             <input type="radio" id="gpu_radio_yes" name="use_gpu" value="y" style="margin-left: 7px;"> Yes (NvCUDA)
                                                             <input type="radio" id="gpu_radio_no" name="use_gpu" value="n" style="margin-left: 7px;"> No
                                                             <br><label for="NumbGpuLayers">Number of Model-layers to offload to the GPU (-ngl): </label>
-                                                            <input type="number" id="NumbGpuLayers" name="NumbGpuLayers" min="-1" style="width: 15%;" value="47">
+                                                            <input type="number" id="NumbGpuLayers" name="NumbGpuLayers" min="-1" class="settings-input-fields" value="47">
                                                         </div>
             
                                                         <br>
             
                                                         <div id="ctx_length" class="restart-settings-group">
                                                             <label for="LlmCtxLgt">Context-Length (-c): </label>
-                                                            <input type="number" id="LlmCtxLgt" name="LlmCtxLgt" min="128" style="width: 15%;" value="8192">
+                                                            <input type="number" id="LlmCtxLgt" name="LlmCtxLgt" min="128" class="settings-input-fields" value="8192">
                                                         </div>
             
                                                         <br>
             
                                                         <div id="llm_max_new_tokens" class="restart-settings-group">
                                                             <label for="MaxNewToks">Maximum tokens to predict (-n): </label>
-                                                            <input type="number" id="MaxNewToks" name="MaxNewToks" min="-1" style="width: 15%;" value="2048">
+                                                            <input type="number" id="MaxNewToks" name="MaxNewToks" min="-1" class="settings-input-fields" value="2048">
                                                         </div>
         
                                                         <br>
@@ -678,7 +678,7 @@
         
                                                     <div id="nkeep_value">
                                                         <label for="nkeepSlider">Prompt-tokens retained when context-size exceeded (n_keep, -1 to retain all): </label>
-                                                        <input type="number" id="nkeepSlider" name="nkeepSlider" min="-1" style="width: 15%;" value="0">
+                                                        <input type="number" id="nkeepSlider" name="nkeepSlider" min="-1" class="settings-input-fields" value="0">
                                                     </div>
                                                     
                                                 </div>
@@ -735,7 +735,7 @@
                                     <div id="embed_model_choice">
                                         <label style="margin-bottom: 3px;">Select an Embedding Model:</label>
                                         <br>
-                                        <select class="modal-selects" name="specify_embedding_model" id="embedding_model_dropdown">
+                                        <select class="modal-selects" name="specify_embedding_model" id="embedding_model_dropdown" style="width: 100%;">
                                             <option value="bge_large">BGE-Large</option>
                                             <option value="bge_base">BGE-Base</option>
                                             <option value="sbert_mpnet_base_v2">SBERT: all-mpnet-base-v2</option>
@@ -800,6 +800,15 @@
                                     <!--Option 3 Content-->
                                     <h5>Edit System Prompt</h5>
 
+                                    <br>
+
+                                    <div class="form-group">
+                                        <input type="checkbox" id="skip_system_prompt_checkbox" name="skip_system_prompt">
+                                        <label for="skip_system_prompt_checkbox">Skip System Prompt</label>
+                                    </div>
+
+                                    <br>
+
                                     <!--Dropdown-->
                                     <div class="dropdown">
                                         <button class="btn btn-secondary dropdown-toggle" type="button" id="templateDropdown" data-bs-toggle="dropdown" aria-expanded="false">
@@ -846,7 +855,14 @@
                                     <h5>Optical Character Recognition (OCR): Specify Usage & Service</h5>
 
                                     <br>
+
+                                    <div class="form-group">
+                                        <input type="checkbox" id="force_extract_previously_extracted_text_checkbox" name="force_extract_previously_extracted_text">
+                                        <label for="force_extract_previously_extracted_text_checkbox">Force Extract Previously Extracted Text</label>
+                                    </div>
                                     
+                                    <br>
+
                                     <div id="ocr_use_choice" class="modal-selection-radios">
                                         <label for="ocr_yes_radio_button" style="flex: 1;">
                                             <input type="radio" id="ocr_yes_radio_button" name="specify_ocr_and_service" value="ocr"> Use OCR Service Specified Below
@@ -861,7 +877,7 @@
                                     <div id="apiOcrSelection" style="display: none;">
                                         <label style="margin-bottom: 3px;">Select an OCR Service:</label>
                                         <br>
-                                        <select class="modal-selects" name="ocr_api_choice" id="ocrApiDropdown">
+                                        <select class="modal-selects" name="ocr_api_choice" id="ocrApiDropdown" style="width: 100%;">
                                             <option value="">Please select</option>
                                             <option value="AzureVision">Azure Vision Service OCR</option>
                                             <option value="AzureDocAi">Azure Document Intelligence AI OCR</option>
