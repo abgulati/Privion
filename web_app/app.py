@@ -14,19 +14,10 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload, MediaDownloadProgress
 
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
-from langchain.memory import ConversationSummaryBufferMemory
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.embeddings import OpenAIEmbeddings
-from langchain.document_loaders import TextLoader
-from langchain.prompts import PromptTemplate
 from langchain.vectorstores import Chroma
-from langchain.chains import RetrievalQA
-from langchain.chains import ConversationChain
-
-from langchain.chat_models import AzureChatOpenAI
-from langchain.schema import HumanMessage
 
 from pdf2image import convert_from_path
 from PIL import Image
