@@ -79,6 +79,7 @@ function getVectorEmbeddingsConfig() {
 
 
 function getSysPromptConfig() {
+    const skip_system_prompt = document.getElementById('skip_system_prompt_checkbox').checked;
     const selectedTemplateName = document.getElementById('templateDropdown').textContent.trim();
     let prompt_template;
 
@@ -91,7 +92,7 @@ function getSysPromptConfig() {
             break;
     }
 
-    return {'base_template': prompt_template};
+    return {'base_template': prompt_template, 'skip_system_prompt': skip_system_prompt};
 }
 
 
@@ -116,10 +117,12 @@ function getOcrConfig() {
     const update_azure_vision_config = document.getElementById('update_azure_vision').checked;
     const update_azure_doc_ai_config = document.getElementById('update_azure_doc_ai').checked;
     const update_local_vision_config = document.getElementById('update_local_vision_config').checked;
+    const force_extract_previously_extracted_text = document.getElementById('force_extract_previously_extracted_text_checkbox').checked;
 
     let config = {
         'ocr_service_choice': 'None',
-        'use_ocr': false
+        'use_ocr': false,
+        'force_extract_previously_extracted_text': force_extract_previously_extracted_text
     };
 
     if (window.getComputedStyle(azure_ocr_form).display != 'none') {

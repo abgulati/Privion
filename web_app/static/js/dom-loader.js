@@ -43,7 +43,30 @@ function setUIValues(values) {
 
 
 function loadAndSetCoreValues() {
-    const initKeysToRead = ['local_llm_server', 'model_choice', 'use_local_llm', 'use_gpu', 'embedding_model_choice', 'use_ocr', 'ocr_service_choice', 'local_llm_chat_template_format', 'force_enable_rag', 'force_disable_rag', 'base_template', 'local_llm_gpu_layers', 'local_llm_context_length', 'local_llm_max_new_tokens', 'local_llm_temperature', 'local_llm_top_k', 'local_llm_top_p', 'local_llm_min_p', 'local_llm_n_keep', 'azure_cv_free_tier']
+    const initKeysToRead = [
+        'local_llm_server',
+        'model_choice',
+        'use_local_llm',
+        'use_gpu',
+        'embedding_model_choice',
+        'use_ocr',
+        'ocr_service_choice',
+        'local_llm_chat_template_format',
+        'force_enable_rag',
+        'force_disable_rag',
+        'base_template',
+        'local_llm_gpu_layers',
+        'local_llm_context_length',
+        'local_llm_max_new_tokens',
+        'local_llm_temperature',
+        'local_llm_top_k',
+        'local_llm_top_p',
+        'local_llm_min_p',
+        'local_llm_n_keep',
+        'azure_cv_free_tier',
+        'skip_system_prompt',
+        'force_extract_previously_extracted_text'
+    ]
     
     return fetch('/config_reader_api', {
         method: 'POST',
@@ -689,6 +712,9 @@ function initializeSystemPromptTabListeners(base_template) {
 function initializeSystemPromptTabComponents(values) {
     setDefaultTemplate();   // Set the default template when the page loads
     initializeSystemPromptTabListeners(values.base_template);
+    if (values.skip_system_prompt) {
+        document.getElementById('skip_system_prompt_checkbox').checked = true;
+    }
 }
 
 
@@ -803,6 +829,9 @@ function initializeOCRTabListeners() {
 function initializeOCRTabComponents(values) {
     initializeOCRTabRadios(values.use_ocr, values.ocr_service_choice, values.azure_cv_free_tier);
     initializeOCRTabListeners();
+    if (values.force_extract_previously_extracted_text) {
+        document.getElementById('force_extract_previously_extracted_text_checkbox').checked = true;
+    }
 }
 
 
