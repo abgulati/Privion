@@ -192,7 +192,17 @@ def write_config(config_updates, filename='config.json'):
         
     restart_required = False
     if LLM_LOADED_UP:
-        llm_trigger_keys_for_app_restart = ['use_local_llm', 'local_llm_server', 'use_azure_open_ai', 'use_gpu', 'model_choice', 'local_llm_chat_template_format', 'local_llm_context_length', 'local_llm_max_new_tokens', 'local_llm_gpu_layers', 'base_template']
+        llm_trigger_keys_for_app_restart = ['use_local_llm',
+        'local_llm_server',
+        'use_azure_open_ai',
+        'use_gpu',
+        'model_choice',
+        'local_llm_chat_template_format',
+        'local_llm_context_length',
+        'local_llm_max_new_tokens',
+        'local_llm_gpu_layers',
+        'base_template',
+        'skip_system_prompt']
                 
         for key in llm_trigger_keys_for_app_restart:
             if key in config_updates and config_updates[key] != config.get(key):
@@ -284,6 +294,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'embedding_model_choice':'sbert_mpnet_base_v2',
                 'use_ocr':False,
                 'ocr_service_choice':'None',
+                'force_extract_previously_extracted_text':False,
                 'local_llm_model_type':'llama',
                 'local_llm_chat_template_format':'llama3',
                 'local_llm_context_length':8192,
@@ -301,6 +312,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'fetch_top_k_results_from_vectordb':75,
                 'filter_top_k_results_by_reranking':20,
                 'base_template':"Answer the user's question in as much detail as possible. Be as accurate as possible. Do not make up answers or fabricate false information! Whenever additional context is provided, mention the document names and page numbers the user should reference as per your best judgement.",
+                'skip_system_prompt':False
             }.get(key, 'undefined')
 
             if default_value == 'undefined':
@@ -687,10 +699,11 @@ def PDFtoAzureDocAiTXT(input_filepath):
     print("\n\nProcessing Document - PDF to Azure DocAI TXT\n\n")
     
     try:
-        read_return = read_config(['azure_doc_ai_endpoint', 'azure_doc_ai_subscription_key', 'ocr_pdfs'])
+        read_return = read_config(['azure_doc_ai_endpoint', 'azure_doc_ai_subscription_key', 'ocr_pdfs', 'force_extract_previously_extracted_text'])
         azure_doc_ai_endpoint = read_return['azure_doc_ai_endpoint']
         azure_doc_ai_subscription_key = read_return['azure_doc_ai_subscription_key']
         ocr_pdfs = read_return['ocr_pdfs']
+        force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
     except Exception as e:
         handle_local_error("Missing Azure OCR Endpoint URL & Subscription Key for PDFtoAzureDocAiTXT, please provide required API config. Error: ", e)
 
@@ -703,7 +716,7 @@ def PDFtoAzureDocAiTXT(input_filepath):
     output_text_file_name = source_filename.replace(".pdf",".txt")
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
-    if os.path.exists(output_text_file_path):
+    if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
         print("Azure-OCR'ed doc already exists! Returning existing file.")
         return output_text_file_path
 
@@ -800,11 +813,12 @@ def PDFtoAzureOCRTXT(input_filepath):
     print("\n\nProcessing Document - PDF to Azure OCR TXT\n\n")
     
     try:
-        read_return = read_config(['azure_ocr_endpoint', 'azure_ocr_subscription_key', 'ocr_pdfs', 'azure_cv_free_tier'])
+        read_return = read_config(['azure_ocr_endpoint', 'azure_ocr_subscription_key', 'ocr_pdfs', 'azure_cv_free_tier', 'force_extract_previously_extracted_text'])
         azure_ocr_endpoint = read_return['azure_ocr_endpoint']
         azure_ocr_subscription_key = read_return['azure_ocr_subscription_key']
         ocr_pdfs = read_return['ocr_pdfs']
         azure_cv_free_tier = read_return['azure_cv_free_tier']
+        force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
     except Exception as e:
         handle_local_error("Missing Azure OCR Endpoint URL & Subscription Key for PDFtoAzureOCRTXT, please provide required API config. Error: ", e)
 
@@ -817,7 +831,7 @@ def PDFtoAzureOCRTXT(input_filepath):
     output_text_file_name = source_filename.replace(".pdf",".txt")
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
-    if os.path.exists(output_text_file_path):
+    if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
         print("OCR'ed doc already exists! Returning existing file.")
         return output_text_file_path
 
@@ -964,8 +978,9 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
         handle_error_no_return("Could not check if HF-Waitress Server is Online, presuming online and proceeding. Encountered error: ", e)
 
     try:
-        read_return = read_config(['ocr_pdfs'])
+        read_return = read_config(['ocr_pdfs', 'force_extract_previously_extracted_text'])
         ocr_pdfs = read_return['ocr_pdfs']
+        force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
     except Exception as e:
         handle_local_error("Missing OCR PDFs directory for PDFtoVisionLLMOCRTXT, please provide required API config. Error: ", e)
 
@@ -978,7 +993,7 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
     output_text_file_name = source_filename.replace(".pdf",".txt")
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
-    if os.path.exists(output_text_file_path):
+    if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
         print("OCR'ed doc already exists! Returning existing file.")
         return output_text_file_path
 
@@ -1056,8 +1071,9 @@ def PDFtoTXT(input_file):
     print("\n\nProcessing Document - PDF to TXT\n\n")
 
     try:
-        read_return = read_config(['pdfs_to_txts'])
+        read_return = read_config(['pdfs_to_txts', 'force_extract_previously_extracted_text'])
         pdfs_to_txts = read_return['pdfs_to_txts']
+        force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
     except Exception as e:
         handle_local_error("Missing pdfs_to_txts directory for PDFtoTXT in config.json, encountered error: ", e)
     
@@ -1082,7 +1098,7 @@ def PDFtoTXT(input_file):
     output_text_file_name = source_filename.replace(".pdf",".txt")
     output_text_file_path = os.path.join(pdfs_to_txts, output_text_file_name).replace("\\","/")
 
-    if os.path.exists(output_text_file_path):
+    if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
         print("PyPDF2-extracted .txt already exists! Returning existing file.")
         return output_text_file_path
 
@@ -3457,7 +3473,7 @@ def format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_i
     return formatted_prompt
 
 
-def format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, flux_diffusers, vision):
+def format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, flux_diffusers, vision, skip_system_prompt):
 
     print("\n\nFormatting prompt for hf-waitress\n\n")
 
@@ -3482,7 +3498,7 @@ def format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence
                 formatted_prompt = updated_history_prompt_json  # return json object
             else:
                 formatted_prompt = str(updated_history_prompt_json)
-        else:
+        else:   # first message in chat
             if vision:
                 formatted_prompt = {
                     "messages": [
@@ -3497,14 +3513,23 @@ def format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence
                 }
                 formatted_prompt = json.dumps(formatted_prompt) # Convert to a JSON string
             else:
-                first_prompt_json = f'''
-                {{
-                        "messages": [
-                            {{"role": "system", "content": {json.dumps(base_template)}}},
-                            {{"role": "user", "content": {json.dumps(user_query)}}}
-                        ]
-                    }}
-                '''
+                if skip_system_prompt:
+                    first_prompt_json = f'''
+                    {{
+                            "messages": [
+                                {{"role": "user", "content": {json.dumps(user_query)}}}
+                            ]
+                        }}
+                    '''
+                else:
+                    first_prompt_json = f'''
+                    {{
+                            "messages": [
+                                {{"role": "system", "content": {json.dumps(base_template)}}},
+                                {{"role": "user", "content": {json.dumps(user_query)}}}
+                            ]
+                        }}
+                    '''                    
 
                 formatted_prompt = str(first_prompt_json)
 
@@ -3566,7 +3591,18 @@ def setup_for_llama_cpp_response():
 
     # Determine do_rag
     try:
-        read_return = read_config(['local_llm_server', 'use_sbert_embeddings', 'use_openai_embeddings', 'use_bge_base_embeddings', 'use_bge_large_embeddings', 'force_enable_rag', 'force_disable_rag', 'local_llm_chat_template_format', 'base_template', 'fetch_top_k_results_from_vectordb', 'filter_top_k_results_by_reranking'])
+        read_return = read_config(['local_llm_server',
+            'use_sbert_embeddings', 
+            'use_openai_embeddings', 
+            'use_bge_base_embeddings', 
+            'use_bge_large_embeddings',
+            'force_enable_rag', 
+            'force_disable_rag', 
+            'local_llm_chat_template_format', 
+            'base_template',
+            'fetch_top_k_results_from_vectordb', 
+            'filter_top_k_results_by_reranking', 
+            'skip_system_prompt'])
         use_sbert_embeddings = read_return['use_sbert_embeddings']
         use_openai_embeddings = read_return['use_openai_embeddings']
         use_bge_base_embeddings = read_return['use_bge_base_embeddings']
@@ -3578,7 +3614,7 @@ def setup_for_llama_cpp_response():
         local_llm_server = read_return['local_llm_server']
         fetch_top_k_results_from_vectordb = read_return['fetch_top_k_results_from_vectordb']
         filter_top_k_results_by_reranking = read_return['filter_top_k_results_by_reranking']
-
+        skip_system_prompt = str(read_return['skip_system_prompt']).lower() == 'true'
     except Exception as e:
         return handle_api_error("Missing values in config.json when attempting to setup_for_streaming_response. Error: ", e)
 
@@ -3628,7 +3664,7 @@ def setup_for_llama_cpp_response():
             if flux_diffusers:
                 print("Flux diffusers detected, preparing accordingly")
                 try:
-                    formatted_prompt = format_prompt_for_hf_waitress("", user_query, 0, "", True, False)
+                    formatted_prompt = format_prompt_for_hf_waitress("", user_query, 0, "", True, False, True)
                     local_llm_server = 'hfw-diffusers'
                     print("Returning diffusers formatted_prompt: ", formatted_prompt)
                     return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
@@ -3640,7 +3676,7 @@ def setup_for_llama_cpp_response():
                 local_llm_server = 'hfw-vision'
                 if file_attached:
                     try:
-                        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True)
+                        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True, True)
                     except Exception as e:
                         return handle_api_error("Could not format prompt for Vision-LLM in method setup_for_llama_cpp_response, encountered error: ", e)
                     print("File attached to request, returning vision formatted_prompt: ", formatted_prompt)
@@ -3719,9 +3755,9 @@ def setup_for_llama_cpp_response():
     if local_llm_server == 'llama-cpp':
         formatted_prompt = format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format)
     elif local_llm_server == 'hf-waitress':
-        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, False, False)
+        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, False, False, skip_system_prompt)
     elif local_llm_server == 'hfw-vision':
-        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True)
+        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True, True)
 
     print("Returning formatted_prompt: ", formatted_prompt)
 
