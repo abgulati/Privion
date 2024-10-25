@@ -227,6 +227,7 @@ function createDownloadLinkForFile(filename) {
 
 
 function createDownloadContainerForFile(filename) {
+    filename = secure_filename(filename);       // get secure filename similar to how it's done in Python - to prevent directory traversal attacks. secure_filename() is implemented in helper-functions.js
     const downloadContainer = document.createElement('div');
     downloadContainer.classList.add('download-container-for-vision-appended-file');
 

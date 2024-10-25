@@ -1063,3 +1063,25 @@ function showStopGenerationButton() {
 function hideStopGenerationButton() {
     document.getElementById('stopGenerationButton').style.display = 'none';
 }
+
+
+function secure_filename(filename) {
+    // Remove non-ASCII characters
+    filename = filename.replace(/[^\x00-\x7F]/g, '');
+    
+    // Replace spaces with underscores
+    filename = filename.replace(/\s+/g, '_');
+    
+    // Remove any other potentially dangerous characters
+    filename = filename.replace(/[^a-zA-Z0-9._-]/g, '');
+    
+    // Remove leading underscores (to match Python's secure_filename behavior)
+    filename = filename.replace(/^_+/, '');
+    
+    // Ensure the filename isn't empty after cleaning
+    if (!filename) {
+        filename = 'file';
+    }
+    
+    return filename;
+}
