@@ -187,14 +187,14 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                 return_dict[key] = hf_config[key]
             else:
                 default_value = {
-                    'windows_base_directory':'M:/Storage/waitress_storage',
+                    'windows_base_directory':'C:/waitress_storage',
                     'unix_and_docker_base_directory':'/app/waitress_storage',
                     'mac_base_directory':'waitress_storage',
                     'upload_folder':base_directory + '/uploaded_files_for_vision_inferencing',
                     'generated_images_folder':base_directory + '/generated_images',
                     'access_gated':False,
                     'access_token':"",
-                    'model_id':"meta-llama/Llama-3.2-1B-Instruct",
+                    'model_id':"microsoft/Phi-3-mini-4k-instruct",
                     'gguf':False,
                     'awq':False,
                     'flux_diffusers':False,
