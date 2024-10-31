@@ -881,6 +881,7 @@
                                             <option value="">Please select</option>
                                             <option value="AzureVision">Azure Vision Service OCR</option>
                                             <option value="AzureDocAi">Azure Document Intelligence AI OCR</option>
+                                            <option value="Kosmos">Kosmos OCR</option>
                                             <option value="LocalVisionLLM">Local Vision OCR</option>
                                             <!-- Add more OCR services here!-->
                                         </select>
@@ -893,14 +894,17 @@
                                             <input type="checkbox" id="update_azure_vision" name="update_azure_vision">
                                             <label for="update_azure_vision"> Update Configuration</label>
                                         </div>
+                                        <br>
                                         <div class="form-group">
                                             <input type="checkbox" id="is_azure_cv_free_tier" name="is_azure_cv_free_tier" disabled>
                                             <label for="is_azure_cv_free_tier"> Free Tier?</label>
                                         </div>
+                                        <br>
                                         <div class="form-group">
                                             <label for="azure_vision_api_url">Azure Vision OCR Endpoint:</label>
                                             <input type="text" id="azure_vision_api_url" name="azure_vision_api_url" disabled>
                                         </div>
+                                        <br>
                                         <div class="form-group">
                                             <label for="azure_vision_api_key">Azure Vision OCR Key:</label>
                                             <input type="text" id="azure_vision_api_key" name="azure_vision_api_key" disabled>
@@ -913,10 +917,12 @@
                                             <input type="checkbox" id="update_azure_doc_ai" name="update_azure_doc_ai">
                                             <label for="update_azure_doc_ai">Update Configuration</label>
                                         </div>
+                                        <br>
                                         <div class="form-group">
                                             <label for="azure_doc_ai_api_url">Azure Document-Intelligence AI OCR Endpoint:</label>
                                             <input type="text" id="azure_doc_ai_api_url" name="azure_doc_ai_api_url" disabled>
                                         </div>
+                                        <br>
                                         <div class="form-group">
                                             <label for="azure_doc_ai_api_key">Azure Document-Intelligence AI OCR Key:</label>
                                             <input type="text" id="azure_doc_ai_api_key" name="azure_doc_ai_api_key" disabled>
@@ -929,10 +935,38 @@
                                             <input type="checkbox" id="update_local_vision_config" name="update_local_vision_config">
                                             <label for="update_local_vision_config">Update Configuration</label>
                                         </div>
+                                        <br>
                                         <div class="form-group">
                                             <label for="local_vision_api_url">Local Vision OCR Endpoint:</label>
                                             <input type="text" id="local_vision_api_url" name="local_vision_api_url" disabled>
                                         </div>
+                                        <br>
+                                    </form>
+
+                                    <form action="" class="api_form" id="kosmos_api_form" style="display: none;">
+                                        <div class="form-group">
+                                            <input type="checkbox" id="update_kosmos_url_config" name="update_kosmos_url_config">
+                                            <label for="update_kosmos_url_config">Update Kosmos URL Configuration</label>
+                                        </div>
+                                        <br>
+                                        <div class="form-group">
+                                            <label for="kosmos_api_url">Kosmos OCR Endpoint:</label>
+                                            <input type="text" id="kosmos_api_url" name="kosmos_api_url" disabled>
+                                        </div>
+                                        <br>
+                                        <div class="form-group">
+                                            <label for="kosmos_task">Task:</label>
+                                            <select id="kosmos_task" name="kosmos_task" class="modal-selects">
+                                                <option value="ocr" selected>OCR (Default)</option>
+                                                <option value="md">MD</option>
+                                            </select>
+                                        </div>
+                                        <br>
+                                        <div class="form-group">
+                                            <label for="kosmos_threshold" class="hf-select-settings-labels-group">Threshold:</label>
+                                            <input type="number" id="kosmos_threshold" class="settings-input-fields" min="0" max="100" value="20">
+                                        </div>
+                                        <br>
                                     </form>
 
                                 </div>
