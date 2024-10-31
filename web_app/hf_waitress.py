@@ -490,7 +490,7 @@ def hf_login_for_gated_models():
         handle_api_error("403 - No access token found, please submit an access token via the /hf_login endpoint")
 
     try:
-        login(token=access_token)
+        login(token=access_token)   # imported from huggingface_hub
     except Exception as e:
         handle_api_error("Unable to login to the HuggingFace-Hub, please ensure the correct access token has been provided. Encountered error: ", e)
 
