@@ -275,6 +275,9 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'local_llm_server':'hf-waitress',
                 'model_choice':'Meta-Llama-3-8B-Instruct.f16.gguf',
                 'vision_llm_local_url':"http://localhost:9069/completions",
+                'kosmos_local_url':"http://localhost:25000/infer_file_stream",
+                'kosmos_task':'ocr',
+                'kosmos_threshold':20,
                 'do_rag':True,
                 'force_enable_rag':False,
                 'force_disable_rag':False,
@@ -1061,6 +1064,106 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
             continue
     
      # Close all files
+    output_text_file.close()
+
+    return output_text_file_path
+
+
+def get_kosmos_request_params():
+    try:
+        read_return = read_config(['kosmos_local_url', 'kosmos_task', 'kosmos_threshold'])
+        kosmos_local_url = read_return['kosmos_local_url']
+        kosmos_task = read_return['kosmos_task']
+        kosmos_threshold = read_return['kosmos_threshold']
+    except Exception as e:
+        handle_local_error("Missing Kosmos API config, please provide required API config. Error: ", e)
+
+    payload = {
+        'task': kosmos_task,
+        'threshold': kosmos_threshold
+    }
+
+    headers = {}
+
+    return kosmos_local_url, payload, headers
+
+
+def PDFtoKosmosOCRTXT(input_filepath):
+
+    print("\n\nProcessing Document - PDF to Kosmos OCR TXT\n\n")
+
+    try:
+        read_return = read_config(['ocr_pdfs', 'force_extract_previously_extracted_text'])
+        ocr_pdfs = read_return['ocr_pdfs']
+        force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
+    except Exception as e:
+        handle_local_error("Missing OCR PDFs directory for PDFtoKosmosOCRTXT, please provide required API config. Error: ", e)
+
+    try:
+        source_filename = os.path.basename(input_filepath)
+    except Exception as e:
+        handle_local_error("Could not extract filename, encountered error: ", e)
+
+    # Set output path
+    output_text_file_name = source_filename.replace(".pdf",".txt")
+    output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
+
+    if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
+        print("OCR'ed doc already exists! Returning existing file.")
+        return output_text_file_path
+    
+    # Initialize text output
+    try:
+        output_text_file = open(output_text_file_path, 'w', encoding='utf-8')
+    except Exception as e:
+        handle_local_error("Could not initialize/access output text file, encountered error: ", e)
+
+    try:
+        kosmos_local_url, payload, headers = get_kosmos_request_params()
+    except Exception as e:
+        return handle_local_error("Could not get Kosmos request parameters, encountered error: ", e)
+
+    try:
+        print("\nPreparing file payload for Kosmos\n")
+        file_payload = [
+            ('file', (source_filename, open(input_filepath,'rb'),'application/pdf'))
+        ]
+    except Exception as e:
+        handle_error_no_return("Could not prepare file payload for Kosmos, encountered error: ", e)
+
+    # Send request to Kosmos and open an event stream to receive the response
+    page_number = 0
+    try:
+        print("\nSending request to Kosmos\n")
+        with requests.post(kosmos_local_url, headers=headers, data=payload, files=file_payload, stream=True) as response:
+            response.raise_for_status() # Raise an exception for bad 4xx or 5xx status codes
+
+            print("\nReceiving event-streaming response from Kosmos\n")
+            for event in response.iter_lines(decode_unicode=True):
+                if event:
+                    if event.startswith('data:'):
+                        event_data = event[5:].strip()
+                        try:
+                            json_data = json.loads(event_data)
+                            if 'full_parsed_text' in json_data:
+                                page_number += 1
+                                full_parsed_text = json_data['full_parsed_text']
+                                print(f"\n\nWriting full_parsed_text to output text file: {full_parsed_text}\n\n")
+                                output_text_file.write(f"[PAGE:{page_number}]\n{full_parsed_text}\n")
+                            else:
+                                print(f"\n\nReceived plain-text event from Kosmos: {event_data}\n\n")
+                        except json.JSONDecodeError as e:
+                            print(f"\n\nCould not parse event from Kosmos as JSON dictionary, encountered error: {e}\n\n")
+                            print(f"\n\nReceived plain-text event from Kosmos: {event}\n\n")
+                        except Exception as e:
+                            handle_error_no_return("Could not process event from Kosmos, encountered error: ", e)
+    
+    except requests.exceptions.RequestException as e:
+        handle_local_error("Could not send request to Kosmos, encountered error: ", e)
+    except Exception as e:
+        handle_error_no_return("Could not send request to Kosmos, encountered error: ", e)
+
+    # Close all files
     output_text_file.close()
 
     return output_text_file_path
@@ -2115,6 +2218,8 @@ def document_extractor_and_loader(filename, filepath):
                 input_file = PDFtoAzureDocAiTXT(filepath)
             elif ocr_service_choice == 'LocalVisionLLM':
                 input_file = PDFtoVisionLLMOCRTXT(filepath)
+            elif ocr_service_choice == 'Kosmos':
+                input_file = PDFtoKosmosOCRTXT(filepath)
         except Exception as e:
             handle_error_no_return("Failed to OCR text from PDF. Will now attempt to extract text via PyPDF2. Encountered error: ", e)
             try:
