@@ -114,9 +114,11 @@ function getOcrConfig() {
     const azure_ocr_form = document.getElementById("azure_vision_api_form");
     const azure_doc_ai_form = document.getElementById("azure_doc_ai_api_form");
     const local_vision_form = document.getElementById("local_vision_api_form");
+    const kosmos_form = document.getElementById("kosmos_api_form");
     const update_azure_vision_config = document.getElementById('update_azure_vision').checked;
     const update_azure_doc_ai_config = document.getElementById('update_azure_doc_ai').checked;
     const update_local_vision_config = document.getElementById('update_local_vision_config').checked;
+    const update_kosmos_url_config = document.getElementById('update_kosmos_url_config').checked;
     const force_extract_previously_extracted_text = document.getElementById('force_extract_previously_extracted_text_checkbox').checked;
 
     let config = {
@@ -146,6 +148,14 @@ function getOcrConfig() {
         if (update_local_vision_config) {
             config.local_vision_endpoint = document.getElementById("local_vision_api_url").value;
         }
+    } else if (window.getComputedStyle(kosmos_form).display != 'none') {
+        config.ocr_service_choice = 'Kosmos';
+        config.use_ocr = true;
+        if (update_kosmos_url_config) {
+            config.kosmos_local_url = document.getElementById("kosmos_api_url").value;
+        }
+        config.kosmos_task = document.getElementById("kosmos_task").value;
+        config.kosmos_threshold = document.getElementById("kosmos_threshold").value;
     }
 
     return config;
