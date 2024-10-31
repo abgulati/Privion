@@ -65,7 +65,11 @@ function loadAndSetCoreValues() {
         'local_llm_n_keep',
         'azure_cv_free_tier',
         'skip_system_prompt',
-        'force_extract_previously_extracted_text'
+        'force_extract_previously_extracted_text',
+        'vision_llm_local_url',
+        'kosmos_local_url',
+        'kosmos_task',
+        'kosmos_threshold'
     ]
     
     return fetch('/config_reader_api', {
@@ -792,6 +796,7 @@ function toggleOcrApiForm() {   //Show or hide API form:
     document.getElementById('azure_vision_api_form').style.display = selection === 'AzureVision' ? 'block' : 'none';
     document.getElementById('azure_doc_ai_api_form').style.display = selection === 'AzureDocAi' ? 'block' : 'none';
     document.getElementById('local_vision_api_form').style.display = selection === 'LocalVisionLLM' ? 'block' : 'none';
+    document.getElementById('kosmos_api_form').style.display = selection === 'Kosmos' ? 'block' : 'none';
     //Add more API form selectors here
 }
 
@@ -808,6 +813,9 @@ function initializeOCRTabListeners() {
     });
     document.getElementById('update_local_vision_config').addEventListener('change', function() {
         document.getElementById('local_vision_api_url').disabled = !this.checked;
+    });
+    document.getElementById('update_kosmos_url_config').addEventListener('change', function() {
+        document.getElementById('kosmos_api_url').disabled = !this.checked;
     });
 
     // Event listener for radio buttons:
@@ -829,9 +837,11 @@ function initializeOCRTabListeners() {
 function initializeOCRTabComponents(values) {
     initializeOCRTabRadios(values.use_ocr, values.ocr_service_choice, values.azure_cv_free_tier);
     initializeOCRTabListeners();
-    if (values.force_extract_previously_extracted_text) {
-        document.getElementById('force_extract_previously_extracted_text_checkbox').checked = true;
-    }
+    if (values.force_extract_previously_extracted_text) { document.getElementById('force_extract_previously_extracted_text_checkbox').checked = true; }
+    if (values.kosmos_local_url) { document.getElementById('kosmos_api_url').value = values.kosmos_local_url; }
+    if (values.kosmos_task) { document.getElementById('kosmos_task').value = values.kosmos_task; }
+    if (values.kosmos_threshold) { document.getElementById('kosmos_threshold').value = values.kosmos_threshold; }
+    if (values.vision_llm_local_url) { document.getElementById('local_vision_api_url').value = values.vision_llm_local_url; }
 }
 
 
