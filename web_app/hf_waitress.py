@@ -1,10 +1,19 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel, CLIPTextModel, AutoProcessor, MllamaForConditionalGeneration
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel, CLIPTextModel, AutoProcessor
 from transformers import StoppingCriteria, StoppingCriteriaList
 from huggingface_hub import login
 import torch
 
 from diffusers import FluxPipeline, FluxTransformer2DModel
-from optimum.quanto import freeze, qfloat8, quantize
+
+try:
+    from optimum.quanto import freeze, qfloat8, quantize
+except ImportError:
+    print("optimum.quanto is not installed. Skipping import.")
+
+try:
+    from transformers import MllamaForConditionalGeneration
+except ImportError:
+    print("transformers version is below 4.45.0 required from Llama3.2-Vision. Skipping MllamaForConditionalGeneration import.")
 
 from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
