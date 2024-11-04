@@ -938,13 +938,12 @@ def get_vision_llm_request_params():
     except Exception as e:
         handle_local_error("Missing OCR PDFs directory for PDFtoVisionLLMOCRTXT, please provide required API config. Error: ", e)
 
-    ocr_prompt = f'''
-        Please OCR the attached image line-by-line as accurately as possible.
-        If the image contains a table, output cell contents with their row and column indices. Include row and column name headers too. Follow this formatting example: "Row 0 (name:<header-name>), Column 0 (name:<header-name>): <cell-data>; Row 0 (name:<header-name>), Column 1 (name:<header-name>): <cell-data>;" etc.
-        The extracted text will be converted into embeddings and used for semantic search, so extracting as much detail as possible, while maintaining formatting integrity and tabular context is crucially important.
-        Please output only the text extracted from the image, without any other text, code, or markup. Please no yapping!
-        Don't even say stuff like "Here's the OCR'ed text from the image" or "Here's the text extracted from the image" or anything like that. Just output the text.
-        Thank you!
+    ocr_prompt = f'''Please OCR the attached image line-by-line as accurately as possible. 
+    If the image contains a table, output cell contents with their row and column indices. Include row and column name headers too. Follow this formatting example: "Row 0 (name:<header-name>), Column 0 (name:<header-name>): <cell-data>; Row 0 (name:<header-name>), Column 1 (name:<header-name>): <cell-data>;" etc.
+    The extracted text will be converted into embeddings and used for semantic search, so extracting as much detail as possible, while maintaining formatting integrity and tabular context is crucially important.
+    Please output only the text extracted from the image, without any other text, code, or markup. Please no yapping!
+    Don't even say stuff like "Here's the OCR'ed text from the image" or "Here's the text extracted from the image" or anything like that. Just output the text.
+    Thank you!
     '''
 
     vision_request_payload = {
