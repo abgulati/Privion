@@ -801,7 +801,7 @@ def get_model_params():
         "trust_remote_code": trust_remote_code,
     }
 
-    if use_flash_attention_2:
+    if use_flash_attention_2 and not vision:
         model_params["attn_implementation"] = "flash_attention_2"
 
     quantize = quantize.lower().strip()
@@ -955,24 +955,20 @@ def load_vision_pipeline(pipeline, model_params):
 
     try:
         print(f"\nInitializing vision model: {model_id} with device_map: {torch_device_map}\n")
-        MODEL = MllamaForConditionalGeneration.from_pretrained(
-            model_id,
-            torch_dtype=torch.bfloat16,
-            device_map=torch_device_map ,
-        )
-
+        MODEL = MllamaForConditionalGeneration.from_pretrained(model_id, **model_params)
+       
         try:
             print(f"Your vision-model's memory footprint is: {MODEL.get_memory_footprint()}")
         except Exception as e:
             handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
 
         print(f"\nInitializing processor for vision model: {model_id}\n")
-        pipeline = AutoProcessor.from_pretrained(model_id, **model_params)  # Using 'pipeline' instead of 'processor' to maintain consistency with the server code. AutoProcessor is used to process images and text inputs for the vision model.
+        pipeline = AutoProcessor.from_pretrained(model_id)  # Using 'pipeline' instead of 'processor' to maintain consistency with the server code. AutoProcessor is used to process images and text inputs for the vision model.
         
         print(f"\nVision Model & Processor Loaded Successfully!\n")
         return pipeline
     except Exception as e:
-        handle_local_error("Could not load Vision Pipeline, encountered error: ", e)
+        handle_model_loading_error("Could not load Vision Pipeline, encountered error: ", e)
         return False
 
 
