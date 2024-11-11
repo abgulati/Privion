@@ -854,27 +854,27 @@ def get_model_params():
 
             if quant_level == "int8":
                 print("Proceeding with HQQ-Int8 Weights")
-                quantization_config  = HqqConfig(nbits=8, group_size=hqq_group_size, quant_zero=False, quant_scale=False, axis=0)
+                quantization_config  = HqqConfig(nbits=8, group_size=hqq_group_size)
                 model_params["quantization_config"] = quantization_config
             elif quant_level == "int4":
                 print("Proceeding with HQQ-Int4 Weights")
-                quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size, quant_zero=False, quant_scale=False, axis=0)
+                quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size)
                 model_params["quantization_config"] = quantization_config
             elif quant_level == "int3":
                 print("Proceeding with HQQ-Int3 Weights")
-                quantization_config  = HqqConfig(nbits=3, group_size=hqq_group_size, quant_zero=False, quant_scale=False, axis=0)
+                quantization_config  = HqqConfig(nbits=3, group_size=hqq_group_size)
                 model_params["quantization_config"] = quantization_config
             elif quant_level == "int2":
                 print("Proceeding with HQQ-Int2 Weights")
-                quantization_config  = HqqConfig(nbits=2, group_size=hqq_group_size, quant_zero=False, quant_scale=False, axis=0)
+                quantization_config  = HqqConfig(nbits=2, group_size=hqq_group_size)
                 model_params["quantization_config"] = quantization_config
             elif quant_level == "int1":
                 print("Proceeding with HQQ-Int1 Weights")
-                quantization_config  = HqqConfig(nbits=1, group_size=hqq_group_size, quant_zero=False, quant_scale=False, axis=0)
+                quantization_config  = HqqConfig(nbits=1, group_size=hqq_group_size)
                 model_params["quantization_config"] = quantization_config
             else:
                 print(f"Invalid quant_level setting, HQQ supports int8, int4, int3, int2 & int1 quants but you set {quant_level}; proceeding with HQQ-Int4 Quant")
-                quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size, quant_zero=False, quant_scale=False, axis=0)
+                quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size)
                 model_params["quantization_config"] = quantization_config
 
     return model_params
@@ -952,6 +952,8 @@ def load_vision_pipeline(pipeline, model_params):
         torch_device_map = str(read_return['torch_device_map'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
+
+    model_params.pop('trust_remote_code', None)
 
     try:
         print(f"\nInitializing vision model: {model_id} with device_map: {torch_device_map}\n")
