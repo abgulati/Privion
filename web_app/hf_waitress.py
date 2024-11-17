@@ -162,6 +162,19 @@ def write_config(config_updates, filename='hf_config.json'):
             if key in triggers_for_hf_restart and config_updates[key] != hf_config.get(key):
                 restart_required = True
 
+        # Auto-detect Flux and Llama-3.2-Vision models
+        if "flux" in config_updates.get('model_id', '').lower():
+            print("Flux model auto-detected, setting flux_diffusers=True")
+            config_updates['flux_diffusers'] = True
+        else:
+            config_updates['flux_diffusers'] = False
+
+        if "llama-3.2" in config_updates.get('model_id', '').lower() and "vision" in config_updates.get('model_id', '').lower():
+            print("Llama-3.2-Vision model auto-detected, setting vision=True")
+            config_updates['vision'] = True
+        else:
+            config_updates['vision'] = False
+
         hf_config.update(config_updates)
 
         # Write updated hf_config.json:
@@ -651,6 +664,19 @@ def parse_arguments():
                 handle_local_error("Could not reset hf_config.json, encountered error: ", e)
         else:
             try:
+                # Auto-detect Flux and Llama-3.2-Vision models
+                if "flux" in args.model_id.lower():
+                    print("Flux model auto-detected, setting flux_diffusers=True")
+                    args.flux_diffusers = True
+                else:
+                    args.flux_diffusers = False
+                
+                if "llama-3.2" in args.model_id.lower() and "vision" in args.model_id.lower():
+                    print("Llama-3.2-Vision model auto-detected, setting vision=True")
+                    args.vision = True
+                else:
+                    args.vision = False
+                
                 write_config({
                     'access_gated':args.access_gated,
                     'access_token':args.access_token,
@@ -924,7 +950,7 @@ def load_flux_pipeline(pipeline):
             print(f"\n\nEnabling model CPU offload for Quantized Flux Pipeline\n\n")
             pipeline.enable_model_cpu_offload()
         except Exception as e:
-            handle_local_error("Could not load quantized Flux Pipeline, encountered error: ", e)
+            handle_model_loading_error("Could not load quantized Flux Pipeline, encountered error: ", e)
             return False
     else:    
         try:
@@ -935,7 +961,7 @@ def load_flux_pipeline(pipeline):
                 pipeline.vae.enable_tiling()
                 pipeline.to(torch.float16)  # Casting here instead of in the pipeline constructor because doing so in the constructor loads all models into CPU memory at once
         except Exception as e:
-            handle_local_error("Could not load Flux Pipeline, encountered error: ", e)
+            handle_model_loading_error("Could not load Flux Pipeline, encountered error: ", e)
             return False
     
     print(f"\n{model_id} loaded successfully!\n")
