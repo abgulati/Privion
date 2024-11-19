@@ -918,6 +918,26 @@ function googleDriveLogin() {
     });
 }
 
+function googleDriveLogout() {
+    fetch('/logout_from_google_drive')
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error)});
+        }
+        return response.json()
+    })
+    .then(data => {
+        if (data.success) {
+            console.log(data);
+            clearGoogleDriveTable();
+        } else {
+            throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+        }
+    })
+    .catch(error => {
+        errorHandler("logging out from Google Drive", "/logout_from_google_drive", String(error.message))
+    });
+}
 
 function checkLocalLLMServerStatus() {
     setServerStatusIndicator('Status Check In-Progress...');

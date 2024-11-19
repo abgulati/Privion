@@ -861,6 +861,7 @@ function getFileIconClass(fileType) {
 
 function initializeGoogleDriveTabListeners() {
     document.getElementById('googleDriveLogin').addEventListener('click', googleDriveLogin);
+    document.getElementById('googleDriveLogout').addEventListener('click', googleDriveLogout);
     initSortingAndFiltering();  // Inititalize sorting and filtering
     document.getElementById('googleDriveSyncAction').addEventListener('click', triggerSyncGoogleDrive);
 }
