@@ -1657,16 +1657,29 @@ def login_to_google_drive():
     if os.path.exists("gdrive_token.json"):
         GDRIVE_CREDS = Credentials.from_authorized_user_file("gdrive_token.json", GDRIVE_SCOPES)
     if not GDRIVE_CREDS or not GDRIVE_CREDS.valid:
-        if GDRIVE_CREDS and GDRIVE_CREDS.expired and GDRIVE_CREDS.refresh_token:
-            GDRIVE_CREDS.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                "gdrive_credentials.json", GDRIVE_SCOPES
-            )
-            GDRIVE_CREDS = flow.run_local_server(port=0)
-            with open("gdrive_token.json", "w") as token:
-                token.write(GDRIVE_CREDS.to_json())
+        flow = InstalledAppFlow.from_client_secrets_file(
+            "gdrive_credentials.json", GDRIVE_SCOPES
+        )
+        GDRIVE_CREDS = flow.run_local_server(port=0)
+        with open("gdrive_token.json", "w") as token:
+            token.write(GDRIVE_CREDS.to_json())
     return jsonify(success=True)
+
+
+@app.route('/logout_from_google_drive')
+def logout_from_google_drive():
+    global GDRIVE_CREDS
+    try:
+        # Remove token file if it exists
+        if os.path.exists("gdrive_token.json"):
+            os.remove("gdrive_token.json")
+        
+        # Reset credentials
+        GDRIVE_CREDS = None
+        
+        return jsonify(success=True, message="Successfully logged out from Google Drive")
+    except Exception as e:
+        return handle_api_error("Failed to logout from Google Drive: ", e)
 
 
 def categorize_mimetype(mimetype):
