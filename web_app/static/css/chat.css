@@ -235,6 +235,14 @@ body {
     background-color: #181a1b;
 }
 
+.gdrive-search-bar {
+    width: 100%;
+    padding: 10px;
+    margin: 5px 0;      /*set top and bottom margin to 5px and left and right to 0*/
+    border: solid #383d3f;
+    border-width: thin;
+}
+
 .sidenav-content {
     overflow-y: auto;
     position: absolute;
@@ -570,6 +578,19 @@ body {
     background-color: #181A1B;
     color: #e8e6e3;
     border: 1px solid #3A3E41;
+    overflow: hidden;   /*Prevents content from overflowing*/
+    max-height: calc(90vh - 3.5rem);    /*75% of the viewport height with margin subtracted to prevent overflow*/
+}
+
+.modal-body {
+    overflow-y: auto;   /*Enables vertical scrolling if content exceeds max height*/
+    max-height: calc(90vh - 155px); /*Subtracting the standard heights (check with browser dev tools) of the modal header (64px), footer (70px), and some padding (20px)*/
+    margin-bottom: 20px;
+}
+
+.modal-dialog.custom-modal-width {
+    max-height: 90vh;  /*75% of the viewport height*/
+    margin: 1.75rem auto;   /*1.75rem from the top and bottom, auto for left and right*/
 }
 
 .modal-header{
@@ -700,6 +721,21 @@ background-color: #282d33; /* Darker shade on hover */
     word-wrap: break-word;
     overflow-wrap: break-word;
     text-align: center;
+}
+
+/* Ensure tables create scrollbars when needed */
+#docs_loaded_details_table,
+#google_drive_files_tables {
+    width: 100%;
+    table-layout: fixed;    /*Prevents columns from changing width*/
+    margin-bottom: 1rem;
+}
+
+.table-container {
+    max-height: calc(90vh - 575px);
+    border-bottom-style: double;
+    overflow-y: auto;
+    margin: 1rem 0;
 }
 
 #googleDriveSyncAction {
