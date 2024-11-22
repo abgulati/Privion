@@ -747,9 +747,9 @@ function populateGoogleDriveTable(gdrive_files) {
     gdrive_files.forEach((file, index) => {
         const iconClass = getFileIconClass(file.type);
         const rowHTML = `
-            <tr data-gdrive-file-id="${file.id}" data-gdrive-mime-type="${file.mimeType}">
+            <tr data-gdrive-file-id="${file.id}" data-gdrive-mime-type="${file.mimeType}" id="gdrive_doc_row_${file.id}">
                 <td class="checkbox-cell"><input type="checkbox" id="select-${parseInt(index)+1}"></td>
-                <td style="text-align:left">${file.name}</td>
+                <td style="text-align:left" data-gdrive-row-id="${file.id}" class="gdrive_doc_name">${file.name}</td>
                 <td style="text-align:left">${file.type}</td>
                 <td style="text-align:center"><i class="file-icon fa-solid ${iconClass}"></i></td>
                 <td style="text-align:center">v${file.version}</td>
@@ -1013,6 +1013,22 @@ function coreFilterFunction(search_words, items) {
 }
 
 
+function coreFilterRowsFunction(search_words, items) {
+    const searchQuery = search_words.toLowerCase();
+
+    Array.from(items).forEach(item => {
+        const text = item.textContent.toLowerCase();
+        const row_id = item.getAttribute('data-gdrive-row-id');
+        const row = document.getElementById(`gdrive_doc_row_${row_id}`);
+        if (text.includes(searchQuery)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    })
+}
+
+
 function filterCustomDropdown(search_words) {
     const customDropdownList = document.getElementById('hf-waitress-llm-custom-dropdown-items-list');
     const items = customDropdownList.getElementsByClassName('hf-waitress-llm-custom-dropdown-item');
@@ -1026,6 +1042,12 @@ function filterChatHistoryItems(search_words) {
     coreFilterFunction(search_words, items);
 }
 
+
+function filterGoogleDriveTable(search_words) {
+    const fullGdriveTable = document.getElementById('google_drive_files_tables');
+    const gdrive_doc_name_cells = fullGdriveTable.getElementsByClassName('gdrive_doc_name');
+    coreFilterRowsFunction(search_words, gdrive_doc_name_cells);
+}
 
 function addNewHfwModel(model) {
     loadCoreHfValues()
