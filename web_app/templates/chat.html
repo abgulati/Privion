@@ -773,20 +773,22 @@
 
                                     <div id="vector_embeddings_details">
                                         
-                                        <table id="docs_loaded_details_table">  <!--TODO: table wrap per div width-->
-                                            <tr>
-                                                <th>Document Name</th>
-                                                <th>VectorDB Location</th>
-                                                <th>Chunk Size</th>
-                                                <th>Chunk Overlap</th>
-                                            </tr>
-                                            <tr>
-                                                <td>placeholder</td>
-                                                <td>placeholder</td>
-                                                <td>placeholder</td>
-                                                <td>placeholder</td>
-                                            </tr>
-                                        </table>
+                                        <div class="table-container">
+                                            <table id="docs_loaded_details_table">  <!--TODO: table wrap per div width-->
+                                                <tr>
+                                                    <th>Document Name</th>
+                                                    <th>VectorDB Location</th>
+                                                    <th>Chunk Size</th>
+                                                    <th>Chunk Overlap</th>
+                                                </tr>
+                                                <tr>
+                                                    <td>placeholder</td>
+                                                    <td>placeholder</td>
+                                                    <td>placeholder</td>
+                                                    <td>placeholder</td>
+                                                </tr>
+                                            </table>
+                                        </div>
 
                                         <br>
 
@@ -991,9 +993,12 @@
                                                 <option value="">All Document Types</option>
                                             </select>
                                         </div>
+
+                                        <input type="text" class="gdrive-search-bar" id="gdrive-search-bar" oninput="filterGoogleDriveTable(this.value)" placeholder="Search by Document Name...">
                                         
-                                        <table id="google_drive_files_tables" class="gdrive-table">  <!--TODO: table wrap per div width-->
-                                            <thead>
+                                        <div class="table-container">
+                                            <table id="google_drive_files_tables" class="gdrive-table">  <!--TODO: table wrap per div width-->
+                                                <thead>
                                                 <!-- <tr>
                                                     <th>Sync</th>
                                                     <th style="text-align: left;">Name</th>
@@ -1019,10 +1024,11 @@
                                                     <th>Document Version</th>
                                                     <th>Sync Status</th>
                                                 </tr>
-                                            </thead>
-                                            <tbody>
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody>
+                                                </tbody>
+                                            </table>
+                                        </div>
 
                                     </div>
                                     <button class="btn btn-primary" type="button" id="googleDriveSyncAction" style="display: none;">Sync Files</button>
