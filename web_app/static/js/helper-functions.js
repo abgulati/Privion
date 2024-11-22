@@ -1127,3 +1127,14 @@ function secure_filename(filename) {
     
     return filename;
 }
+
+
+function collapseAdvancedSettings(advancedSettingsId) {
+    var advancedSettings = document.getElementById(advancedSettingsId);
+    if (advancedSettings.classList.contains('show')) {
+        var bsCollapse = new bootstrap.Collapse(advancedSettings, {
+            toggle: false
+        });
+        bsCollapse.hide();
+    }
+}
