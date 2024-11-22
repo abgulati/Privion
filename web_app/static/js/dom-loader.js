@@ -411,14 +411,8 @@ function toggleLocalLlmSelection() {    // Show or hide local-LLM selection:
         }
     } else {
         // Collapse Advanced Settings if it's expanded
-        var advancedLlmSettings = document.getElementById('advancedLlmSettings');
-        if (advancedLlmSettings.classList.contains('show')) {
-            var bsCollapse = new bootstrap.Collapse(advancedLlmSettings, {
-                toggle: false
-            });
-            bsCollapse.hide();
-        }
-
+        collapseAdvancedSettings('advancedLlmSettings');
+        collapseAdvancedSettings('advancedHfLlmSettings');
     }
 }
 
@@ -458,6 +452,7 @@ function toggleHfwDiffusersConfig() {
     if (selection === 'y') {
         document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'block';
         disableTransformersSettings();
+        collapseAdvancedSettings('advancedHfLlmSettings');
     } else {
         document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
         enableTransformersSettings();
