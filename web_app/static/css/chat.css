@@ -988,6 +988,11 @@ body {
     cursor: pointer;
 }
 
+.hf-waitress-llm-custom-dropdown-items-list {
+    max-height: calc(90vh - 575px);
+    overflow-y: auto;
+}
+
 .hf-waitress-llm-custom-dropdown-content {
     display: none;
     position: absolute;
