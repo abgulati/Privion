@@ -408,6 +408,11 @@ function handleSaveChanges() {
                     
                     let chatID = getChatId();
                     setModelHeaderInfoBox(chatID, hf_config.model_id);
+                    if (hf_config.model_id.toLowerCase().includes('vision-instruct')) {
+                        document.getElementById('textAttachmentButton').disabled = false;
+                    } else {
+                        document.getElementById('textAttachmentButton').disabled = true;
+                    }
                 })
                 .catch(error => {
                     errorHandler("saving HF-Waitress settings", "handleSaveChanges()", String(error.message));  // Catching the error will resolve the Promise and allow the rest of the code to continue!

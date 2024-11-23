@@ -185,6 +185,9 @@ function initializeHfWaitressCustomDropdown(model_list, model_id) {
     model_list.forEach(model => {
         if (model.toLowerCase() == model_id.toLowerCase()) {
             selectedValue.textContent = model;
+            if (model_id.toLowerCase().includes('vision-instruct')) {
+                document.getElementById('textAttachmentButton').disabled = false;
+            }
         }
         const div = document.createElement('div');
         div.className = 'hf-waitress-llm-custom-dropdown-item';
