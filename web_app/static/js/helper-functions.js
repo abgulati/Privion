@@ -12,6 +12,10 @@ function setLlmModel(model) {
     document.getElementById('chatState').setAttribute('data-llm-model', model);
 }
 
+function setOldLlmModel(model) {
+    document.getElementById('chatState').setAttribute('data-old-llm-model', model);
+}
+
 function getChatId() {
     return document.getElementById('chatState').getAttribute('data-ongoing-chat-id');
 }
@@ -22,6 +26,10 @@ function getSequenceId() {
 
 function getLlmModel() {
     return document.getElementById('chatState').getAttribute('data-llm-model');
+}
+
+function getOldLlmModel() {
+    return document.getElementById('chatState').getAttribute('data-old-llm-model');
 }
 
 function setModelHeaderInfoBox(chat_id, model_id) {
@@ -260,6 +268,8 @@ function createChatHistoryMenuItem(chat) {
     let chatTitle = chat['date_time'];
     if (chat['chat_name'] != '' && chat['chat_name'] != null && chat['chat_name'] != "null") {
         chatTitle = chat['chat_name'];
+    } else {
+        newDiv.setAttribute('data-chat-name', chatTitle);
     }
 
     const rename_chat_title_button_class = `rename-chat-title-button-for-chat-id-${chat['chat_id']}`;
@@ -279,7 +289,8 @@ function createChatHistoryMenuItem(chat) {
 
     newDiv.querySelector('.chat-title').addEventListener('click', function() {
         let chatID = this.parentElement.getAttribute('data-chat-id');
-        loadChatHistory(chatID);
+        let chatTitleAttribute = this.parentElement.getAttribute('data-chat-name');
+        loadChatHistory(chatID, chatTitleAttribute);
     });
 
     // Event listener to rename the chat name/title:
@@ -318,7 +329,7 @@ function createChatHistoryMenuItem(chat) {
 }
 
 
-function loadChatHistory(chatID) {
+function loadChatHistory(chatID, chatTitle) {
 
     // console.log("Loading chat history")
     console.log("Loading chat history for chatID: ", chatID);
@@ -328,6 +339,8 @@ function loadChatHistory(chatID) {
 
     history_chat_id = chatID
     setModelHeaderInfoBox(history_chat_id, current_llm_model);
+    document.getElementById('chat_name_header').innerHTML = " " + String(chatTitle);
+    document.getElementById('chat_name_header').style.display = 'block';
 
     document.getElementById('chat-area').innerHTML = '';
 
@@ -365,6 +378,9 @@ function loadChatHistory(chatID) {
             for (let i = 0; i < defaultTabs.length; i++) {
                 defaultTabs[i].click();
             }
+
+            setSequenceId(data.sequence_id);
+            setOldLlmModel(data.old_chat_model);
             
         } else {
             throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
