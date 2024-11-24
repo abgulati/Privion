@@ -926,7 +926,7 @@ function initChatHistoryDB(llm_model) {
     .then(data => {
         if (data.success) {
             // If LLM, VectorDB and chat history DB initialized successfully, continue:
-            setChatId(data.chat_id);
+            setChatId(data.chat_id);    //chat_id is requred to determine current chat ID, but we don't want to set sequence_id here as DOM load begins a new chat!
             updateUIWithChatInfo(data.chat_id, llm_model)
         } else {
             throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
