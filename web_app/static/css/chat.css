@@ -447,7 +447,7 @@ body {
 
 .response-and-viewer-container {
     display: flex;
-    margin-bottom: 100px;
+    margin-bottom: 33px;
 }
 
 .pdf-viewer {
@@ -932,7 +932,7 @@ body {
 
 .pdf-viewer-container {
     width: 50%;
-    height: 600px;
+    height: 750px;
     padding: 10px;
     padding-right: 7px;
 }
