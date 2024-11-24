@@ -95,7 +95,7 @@ function appendContentToResponse(responseContentID, content) {
 
 
 function setupLLMResponse(userInput, file_attached, current_chat_id) { //no need to async-await here as fetch() inherently returns a promise, so by returning fetch() directly we're providing the same Promise that the async function with await would return.
-    return fetch('/setup_for_llama_cpp_response', {
+    return fetch('/setup_for_local_llm_response', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({'user_query': userInput, 'chat_id': current_chat_id, 'file_attached': file_attached})
@@ -116,7 +116,7 @@ function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, r
 }
 
 function handleSetupResponse(data) {
-    const {do_rag, stream_session_id, formatted_user_prompt, sequence_id, server_type} = data;   // using object=destructuring (ES6-2015) to extract and set specific values from the data object in a single step!
+    const {do_rag, stream_session_id, formatted_user_prompt, sequence_id, server_type} = data;   // using object-destructuring (ES6-2015) to extract and set specific values from the data object in a single step!
 
     console.log("do_rag: ", do_rag);
     console.log("stream_session_id: ", stream_session_id);
@@ -580,7 +580,7 @@ async function requestFormattedPrompt() {
     if (file) { file_attached = true; }
 
     try {
-        // 1- setup_for_llama_cpp_response
+        // 1- setup_for_local_llm_response
         const response = await setupLLMResponse(userInput, file_attached, current_chat_id);
         const data = await response.json();
         const {do_rag, stream_session_id, formatted_user_prompt, responseIDs, server_type} = handleSetupResponse(data);
