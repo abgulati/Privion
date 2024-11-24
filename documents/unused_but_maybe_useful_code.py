@@ -1638,3 +1638,169 @@ def lc_get_references():
                 // Clear the input field
                 document.getElementById('user-input').value = '';
             }
+
+
+
+
+
+@app.route('/load_chat_history', methods=['POST'])
+def load_chat_history():
+
+    global HISTORY_SUMMARY
+    global HISTORY_MEMORY_WITH_BUFFER
+
+    print("loading chat history")
+
+    try:
+        read_return = read_config(['sqlite_history_db'])
+        sqlite_history_db = read_return['sqlite_history_db']
+    except Exception as e:
+        handle_local_error("Missing sqlite_history_db in config.json in method load_chat_history. Error: ", e)
+
+    # Clear chat history of current chat, prep for loading historical chat summary:
+    # try:
+    #     HISTORY_MEMORY_WITH_BUFFER.chat_memory.clear()
+    #     HISTORY_MEMORY_WITH_BUFFER = ConversationSummaryBufferMemory(llm=LLM, max_token_limit=300, return_messages=False)
+    #     HISTORY_SUMMARY = {}
+    # except Exception as e:
+    #     handle_error_no_return("Could not clear memory when loading chat history, encountered error: ", e)
+
+    try:
+        chat_id_for_history_search = request.form['chat_id']
+        chat_id = request.form['chat_id']
+    except Exception as e:
+        return handle_api_error("Could not retrieve Chat ID from request form, encountered error: ", e)
+
+    try:
+        conn = sqlite3.connect(sqlite_history_db)
+        c = conn.cursor()
+    except Exception as e:
+        return handle_api_error("Could not connect to chat history database, encountered error: ", e)
+
+    sequence_id_for_history_search = 1
+    retrieve_history = True
+    chat_history = []
+    old_chat_model = ""
+
+    while(retrieve_history):
+
+        try:
+            c.execute("SELECT user_query FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (int(chat_id_for_history_search), int(sequence_id_for_history_search)))
+            result = c.fetchone()
+            
+            user_message = str(result[0])
+
+            user_message = user_message.strip('\n')
+            regex_to_swap_multiple_spaces_with_newline = r' {2,}'
+            user_message = re.sub(regex_to_swap_multiple_spaces_with_newline, '<br>', user_message)
+
+            user_message = '<div class="user-message glassmorphism">' + user_message + '</div>'
+
+            chat_history.append(user_message)
+
+            c.execute("SELECT llm_response FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (int(chat_id_for_history_search), int(sequence_id_for_history_search)))
+            result = c.fetchone()
+
+            result = str(result[0])
+            result_parts = result.split("pdf_pane_data=",1)
+            llm_response = '<div class="response-and-viewer-container"><div class="llm-wrapper"> <div class="llm-response">' + result_parts[0]
+
+        except Exception as e:
+            return handle_api_error("Could not retrieve chat history, encountered error: ", e)
+        
+        llm_response = llm_response.strip('\n')
+        llm_response = llm_response.replace('\n\n', '<br><br>')
+        llm_response = llm_response.replace('\n', '<br>')
+        
+        try:
+            c.execute("SELECT user_rating FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (int(chat_id_for_history_search), int(sequence_id_for_history_search)))
+            result = c.fetchone()
+        except Exception as e:
+            handle_error_no_return("Could not fetch user rating, encountered error: ", e)
+
+        response_rated = False
+        user_rating_for_history_chat = None
+
+        if result[0]:
+            response_rated = True
+            try:
+                user_rating_for_history_chat = int(result[0])
+                #print(f'rating exists: {user_rating_for_history_chat}')
+            except Exception as e:
+                handle_error_no_return("Could not retrieve integer value of user rating, encountered error: ", e)
+
+
+        llm_rating = f'''<div class="star-rating" data-rated={response_rated} rating-chat-id={chat_id_for_history_search} rating-sequence-id={sequence_id_for_history_search}>
+        <i class="far fa-star" data-rate="1"></i>
+        <i class="far fa-star" data-rate="2"></i>
+        <i class="far fa-star" data-rate="3"></i>
+        <i class="far fa-star" data-rate="4"></i>
+        <i class="far fa-star" data-rate="5"></i>
+        </div>
+        </div>
+        </div>'''
+
+
+        if user_rating_for_history_chat:
+            rating_parts = llm_rating.split("far", user_rating_for_history_chat)
+            if len(rating_parts) <= user_rating_for_history_chat:
+                llm_rating = "fas".join(rating_parts)
+            else:
+                llm_rating = "fas".join(rating_parts[:-1]) + "fas" + "far".join(rating_parts[-1:])
+
+        llm_response += llm_rating
+
+        if len(result_parts) > 1:
+            llm_response += result_parts[1]
+            llm_response += "</div>"
+            llm_response = llm_response.strip('\n')
+            llm_response = llm_response.replace('\n\n', '<br><br>')
+            llm_response = llm_response.replace('\n', '<br>')
+
+        chat_history.append(llm_response)
+
+        # Increment sequence ID for next iteration:
+        sequence_id_for_history_search += 1
+
+        # But first, check to see if next sequence exists!
+        try:
+            c.execute("SELECT EXISTS(SELECT 1 FROM chat_history WHERE chat_id = ? AND sequence_id = ?)", (int(chat_id_for_history_search), int(sequence_id_for_history_search)))
+            exists = c.fetchone()[0]
+        except Exception as e:
+            return handle_api_error("Could not determine if next sequence exists in chat history DB, encountered error: ", e)
+            
+        if not exists:
+            sequence_id = sequence_id_for_history_search - 1
+            retrieve_history = False
+            try:
+                c.execute("SELECT llm_model FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (chat_id, sequence_id))
+                result = c.fetchone()
+                old_chat_model = str(result[0])
+            except Exception as e:
+                handle_error_no_return("Could not determine previously used LLM in chat, encountered error: ", e)
+            try:
+                c.execute("SELECT history_summary FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (chat_id, sequence_id))
+                result = c.fetchone()
+                history_summary_dict = str(result[0])
+            except Exception as e:
+                handle_error_no_return("Could not fetch history summary of last chat, encountered error: ", e)
+            c.close()
+
+    # Convert History Summary and add a new key indicating it was recently cleared!
+    if history_summary_dict is not None and history_summary_dict != "" and history_summary_dict != 'None':
+        print(f"\n\history_summary_dict string from old chat: {history_summary_dict}\n\n")
+        try:
+            HISTORY_SUMMARY = ast.literal_eval(history_summary_dict)    #cast as dictionary
+            HISTORY_SUMMARY["has_been_reset"] = True
+        except Exception as e:
+            handle_error_no_return("Could not cast history summary string from DB to dict and/or set has_been_reset boolean, encountered error: ", e)
+
+    # Temp prints:
+    # print(f"\n\nHISTORY_SUMMARY: {HISTORY_SUMMARY}\n\n")
+    # print(f"\n\history_summary_dict: {history_summary_dict}\n\n")
+    # print(f"\n\nHISTORY_MEMORY_WITH_BUFFER.summary: {HISTORY_MEMORY_WITH_BUFFER.summary}\n\n")
+    # print(f"\n\nHISTORY_MEMORY_WITH_BUFFER.chat_memory.messages: {HISTORY_MEMORY_WITH_BUFFER.chat_memory.messages}\n\n")
+    print(f'\n\nChat history loaded for chat with model: {old_chat_model}\n\n')
+
+    return jsonify({'success': True, 'chat_history': chat_history, 'old_chat_model': old_chat_model})
+
