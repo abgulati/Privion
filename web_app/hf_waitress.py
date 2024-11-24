@@ -861,6 +861,10 @@ def get_model_params():
                 print("Proceeding with Quanto-Int8 Weights")
                 quantization_config  = QuantoConfig(weights="int8")
                 model_params["quantization_config"] = quantization_config
+            elif quant_level == "float8":
+                print("Proceeding with Quanto-Float8 Weights")
+                quantization_config  = QuantoConfig(weights="float8")
+                model_params["quantization_config"] = quantization_config
             elif quant_level == "int4":
                 print("Proceeding with Quanto-Int4 Weights")
                 quantization_config  = QuantoConfig(weights="int4")
