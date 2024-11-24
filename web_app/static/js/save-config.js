@@ -194,6 +194,16 @@ function getHfWaitressConfig() {
         'port': parseInt(document.getElementById('HfwPort').value)
     };
 
+    if (hf_config.model_id.toLowerCase().includes('vision-instruct')) {
+        hf_config.vision = true;
+        document.getElementById('hf_waitress_vision_yes').checked = true;
+        document.getElementById('hf_waitress_vision_no').checked = false;
+    } else {
+        hf_config.vision = false;
+        document.getElementById('hf_waitress_vision_yes').checked = false;
+        document.getElementById('hf_waitress_vision_no').checked = true;
+    }
+
     hfw_temperature = parseFloat(document.getElementById('HfwTempSlider').value);
     hf_config.do_sample = hfw_temperature > 0.0;
     hf_config.temperature = Math.max(0.0, hfw_temperature);
@@ -408,10 +418,17 @@ function handleSaveChanges() {
                     
                     let chatID = getChatId();
                     setModelHeaderInfoBox(chatID, hf_config.model_id);
-                    if (hf_config.model_id.toLowerCase().includes('vision-instruct')) {
+                    if (hf_config.model_id.toLowerCase().includes('vision-instruct')) { // we have switched to a Vision-Instruct model...
                         document.getElementById('textAttachmentButton').disabled = false;
-                    } else {
+                        let current_sequence_id = getSequenceId();
+                        if (current_sequence_id != null && parseInt(current_sequence_id) > 0 && !String(getOldLlmModel()).toLowerCase().includes('vision-instruct')) {  //...midway through a chat, or while browsing chat history, and the old LLM model was not a Vision-Instruct model...
+                            location.reload();  //...reload!
+                        }
+                    } else {    //...we have switched to a non-Vision-Instruct model...
                         document.getElementById('textAttachmentButton').disabled = true;
+                        if (String(getOldLlmModel()).toLowerCase().includes('vision-instruct') || String(getOldLlmModel()).toLowerCase().includes('gguf') || String(getOldLlmModel()).toLowerCase().includes('flux')) {    //...from a Vision-Instruct, FLUX, or a GGUF model...
+                            location.reload();  //...reload!
+                        }
                     }
                 })
                 .catch(error => {
