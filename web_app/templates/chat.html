@@ -464,9 +464,9 @@
                                                             <label class="hf-select-settings-labels-group">Quantization Method (--quantize):</label>
                                                             <br>
                                                             <select class="modal-selects" id="hf_waitress_quantization_choice">
-                                                                <option value="quanto">Quanto (Default)</option>
-                                                                <option value="bitsandbytes">BitsAndBytes</option>
-                                                                <option value="hqq">HQQ</option>
+                                                                <option value="quanto" title="Supports CPUs, NvCUDA, & Apple M-Silicon Macs">Quanto (Default)</option>
+                                                                <option value="bitsandbytes" title="Primarily Supports NvCUDA. CPU & AMD ROCm Experimentally Supported. Apple Silicon Macs Not Supported Yet.">BitsAndBytes</option>
+                                                                <option value="hqq" title="Supports CPUs and NvCUDA Only">HQQ</option>
                                                                 <option value="n">No Quantization</option>
                                                             </select>
                                                         </div>
@@ -477,17 +477,16 @@
                                                             <label class="hf-select-settings-labels-group">Quantization Level (--quant_level):</label>
                                                             <br>
                                                             <select class="modal-selects" id="hf_waitress_quantization_level_choice">
-                                                                <option value="int8">Int8 (Recommended)</option>
-                                                                <option value="int4">Int4 (Default)</option>
-                                                                <option value="int3">Int3 (HQQ Only)</option>
-                                                                <option value="int2">Int2 (Quanto & HQQ only)</option>
-                                                                <option value="int1">Int1 (HQQ Only - Not Recommended!)</option>
+                                                                <option value="float8" title="For use with Quanto: Float8 Quantization of Weights & Activations. ">Float8 (Quanto Only)</option>
+                                                                <option value="int8" title="Supported by All.">Int8 (Recommended)</option>
+                                                                <option value="int4" title="Supported by All.">Int4 (Default)</option>
+                                                                <option value="int3" title="Supported by HQQ Only.">Int3 (HQQ Only)</option>
+                                                                <option value="int2" title="Supported by Quanto & HQQ only.">Int2 (Quanto & HQQ only)</option>
+                                                                <option value="int1" title="Supported by HQQ Only - Not Recommended!">Int1 (HQQ Only - Not Recommended!)</option>
                                                             </select>
                                                         </div>
-
-                                                        <br>
             
-                                                        <div id="hf_waitress_hqq_group_size" class="restart-settings-group">
+                                                        <div id="hf_waitress_hqq_group_size" class="restart-settings-group" style="display: none; margin-top: 20px;">
                                                             <label for="HfwHqqGroupSize" class="hf-select-settings-labels-group">HQQ Group Size (must be divisible by group_size) (--hqq_group_size): </label>
                                                             <input class="settings-input-fields" type="number" id="HfwHqqGroupSize" min="0" value="64">
                                                         </div>
