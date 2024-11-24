@@ -36,6 +36,7 @@
                 <div class="info-container" style="cursor: pointer; position: relative; font-size: 30px; color: #D1CDC7;">
                     <i class="fa-solid fa-circle-info info-icon" onclick="toggleInfo()"></i>
                     <div class="info-box glassmorphism" id="info_box" style="display: none;">
+                        <h3 style="display: none; margin-bottom: 10px;" id="chat_name_header" class="fa-solid fa-book"></h3>
                         <h3 style="display: none;" id="model_header" class="fa-solid fa-brain"></h3>
                         <h4 style="display: none;" id="old_model_header" class="fa-solid fa-brain"></h4>
                     </div>
@@ -104,18 +105,18 @@
                 <div class="input-wrapper">
                     <textarea rows="1" cols="50" class="form-control" id="user-input" onclick="closeNav()" placeholder="Type your prompts here..."></textarea>
                     <input type="file" id="textAttachmentInput" style="display: none;">
-                    <button type="button" id="textAttachmentButton" class="btn btn-sm btn-outline-secondary" onclick="closeNav(); document.getElementById('textAttachmentInput').click();" disabled>
+                    <button type="button" id="textAttachmentButton" class="btn btn-sm btn-outline-secondary" onclick="closeNav(); document.getElementById('textAttachmentInput').click();" title="Attach a file to your message for Vision inferencing" disabled>
                         <i class="fas fa-paperclip"></i>
                     </button>
                     <div id="textAttachmentPreview" class="mt-2" style="display: none;">
                         <span id="textAttachmentFileName"></span>
                         <button id="textAttachmentRemoveBtn" class="btn btn-sm btn-danger"><i class="fas fa-times"></i></button>
                     </div>
-                    <button id="stopGenerationButton" class="btn btn-sm btn-danger" style="display: none;" onclick="stopGeneration()"><i class="fas fa-stop"></i></button>
+                    <button id="stopGenerationButton" class="btn btn-sm btn-danger" style="display: none;" onclick="stopGeneration()" title="Stop the current LLM's response generation"><i class="fas fa-stop"></i></button>
                 </div>
                 <!-- <textarea rows="1" cols="50" class="form-control" id="user-input" onclick="closeNav()" placeholder="Type your prompts here..."></textarea> -->
                 <input type="file" name="file" id="fileInput" style="display:none;">
-                <button type="button" id="fileInputButton" class="btn btn-primary upload-file-btn" onclick="closeNav(); document.getElementById('fileInput').click();"><i class="fas fa-upload"></i></button>
+                <button type="button" id="fileInputButton" class="btn btn-primary upload-file-btn" onclick="closeNav(); document.getElementById('fileInput').click();" title="Add a file LARS' Retrieval Augmented Generation (RAG) & Citations Pipeline"><i class="fas fa-upload"></i></button>
                 <button class="btn btn-primary" id="sendButton" onclick="closeNav(); requestFormattedPrompt()">Send</button>
             </div>
             
