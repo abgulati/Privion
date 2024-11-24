@@ -255,6 +255,7 @@ function initializeHfSettingsDropdowns(all_values) {
         }
     }
 
+    toggleHfwQuantizationLevel();   // This is necessary to ensure the quantization level options are updated based on the selected quantization method.
 }
 
 
@@ -492,6 +493,55 @@ function disableFluxLowVram() {
 }
 
 
+function toggleHfwQuantizationLevel() {
+    const quantMethod = document.getElementById('hf_waitress_quantization_choice').value;
+    const quantLevelSelection = document.getElementById('hf_waitress_quantization_level_choice');
+
+    //Clear existing options:
+    quantLevelSelection.innerHTML = "";
+
+    // Define available options for each quantization method:
+    const options = {
+        quanto: [
+            {value: "float8", title: "Float8 Quantization of Weights & Activations."},
+            {value: "int8", title: "Int8 Quantization of Weights & Activations."},
+            {value: "int4", title: "Int4 Quantization of Weights, Int8 Quantization of Activations."},
+            {value: "int2", title: "Int2 Quantization of Weights, Int8 Quantization ofActivations."}
+        ],
+        bitsandbytes: [
+            {value: "int8", title: "Int8 Quantization"},
+            {value: "int4", title: "Int4 Quantization"}
+        ],
+        hqq: [
+            {value: "int8", title: "Int8 Quantization"},
+            {value: "int4", title: "Int4 Quantization"},
+            {value: "int3", title: "Int3 Quantization"},
+            {value: "int2", title: "Int2 Quantization"},
+            {value: "int1", title: "Int1 Quantization"}
+        ],
+        n: []
+    };
+
+    // Add options based on quantization method:
+    if (options[quantMethod]) {
+        options[quantMethod].forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.value;
+            option.title = opt.title;
+            quantLevelSelection.appendChild(option);
+        });
+    }
+
+    // Show or hide HQQ Group Size input based on quantization method:
+    document.getElementById('hf_waitress_hqq_group_size').style.display = quantMethod === 'hqq' ? 'block' : 'none';
+
+    // Disable the Selection of No Quantization methos is selected
+    quantLevelSelection.disabled = quantMethod === 'n';
+
+}
+
+
 function initializeEventListenersForLLMTab() {
     // Event listener for Local LLM Server selection:
     document.getElementById('local_llm_server_select_dropdown').addEventListener('change', checkLocalLLMServerStatus);
@@ -528,6 +578,9 @@ function initializeEventListenersForLLMTab() {
     // Event listener for Reset Defaults button:
     document.getElementById('resetLlmAdvancedDefaults').addEventListener('click', resetLlmAdvancedDefaults);    //aparently, adding parenthesis () here will cause resetLlmAdvancedDefaults to run immediately when the script executes, not on button click. Removing them allows the function to be passed as a reference correctly on click.
     document.getElementById('resetHfLlmAdvancedDefaults').addEventListener('click', resetHfLlmAdvancedDefaults);
+
+    // Event listener for toggle Quantization Level:
+    document.getElementById('hf_waitress_quantization_choice').addEventListener('change', toggleHfwQuantizationLevel);
 
     // Initial state check:
     toggleLocalLlmSelection();
