@@ -3096,9 +3096,6 @@ def load_chat_history_list():
 @app.route('/load_chat_history', methods=['POST'])
 def load_chat_history():
 
-    global HISTORY_SUMMARY
-    global HISTORY_MEMORY_WITH_BUFFER
-
     print("loading chat history")
 
     try:
@@ -3106,14 +3103,6 @@ def load_chat_history():
         sqlite_history_db = read_return['sqlite_history_db']
     except Exception as e:
         handle_local_error("Missing sqlite_history_db in config.json in method load_chat_history. Error: ", e)
-
-    # Clear chat history of current chat, prep for loading historical chat summary:
-    # try:
-    #     HISTORY_MEMORY_WITH_BUFFER.chat_memory.clear()
-    #     HISTORY_MEMORY_WITH_BUFFER = ConversationSummaryBufferMemory(llm=LLM, max_token_limit=300, return_messages=False)
-    #     HISTORY_SUMMARY = {}
-    # except Exception as e:
-    #     handle_error_no_return("Could not clear memory when loading chat history, encountered error: ", e)
 
     try:
         chat_id_for_history_search = request.form['chat_id']
@@ -3219,7 +3208,7 @@ def load_chat_history():
         except Exception as e:
             return handle_api_error("Could not determine if next sequence exists in chat history DB, encountered error: ", e)
             
-        if not exists:
+        if not exists:  # Fetch last used LLM
             sequence_id = sequence_id_for_history_search - 1
             retrieve_history = False
             try:
@@ -3228,31 +3217,17 @@ def load_chat_history():
                 old_chat_model = str(result[0])
             except Exception as e:
                 handle_error_no_return("Could not determine previously used LLM in chat, encountered error: ", e)
-            try:
-                c.execute("SELECT history_summary FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (chat_id, sequence_id))
-                result = c.fetchone()
-                history_summary_dict = str(result[0])
-            except Exception as e:
-                handle_error_no_return("Could not fetch history summary of last chat, encountered error: ", e)
             c.close()
 
-    # Convert History Summary and add a new key indicating it was recently cleared!
-    if history_summary_dict is not None and history_summary_dict != "" and history_summary_dict != 'None':
-        print(f"\n\history_summary_dict string from old chat: {history_summary_dict}\n\n")
-        try:
-            HISTORY_SUMMARY = ast.literal_eval(history_summary_dict)    #cast as dictionary
-            HISTORY_SUMMARY["has_been_reset"] = True
-        except Exception as e:
-            handle_error_no_return("Could not cast history summary string from DB to dict and/or set has_been_reset boolean, encountered error: ", e)
-
-    # Temp prints:
-    # print(f"\n\nHISTORY_SUMMARY: {HISTORY_SUMMARY}\n\n")
-    # print(f"\n\history_summary_dict: {history_summary_dict}\n\n")
-    # print(f"\n\nHISTORY_MEMORY_WITH_BUFFER.summary: {HISTORY_MEMORY_WITH_BUFFER.summary}\n\n")
-    # print(f"\n\nHISTORY_MEMORY_WITH_BUFFER.chat_memory.messages: {HISTORY_MEMORY_WITH_BUFFER.chat_memory.messages}\n\n")
     print(f'\n\nChat history loaded for chat with model: {old_chat_model}\n\n')
 
-    return jsonify({'success': True, 'chat_history': chat_history, 'old_chat_model': old_chat_model})
+    try:
+        sequence_id = determine_sequence_id_for_chat(chat_id)
+        print(f"Sequence ID determined: {sequence_id}")
+    except Exception as e:
+        return handle_api_error("Could not determine sequence_id, encountered error: ", e)  
+
+    return jsonify({'success': True, 'chat_history': chat_history, 'old_chat_model': old_chat_model, 'sequence_id': sequence_id})
 
 
 def determine_latest_chat_id(c):
@@ -3324,18 +3299,6 @@ def init_chat_history_db():
 
     try:
         chat_id = determine_latest_chat_id(c)
-        # c.execute("SELECT COALESCE(MAX(chat_id), 0) FROM chat_history")
-        # # The COALESCE function accepts two or more arguments and returns the first non-null argument, returning 0 for a new chat.
-
-        # result = c.fetchone()
-
-        # # 'result' will be a tuple, so extract the first element
-        # max_chat_id = result[0]
-
-        # new_chat_id = max_chat_id + 1
-        # CHAT_ID = new_chat_id
-
-        # print(f"Chat history DB initialised with CHAT_ID: {CHAT_ID}")
     except Exception as e:
         return handle_api_error("Could not set chat_id, encountered error: ", e)
 
@@ -3687,8 +3650,10 @@ def combine_whoosh_and_vector_results(whoosh_results, vector_results):
     return combined_results
 
 
-@app.route('/setup_for_llama_cpp_response', methods=['POST'])
-def setup_for_llama_cpp_response():
+@app.route('/setup_for_local_llm_response', methods=['POST'])
+def setup_for_local_llm_response():
+
+    print("\n\nSetting up for local LLM response\n\n")
 
     global QUERIES
 
@@ -3767,7 +3732,7 @@ def setup_for_llama_cpp_response():
             flux_diffusers = str(hf_read_return['flux_diffusers']).lower() == 'true'
             vision = str(hf_read_return['vision']).lower() == 'true'
         except Exception as e:
-            return handle_api_error("Could not determine if flux_diffusers or vision model used from hf_config.json in method setup_for_llama_cpp_response. Continuing with Transformers. Encountered error: ", e)
+            return handle_api_error("Could not determine if flux_diffusers or vision model used from hf_config.json in method setup_for_local_llm_response. Continuing with Transformers. Encountered error: ", e)
 
         if flux_diffusers or vision or file_attached:
             print("Invoking quick-return route for hfw-diffusers or hfw-vision")
@@ -3786,7 +3751,7 @@ def setup_for_llama_cpp_response():
                     print("Returning diffusers formatted_prompt: ", formatted_prompt)
                     return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
                 except Exception as e:
-                    return handle_api_error("Could not format prompt for hfw-diffusers in method setup_for_llama_cpp_response, encountered error: ", e)
+                    return handle_api_error("Could not format prompt for hfw-diffusers in method setup_for_local_llm_response, encountered error: ", e)
         
             if file_attached or vision:
                 print("File or vision detected, preparing accordingly")
@@ -3795,7 +3760,7 @@ def setup_for_llama_cpp_response():
                     try:
                         formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True, True)
                     except Exception as e:
-                        return handle_api_error("Could not format prompt for Vision-LLM in method setup_for_llama_cpp_response, encountered error: ", e)
+                        return handle_api_error("Could not format prompt for Vision-LLM in method setup_for_local_llm_response, encountered error: ", e)
                     print("File attached to request, returning vision formatted_prompt: ", formatted_prompt)
                     return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
             
@@ -3946,7 +3911,7 @@ def get_references():
             hf_read_return = read_hf_config(['flux_diffusers'])
             flux_diffusers = str(hf_read_return['flux_diffusers']).lower() == 'true'
         except Exception as e:
-            handle_error_no_return("Could not determine flux_diffusers from hf_config.json in method setup_for_llama_cpp_response. Continuing with Transformers. Encountered error: ", e)
+            handle_error_no_return("Could not determine flux_diffusers from hf_config.json in method get_references. Continuing with Transformers. Encountered error: ", e)
 
         if flux_diffusers:
             do_rag = False
