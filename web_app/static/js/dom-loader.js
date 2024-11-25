@@ -830,6 +830,7 @@ function toggleOcrSelection() { //Show or hide OCR-Service selection:
         document.getElementById('azure_vision_api_form').style.display = 'none'; 
         document.getElementById('azure_doc_ai_api_form').style.display = 'none';
         document.getElementById('local_vision_api_form').style.display = 'none';
+        document.getElementById('kosmos_api_form').style.display = 'none';
     } else {
         if (document.getElementById('ocrApiDropdown').value != 'AzureVision') {
             document.getElementById('azure_vision_api_form').style.display = 'none'; //Hide API-Details-Form
@@ -837,6 +838,8 @@ function toggleOcrSelection() { //Show or hide OCR-Service selection:
             document.getElementById('azure_doc_ai_api_form').style.display = 'none';
         } else if (document.getElementById('ocrApiDropdown').value != 'LocalVisionLLM') {
             document.getElementById('local_vision_api_form').style.display = 'none';
+        } else if (document.getElementById('ocrApiDropdown').value != 'Kosmos') {
+            document.getElementById('kosmos_api_form').style.display = 'none';
         }
     }
 }
