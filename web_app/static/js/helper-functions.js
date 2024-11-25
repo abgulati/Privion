@@ -899,6 +899,8 @@ function googleDriveLogin() {
     .then(data => {
         if (data.success) {
             //alert("Google Drive Login Successful!")
+            document.getElementById('googleDriveUserName').textContent = "Logged in as: " + data.user_name;
+            document.getElementById('googleDriveUserName').style.display = 'block';
 
             fetch('/fetch_file_list_from_google_drive')
             .then(response => {
@@ -944,7 +946,9 @@ function googleDriveLogout() {
     })
     .then(data => {
         if (data.success) {
-            console.log(data);
+            // console.log(data);
+            document.getElementById('googleDriveUserName').style.display = 'none';
+            document.getElementById('googleDriveUserName').textContent = '';
             clearGoogleDriveTable();
         } else {
             throw new Error('Internal Server Error: Check server-log and server command-line for more details.');

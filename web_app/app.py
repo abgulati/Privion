@@ -1663,7 +1663,16 @@ def login_to_google_drive():
         GDRIVE_CREDS = flow.run_local_server(port=0)
         with open("gdrive_token.json", "w") as token:
             token.write(GDRIVE_CREDS.to_json())
-    return jsonify(success=True)
+
+    # Get name of the user
+    try:
+        service = build('drive', 'v3', credentials=GDRIVE_CREDS)
+        about_result = service.about().get(fields="user").execute()
+        user_name = about_result.get('user', {}).get('emailAddress', 'Unknown User')
+        return jsonify(success=True, user_name=user_name)
+    except Exception as e:
+        handle_error_no_return("Could not get user name from Google Drive, encountered error: ", e)
+        return jsonify(success=True)
 
 
 @app.route('/logout_from_google_drive')
