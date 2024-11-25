@@ -733,6 +733,7 @@ background-color: #282d33; /* Darker shade on hover */
 
 .table-container {
     max-height: calc(90vh - 575px);
+    min-height: 150px;
     border-bottom-style: double;
     overflow-y: auto;
     margin: 1rem 0;
