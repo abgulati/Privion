@@ -691,6 +691,17 @@ document.getElementById("user-input").addEventListener('change', adjustTextareaR
 
 // Upload new files to VectorDB
 document.getElementById('fileInput').addEventListener('change', function (event) {
+    const confirmed = confirm('Make sure to verify that the following Settings pertaining to File Uploading are correct:\n\n- Text Extraction Method: ' 
+        + (document.getElementById('ocr_yes_radio_button').checked ? 'OCR' : 'Non-OCR (Plain-Text Extraction)') 
+        + '\n- OCR Service Choice: ' + (document.getElementById('ocr_yes_radio_button').checked ? document.getElementById('ocrApiDropdown').value : 'Not Applicable') 
+        + '\n- VectorDB: ' + document.getElementById('embedding_model_dropdown').value 
+        + '\n\nIf unsure, click Cancel to abort the file upload process.');
+
+    if (!confirmed) {
+        document.getElementById('fileInput').value = "";  // Clear the input value
+        return;
+    }
+    
     if (this.value) {    // Check if a file is selected
     
         document.getElementById('overlay').style.display = 'block';

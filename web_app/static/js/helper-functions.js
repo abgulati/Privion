@@ -828,6 +828,16 @@ function updateUIForFile(row, status) {
 }
 
 function triggerSyncGoogleDrive() {
+    const confirmed = confirm('Make sure to verify that the following Settings pertaining to File Uploading are correct:\n\n- Text Extraction Method: ' 
+        + (document.getElementById('ocr_yes_radio_button').checked ? 'OCR' : 'Non-OCR (Plain-Text Extraction)') 
+        + '\n- OCR Service Choice: ' + (document.getElementById('ocr_yes_radio_button').checked ? document.getElementById('ocrApiDropdown').value : 'Not Applicable') 
+        + '\n- VectorDB: ' + document.getElementById('embedding_model_dropdown').value 
+        + '\n\nIf unsure, click Cancel to abort the file upload process.');
+
+    if (!confirmed) {
+        return;
+    }
+
     const table = document.getElementById('google_drive_files_tables');
     const syncButton = document.getElementById('googleDriveSyncAction');
     const selectedFiles = [];
