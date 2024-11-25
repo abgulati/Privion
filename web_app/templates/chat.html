@@ -297,7 +297,7 @@
 
                                             <div class="hf-waitress-diffusers-configuration-div" id="hf-waitress-diffusers-configuration-div" style="display: none;">
                                                 
-                                                <div id="hf_waitress_diffusers_low_vram_optimizations">
+                                                <div id="hf_waitress_diffusers_low_vram_optimizations" title="Instant load-times, slow CPU renders. Recommended for most users.">
                                                     <label class="hf-select-settings-labels-group">Low VRAM Optimizations for FLUX - Enable CPU Offload, VAE Slicing & Tiling?</label>
                                                     <input type="radio" id="hf_waitress_diffusers_low_vram_optimizations_yes" name="hf_diffusers_use_low_vram_optimizations" value="y" style="margin-left: 7px;"> Yes (Default)
                                                     <input type="radio" id="hf_waitress_diffusers_low_vram_optimizations_no" name="hf_diffusers_use_low_vram_optimizations" value="n" style="margin-left: 7px;"> No
@@ -305,7 +305,7 @@
     
                                                 <br>
 
-                                                <div id="hf_waitress_diffusers_fp8">
+                                                <div id="hf_waitress_diffusers_fp8" title="Very slow load-times, fast GPU renders. Requires Optimum-Quanto Python package. NOT recommended for most users!">
                                                     <label class="hf-select-settings-labels-group">FP8 Quantized FLUX Inferencing - GPU Inferencing Under 16GB VRAM?</label>
                                                     <input type="radio" id="hf_waitress_diffusers_fp8_yes" name="hf_diffusers_use_fp8" value="y" style="margin-left: 7px;"> Yes
                                                     <input type="radio" id="hf_waitress_diffusers_fp8_no" name="hf_diffusers_use_fp8" value="n" style="margin-left: 7px;"> No (Default)
@@ -979,11 +979,10 @@
                                     <br>
                                     <button class="btn btn-primary" type="button" id="googleDriveLogin">Login to / Refresh your Google Drive</button>
                                     <button class="btn btn-primary" type="button" id="googleDriveLogout">Logout from Google Drive</button>
-
+                                    <p id="googleDriveUserName" style="font-weight: bold; display: none; margin-top: 15px; margin-bottom: -1rem;"></p>  <!--Paragraph elements have a default bottom margin of 1rem, so we need to override it here-->
                                     <br>
-                                    <br>
 
-                                    <label>Google Drive File Browser:</label>
+                                    <label style="margin: 15px 0px;">Google Drive File Browser:</label>
 
                                     <div id="loader" class="loader" style="display: none;"></div>
 
@@ -996,7 +995,7 @@
 
                                         <input type="text" class="gdrive-search-bar" id="gdrive-search-bar" oninput="filterGoogleDriveTable(this.value)" placeholder="Search by Document Name...">
                                         
-                                        <div class="table-container">
+                                        <div class="table-container" style="margin-top: 1.5rem;">
                                             <table id="google_drive_files_tables" class="gdrive-table">  <!--TODO: table wrap per div width-->
                                                 <thead>
                                                 <!-- <tr>
