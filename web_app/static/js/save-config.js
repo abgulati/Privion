@@ -98,7 +98,8 @@ function getSysPromptConfig() {
 
 function getRagConfig() {
     let force_enable_rag = false;
-    let force_disable_rag = false; 
+    let force_disable_rag = false;
+    let llm_filter_citations = false;
 
     if (forceEnableRagCheckbox.checked) {
         force_enable_rag = true;
@@ -106,7 +107,11 @@ function getRagConfig() {
         force_disable_rag = true;
     }
 
-    return {'force_enable_rag': force_enable_rag, 'force_disable_rag': force_disable_rag};
+    if (document.getElementById('llm_filter_citations_checkbox').checked) { 
+        llm_filter_citations = true;
+    }
+
+    return {'force_enable_rag': force_enable_rag, 'force_disable_rag': force_disable_rag, 'llm_filter_citations': llm_filter_citations};
 }
 
 
@@ -236,11 +241,15 @@ function saveConfigToServer(config) {
     .then(data => {
         console.log(data);
         if (data.restart_required) {    // Refresh the page
-            location.reload();
+            console.log("LARS config changes saved successfully, restart required.");
+            return true;    // Return true to indicate that a restart is required
         }
+        console.log("LARS config changes saved successfully, restart unnecessary.");
+        return false;   // Return false to indicate that a restart is not required
     })
     .catch(error => {
-        errorHandler("writing to config.json", "/config_writer_api", String(error.message))
+        errorHandler("writing to config.json", "/config_writer_api", String(error.message));
+        return false;   // Return false to indicate that a restart is not required
     });
 }
 
@@ -372,12 +381,15 @@ function handleHfWaitressChanges(hf_config) {
             console.log(data);
             if (data.restart_required) {
                 // Restart HF-Waitress Server
-                return fetchRestartEventStream();
+                console.log("HF-Waitress server changes saved successfully, restarting server.");
+                return fetchRestartEventStream();   // Call to an async function will return a promise, so we need to return the promise...
+            } else {
+                console.log("HF-Waitress server changes saved successfully, restart unnecessary.");
+                resolve();
             }
         })
         .then(() => {
-            console.log("HF-Waitress server changes saved successfully.");
-            resolve();
+            resolve();  // ...which is resolved here!
         })
         .catch(error => {
             errorHandler("handling HF-Waitress Server changes", "handleHfWaitressChanges", String(error.message));
@@ -403,7 +415,8 @@ function handleSaveChanges() {
         ...getGoogleDriveConfig()
     };
 
-    let hfSavePromise = Promise.resolve();  // Initialized as a resolved promise so non-blocking!
+    let hfSavePromise;  // Declaring the variable that will hold the promise returned by handleHfWaitressChanges(). Defaulting will result in race condition, so we'll need to handle the Promise chain manually.
+    let needsReload = false;
 
     if (config.local_llm_server === "hf-waitress") {
         const hf_waitress_server_status = document.getElementById('local_llm_server_status_indicator_text').style.color;
@@ -419,27 +432,44 @@ function handleSaveChanges() {
                     let chatID = getChatId();
                     setModelHeaderInfoBox(chatID, hf_config.model_id);
                     if (hf_config.model_id.toLowerCase().includes('vision-instruct')) { // we have switched to a Vision-Instruct model...
+                        console.log("Loaded up a Vision model");
                         document.getElementById('textAttachmentButton').disabled = false;
                         let current_sequence_id = getSequenceId();
                         if (current_sequence_id != null && parseInt(current_sequence_id) > 0 && !String(getOldLlmModel()).toLowerCase().includes('vision-instruct')) {  //...midway through a chat, or while browsing chat history, and the old LLM model was not a Vision-Instruct model...
-                            location.reload();  //...reload!
+                            console.log("Reloading the page to clear the previous model context");
+                            needsReload = true;
                         }
                     } else {    //...we have switched to a non-Vision-Instruct model...
+                        console.log("Loaded up a non-Vision model");
                         document.getElementById('textAttachmentButton').disabled = true;
                         if (String(getOldLlmModel()).toLowerCase().includes('vision-instruct') || String(getOldLlmModel()).toLowerCase().includes('gguf') || String(getOldLlmModel()).toLowerCase().includes('flux')) {    //...from a Vision-Instruct, FLUX, or a GGUF model...
-                            location.reload();  //...reload!
+                            console.log("Reloading the page to clear the previous model context");
+                            needsReload = true;
                         }
                     }
+                    return needsReload;
                 })
                 .catch(error => {
                     errorHandler("saving HF-Waitress settings", "handleSaveChanges()", String(error.message));  // Catching the error will resolve the Promise and allow the rest of the code to continue!
+                    return false; // hfSavePromise is assigned to the entire promise chain including this catch, so we need only return here to resolve the Promise. False indicates that a restart is not required.
                 });
+        } else {
+            console.log("HF-Waitress server is not running, skipping HF-Waitress changes.");
+            hfSavePromise = Promise.resolve(false);
         }
+    } else {
+        console.log("Not saving HF-Waitress settings, as the LLM server is not HF-Waitress");
+        hfSavePromise = Promise.resolve(false);
     }
+    
     console.log("Saving LARS config: ", config);
-    Promise.all([hfSavePromise, saveConfigToServer(config)])    // This promise will always resolve, even if hfSavePromise is not resolved, so we're not blocking the saveConfigToServer() promise. Use Promise.all() to handle both promises in parallel, but wait for both to resolve before proceeding.
-        .then(() => {
-            console.log("LARS config saved successfully, restart unnecessary.");
+    Promise.all([hfSavePromise, saveConfigToServer(config)])    // This promise will always resolve, as hfSavePromise defaults to a resolved promise, so we're not blocking the saveConfigToServer() promise. Promise.all() is used to handle both promises in parallel, waiting for both to resolve before proceeding.
+        .then(([hfNeedsReload, configNeedsReload]) => {
+            console.log("LARS config saved successfully.");
+            if (hfNeedsReload || configNeedsReload) {
+                console.log("A restart is required to apply the changes.");
+                location.reload();  // centralized handling of effects that depend on multiple async operations.
+            }
         })
         .catch(error => {
             errorHandler("saving LARS settings", "handleSaveChanges()", String(error.message));
