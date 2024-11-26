@@ -1,0 +1,828 @@
+{
+	"info": {
+		"_postman_id": "0ea1e9f3-4c4c-4dd1-914f-c126f2943e0f",
+		"name": "all-apis",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "19227763"
+	},
+	"item": [
+		{
+			"name": "Completion-Stream",
+			"protocolProfileBehavior": {
+				"followRedirects": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					},
+					{
+						"key": "X-Return-Full-Text",
+						"value": "False",
+						"type": "text"
+					},
+					{
+						"key": "X-Temperature",
+						"value": "0.7",
+						"type": "text"
+					},
+					{
+						"key": "X-Do-Sample",
+						"value": "True",
+						"type": "text"
+					},
+					{
+						"key": "X-Top-K",
+						"value": "40",
+						"type": "text"
+					},
+					{
+						"key": "X-Top-P",
+						"value": "0.95",
+						"type": "text"
+					},
+					{
+						"key": "X-Min-P",
+						"value": "0.05",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"messages\": [\r\n        {\"role\": \"system\", \"content\": \"Answer the user's question in as much detail as possible. Be as accurate as possible. Do not make up answers or fabricate false information! Whenever additional context is provided, mention the document names and page numbers the user should reference as per your best judgement. Please output newlines to format the response!\"},\r\n        {\"role\": \"user\", \"content\": \"How would you summarize Intel's Q1 2024 earnings?\\n\\nThe following context might be helpful in answering the user query above:\\n[Document(page_content='. Forecasting second-quarter 2024 revenue of $12.5 billion to $13.5 billion; expecting second-quarter EPS of $(0.05); non-GAAP EPS of $0.10.\\\\nSANTA CLARA, Calif., April 25, 2024 - Intel Corporation today reported first-quarter 2024 financial results.', metadata={'page_number': 1, 'source': 'C:/web_app_storage/ocr_pdfs/Intel_Q1_24_EarningsRelease_FINAL.txt'}), Document(page_content='Intel/Page 6\\\\nIntel Corporation Consolidated Condensed Statements of Income and Other Information', metadata={'page_number': 6, 'source': 'C:/web_app_storage/ocr_pdfs/Intel_Q1_24_EarningsRelease_FINAL.txt'}), Document(page_content='Intel/Page 8\\\\nIntel Corporation Consolidated Condensed Statements of Income and Other Information', metadata={'page_number': 8, 'source': 'C:/web_app_storage/ocr_pdfs/FINAL_Q2_24_Earnings_Release.txt'}), Document(page_content='SANTA CLARA, Calif., Aug. 1, 2024 - Intel Corporation today reported second-quarter 2024 financial results.', metadata={'page_number': 1, 'source': 'C:/web_app_storage/ocr_pdfs/FINAL_Q2_24_Earnings_Release.txt'}), Document(page_content='Row 35, Column 0: Non-GAAP net income attributable to Intel\\\\nRow 35, Column 1: $ 83\\\\nRow 35, Column 2: $ 547\\\\nRow 36, Column 0: (In Millions, Except Per Share Amounts)\\\\nRow 36, Column 1: Jun 29, 2024\\\\nRow 36, Column 2: Jul 1, 2023', metadata={'page_number': 14, 'source': 'C:/web_app_storage/ocr_pdfs/FINAL_Q2_24_Earnings_Release.txt'})]\"}\r\n    ]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:9069/completions_stream",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"completions_stream"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "http://localhost:9069/completions",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"messages\": [\r\n    {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"}, \r\n    {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n    {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n    {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:9069/completions",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "9069",
+							"path": [
+								"completions"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Server",
+							"value": "Werkzeug/3.0.1 Python/3.11.5"
+						},
+						{
+							"key": "Date",
+							"value": "Sun, 28 Jul 2024 07:43:01 GMT"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						},
+						{
+							"key": "Content-Length",
+							"value": "388"
+						},
+						{
+							"key": "Connection",
+							"value": "close"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"response\": [\n        {\n            \"generated_text\": \"Let's solve the equation 2x + 3 = 7.\\n\\nTo solve for x, we need to isolate the variable x. We can do this by subtracting 3 from both sides of the equation:\\n\\n2x + 3 - 3 = 7 - 3\\n\\nThis simplifies to:\\n\\n2x = 4\\n\\nNext, we can divide both sides of the equation by 2 to solve for x:\\n\\n2x / 2 = 4 / 2\\n\\nx = 2\\n\\nSo, the value of x is 2.\"\n        }\n    ],\n    \"success\": true\n}"
+				}
+			]
+		},
+		{
+			"name": "Health",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:9069/health",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"health"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Completions",
+			"protocolProfileBehavior": {
+				"followRedirects": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					},
+					{
+						"key": "X-Return-Full-Text",
+						"value": "True",
+						"type": "text"
+					},
+					{
+						"key": "X-Temperature",
+						"value": "0.7",
+						"type": "text"
+					},
+					{
+						"key": "X-Do-Sample",
+						"value": "True",
+						"type": "text"
+					},
+					{
+						"key": "X-Top-K",
+						"value": "40",
+						"type": "text"
+					},
+					{
+						"key": "X-Top-P",
+						"value": "0.95",
+						"type": "text"
+					},
+					{
+						"key": "X-Min-P",
+						"value": "0.05",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"}, \r\n        {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n        {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n        {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n    ] \r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:9069/completions",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"completions"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "http://localhost:9069/completions",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"messages\": [\r\n    {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"}, \r\n    {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n    {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n    {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:9069/completions",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "9069",
+							"path": [
+								"completions"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Server",
+							"value": "Werkzeug/3.0.1 Python/3.11.5"
+						},
+						{
+							"key": "Date",
+							"value": "Sun, 28 Jul 2024 07:43:01 GMT"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						},
+						{
+							"key": "Content-Length",
+							"value": "388"
+						},
+						{
+							"key": "Connection",
+							"value": "close"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"response\": [\n        {\n            \"generated_text\": \"Let's solve the equation 2x + 3 = 7.\\n\\nTo solve for x, we need to isolate the variable x. We can do this by subtracting 3 from both sides of the equation:\\n\\n2x + 3 - 3 = 7 - 3\\n\\nThis simplifies to:\\n\\n2x = 4\\n\\nNext, we can divide both sides of the equation by 2 to solve for x:\\n\\n2x / 2 = 4 / 2\\n\\nx = 2\\n\\nSo, the value of x is 2.\"\n        }\n    ],\n    \"success\": true\n}"
+				}
+			]
+		},
+		{
+			"name": "Config-Writer",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"config_updates\": {\r\n    \"model_id\":\"mistralai/Mistral-Nemo-Instruct-2407\",\r\n    \"quantize\":\"bitsandbytes\",\r\n    \"quant_level\":\"int4\",\r\n    \"torch_dtype\":\"torch.bfloat16\",\r\n    \"torch_device_map\":\"cuda\"\r\n  }\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:9069/hf_config_writer_api",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"hf_config_writer_api"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Restart-Server",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:9069/restart_server",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"restart_server"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Config-Reader",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"keys\": [\r\n    \"model_id\",\r\n    \"quantize\",\r\n    \"quant_level\",\r\n    \"torch_device_map\",\r\n    \"torch_dtype\",\r\n    \"use_flash_attention_2\",\r\n    \"max_new_tokens\"\r\n  ]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:9069/hf_config_reader_api",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"hf_config_reader_api"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "FLUX-Image-Generation",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"followRedirects": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-Guidance-Scale",
+						"value": "0",
+						"type": "text"
+					},
+					{
+						"key": "X-Height",
+						"value": "768",
+						"type": "text"
+					},
+					{
+						"key": "X-Width",
+						"value": "1360",
+						"type": "text"
+					},
+					{
+						"key": "X-Num-Inference-Steps",
+						"value": "3",
+						"type": "text"
+					},
+					{
+						"key": "X-Max-Sequence-Length",
+						"value": "256",
+						"type": "text"
+					},
+					{
+						"key": "X-Num-Images-Per-Prompt",
+						"value": "1",
+						"type": "text"
+					},
+					{
+						"key": "",
+						"value": "",
+						"type": "text",
+						"disabled": true
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\"prompt\": \"High-end liquid-cooled waterfall-themed desktop PC\"}\r\n    ] \r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:9069/completions",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"completions"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "http://localhost:9069/completions",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"messages\": [\r\n    {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"}, \r\n    {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n    {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n    {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:9069/completions",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "9069",
+							"path": [
+								"completions"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Server",
+							"value": "Werkzeug/3.0.1 Python/3.11.5"
+						},
+						{
+							"key": "Date",
+							"value": "Sun, 28 Jul 2024 07:43:01 GMT"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						},
+						{
+							"key": "Content-Length",
+							"value": "388"
+						},
+						{
+							"key": "Connection",
+							"value": "close"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"response\": [\n        {\n            \"generated_text\": \"Let's solve the equation 2x + 3 = 7.\\n\\nTo solve for x, we need to isolate the variable x. We can do this by subtracting 3 from both sides of the equation:\\n\\n2x + 3 - 3 = 7 - 3\\n\\nThis simplifies to:\\n\\n2x = 4\\n\\nNext, we can divide both sides of the equation by 2 to solve for x:\\n\\n2x / 2 = 4 / 2\\n\\nx = 2\\n\\nSo, the value of x is 2.\"\n        }\n    ],\n    \"success\": true\n}"
+				}
+			]
+		},
+		{
+			"name": "Vision-Completions",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"followRedirects": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-DPI",
+						"value": "300",
+						"type": "text"
+					},
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/C:/Users/abhee/OneDrive/Documents/Work_Stuff/LLMs/LARS-Enterprise/documents/images_and_screenshots/vision_tests/form-image.png"
+						},
+						{
+							"key": "messages",
+							"value": "[\n    {\"role\": \"user\", \"content\": [\n        {\"type\": \"image\"},\n        {\"type\": \"text\", \"text\": \"Please describe the attached document\"}\n    ]}\n]",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:9069/completions",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"completions"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "http://localhost:9069/completions",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"messages\": [\r\n    {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"}, \r\n    {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n    {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n    {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:9069/completions",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "9069",
+							"path": [
+								"completions"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Server",
+							"value": "Werkzeug/3.0.1 Python/3.11.5"
+						},
+						{
+							"key": "Date",
+							"value": "Sun, 28 Jul 2024 07:43:01 GMT"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						},
+						{
+							"key": "Content-Length",
+							"value": "388"
+						},
+						{
+							"key": "Connection",
+							"value": "close"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"response\": [\n        {\n            \"generated_text\": \"Let's solve the equation 2x + 3 = 7.\\n\\nTo solve for x, we need to isolate the variable x. We can do this by subtracting 3 from both sides of the equation:\\n\\n2x + 3 - 3 = 7 - 3\\n\\nThis simplifies to:\\n\\n2x = 4\\n\\nNext, we can divide both sides of the equation by 2 to solve for x:\\n\\n2x / 2 = 4 / 2\\n\\nx = 2\\n\\nSo, the value of x is 2.\"\n        }\n    ],\n    \"success\": true\n}"
+				}
+			]
+		},
+		{
+			"name": "Vision-Stream",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"followRedirects": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-DPI",
+						"value": "300",
+						"type": "text"
+					},
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/C:/Users/abhee/Downloads/kamala_scan.png"
+						},
+						{
+							"key": "messages",
+							"value": "[\n    {\"role\": \"user\", \"content\": [\n        {\"type\": \"image\"},\n        {\"type\": \"text\", \"text\": \"What form fields need to be filled in the attached document? \"}\n    ]}\n]",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:9069/vision_stream",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"vision_stream"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "http://localhost:9069/completions",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"messages\": [\r\n    {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"}, \r\n    {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n    {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n    {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:9069/completions",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "9069",
+							"path": [
+								"completions"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Server",
+							"value": "Werkzeug/3.0.1 Python/3.11.5"
+						},
+						{
+							"key": "Date",
+							"value": "Sun, 28 Jul 2024 07:43:01 GMT"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						},
+						{
+							"key": "Content-Length",
+							"value": "388"
+						},
+						{
+							"key": "Connection",
+							"value": "close"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"response\": [\n        {\n            \"generated_text\": \"Let's solve the equation 2x + 3 = 7.\\n\\nTo solve for x, we need to isolate the variable x. We can do this by subtracting 3 from both sides of the equation:\\n\\n2x + 3 - 3 = 7 - 3\\n\\nThis simplifies to:\\n\\n2x = 4\\n\\nNext, we can divide both sides of the equation by 2 to solve for x:\\n\\n2x / 2 = 4 / 2\\n\\nx = 2\\n\\nSo, the value of x is 2.\"\n        }\n    ],\n    \"success\": true\n}"
+				}
+			]
+		},
+		{
+			"name": "Vision-Stream-Conversation",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"followRedirects": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-DPI",
+						"value": "300",
+						"type": "text"
+					},
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/C:/Users/abhee/Downloads/2.pdf"
+						},
+						{
+							"key": "messages",
+							"value": "[\n    {\"role\": \"user\", \"content\": [\n        {\"type\": \"image\"},\n        {\"type\": \"text\", \"text\": \"What form fields need to be filled in the attached document? \"}\n    ]},\n    {\"role\":\"assistant\", \"content\":\"**Required Form Fields:**\\n\\nThe following fields in the attached document must be filled in:\\n\\n* **Filing Status:** Single or Married filing jointly\\n* **Last name:** EMHOFF\\n* **First name:** KAMALA D.\\n* **City, town, or post office:** HARRIS\\n* **Foreign country name:** None\\n* **Foreign province/state/county:** None\\n* **Foreign postal code:** None\\n* **Standard Deduction:** Yes\\n* **Spouse:** Yes\\n* **Age/Birthdate:** Born before January 2, 1957\\n* **Spouse:** Born before January 2, 1957\\n* **Dependents:** First name, Last name, Social security number, Relationship to you\\n* **Wages, salaries, tips, etc. Attach Form(s) W-2:** Tax-exempt interest, Qualified dividends, IRA distributions, Pensions and annuities, Social security benefits\\n* **Standard Deduction for:** Single or Married filing separately, Married filing jointly, Head of household, Standard Deduction, Taxable income\\n* **Charitable contributions:** Add lines 12a and 12b\\n* **Qualified business income deduction from Form 8995 or Form 6995-A:** Add lines 12c and 13\\n* **Taxable income:** Subtract line 14 from line 11\\n\\nThese fields are necessary for accurate reporting and compliance with tax laws.\"},\n    {\"role\": \"user\", \"content\":\"Anything else you can tell me?\"},\n    {\"role\":\"assistant\", \"content\":\"Based on the provided information, it appears that the user is filing a tax return for the year 2022. The user is married filing jointly and has two dependents. The user's income includes wages, salaries, tips, and other income, as well as tax-exempt interest, qualified dividends, IRA distributions, pensions and annuities, and social security benefits.\\n\\nThe user is claiming the standard deduction, which is $25,900 for married filing jointly. The user is also claiming the qualified business income deduction, which is $100,000.\\n\\nThe user has made charitable contributions totaling $10,000 and has a total taxable income of $150,000. The user's tax liability is $20,000, and the user is eligible for a refund of $30,000.\\n\\nIt's important to note that this is just a hypothetical example and actual tax returns may vary depending on individual circumstances. It's always best to consult with a tax professional or use tax preparation software to ensure accuracy and compliance with tax laws.\"},\n    {\"role\": \"user\", \"content\":\"Is this similar to any other form you know?\"},\n    {\"role\":\"assistant\", \"content\":\"The form you provided appears to be a tax form, likely a 1040 form, which is used for personal income tax returns in the United States. The form is divided into several sections, including personal information, income, deductions, and credits. The user is required to provide their name, address, and social security number, as well as information about their income, deductions, and credits.\\n\\nThe form also asks about the user's filing status, which determines the tax rates and deductions they are eligible for. The user is required to report their income from various sources, including wages, salaries, tips, and self-employment income. They are also asked to report any deductions they are eligible for, such as charitable contributions and mortgage interest.\\n\\nThe form also asks about the user's dependents, including their name, social security number, and relationship to the user. The user is also required to report any business income and expenses, as well as any investments and retirement accounts.\\n\\nOverall, the form is designed to help the user accurately report their income and claim the deductions and credits they are eligible for, in order to minimize their tax liability.\"},\n    {\"role\": \"user\", \"content\":\"What about this document?\"}\n]",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:9069/vision_stream",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"vision_stream"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "http://localhost:9069/completions",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"messages\": [\r\n    {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"}, \r\n    {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n    {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n    {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:9069/completions",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "9069",
+							"path": [
+								"completions"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Server",
+							"value": "Werkzeug/3.0.1 Python/3.11.5"
+						},
+						{
+							"key": "Date",
+							"value": "Sun, 28 Jul 2024 07:43:01 GMT"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						},
+						{
+							"key": "Content-Length",
+							"value": "388"
+						},
+						{
+							"key": "Connection",
+							"value": "close"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"response\": [\n        {\n            \"generated_text\": \"Let's solve the equation 2x + 3 = 7.\\n\\nTo solve for x, we need to isolate the variable x. We can do this by subtracting 3 from both sides of the equation:\\n\\n2x + 3 - 3 = 7 - 3\\n\\nThis simplifies to:\\n\\n2x = 4\\n\\nNext, we can divide both sides of the equation by 2 to solve for x:\\n\\n2x / 2 = 4 / 2\\n\\nx = 2\\n\\nSo, the value of x is 2.\"\n        }\n    ],\n    \"success\": true\n}"
+				}
+			]
+		}
+	]
+}
