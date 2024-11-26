@@ -2636,9 +2636,16 @@ def hf_waitress_server_starter():
         if platform.system() == 'Windows':
             HF_WAITRESS_PROCESS = subprocess.Popen(full_command, creationflags=subprocess.CREATE_NEW_CONSOLE)   #Popen is non-blocking, so the server will keep running in the background
         else:
-            # Platform & container agnostic:
+             # Platform & container agnostic - On Linux/Unix, you need to explicitly provide the arguments as a list to avoid shell interpretation issues:
+            command_list = [base_command]  # 'python3'
+            # Add script name
+            command_list.append('hf_waitress.py')
+            # Add any additional arguments
+            if launch_args.strip():  # Only add if there are actual arguments
+                command_list.extend(launch_args.split())
+            
             with open('hf_waitress_output_log.txt', 'w') as f:
-                HF_WAITRESS_PROCESS = subprocess.Popen(full_command, stdout=f, stderr=subprocess.STDOUT, text=True)
+                HF_WAITRESS_PROCESS = subprocess.Popen(command_list, stdout=f, stderr=subprocess.STDOUT, text=True)
 
     except Exception as e:
         return handle_api_error("Could not launch HF-Waitress process, encountered error: ", e)
