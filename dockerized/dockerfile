@@ -1,5 +1,6 @@
 # BUILD WITH: docker build --no-cache --progress=plain -t lars-v333 .
 # RUN WITH: docker run --gpus all -p 5000:5000 -p 9069:9069 -p 8080:8080 -v lars_storage:/app/lars_storage lars-v333
+# STORAGE VOLUME: docker volume create lars_storage
 
 # Use an official Nvidia CUDA runtime as a parent image
 FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
@@ -21,6 +22,7 @@ COPY . /app
 
 # OPTIONAL - Change fPIC level, and Set CUDA optimizations as per your GPU arch - `arch=compute_86,code=sm_86` is for RTX 3000 Ampere, `arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90` is for Ampere & Hopper etc
 # ENV CUDA_NVCC_FLAGS="-Xcompiler -fPIC -O3 --use_fast_math -gencode arch=compute_86,code=sm_86"
+ENV CUDA_NVCC_FLAGS="-gencode arch=compute_80,code=sm_80"
 
 # Clone specific llama.cpp release
 RUN git clone -b b4174 https://github.com/ggerganov/llama.cpp.git
