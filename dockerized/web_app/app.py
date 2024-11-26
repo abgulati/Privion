@@ -4124,4 +4124,5 @@ if __name__ == '__main__':
     print("\n\nServing LARS-Enterprise on localhost port 5000\n\n")
     # app.run(debug=True)
     # app.run(host='0.0.0.0', port=5000)
-    serve(app, host='0.0.0.0', port=5000)
+    MAX_UPLOAD_SIZE = 100 * 1024 * 1024 * 1024  # 100GB in bytes upload limit
+    serve(app, host='0.0.0.0', port=5000, max_request_body_size=MAX_UPLOAD_SIZE)
