@@ -1038,9 +1038,13 @@ def restart_server_stream():
 
     print("\n\nrestarting server with stream\n\n")
 
-    shutdown_pipe()
-    if MODEL is not None:
-        shutdown_model()
+    # shutdown_pipe()
+    # if MODEL is not None:
+    #     shutdown_model()
+    global PIPE
+    global MODEL
+    PIPE = None
+    MODEL = None
 
     try:
         read_return = read_config(['model_id', 'pipeline_task', 'flux_diffusers', 'vision'])
@@ -1875,9 +1879,13 @@ def restart_server():
                 print("\n\n/restart_server acquired error_logging_semaphore, proceeding...\n\n")
 
                 try:
-                    shutdown_pipe()
-                    if MODEL is not None:
-                        shutdown_model()
+                    # shutdown_pipe()
+                    # if MODEL is not None:
+                    #     shutdown_model()
+                    global PIPE
+                    global MODEL
+                    PIPE = None
+                    MODEL = None
                     initialize_model()
                 except Exception as e:
                     handle_api_error("Could not restart server, encountered error: ", e)
