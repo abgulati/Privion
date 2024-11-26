@@ -69,7 +69,8 @@ function loadAndSetCoreValues() {
         'vision_llm_local_url',
         'kosmos_local_url',
         'kosmos_task',
-        'kosmos_threshold'
+        'kosmos_threshold',
+        'llm_filter_citations'
     ]
     
     return fetch('/config_reader_api', {
@@ -246,6 +247,8 @@ function initializeHfSettingsDropdowns(all_values) {
         }
     }
 
+    toggleHfwQuantizationLevel();   // This is necessary to ensure the quantization level options are updated based on the selected quantization method.
+
     const hfQuantLevel = document.getElementById('hf_waitress_quantization_level_choice');
 
     for (let option of hfQuantLevel.options) {
@@ -254,8 +257,6 @@ function initializeHfSettingsDropdowns(all_values) {
             break;
         }
     }
-
-    toggleHfwQuantizationLevel();   // This is necessary to ensure the quantization level options are updated based on the selected quantization method.
 }
 
 
@@ -789,6 +790,9 @@ function initializeRAGTabCheckbox(force_enable_rag, force_disable_rag) {
 
 function initializeRAGTabComponents(values) {
     initializeRAGTabCheckbox(values.force_enable_rag , values.force_disable_rag);
+    if (values.llm_filter_citations) {
+        document.getElementById('llm_filter_citations_checkbox').checked = true;
+    }
 }
 
 
