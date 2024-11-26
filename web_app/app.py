@@ -298,6 +298,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'use_ocr':False,
                 'ocr_service_choice':'None',
                 'force_extract_previously_extracted_text':False,
+                'llm_filter_citations':True,
                 'local_llm_model_type':'llama',
                 'local_llm_chat_template_format':'llama3',
                 'local_llm_context_length':8192,
@@ -3858,16 +3859,30 @@ def setup_for_local_llm_response():
 
 
 
+def is_citation_relevant(llm_response, source_filename):
+    print(f"Checking if citation is relevant: {source_filename} in LLM response")
+    llm_response = llm_response.lower()
+    source_filename = source_filename.lower()   # Full source filename
+
+    source_filename_no_extension = source_filename.split('.')[0]     # Source filename without extension
+
+    source_filename_no_dashes_or_underscores = source_filename_no_extension.replace('_', ' ').replace('-', ' ') # Source filename without dashes or underscores: very unlikely that the LLM will deliberately output the document name with dashes or underscores but no extension!
+
+    return source_filename in llm_response or source_filename_no_dashes_or_underscores in llm_response or source_filename_no_extension in llm_response
+
+
+
 @app.route('/get_references', methods=['POST'])
 def get_references():
 
     print("\n\nStoring History Post-Response -- Determining if Citations are Necessary\n\n")
 
     try:
-        read_return = read_config(['local_llm_server', 'upload_folder', 'local_llm_chat_template_format'])
+        read_return = read_config(['local_llm_server', 'upload_folder', 'local_llm_chat_template_format', 'llm_filter_citations'])
         local_llm_server = read_return['local_llm_server']
         upload_folder = read_return['upload_folder']
         local_llm_chat_template_format = read_return['local_llm_chat_template_format']
+        llm_filter_citations = read_return['llm_filter_citations']
     except Exception as e:
         return handle_api_error("Missing values in config.json when attempting to get_references. Error: ", e)
 
@@ -3965,6 +3980,14 @@ def get_references():
         except Exception as e:
             handle_error_no_return("Could not parse path with OS lib, encountered error: ", e)
             continue
+        
+        try:
+            if llm_filter_citations:
+                if not is_citation_relevant(llm_response, source_filename):
+                    print(f"Citation {source_filename} is not relevant, skipping")
+                    continue
+        except Exception as e:
+            handle_error_no_return("Could not determine if citation is relevant in get_references(). Considering it relevant and continuing. Encountered error: ", e)
 
         if file_extension == '.txt':    # The source_filepath will likely always reference a TXT file because of how we're loading the VectorDB!
 
