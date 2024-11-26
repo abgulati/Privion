@@ -312,9 +312,9 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'server_timeout_seconds':10,
                 'server_retry_attempts':3,
                 'whoosh_search_weighting':'BM25F',
-                'fetch_top_k_results_from_whoosh':75,
-                'fetch_top_k_results_from_vectordb':75,
-                'filter_top_k_results_by_reranking':20,
+                'fetch_top_k_results_from_whoosh':50,
+                'fetch_top_k_results_from_vectordb':11,
+                'filter_top_k_results_by_reranking':50,
                 'base_template':"You are a helpful assistant designed to answer user questions with accuracy and detail. Follow these instructions carefully:\n\n1. Accuracy and Truthfulness: Always provide accurate information. Do not fabricate or guess answers. If unsure, clearly state that you don't know.\n\n2. Using Additional Context:\n\na. If additional context is provided, identify and mention only the document names and page numbers that are directly relevant to the user's query.\nb. Use the document names exactly as they appear in the context, including any special characters or formatting.\n\n3. Avoiding Irrelevant Information:\na. Do not mention or acknowledge irrelevant documents or context.\nb. Be mindful that the user cannot see the additional context. Ensure your response does not confuse them by referencing irrelevant or unnecessary details.\n\n4. Clarity in Responses: Structure your response so that it is clear, concise, and easy to understand.\n\nImportant: Only include references to sources when additional context is provided and when the source is directly helpful for answering the user's query. If no additional context is provided, answer based solely on your internal knowledge.\n\n",
                 'skip_system_prompt':False
             }.get(key, 'undefined')
@@ -2646,7 +2646,8 @@ def hf_waitress_server_starter():
                 command_list.extend(launch_args.split())
             
             with open('hf_waitress_output_log.txt', 'w') as f:
-                HF_WAITRESS_PROCESS = subprocess.Popen(command_list, stdout=f, stderr=subprocess.STDOUT, text=True)
+                # HF_WAITRESS_PROCESS = subprocess.Popen(command_list, stdout=f, stderr=subprocess.STDOUT, text=True)
+                HF_WAITRESS_PROCESS = subprocess.Popen(command_list)
 
     except Exception as e:
         return handle_api_error(f"Could not launch HF-Waitress process in directory: {os.getcwd()}, encountered error: ", e)
