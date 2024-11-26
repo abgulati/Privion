@@ -415,7 +415,7 @@ function handleSaveChanges() {
         ...getGoogleDriveConfig()
     };
 
-    let hfSavePromise;  // Declaring the variable that will hold the promise returned by handleHfWaitressChanges(). Defaulting will result in race condition, so we'll need to handle the Promise chain manually.
+    let hfSavePromise;  // Declaring the variable that will hold the promise returned by handleHfWaitressChanges(). Defaulting will result in a race condition, so we'll need to handle the Promise chain manually.
     let needsReload = false;
 
     if (config.local_llm_server === "hf-waitress") {
@@ -463,7 +463,7 @@ function handleSaveChanges() {
     }
     
     console.log("Saving LARS config: ", config);
-    Promise.all([hfSavePromise, saveConfigToServer(config)])    // This promise will always resolve, as hfSavePromise defaults to a resolved promise, so we're not blocking the saveConfigToServer() promise. Promise.all() is used to handle both promises in parallel, waiting for both to resolve before proceeding.
+    Promise.all([hfSavePromise, saveConfigToServer(config)])    // This promise will always resolve, as hfSavePromise is manually set to resolve to false when necessary, so we're not blocking the saveConfigToServer() promise. Promise.all() is used to handle both promises in parallel, waiting for both to resolve before proceeding.
         .then(([hfNeedsReload, configNeedsReload]) => {
             console.log("LARS config saved successfully.");
             if (hfNeedsReload || configNeedsReload) {
