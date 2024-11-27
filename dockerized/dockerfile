@@ -49,6 +49,7 @@ RUN pip install -v prebuilt_wheels/flash_attn-2.6.3-cp310-cp310-linux_x86_64.whl
 
 # make port 5000 available to the world outside this container
 EXPOSE 5000
+EXPOSE 6003
 EXPOSE 8080
 EXPOSE 9069
 
