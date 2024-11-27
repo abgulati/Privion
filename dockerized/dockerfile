@@ -1,5 +1,5 @@
 # BUILD WITH: docker build --no-cache --progress=plain -t lars-v333 .
-# RUN WITH: docker run --gpus all -p 5000:5000 -p 9069:9069 -p 8080:8080 -v lars_storage:/app/lars_storage lars-v333
+# RUN WITH: docker run --gpus all -p 5000:5000 -p 9069:9069 -p 8080:8080 -p 6003:6003 -v lars_storage:/app/lars_storage lars-v333
 # STORAGE VOLUME: docker volume create lars_storage
 
 # Use an official Nvidia CUDA runtime as a parent image
