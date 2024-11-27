@@ -74,7 +74,8 @@ function errorHandler(attempted_action, error_generator, error_message) {
     console.error(full_error_message);
     alert(error_alert_message);
     document.getElementById('ModelAndDBLoading').style.display = 'none';
-    document.getElementById('SavingHfWaitressSettings').style.display = 'none';  
+    document.getElementById('SavingHfWaitressSettings').style.display = 'none';
+    hideLoader();
 }
 
 const forceEnableRagCheckbox = document.getElementById('force_enable_rag_checkbox');
