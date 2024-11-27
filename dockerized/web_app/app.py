@@ -1668,7 +1668,7 @@ def login_to_google_drive():
         flow = InstalledAppFlow.from_client_secrets_file(
             "gdrive_credentials.json", GDRIVE_SCOPES
         )
-        GDRIVE_CREDS = flow.run_local_server(port=0)
+        GDRIVE_CREDS = flow.run_local_server(port=6003)
         with open("gdrive_token.json", "w") as token:
             token.write(GDRIVE_CREDS.to_json())
 
