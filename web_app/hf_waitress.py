@@ -243,6 +243,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'min_p':0.05, 
                     'n_keep':0,
                     'port':9069,
+                    'host':'0.0.0.0',
                     'load_safe_defaults':False,
                     'model_list': [
                                     'meta-llama/Llama-3.2-11B-Vision-Instruct',
@@ -556,6 +557,7 @@ def parse_arguments():
             'min_p',
             'n_keep',
             'port',
+            'host',
             'load_safe_defaults'
         ])
         access_gated = str(read_return['access_gated']).lower() == 'true'
@@ -578,6 +580,7 @@ def parse_arguments():
         min_p = float(read_return['min_p'])
         n_keep = int(read_return['n_keep'])
         port = int(read_return['port'])
+        host = str(read_return['host'])
         load_safe_defaults = str(read_return['load_safe_defaults']).lower() == 'true'
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to parse_arguments(), encountered error: ", e)
@@ -614,7 +617,8 @@ def parse_arguments():
         parser.add_argument("--min_p", type=float, default=min_p, help="The minimum probability for a token to be considered, relative to the probability of the most likely token. Remembers previously set value and falls-back to 0.05 as a default.")
         parser.add_argument("--n_keep", type=int, default=n_keep, help="Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded. Remembers previously set value and falls-back to 0 as a default, meaning no tokens are kept. Use -1 to retain all tokens from the prompt.")
         parser.add_argument("--port", type=int, default=port, help="Specify the port to be used by the server. Remembers previously set value and falls-back to 9069 as a default.")
-
+        parser.add_argument("--host", type=str, default=host, help="Specify the host to be used by the server. Remembers previously set value and falls-back to 0.0.0.0 as a default.")
+        
         args = parser.parse_args()
         print(f"\n\nparser.parse_args():\n\n{args}\n\n")
 
@@ -657,7 +661,8 @@ def parse_arguments():
                     'top_p',
                     'min_p',
                     'n_keep',
-                    'port'
+                    'port',
+                    'host'
                 ])
 
             except Exception as e:
@@ -706,7 +711,8 @@ def parse_arguments():
                     'top_p':args.top_p, 
                     'min_p':args.min_p, 
                     'n_keep':args.n_keep,
-                    'port':args.port
+                    'port':args.port,
+                    'host':args.host
                 })
             except Exception as e:
                 handle_local_error("Could not write launch arguments to hf_config.json, encountered error: ", e)
@@ -1899,8 +1905,19 @@ def stop_generation():
     STOP_GENERATION = True
     return jsonify(success=True)
 
+
+def get_host_and_port():
+    try:
+        read_return = read_config(['host', 'port'])
+        host = str(read_return['host'])
+        port = int(read_return['port'])
+        return host, port
+    except Exception as e:
+        handle_error_no_return("Could not get host and port from hf_config.json, encountered error: ", e)
+
+
 if __name__ == '__main__':
-    args = parse_arguments()
+    _ = parse_arguments()
     initialize_model()
-    port = getattr(args, 'port', 9069)
-    serve(app, host='0.0.0.0', port=port)
+    host, port = get_host_and_port()
+    serve(app, host=host, port=port)
