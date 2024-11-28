@@ -70,7 +70,13 @@ function loadAndSetCoreValues() {
         'kosmos_local_url',
         'kosmos_task',
         'kosmos_threshold',
-        'llm_filter_citations'
+        'llm_filter_citations',
+        'hf_waitress_serving_url',
+        'hf_waitress_access_url',
+        'hf_waitress_server_port',
+        'llama_cpp_serving_url',
+        'llama_cpp_access_url',
+        'llama_cpp_server_port'
     ]
     
     return fetch('/config_reader_api', {
@@ -131,7 +137,6 @@ function loadCoreHfValues() {
         'n_keep',
         'quantize',
         'quant_level',
-        'port',
         'awq',
         'hqq_group_size',
         'flux_diffusers',
@@ -140,7 +145,8 @@ function loadCoreHfValues() {
         'vision'
     ]
     
-    return fetch('http://localhost:9069/hf_config_reader_api', {
+    const hfWaitress_URL = getHfwUrl();
+    return fetch(hfWaitress_URL + '/hf_config_reader_api', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -291,7 +297,6 @@ function initializeHfRadioButtons(all_values) {
 
 function setHfSlidersAndTextAreas(values) {
     document.getElementById('HfwHqqGroupSize').value = values.hqq_group_size;
-    document.getElementById('HfwPort').value = values.port;
     document.getElementById('HfwMaxNewToks').value = values.max_new_tokens;
     document.getElementById('HfwTempSlider').value = values.temperature;
     document.getElementById('HfwTempSliderValue').textContent = values.temperature;
@@ -667,12 +672,21 @@ function initializeEventListenersForLLMTabSliders() {
 }
 
 
+function initializeHfwUrlComponents(hf_waitress_serving_url, hf_waitress_access_url, hf_waitress_server_port) {
+    document.getElementById('HfwServingUrl').value = hf_waitress_serving_url;
+    document.getElementById('HfwAccessUrl').value = hf_waitress_access_url;
+    document.getElementById('HfwPort').value = hf_waitress_server_port;
+    setHfwUrl(hf_waitress_access_url, hf_waitress_server_port);
+}
+
+
 function initializeLLMTabComponents(values) {
     initializeLocalLLMServerDropdown(values.local_llm_server);
     initializeModelDropdown(values.model_choice);   
     initializeLLMTemplateDropdown(values.local_llm_chat_template_format);
     initializeGPURadioButtons(values.use_gpu);
     initializeLLMRadioButtons(values.use_local_llm, values.model_choice);
+    initializeHfwUrlComponents(values.hf_waitress_serving_url, values.hf_waitress_access_url, values.hf_waitress_server_port);
     initializeEventListenersForLLMTab();
     initializeEventListenersForLLMTabSliders();
 }

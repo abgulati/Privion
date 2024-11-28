@@ -217,7 +217,8 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
 // modify to open the file in a new tab instead of downloading it
 function createDownloadLinkForFile(filename) {
     const downloadLink = document.createElement('a');
-    downloadLink.href = `http://localhost:9069/serve_uploaded_file/${filename}`;
+    const hfWaitress_URL = getHfwUrl();
+    downloadLink.href = `${hfWaitress_URL}/serve_uploaded_file/${filename}`;
     downloadLink.target = '_blank';
     downloadLink.download = filename;   // HTML5 attribute that specifies that the linked resource should be downloaded when a user clicks on the hyperlink
     downloadLink.innerHTML = `<i class="fa-solid fa-file-arrow-down"></i> ${filename} Appended to Conversation`;
@@ -232,7 +233,8 @@ function createDownloadContainerForFile(filename) {
     downloadContainer.classList.add('download-container-for-vision-appended-file');
 
     const downloadLink = document.createElement('a');
-    downloadLink.href = `http://localhost:9069/serve_uploaded_file/${filename}`;
+    const hfWaitress_URL = getHfwUrl();
+    downloadLink.href = `${hfWaitress_URL}/serve_uploaded_file/${filename}`;
     downloadLink.target = '_blank';
     downloadLink.download = filename;   // HTML5 attribute that specifies that the linked resource should be downloaded when a user clicks on the hyperlink
     downloadLink.classList.add('download-link-for-vision-appended-file');
@@ -273,7 +275,8 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
     const vision = document.getElementById('hf_waitress_vision_yes').checked;
     if (vision) {
         console.log("Invoking vision_stream");
-        url = "http://localhost:9069/vision_stream";
+        const hfWaitress_URL = getHfwUrl();
+        url = `${hfWaitress_URL}/vision_stream`;
 
         hfwHeaders = new Headers();
         hfwHeaders.append("X-DPI", "300");
@@ -286,7 +289,8 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         if (file) { formdata.append("file", file); }
     } else {
         console.log("Invoking completions_stream");
-        url = "http://localhost:9069/completions_stream";
+        const hfWaitress_URL = getHfwUrl();
+        url = `${hfWaitress_URL}/completions_stream`;
 
         hfwHeaders = new Headers();
         hfwHeaders.append("Content-Type", "application/json");
@@ -403,13 +407,14 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         return hfwTotalContent;
 
     } catch (error) {
-        errorHandler("fetching event-streaming response", "localhost:9069/completions_stream", String(error));
+        errorHandler("fetching event-streaming response", "HF-Waitress/completions_stream", String(error));
     }
 
 }
 
 async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, chatContainer) {
-    const url = "http://localhost:9069/completions";
+    const hfWaitress_URL = getHfwUrl();
+    const url = `${hfWaitress_URL}/completions`;
 
     const hfwHeaders = new Headers();
     hfwHeaders.append("Content-Type", "application/json");
@@ -444,12 +449,13 @@ async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, 
         if (data.success) {
             console.log("Diffusers Image Generation Successful");
             console.log("data: ", data);
+            const hfWaitress_URL = getHfwUrl();
 
             // create image div with source = data.image_name (local file path) and append to responseContentID.innerHTML
             const imageDiv = document.createElement('div');
             const img = document.createElement('img');
             img.alt = "Generated Image";
-            img.src = `http://localhost:9069/serve_generated_image/${data.image_name}`;
+            img.src = `${hfWaitress_URL}/serve_generated_image/${data.image_name}`;
             imageDiv.appendChild(img);
             document.getElementById(responseContentID).appendChild(imageDiv);
 
@@ -460,7 +466,7 @@ async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, 
             throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
         }
     } catch (error) {
-        errorHandler("fetching diffusers response", "localhost:9069/completions", String(error));
+        errorHandler("fetching diffusers response", "HF-Waitress/completions", String(error));
     }
     
 }

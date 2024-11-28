@@ -8,7 +8,7 @@ function getLlmConfig() {
 
     let config = {
         'use_local_llm': useLocalLlmRadioButton.checked,
-        'use_azure_open_ai':false,
+        'use_azure_open_ai':false
     };
 
     if (useLocalLlmRadioButton.checked) {
@@ -25,7 +25,11 @@ function getLlmConfig() {
             config.local_llm_top_p = parseFloat(document.getElementById('toppSlider').value);
             config.local_llm_min_p = parseFloat(document.getElementById('minpSlider').value);
             config.local_llm_n_keep = parseInt(document.getElementById('nkeepSlider').value);
-        } 
+        } else if (config.local_llm_server === "hf-waitress") {
+            config.hf_waitress_serving_url = document.getElementById('HfwServingUrl').value;
+            config.hf_waitress_access_url = document.getElementById('HfwAccessUrl').value;
+            config.hf_waitress_server_port = parseInt(document.getElementById('HfwPort').value);
+        }
     } else if (useApiRadioButton.checked) {
         config.model_choice = document.getElementById('llmApiDropdown').value;
         if (config.model_choice === "AzureOpenAI") {
@@ -196,7 +200,6 @@ function getHfWaitressConfig() {
         'quantize': document.getElementById('hf_waitress_quantization_choice').value,
         'quant_level': document.getElementById('hf_waitress_quantization_level_choice').value,
         'hqq_group_size': parseInt(document.getElementById('HfwHqqGroupSize').value),
-        'port': parseInt(document.getElementById('HfwPort').value)
     };
 
     if (hf_config.model_id.toLowerCase().includes('vision-instruct')) {
@@ -255,7 +258,8 @@ function saveConfigToServer(config) {
 
 
 async function fetchRestartEventStream() {                
-    const url = "http://localhost:9069/restart_server_stream";
+    const hfWaitress_URL = getHfwUrl();
+    const url = hfWaitress_URL + '/restart_server_stream';
     const responseRestartContentElement = document.getElementById('hf-model-loader-stream');
 
     try {
@@ -352,7 +356,7 @@ async function fetchRestartEventStream() {
         await hfwProcessChunk();
         
     } catch (error) {
-        errorHandler("fetching HF-Waitress Restart event-streaming response", "localhost:9069/restart_server_stream", String(error))
+        errorHandler("fetching HF-Waitress Restart event-streaming response", "HF-Waitress/restart_server_stream", String(error))
     }
 }
 
@@ -362,7 +366,8 @@ function handleHfWaitressChanges(hf_config) {
         document.getElementById('hf-model-loader-stream').innerHTML = '';
         document.getElementById('SavingHfWaitressSettings').style.display = 'block';
 
-        fetch('http://localhost:9069/hf_config_writer_api', {
+        const hfWaitress_URL = getHfwUrl();
+        fetch(hfWaitress_URL + '/hf_config_writer_api', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

@@ -16,6 +16,10 @@ function setOldLlmModel(model) {
     document.getElementById('chatState').setAttribute('data-old-llm-model', model);
 }
 
+function setHfwUrl(host, port) {
+    document.getElementById('chatState').setAttribute('data-hf-waitress-url', `http://${host}:${port}`);
+}
+
 function getChatId() {
     return document.getElementById('chatState').getAttribute('data-ongoing-chat-id');
 }
@@ -30,6 +34,10 @@ function getLlmModel() {
 
 function getOldLlmModel() {
     return document.getElementById('chatState').getAttribute('data-old-llm-model');
+}
+
+function getHfwUrl() {
+    return document.getElementById('chatState').getAttribute('data-hf-waitress-url');
 }
 
 function setModelHeaderInfoBox(chat_id, model_id) {
@@ -426,7 +434,8 @@ function loadChatHistoryMenu() {
 
 async function updateHfModelList(newModelList) {
     console.log("Updating HF-Waitress model list");
-    const response = await fetch('http://localhost:9069/hf_config_writer_api', {
+    const hfWaitress_URL = getHfwUrl();
+    const response = await fetch(hfWaitress_URL + '/hf_config_writer_api', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -498,6 +507,8 @@ function resetHfLlmAdvancedDefaults() {
     document.getElementById('hf_waitress_quantization_choice').value = 'quanto';
     document.getElementById('hf_waitress_quantization_level_choice').value = 'int4';
     document.getElementById('HfwHqqGroupSize').value = "64";
+    document.getElementById('HfwServingUrl').value = "0.0.0.0";
+    document.getElementById('HfwAccessUrl').value = "localhost";
     document.getElementById('HfwPort').value = "9069";
     document.getElementById('HfwMaxNewToks').value = "500";
     document.getElementById('HfwTempSlider').value = "0";
@@ -1113,8 +1124,8 @@ function enableTransformersSettings() {
 function stopGeneration() {
     console.log("Stop Generation button clicked");
     displayProcessingStatus('Stopping...');
-    
-    fetch('http://localhost:9069/stop_generation')
+    const hfWaitress_URL = getHfwUrl();
+    fetch(hfWaitress_URL + '/stop_generation')
     .then(response => {
         if (!response.ok) {
             return response.json().then(err => { throw new Error(err.error)});
