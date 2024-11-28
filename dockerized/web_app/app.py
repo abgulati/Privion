@@ -2660,7 +2660,7 @@ def hf_waitress_server_starter():
     print("\n\nProceeding to launch HF-Waitress server\n\n")
 
     hf_waitress_host, hf_waitress_port = get_hf_waitress_serving_host_and_port()
-    launch_args = f'--host={hf_waitress_host} --port={hf_waitress_port}'
+    launch_args = f'--host={hf_waitress_host} --port={hf_waitress_port} '
     if is_awq:
         launch_args += '--awq '
     if use_flash_attention_2:
