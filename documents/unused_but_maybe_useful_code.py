@@ -1804,3 +1804,136 @@ def load_chat_history():
 
     return jsonify({'success': True, 'chat_history': chat_history, 'old_chat_model': old_chat_model})
 
+
+
+# Use a pseudo-terminal to start the process in its own console
+# master_fd, slave_fd = pty.openpty() # The pty() module creates a pseudo terminal, simulating a physical terminal device. pty.openpty() returns a pair of file descriptors master_fd (used to write to the pseudo-terminal) and slave_fd (used to read from the pseudo-terminal).
+# command_list = [base_command, 'hf_waitress.py'] + launch_args.split()
+
+# HF_WAITRESS_PROCESS = subprocess.Popen(
+#     command_list,
+#     stdin=slave_fd,
+#     stdout=slave_fd,
+#     stderr=subprocess.STDOUT,
+#     text=True
+# )
+# os.close(slave_fd)  # Close the slave_fd as it's not needed in the parent process and so it won't remain open and blocking the pseudo-terminal.
+
+
+
+# GDrive Experiments:
+
+#app.py:
+
+# add debuggin prints all over:
+# @app.route('/login_to_google_drive')
+# def login_to_google_drive():
+#     print(f"\n\nlogin_to_google_drive()\n\n")
+#     global GDRIVE_CREDS
+#     if os.path.exists("gdrive_token.json"):
+#         print(f"\n\nGDRIVE_CREDS exists\n\n")
+#         GDRIVE_CREDS = Credentials.from_authorized_user_file("gdrive_token.json", GDRIVE_SCOPES)
+#         if GDRIVE_CREDS and GDRIVE_CREDS.valid:
+#             print(f"\n\nGDRIVE_CREDS is valid\n\n")
+#             try:
+#                 service = build('drive', 'v3', credentials=GDRIVE_CREDS)
+#                 about_result = service.about().get(fields="user").execute()
+#                 user_name = about_result.get('user', {}).get('emailAddress', 'Unknown User')
+#                 print(f"\n\nreturning user_name: {user_name}\n\n")
+#                 return jsonify(success=True, user_name=user_name)
+#             except Exception as e:
+#                 handle_error_no_return("Could not get user name from Google Drive, encountered error: ", e)
+    
+#     try:
+#         print(f"\n\nTrying to get auth_url\n\n")
+#         flow = InstalledAppFlow.from_client_secrets_file(
+#             "gdrive_credentials.json", 
+#             GDRIVE_SCOPES
+#         )
+        
+#         # Start the local server in a separate thread
+#         import threading
+#         server_thread = threading.Thread(
+#             target=flow.run_local_server,
+#             kwargs={
+#                 'port': 6003,
+#                 'open_browser': False
+#             }
+#         )
+#         server_thread.daemon = True
+#         server_thread.start()
+        
+#         # Get the authorization URL
+#         auth_url, _ = flow.authorization_url(
+#             access_type='offline',
+#             include_granted_scopes='true',
+#             redirect_uri='http://localhost:6003'  # Add explicit redirect URI
+#         )
+
+#         print(f"\n\nreturning auth_url: {auth_url}\n\n")
+#         return jsonify(
+#             success=True, 
+#             needs_auth=True,
+#             auth_url=auth_url
+#         )
+#     except Exception as e:
+#         return jsonify(success=False, error=str(e)), 500
+
+
+# helper-functions.js:
+
+
+// async function googleDriveLogin() {
+//     try {
+//         showLoader();
+//         const response = await fetch('/login_to_google_drive');
+//         const data = await response.json();
+        
+//         if (data.success) {
+//             if (data.needs_auth) {
+//                 // Open the authorization URL in a new window/tab
+//                 console.log("data:", data);
+//                 const authWindow = window.open(data.auth_url, '_blank');
+                
+//                 // Poll every 2 seconds to check if auth is complete
+//                 const checkAuth = setInterval(async () => {
+//                     try {
+//                         const checkResponse = await fetch('/login_to_google_drive');
+//                         const checkData = await checkResponse.json();
+                        
+//                         if (checkData.success && checkData.user_name) {
+//                             // Auth is complete
+//                             clearInterval(checkAuth);
+//                             console.log('Logged in as:', checkData.user_name);
+//                             // Handle successful login (e.g., update UI)
+                            
+//                             // Optional: close the auth window if it's still open
+//                             if (authWindow && !authWindow.closed) {
+//                                 authWindow.close();
+//                             }
+//                         }
+//                     } catch (error) {
+//                         clearInterval(checkAuth);
+//                         // console.error('Error checking auth status:', error);
+//                         errorHandler("checking auth status", "/login_to_google_drive", String(error.message));
+//                     }
+//                 }, 2000);
+
+//                 // Stop polling after 5 minutes (optional timeout)
+//                 setTimeout(() => {
+//                     clearInterval(checkAuth);
+//                 }, 300000);
+                
+//             } else if (data.user_name) {
+//                 // Already authenticated
+//                 console.log('Logged in as:', data.user_name);
+//                 // Handle already logged in state
+//             }
+//         }
+//     } catch (error) {
+//         // console.error('Error:', error);
+//         errorHandler("logging into Google Drive", "/login_to_google_drive", String(error.message));
+//     }
+// }
+
+
