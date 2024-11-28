@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, Response, stream_with_context
 from flask import send_from_directory
+from flask_cors import CORS
 from flask import jsonify
 
 from sentence_transformers import SentenceTransformer, util
@@ -31,6 +32,7 @@ import subprocess
 import threading
 import traceback
 import platform
+import argparse
 import tempfile
 import datetime
 import requests
@@ -64,6 +66,7 @@ from whoosh import scoring
 from waitress import serve
 
 app = Flask(__name__)
+CORS(app)
 
 # Route for the home page, rendering the initial model selection form (legacy)
 @app.route('/')
@@ -199,17 +202,22 @@ def write_config(config_updates, filename=docker_only_config_path):
         
     restart_required = False
     if LLM_LOADED_UP:
-        llm_trigger_keys_for_app_restart = ['use_local_llm',
-        'local_llm_server',
-        'use_azure_open_ai',
-        'use_gpu',
-        'model_choice',
-        'local_llm_chat_template_format',
-        'local_llm_context_length',
-        'local_llm_max_new_tokens',
-        'local_llm_gpu_layers',
-        'base_template',
-        'skip_system_prompt']
+        llm_trigger_keys_for_app_restart = [
+            'use_local_llm',
+            'local_llm_server',
+            'use_azure_open_ai',
+            'use_gpu',
+            'model_choice',
+            'local_llm_chat_template_format',
+            'local_llm_context_length',
+            'local_llm_max_new_tokens',
+            'local_llm_gpu_layers',
+            'base_template',
+            'skip_system_prompt',
+            'hf_waitress_serving_url',
+            'hf_waitress_access_url',
+            'hf_waitress_server_port'
+        ]
                 
         for key in llm_trigger_keys_for_app_restart:
             if key in config_updates and config_updates[key] != config.get(key):
@@ -285,6 +293,14 @@ def read_config(keys, default_value=None, filename=docker_only_config_path):
                 'kosmos_local_url':"http://host.docker.internal:25000/infer_file_stream",
                 'kosmos_task':'ocr',
                 'kosmos_threshold':20,
+                'lars_host':'0.0.0.0',
+                'lars_port':5000,
+                'hf_waitress_serving_url':'0.0.0.0',
+                'hf_waitress_access_url':'localhost',
+                'hf_waitress_server_port':9069,
+                'llama_cpp_serving_url':'0.0.0.0',
+                'llama_cpp_access_url':'localhost',
+                'llama_cpp_server_port':8080,
                 'do_rag':True,
                 'force_enable_rag':False,
                 'force_disable_rag':False,
@@ -2082,6 +2098,7 @@ def load_local_models():
 
 @app.route('/upload_new_llm', methods=['POST'])
 def upload_new_llm():
+    print("\n\nUploading new LLM\n\n")
 
     try:
         read_return = read_config(['model_dir'])
@@ -2360,17 +2377,28 @@ def store_user_rating():
     return jsonify(success=True)
 
 
+def get_url_for_server(server_to_check):
+    if server_to_check == 'llama-cpp':
+        try:
+            read_return = read_config(['llama_cpp_access_url', 'llama_cpp_server_port'])
+            return f'http://{read_return["llama_cpp_access_url"]}:{read_return["llama_cpp_server_port"]}'
+        except Exception as e:
+            handle_error_no_return("Could not read llama_cpp_access_url and llama_cpp_server_port from config.json in method is_local_server_online(), using default localhost:8080 instead. Encountered error: ", e)
+            return 'http://localhost:8080'
+    elif server_to_check == 'hf-waitress':
+        try:
+            read_return = read_config(['hf_waitress_access_url', 'hf_waitress_server_port'])
+            return f'http://{read_return["hf_waitress_access_url"]}:{read_return["hf_waitress_server_port"]}'
+        except Exception as e:
+            handle_error_no_return("Could not read hf_waitress_access_url and hf_waitress_server_port from config.json in method is_local_server_online(), using default localhost:9069 instead. Encountered error: ", e)
+            return 'http://localhost:9069'
+    else:
+        return handle_api_error("Invalid server_to_check in method get_url_for_server, encountered error: ", e)
+
 
 def is_local_server_online(server_to_check):
-    server_health_url = ''
-    if server_to_check == 'llama-cpp':
-        server_health_url = 'http://localhost:8080/health'
-    elif server_to_check == 'hf-waitress':
-        server_health_url = 'http://localhost:9069/health'
-    else:
-        return handle_api_error("Invalid server_to_check in method is_local_server_online, encountered error: ", e)
-
-    print(f"\n\nChecking {server_to_check} server status\n\n")
+    server_health_url = get_url_for_server(server_to_check)
+    print(f"\n\nChecking {server_to_check} server status - URL: {server_health_url}\n\n")
 
     try:
         response = requests.get(server_health_url)
@@ -2568,6 +2596,15 @@ def llama_cpp_server_starter():
     return handle_api_error("Failed to start llama.cpp local-server")
 
 
+def get_hf_waitress_serving_host_and_port():
+    try:
+        read_return = read_config(['hf_waitress_serving_url', 'hf_waitress_server_port'])
+        return read_return['hf_waitress_serving_url'], read_return['hf_waitress_server_port']
+    except Exception as e:
+        handle_error_no_return("Could not read hf_waitress_serving_url and hf_waitress_server_port from config.json in method get_hf_waitress_serving_host_and_port(), using default localhost:9069 instead. Encountered error: ", e)
+        return '0.0.0.0', 9069
+
+
 @app.route('/hf_waitress_server_starter')
 def hf_waitress_server_starter():
     print("\n\nStarting HF-Waitress Server\n\n")
@@ -2622,7 +2659,8 @@ def hf_waitress_server_starter():
     
     print("\n\nProceeding to launch HF-Waitress server\n\n")
 
-    launch_args = ' '
+    hf_waitress_host, hf_waitress_port = get_hf_waitress_serving_host_and_port()
+    launch_args = f'--host={hf_waitress_host} --port={hf_waitress_port}'
     if is_awq:
         launch_args += '--awq '
     if use_flash_attention_2:
@@ -2652,20 +2690,8 @@ def hf_waitress_server_starter():
                 command_list.extend(launch_args.split())
             
             with open('hf_waitress_output_log.txt', 'w') as f:
+                # HF_WAITRESS_PROCESS = subprocess.Popen(command_list, stdout=f, stderr=subprocess.STDOUT, text=True)
                 HF_WAITRESS_PROCESS = subprocess.Popen(command_list)
-            
-            # Use a pseudo-terminal to start the process in its own console
-            # master_fd, slave_fd = pty.openpty() # The pty() module creates a pseudo terminal, simulating a physical terminal device. pty.openpty() returns a pair of file descriptors master_fd (used to write to the pseudo-terminal) and slave_fd (used to read from the pseudo-terminal).
-            # command_list = [base_command, 'hf_waitress.py'] + launch_args.split()
-
-            # HF_WAITRESS_PROCESS = subprocess.Popen(
-            #     command_list,
-            #     stdin=slave_fd,
-            #     stdout=slave_fd,
-            #     stderr=subprocess.STDOUT,
-            #     text=True
-            # )
-            # os.close(slave_fd)  # Close the slave_fd as it's not needed in the parent process and so it won't remain open and blocking the pseudo-terminal.
 
     except Exception as e:
         return handle_api_error(f"Could not launch HF-Waitress process in directory: {os.getcwd()}, encountered error: ", e)
@@ -4133,9 +4159,98 @@ def get_references():
     return jsonify({'success': True, 'response': reference_response, 'pdf_frame':download_link_html, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
 
 
+def parse_arguments():
+
+    try:
+        parser = argparse.ArgumentParser(description="Server for HuggingFace Transformers models")
+    except Exception as e:
+        handle_local_error("Could not create parser to parse_arguments(), proceeding with defaults. Encountered error: ", e)
+
+    # Even if a parser object could not be created, a read_request will write & return defaults
+    try:
+        read_return = read_config(['lars_host', 'lars_port', 'hf_waitress_access_url', 'hf_waitress_serving_url', 'hf_waitress_server_port', 'llama_cpp_access_url', 'llama_cpp_serving_url', 'llama_cpp_server_port'])
+        lars_host = str(read_return['lars_host'])
+        lars_port = int(read_return['lars_port'])
+        hf_waitress_access_url = str(read_return['hf_waitress_access_url'])
+        hf_waitress_serving_url = str(read_return['hf_waitress_serving_url'])
+        hf_waitress_server_port = int(read_return['hf_waitress_server_port'])
+        llama_cpp_access_url = str(read_return['llama_cpp_access_url'])
+        llama_cpp_serving_url = str(read_return['llama_cpp_serving_url'])
+        llama_cpp_server_port = int(read_return['llama_cpp_server_port'])
+    except Exception as e:
+        handle_error_no_return("Could not get host and port from hf_config.json, encountered error: ", e)
+
+    if parser:
+        parser.add_argument("--reset_to_defaults", action="store_true", default=False, help="Use default settings")
+        parser.add_argument("--lars_host", type=str, default=lars_host, help="Specify the host to be used by the server. Remembers previously set value and falls-back to 0.0.0.0 as a default.")
+        parser.add_argument("--lars_port", type=int, default=lars_port, help="Specify the port to be used by the server. Remembers previously set value and falls-back to 5000 as a default.")
+        parser.add_argument("--hf_waitress_access_url", type=str, default=hf_waitress_access_url, help="Specify the access URL to be used by the HF-Waitress server. Remembers previously set value and falls-back to localhost as a default.")
+        parser.add_argument("--hf_waitress_serving_url", type=str, default=hf_waitress_serving_url, help="Specify the serving URL to be used by the HF-Waitress server. Remembers previously set value and falls-back to 0.0.0.0 as a default.")
+        parser.add_argument("--hf_waitress_server_port", type=int, default=hf_waitress_server_port, help="Specify the port to be used by the HF-Waitress server. Remembers previously set value and falls-back to 9069 as a default.")
+        parser.add_argument("--llama_cpp_access_url", type=str, default=llama_cpp_access_url, help="Specify the access URL to be used by the Llama-CPP server. Remembers previously set value and falls-back to localhost as a default.")
+        parser.add_argument("--llama_cpp_serving_url", type=str, default=llama_cpp_serving_url, help="Specify the serving URL to be used by the Llama-CPP server. Remembers previously set value and falls-back to 0.0.0.0 as a default.")
+        parser.add_argument("--llama_cpp_server_port", type=int, default=llama_cpp_server_port, help="Specify the port to be used by the Llama-CPP server. Remembers previously set value and falls-back to 8080 as a default.")
+
+        args = parser.parse_args()
+        # print(f"\n\nparser.parse_args():\n\n{args}\n\n")
+
+        if args.reset_to_defaults:
+            print("\n\nLoading Server with Safe Defaults\n\n")
+            try:
+                # Empty hf_config.json
+                with open('hf_config.json', 'w') as file:
+                    json.dump({}, file, indent=4)
+                
+                # Set defaults
+                read_config([
+                    'lars_host',
+                    'lars_port',
+                    'hf_waitress_access_url',
+                    'hf_waitress_serving_url',
+                    'hf_waitress_server_port',
+                    'llama_cpp_access_url',
+                    'llama_cpp_serving_url',
+                    'llama_cpp_server_port'
+                ])
+            except Exception as e:
+                handle_local_error("Could not reset hosts and ports in config.json, encountered error: ", e)
+
+        else:
+            try:
+                write_config({
+                    'lars_host':args.lars_host,
+                    'lars_port':args.lars_port,
+                    'hf_waitress_access_url':args.hf_waitress_access_url,
+                    'hf_waitress_serving_url':args.hf_waitress_serving_url,
+                    'hf_waitress_server_port':args.hf_waitress_server_port,
+                    'llama_cpp_access_url':args.llama_cpp_access_url,
+                    'llama_cpp_serving_url':args.llama_cpp_serving_url,
+                    'llama_cpp_server_port':args.llama_cpp_server_port
+                })
+            except Exception as e:
+                handle_local_error("Could not write hosts and ports to config.json, encountered error: ", e)
+
+        return args
+
+    # Return None if parser was not created
+    return None
+
+
+def get_host_and_port():
+    try:
+        read_return = read_config(['lars_host', 'lars_port'])
+        lars_host = str(read_return['lars_host'])
+        lars_port = int(read_return['lars_port'])
+        return lars_host, lars_port
+    except Exception as e:
+        handle_error_no_return("Could not get host and port from hf_config.json, encountered error: ", e)
+
+
 if __name__ == '__main__':
-    print("\n\nServing LARS-Enterprise on localhost port 5000\n\n")
+    _ = parse_arguments()
+    lars_host, lars_port = get_host_and_port()
+    print(f"\n\nServing LARS-Enterprise on {lars_host} port {lars_port}\n\n")
     # app.run(debug=True)
     # app.run(host='0.0.0.0', port=5000)
     MAX_UPLOAD_SIZE = 100 * 1024 * 1024 * 1024  # 100GB in bytes upload limit
-    serve(app, host='0.0.0.0', port=5000, max_request_body_size=MAX_UPLOAD_SIZE)
+    serve(app, host=lars_host, port=lars_port, max_request_body_size=MAX_UPLOAD_SIZE)
