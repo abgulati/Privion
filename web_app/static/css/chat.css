@@ -933,7 +933,7 @@ body {
 
 .pdf-viewer-container {
     width: 50%;
-    height: 750px;
+    /* height: 750px; */
     padding: 10px;
     padding-right: 7px;
 }
