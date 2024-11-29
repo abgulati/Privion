@@ -22,20 +22,20 @@ COPY . /app
 
 # OPTIONAL - Change fPIC level, and Set CUDA optimizations as per your GPU arch - `arch=compute_86,code=sm_86` is for RTX 3000 Ampere, `arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90` is for Ampere & Hopper etc
 # ENV CUDA_NVCC_FLAGS="-Xcompiler -fPIC -O3 --use_fast_math -gencode arch=compute_86,code=sm_86"
-ENV CUDA_NVCC_FLAGS="-gencode arch=compute_80,code=sm_80"
+# ENV CUDA_NVCC_FLAGS="-gencode arch=compute_80,code=sm_80"
 
 # Clone specific llama.cpp release
-RUN git clone -b b4174 https://github.com/ggerganov/llama.cpp.git
+# RUN git clone -b b4174 https://github.com/ggerganov/llama.cpp.git
 
 # Build llama.cpp
-WORKDIR /app/llama.cpp
-RUN make GGML_CUDA=1 -j $(nproc)
+# WORKDIR /app/llama-b4226-bin-ubuntu-x64/build/bin
+# RUN make GGML_CUDA=1 -j $(nproc)
 
 # Add the build path to the system PATH
-ENV PATH="/app/llama.cpp:${PATH}"
+ENV PATH="/app/llama-b4226-bin-ubuntu-x64/build/bin:${PATH}"
 
 # Change back to the main app directory
-WORKDIR /app
+# WORKDIR /app
 
 # Install any needed packages specified in requirements.txt
 RUN pip install -r requirements_linux.txt
