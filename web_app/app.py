@@ -3366,14 +3366,20 @@ def init_chat_history_db():
 def extract_significant_phrases(query):
     print("Extracting significant phrases")
 
+    if not query:
+        print("No query to extract significant phrases from")
+        return []
+
     try:
         nltk.download('stopwords')
         stop_words = set(stopwords.words('english'))
+        custom_stop_words = {"you", "me", "anything", "tell", "can", "could", "would", "should"}
+        stop_words.update(custom_stop_words)
     except Exception as e:
         handle_error_no_return("Failed to download & set stopwords, encountered error: ", e)
     
     try:
-        tokens = [token for token in query.lower().split() if token not in stop_words]
+        tokens = [token for token in query.lower().split() if token.isalnum() and token not in stop_words]
     except Exception as e:
         handle_local_error("Could not extract significant tokens, encountered error: ", e)
 
@@ -3490,8 +3496,8 @@ def determine_do_rag(query, docs, force_enable_rag, force_disable_rag):
         try:
             _, do_rag = filter_relevant_documents(query, docs)
         except Exception as e:
-            do_rag = False
-            handle_error_no_return("RAG Error, disabling RAG and continuing: could not filter_relevant_documents during setup_for_streaming_response, encountered error: ", e)
+            do_rag = True
+            handle_error_no_return("Error determining if RAG is required, default enabling RAG and continuing: could not filter_relevant_documents during setup_for_streaming_response, encountered error: ", e)
 
     return do_rag
 
