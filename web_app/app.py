@@ -461,15 +461,13 @@ except Exception as e:
 
 
 ###---Notes on the above workflow:---###
-# 1. Everytime the app runs, the OS platform is detected
-# 2. Following which the apporpriate base directory is requested as above
-# 3. If this is the very first run:
+# 1. Everytime the app runs, the OS platform is detected and the appropriate OS-specific base directory is requested above
+# 2. If this is the very first run:
 #   a. read_config does not find the directory data in config.json
-#   b. the else clause is triggered and defaults set for both, write_config and return
-# 4. If this isn't the very first run, read_config simply returns the OS specific directory
-# 5. On return, BASE_DIRECTORY is set and write_config has os specific directories are subsequently set (windows_base_directory, unix_and_docker_base_directory, and mac_base_directory)
-# 6. write_config is then invoked for BASE_DIRECTORY
-# 7. This setup ensures that:
+#   b. the else clause is triggered and defaults are written to config.json and subsequently returned
+# 3. If this isn't the very first run, read_config simply returns the OS specific directory (windows_base_directory, unix_and_docker_base_directory, and mac_base_directory)
+# 4. Basis this, BASE_DIRECTORY is written to config.json
+# 5. This setup ensures that:
 #   a. directories are set correctly at each run
 #   b. The user can set their preferred directory by easily editing config.json!
 
@@ -3615,7 +3613,7 @@ def format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_i
     return formatted_prompt
 
 
-def format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, flux_diffusers, vision, skip_system_prompt):
+def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_sequence_id:int, base_template:str, flux_diffusers:bool, vision:bool, skip_system_prompt:bool) -> str:
 
     print("\n\nFormatting prompt for hf-waitress\n\n")
 
@@ -3712,41 +3710,136 @@ def combine_whoosh_and_vector_results(whoosh_results, vector_results):
     return combined_results
 
 
+def get_session_id_and_vector_key() -> tuple[str, str]:
+    '''
+    # Generate a unique session ID using universally Unique Identifier via the uuid4() method, wherein the randomness of the result is dependent on the randomness of the underlying operating system's random number generator
+    # UUI is a standard used for creating unique strings that have a very high likelihood of being unique across all time and space, for ex: f47ac10b-58cc-4372-a567-0e02b2c3d479
+    '''
+    stream_session_id = str(uuid.uuid4())
+    key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
+    return stream_session_id, key_for_vector_results
+
+def read_config_for_setup_for_local_llm_response() -> dict:
+    read_return = read_config([
+        'local_llm_server',
+        'use_sbert_embeddings', 
+        'use_openai_embeddings', 
+        'use_bge_base_embeddings', 
+        'use_bge_large_embeddings',
+        'force_enable_rag', 
+        'force_disable_rag', 
+        'local_llm_chat_template_format', 
+        'base_template',
+        'fetch_top_k_results_from_vectordb', 
+        'filter_top_k_results_by_reranking', 
+        'skip_system_prompt'
+    ])
+    return {
+        'use_sbert_embeddings': read_return['use_sbert_embeddings'],
+        'use_openai_embeddings': read_return['use_openai_embeddings'],
+        'use_bge_base_embeddings': read_return['use_bge_base_embeddings'],
+        'use_bge_large_embeddings': read_return['use_bge_large_embeddings'],
+        'force_enable_rag': read_return['force_enable_rag'],
+        'force_disable_rag': read_return['force_disable_rag'],
+        'local_llm_chat_template_format': read_return['local_llm_chat_template_format'],
+        'base_template': read_return['base_template'],
+        'local_llm_server': read_return['local_llm_server'],
+        'fetch_top_k_results_from_vectordb': read_return['fetch_top_k_results_from_vectordb'],
+        'filter_top_k_results_by_reranking': read_return['filter_top_k_results_by_reranking'],
+        'skip_system_prompt': str(read_return['skip_system_prompt']).lower() == 'true'
+    }
+
+
+def read_request_data_for_setup_for_local_llm_response(request: Request) -> tuple[str, str, bool]:
+    user_query = request.json['user_query']
+    chat_id = request.json['chat_id']
+    file_attached = request.json['file_attached']
+    return user_query, chat_id, file_attached
+
+
+def determine_special_model_type_for_hf_waitress() -> tuple[bool, bool]:
+    try:
+        hf_read_return = read_hf_config(['flux_diffusers', 'vision'])
+        return (
+            str(hf_read_return['flux_diffusers']).lower() == 'true',
+            str(hf_read_return['vision']).lower() == 'true'
+        )
+    except Exception as e:
+        handle_error_no_return("Could not determine if flux_diffusers or vision model in method determine_special_model_type_for_hf_waitress, encountered error: ", e)
+        return False, False
+
+
+def prepare_special_model_response(formatted_prompt:str, user_query:str, current_sequence_id:int, new_sequence_id:int, stream_session_id:str, local_llm_server:str) -> dict:
+    '''Prepare a response for a special model type, such as hfw-diffusers or hfw-vision'''
+    try:
+        is_diffusers = local_llm_server == 'hfw-diffusers'
+        formatted_prompt = format_prompt_for_hf_waitress(
+            prompt="" if is_diffusers else formatted_prompt, 
+            user_query=user_query, 
+            current_sequence_id=0 if is_diffusers else current_sequence_id, 
+            base_template="", 
+            flux_diffusers=is_diffusers, 
+            vision=not is_diffusers, 
+            skip_system_prompt=True
+        )
+        return {
+            "success": True, 
+            "stream_session_id": stream_session_id,
+            "do_rag": False, 
+            "formatted_user_prompt": formatted_prompt, 
+            "sequence_id":new_sequence_id, 
+            "server_type":local_llm_server
+        }
+    except Exception as e:
+        handle_local_error("Could not prepare special model response in method prepare_special_model_response, encountered error: ", e)
+
+
+def reject_rag() -> dict:
+    try:
+        write_config({'do_rag':False})
+        return {"success": True}
+    except Exception as e:
+        handle_error_no_return("Could not default do_rag to False in method reject_rag, encountered error: ", e)
+        return {"success": False}
+
+
+def prepare_for_quick_response(current_sequence_id:int) -> int:
+    print("Invoking quick-return route for hfw-diffusers or hfw-vision(file_attached)")
+    new_sequence_id = int(current_sequence_id) + 1
+    reject_rag()
+    return new_sequence_id
+
+
+def get_embedding_function(use_sbert_embeddings:bool, use_openai_embeddings:bool, use_bge_base_embeddings:bool, use_bge_large_embeddings:bool) -> HuggingFaceEmbeddings:
+    try:
+        if use_sbert_embeddings:
+            return HuggingFaceEmbeddings()
+        elif use_openai_embeddings:
+            return AZURE_OPENAI_EMBEDDINGS
+        elif use_bge_base_embeddings:
+            return HF_BGE_EMBEDDINGS
+        elif use_bge_large_embeddings:
+            return HF_BGE_EMBEDDINGS
+    except Exception as e:
+        handle_error_no_return("Could not get embedding function in method get_embedding_function, encountered error: ", e)
+
+
 @app.route('/setup_for_local_llm_response', methods=['POST'])
 def setup_for_local_llm_response():
 
     print("\n\nSetting up for local LLM response\n\n")
 
     global QUERIES
-
     do_rag = True
-    similarity_threshold = 0.8
 
-    stream_session_id = ""
-    key_for_vector_results = ""
-    # Generate a unique session ID using universally Unique Identifier via the uuid4() method, wherein the randomness of the result is dependent on the randomness of the underlying operating system's random number generator
-    # UUI is a standard used for creating unique strings that have a very high likelihood of being unique across all time and space, for ex: f47ac10b-58cc-4372-a567-0e02b2c3d479
     try:
-        stream_session_id = str(uuid.uuid4())
-        key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
+        stream_session_id, key_for_vector_results = get_session_id_and_vector_key()
     except Exception as e:
-        return handle_api_error("Error creating unique stream_session_id when attempting to setup_for_streaming_response. Error: ", e)
-    
+        return handle_api_error("Could not get session_id and vector_key when attempting to setup_for_streaming_response, encountered error: ", e)
 
     # Determine do_rag
     try:
-        read_return = read_config(['local_llm_server',
-            'use_sbert_embeddings', 
-            'use_openai_embeddings', 
-            'use_bge_base_embeddings', 
-            'use_bge_large_embeddings',
-            'force_enable_rag', 
-            'force_disable_rag', 
-            'local_llm_chat_template_format', 
-            'base_template',
-            'fetch_top_k_results_from_vectordb', 
-            'filter_top_k_results_by_reranking', 
-            'skip_system_prompt'])
+        read_return = read_config_for_setup_for_local_llm_response()
         use_sbert_embeddings = read_return['use_sbert_embeddings']
         use_openai_embeddings = read_return['use_openai_embeddings']
         use_bge_base_embeddings = read_return['use_bge_base_embeddings']
@@ -3758,27 +3851,23 @@ def setup_for_local_llm_response():
         local_llm_server = read_return['local_llm_server']
         fetch_top_k_results_from_vectordb = read_return['fetch_top_k_results_from_vectordb']
         filter_top_k_results_by_reranking = read_return['filter_top_k_results_by_reranking']
-        skip_system_prompt = str(read_return['skip_system_prompt']).lower() == 'true'
+        skip_system_prompt = read_return['skip_system_prompt']
     except Exception as e:
         return handle_api_error("Missing values in config.json when attempting to setup_for_streaming_response. Error: ", e)
 
     try:
-        # Attempt to get query data
-        user_query = request.json['user_query']
-        chat_id = request.json['chat_id']
-        file_attached = request.json['file_attached']
-
-        # Store the query associated with the ID
-        QUERIES[stream_session_id] = user_query
+        user_query, chat_id, file_attached = read_request_data_for_setup_for_local_llm_response(request)
+        QUERIES[stream_session_id] = user_query     # Store the query associated with the ID
     except Exception as e:
         return handle_api_error("Could not obtain and/or store user_query in setup_for_streaming_response, encountered error: ", e)
 
-    print("chat_id: ", chat_id)
-    
-    current_sequence_id = determine_sequence_id_for_chat(chat_id)
-    formatted_prompt = ""
-    print("current_sequence_id: ", current_sequence_id)
+    try:
+        current_sequence_id = determine_sequence_id_for_chat(chat_id)
+        print(f"Current Chat ID: {chat_id} & Sequence ID: {current_sequence_id}")
+    except Exception as e:
+        return handle_api_error("Could not determine current_sequence_id when attempting to setup_for_streaming_response, encountered error: ", e)
 
+    formatted_prompt = ""
     if current_sequence_id > 0:    # get the last prompt so we can continue the completions
         formatted_prompt = get_formatted_prompt_from_history_db(chat_id, current_sequence_id)
     
@@ -3787,82 +3876,47 @@ def setup_for_local_llm_response():
 
     
     if local_llm_server == 'hf-waitress':
-        flux_diffusers = False
-        vision = False
-        try:
-            hf_read_return = read_hf_config(['flux_diffusers', 'vision'])
-            flux_diffusers = str(hf_read_return['flux_diffusers']).lower() == 'true'
-            vision = str(hf_read_return['vision']).lower() == 'true'
-        except Exception as e:
-            return handle_api_error("Could not determine if flux_diffusers or vision model used from hf_config.json in method setup_for_local_llm_response. Continuing with Transformers. Encountered error: ", e)
+        flux_diffusers, vision = determine_special_model_type_for_hf_waitress()
+        if vision: local_llm_server = 'hfw-vision'
 
-        if flux_diffusers or vision or file_attached:
-            print("Invoking quick-return route for hfw-diffusers or hfw-vision")
-            new_sequence_id = int(current_sequence_id) + 1
-            
+        elif flux_diffusers or file_attached:
+            new_sequence_id = prepare_for_quick_response(current_sequence_id)
             try:
-                write_config({'do_rag':False})
+                response = prepare_special_model_response(
+                    local_llm_server='hfw-diffusers' if flux_diffusers else 'hfw-vision',
+                    stream_session_id=stream_session_id,
+                    user_query=user_query,
+                    current_sequence_id=current_sequence_id,
+                    new_sequence_id=new_sequence_id,
+                    formatted_prompt=formatted_prompt
+                )
+                print(f"Returning quick-return formatted_prompt: {response['formatted_user_prompt']}")
+                return jsonify(response)
             except Exception as e:
-                handle_error_no_return("Could not write do_rag to config during setup_for_streaming_response, encountered error: ", e)
-            
-            if flux_diffusers:
-                print("Flux diffusers detected, preparing accordingly")
-                try:
-                    formatted_prompt = format_prompt_for_hf_waitress("", user_query, 0, "", True, False, True)
-                    local_llm_server = 'hfw-diffusers'
-                    print("Returning diffusers formatted_prompt: ", formatted_prompt)
-                    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
-                except Exception as e:
-                    return handle_api_error("Could not format prompt for hfw-diffusers in method setup_for_local_llm_response, encountered error: ", e)
+                return handle_api_error("Could not prepare special model response in method setup_for_local_llm_response, encountered error: ", e)
         
-            if file_attached or vision:
-                print("File or vision detected, preparing accordingly")
-                local_llm_server = 'hfw-vision'
-                if file_attached:
-                    try:
-                        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True, True)
-                    except Exception as e:
-                        return handle_api_error("Could not format prompt for Vision-LLM in method setup_for_local_llm_response, encountered error: ", e)
-                    print("File attached to request, returning vision formatted_prompt: ", formatted_prompt)
-                    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
             
     # Perform similarity search on the vector DB
     print("\n\nPerforming similarity search to determine if RAG necessary\n\n")
-    embedding_function = None
-    try:
-        if use_sbert_embeddings:
-            embedding_function=HuggingFaceEmbeddings()
-        elif use_openai_embeddings:
-            embedding_function=AZURE_OPENAI_EMBEDDINGS
-        elif use_bge_base_embeddings:
-            embedding_function=HF_BGE_EMBEDDINGS
-        elif use_bge_large_embeddings:
-            embedding_function=HF_BGE_EMBEDDINGS
-    except Exception as e:
-        handle_error_no_return("Could not set embedding_function for similarity_search when attempting to setup_for_streaming_response, encountered error: ", e)
+    
+    embedding_function = get_embedding_function(use_sbert_embeddings, use_openai_embeddings, use_bge_base_embeddings, use_bge_large_embeddings)
     
     try:
-        # docs = VECTOR_STORE.similarity_search(user_query, embedding_fn=embedding_function)
-        # docs_with_relevance_score = VECTOR_STORE.similarity_search_with_relevance_scores(user_query, 10, embedding_fn=embedding_function)
         docs_list_with_cosine_distance = VECTOR_STORE.similarity_search_with_score(user_query, fetch_top_k_results_from_vectordb, embedding_fn=embedding_function)
     except Exception as e:
         handle_error_no_return("Could not perform similarity_search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
 
     try:
         whoosh_results = search_whoosh_index(user_query)
-        # print(f"Whoosh results: {whoosh_results}")
     except Exception as e:
         handle_error_no_return("Could not perform whoosh search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
 
     filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc,score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of a Document object and a float score!
-    # print(f"Filtered docs: {filtered_docs}")
 
-    # Combine the whoosh and vector results
-    if whoosh_results:
+    if whoosh_results:  # Combine the whoosh and vector results
         combined_docs = combine_whoosh_and_vector_results(whoosh_results, filtered_docs)
     else:
         combined_docs = filtered_docs
-    # print(f"Combined docs: {combined_docs}")
 
     docs = []
     if combined_docs:
@@ -3879,33 +3933,22 @@ def setup_for_local_llm_response():
     except Exception as e:
         handle_error_no_return("Could not write do_rag to config during setup_for_streaming_response, encountered error: ", e)
 
-        
     if do_rag:  # add similarity search results for RAG if necessary!
         try:
             QUERIES[key_for_vector_results] = docs
-            if local_llm_server == 'hfw-vision':
-                user_query += f"\n\nWhenever possible, mention the document names and page numbers the user should reference as per your best judgement. The following context might be helpful in answering the user query above:\n{docs}"
-            else:
-                user_query += f"\n\nThe following context might be helpful in answering the user query above:\n{docs}"
-            # print(f"RAG formatted user_query: \n{user_query}\n")
+            user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference it in your response by name and page number:\n{docs}"
         except Exception as e:
-            try:
-                write_config({'do_rag':False})
-            except Exception as e:
-                handle_error_no_return("Could not write do_rag to config during setup_for_streaming_response, encountered error: ", e)
+            reject_rag()
             handle_error_no_return("RAG Error: Could not update QUERIES dict and user_query during setup_for_streaming_response, proceeding without RAG. Encountered error: ", e)
-
     
     if local_llm_server == 'llama-cpp':
         formatted_prompt = format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format)
     elif local_llm_server == 'hf-waitress':
         formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, False, False, skip_system_prompt)
     elif local_llm_server == 'hfw-vision':
-        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True, True)
-
+        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True, True)  # No base_template for hfw-vision
     print("Returning formatted_prompt: ", formatted_prompt)
 
-    # Return a bunch of stuff
     new_sequence_id = int(current_sequence_id) + 1
     return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
 
