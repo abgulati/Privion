@@ -214,6 +214,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'mac_base_directory':'waitress_storage',
                     'upload_folder':base_directory + '/uploaded_files_for_vision_inferencing',
                     'generated_images_folder':base_directory + '/generated_images',
+                    'transformer_models_folder':base_directory + '/transformer_models',
                     'access_gated':False,
                     'access_token':"",
                     'model_id':"microsoft/Phi-3-mini-4k-instruct",
@@ -365,15 +366,13 @@ except Exception as e:
 
 
 ###---Notes on the above workflow:---###
-# 1. Everytime the app runs, the OS platform is detected
-# 2. Following which the apporpriate base directory is requested as above
-# 3. If this is the very first run:
+# 1. Everytime the app runs, the OS platform is detected and the appropriate OS-specific base directory is requested above
+# 2. If this is the very first run:
 #   a. read_config does not find the directory data in config.json
-#   b. the else clause is triggered and defaults set for both, write_config and return
-# 4. If this isn't the very first run, read_config simply returns the OS specific directory
-# 5. On return, BASE_DIRECTORY is set and write_config has os specific directories are subsequently set (windows_base_directory, unix_and_docker_base_directory, and mac_base_directory)
-# 6. write_config is then invoked for BASE_DIRECTORY
-# 7. This setup ensures that:
+#   b. the else clause is triggered and defaults are written to config.json and subsequently returned
+# 3. If this isn't the very first run, read_config simply returns the OS specific directory (windows_base_directory, unix_and_docker_base_directory, and mac_base_directory)
+# 4. Basis this, BASE_DIRECTORY is written to config.json
+# 5. This setup ensures that:
 #   a. directories are set correctly at each run
 #   b. The user can set their preferred directory by easily editing config.json!
 
@@ -386,9 +385,10 @@ except Exception as e:
     handle_local_error("Failed to create Base App Directory, encountered error: ", e)
 
 try:
-    read_return = read_config(['upload_folder', 'generated_images_folder'])
+    read_return = read_config(['upload_folder', 'generated_images_folder', 'transformer_models_folder'])
     upload_folder = read_return['upload_folder']
     generated_images_folder = read_return['generated_images_folder']
+    transformer_models_folder = read_return['transformer_models_folder']
 except Exception as e:
     handle_local_error("Could not read paths for app directories (upload_folder, generated_images_folder) from config.json on boot, encountered error: ", e)
 
@@ -402,8 +402,17 @@ try:
 except Exception as e:
     handle_local_error("Failed to create Generated Images Directory (generated_images_folder), encountered error: ", e)
 
+try:
+    os.makedirs(transformer_models_folder, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create Transformer Models Directory (transformer_models_folder), encountered error: ", e)
+
 
 app.config['UPLOAD_FOLDER'] = upload_folder
+
+# os.environ['HUGGINGFACE_HUB_CACHE'] = transformer_models_folder
+# os.environ['TRANSFORMERS_CACHE'] = transformer_models_folder
+# os.environ['HF_HOME'] = transformer_models_folder
 
 ############################----------------------------------------------###############################
 
