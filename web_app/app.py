@@ -3981,7 +3981,16 @@ def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
             rf'\b{re.escape(source_filename_no_extension)}\b' # Filename without extension
         ]
 
-        is_relevant = any(re.search(pattern, llm_response) for pattern in patterns)
+        responses_to_check = [
+            llm_response,
+            re.sub(r'[-_+]', ' ', llm_response)
+        ]
+
+        is_relevant = any(
+            re.search(pattern, response) 
+            for pattern in patterns
+            for response in responses_to_check
+        )
 
         print(f"Citation relevance check result: {is_relevant} for {source_filename}")
         return is_relevant
