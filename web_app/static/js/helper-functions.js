@@ -40,6 +40,10 @@ function getHfwUrl() {
     return document.getElementById('chatState').getAttribute('data-hf-waitress-url');
 }
 
+function getUniqueId() {
+    return crypto.randomUUID();
+}
+
 function setModelHeaderInfoBox(chat_id, model_id) {
     setLlmModel(model_id);
     chatID = " Chat ".concat(String(chat_id))
