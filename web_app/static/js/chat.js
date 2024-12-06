@@ -58,8 +58,26 @@ function handleAutoScroll(chatContainer) {
 }
 
 function updateChatAreaWithUserInput(userInputForHtml) {
-    document.getElementById('chat-area').innerHTML += `<div class="user-message glassmorphism">${userInputForHtml}</div>`;
+    const uniqueId = getUniqueId();
+    const current_chat_id = getChatId();
+    document.getElementById('chat-area').innerHTML += `<div class="user-message glassmorphism" data-unique-id="${uniqueId}" data-chat-id="${current_chat_id}">${userInputForHtml}</div>`;
     scrollChatAreaToBottom();
+    return uniqueId;
+}
+
+function appendChatIdToUserMessage(uniqueId, chat_id) {
+    const userMessageElement = document.querySelector(`[data-unique-id="${uniqueId}"]`);
+    userMessageElement.setAttribute('data-chat-id', chat_id);
+}
+
+function appendStreamSessionIdToUserMessage(uniqueId, stream_session_id) {
+    const userMessageElement = document.querySelector(`[data-unique-id="${uniqueId}"]`);
+    userMessageElement.setAttribute('data-stream-session-id', stream_session_id);
+}
+
+function appendSequenceIdToUserMessage(uniqueId, sequence_id) {
+    const userMessageElement = document.querySelector(`[data-unique-id="${uniqueId}"]`);
+    userMessageElement.setAttribute('data-sequence-id', sequence_id);
 }
 
 function getUserInput() {
@@ -102,10 +120,10 @@ function setupLLMResponse(userInput, file_attached, current_chat_id) { //no need
     });
 }
 
-function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, responseContentID) {
+function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, responseContentID, stream_session_id) {
     const chatArea = document.getElementById('chat-area');
     chatArea.innerHTML += `
-        <div class="response-and-viewer-container" id="${masterWrapperID}">
+        <div class="response-and-viewer-container" id="${masterWrapperID}" data-stream-session-id="${stream_session_id}">
             <div class="llm-wrapper" style="display:none;" id="${responseWrapperID}">
                 <div class="llm-response" id="${responseContentID}"></div>
             </div>
@@ -123,6 +141,7 @@ function handleSetupResponse(data) {
     console.log("formatted_user_prompt: ", formatted_user_prompt);
     console.log("server_type: ", server_type);
     setSequenceId(sequence_id);
+    appendSequenceIdToUserMessage(data.user_message_html_unique_id, sequence_id);
 
     const responseIDs = {
         responseWrapperID: `ResponseWrapper${stream_session_id}`,
@@ -130,7 +149,7 @@ function handleSetupResponse(data) {
         masterWrapperID: `MasterWrapper${stream_session_id}`
     }
 
-    appendResponseContainerToChatArea(responseIDs.masterWrapperID, responseIDs.responseWrapperID, responseIDs.responseContentID);
+    appendResponseContainerToChatArea(responseIDs.masterWrapperID, responseIDs.responseWrapperID, responseIDs.responseContentID, stream_session_id);
     displayProcessingStatus('Generating...');
 
     return { do_rag, stream_session_id, formatted_user_prompt, responseIDs, server_type };
@@ -486,7 +505,7 @@ async function fetchEventStream(serverType, formattedPrompt, responseContentID, 
 }
 
 
-function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, stream_session_id) {
+function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, stream_session_id, user_message_html_unique_id) {
     const latest_sequence_id = getSequenceId();
     const current_chat_id = data.chat_id;
 
@@ -495,6 +514,7 @@ function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapper
         console.log("Updating chatID in the InfoBox");
         setChatId(current_chat_id);
         setModelHeaderInfoBox(current_chat_id, getLlmModel());
+        appendChatIdToUserMessage(user_message_html_unique_id, current_chat_id);
     }
 
     if (parseInt(latest_sequence_id) == 1) { 
@@ -548,7 +568,7 @@ function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapper
     }
 }
 
-async function getReferences(do_rag, params, responseContentID, masterWrapperID) {
+async function getReferences(do_rag, params, responseContentID, masterWrapperID, user_message_html_unique_id) {
     try {
         const response = await fetch('/get_references', {
             method: 'POST',
@@ -567,7 +587,7 @@ async function getReferences(do_rag, params, responseContentID, masterWrapperID)
             throw new Error(`Internal Server Error: Check server-log and server command-line for more details. Error: ${data.error}`);
         }
 
-        handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, params.stream_session_id);
+        handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, params.stream_session_id, user_message_html_unique_id);
     } catch (error) {
         errorHandler("fetching relevant reference material", "getReferences()", String(error))
     }
@@ -580,8 +600,8 @@ async function requestFormattedPrompt() {
     const current_chat_id = getChatId();
     const {userInput, file} = getUserInput();
     const userInputForHtml = formatTabsAndSpaces(userInput);
-    updateChatAreaWithUserInput(userInputForHtml);
-
+    const uniqueId = updateChatAreaWithUserInput(userInputForHtml);
+    
     let file_attached = false;
     if (file) { file_attached = true; }
 
@@ -589,7 +609,9 @@ async function requestFormattedPrompt() {
         // 1- setup_for_local_llm_response
         const response = await setupLLMResponse(userInput, file_attached, current_chat_id);
         const data = await response.json();
+        data.user_message_html_unique_id = uniqueId;
         const {do_rag, stream_session_id, formatted_user_prompt, responseIDs, server_type} = handleSetupResponse(data);
+        appendStreamSessionIdToUserMessage(uniqueId, stream_session_id);
 
         // 2- fetchEventStream()
         const chatContainer = document.getElementById('chat-area');
@@ -611,7 +633,7 @@ async function requestFormattedPrompt() {
             'formatted_user_prompt': formatted_user_prompt
         };
 
-        await getReferences(do_rag, getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID);
+        await getReferences(do_rag, getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);
 
     } catch (error) {
         errorHandler("chatting with the LLM", "requestFormattedPrompt()", String(error.message))
