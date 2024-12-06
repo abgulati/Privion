@@ -4041,8 +4041,11 @@ def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
             for response in responses_to_check
         )
 
+        threshold = 80
         if not is_relevant: # No exact matches found, LLM may have mentioned the filename just differently enough, so time to check if a Fuzzy match is found
-            is_relevant = is_fuzzy_subset(llm_response_cleaned, source_filename_cleaned, threshold=80)
+            print(f"\nNo exact matches found, checking for fuzzy match with a {threshold}% or higher threshold\n")
+            is_relevant = is_fuzzy_subset(llm_response_cleaned, source_filename_cleaned, threshold)
+            print(f"Fuzzy match result: {is_relevant} for {source_filename}\n")
 
         print(f"Citation relevance check result: {is_relevant} for {source_filename}")
         return is_relevant
