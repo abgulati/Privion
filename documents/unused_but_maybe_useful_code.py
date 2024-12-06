@@ -1937,3 +1937,480 @@ def load_chat_history():
 // }
 
 
+
+def is_citation_relevant(llm_response, source_filename):
+    print(f"Checking if citation is relevant: {source_filename} in LLM response")
+    llm_response = llm_response.lower()
+    source_filename = source_filename.lower()   # Full source filename
+
+    source_filename_no_extension = source_filename.split('.')[0]     # Source filename without extension
+
+    source_filename_no_dashes_or_underscores = source_filename_no_extension.replace('_', ' ').replace('-', ' ') # Source filename without dashes or underscores: very unlikely that the LLM will deliberately output the document name with dashes or underscores but no extension!
+
+    return source_filename in llm_response or source_filename_no_dashes_or_underscores in llm_response or source_filename_no_extension in llm_response
+
+
+
+# legacy get_ref code from get_sources_and_pages_for_get_references():
+
+if file_extension == '.txt':    # The source_filepath will likely always reference a TXT file because of how we're loading the VectorDB!
+
+            #print("\n\ntxt file\n\n")
+
+            pdf_version_path = os.path.join(upload_folder, os.path.basename(source_filepath).replace('.txt', '.pdf'))   # not catching an error here as os.path.basename(source_filepath) has already been caught just above! Construct the path to the potential PDF version.
+
+            if os.path.exists(pdf_version_path):
+
+                #print("\n\pdf exists\n\n")
+
+                source_filename = source_filename.replace('.txt', '.pdf')
+                
+                if pdf_version_path in reference_pages:
+                    reference_pages[pdf_version_path].extend([[relevant_page_text,relevant_page_number]])
+                else:
+                    reference_pages[pdf_version_path] = [[relevant_page_text,relevant_page_number]]
+
+                if source_filename not in all_sources:  # Add this file to our sources dictionary if it's not already present
+                    source_filepath = pdf_version_path
+                    all_sources.update({source_filename: source_filepath})
+
+            else:
+                print("\n\nNo PDF source doc found (TXT Source) in the 'uploaded_pdfs' dir, RAG ACTIVE BUT REFERENCING WILL NOT DISPLAY!\n\n")
+                if source_filename not in all_sources: # Do not duplicate if the TXT file is already in the sources dict
+                    try:
+                        source_filepath = os.path.join(upload_folder, source_filename) # reconstructed path using the OS module just to be safe
+                        all_sources.update({source_filename: source_filepath})
+                    except Exception as e:
+                        handle_error_no_return("Could not construct filepath for TXT file, encountered error: ", e)
+
+
+        # If by any odd chance the file is not a TXT file
+        else:
+            if source_filename not in all_sources: # Do not duplicate if the TXT file is already in the sources dict
+                try:
+                    source_filepath = os.path.join(upload_folder, source_filename) # reconstructed path using the OS module just to be safe
+                    all_sources.update({source_filename: source_filepath})
+                except Exception as e:
+                    handle_error_no_return("Could not construct filepath for non-TXT file, encountered error: ", e)
+
+
+async function requestFormattedPrompt(regeneration_request=false, stream_session_id=null, chat_id=null, sequence_id=null, user_query=null) {
+    initializePromptRequest();
+
+    let current_chat_id;
+    let uniqueId;
+
+    if (regeneration_request) { 
+        current_chat_id = chat_id;
+        sequence_id = sequence_id;
+        user_query = user_query;
+        uniqueId = getUniqueId();
+    } else {
+        current_chat_id = getChatId();
+        const {userInput, file} = getUserInput();
+        const userInputForHtml = formatTabsAndSpaces(userInput);
+        uniqueId = updateChatAreaWithUserInput(userInputForHtml);
+    }
+
+
+
+def read_request_data_for_regenerate_response(request: Request) -> tuple[str, str, str, int]:
+    stream_session_id = request.json.get('stream_session_id')
+    user_query = request.json.get('user_query')
+    chat_id = request.json.get('chat_id')
+    sequence_id = request.json.get('sequence_id')
+    return stream_session_id, user_query, chat_id, sequence_id
+
+@app.route('/regenerate_response', methods=['POST'])
+def regenerate_response():
+    print("\n\nRegenerating Response\n\n")
+
+    '''
+    1. Read the request:
+        - stream_session_id
+        - user_query
+        - chat_id
+        - sequence_id
+    2. Read config:
+        - local_llm_server
+        - local_llm_chat_template_format
+    '''
+
+    global QUERIES
+    do_rag = True
+
+    # Determine do_rag
+    try:
+        read_return = read_config_for_setup_for_local_llm_response()
+        use_sbert_embeddings = read_return['use_sbert_embeddings']
+        use_openai_embeddings = read_return['use_openai_embeddings']
+        use_bge_base_embeddings = read_return['use_bge_base_embeddings']
+        use_bge_large_embeddings = read_return['use_bge_large_embeddings']
+        force_enable_rag = read_return['force_enable_rag']
+        force_disable_rag = read_return['force_disable_rag']
+        local_llm_chat_template_format = read_return['local_llm_chat_template_format']
+        base_template = read_return['base_template']
+        local_llm_server = read_return['local_llm_server']
+        fetch_top_k_results_from_vectordb = read_return['fetch_top_k_results_from_vectordb']
+        filter_top_k_results_by_reranking = read_return['filter_top_k_results_by_reranking']
+        skip_system_prompt = read_return['skip_system_prompt']
+    except Exception as e:
+        return handle_api_error("Missing values in config.json when attempting to setup_for_streaming_response. Error: ", e)
+
+    try:
+        stream_session_id, user_query, chat_id, sequence_id = read_request_data_for_regenerate_response(request)
+        QUERIES[stream_session_id] = user_query     # Store the query associated with the ID
+    except Exception as e:
+        return handle_api_error("Could not obtain and/or store user_query in setup_for_streaming_response, encountered error: ", e)
+
+    # Set defaults for regeneration:
+    key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
+    file_attached = False
+    current_sequence_id = sequence_id
+
+    try:
+        formatted_prompt, current_sequence_id = get_formatted_prompt_from_history_db(chat_id, current_sequence_id)
+    except Exception as e:
+        return handle_api_error("Could not get formatted_prompt from history db in method regenerate_response, encountered error: ", e)
+
+    if local_llm_server == 'hf-waitress':
+        flux_diffusers, vision = determine_special_model_type_for_hf_waitress()
+        if vision: local_llm_server = 'hfw-vision'
+
+        elif flux_diffusers or file_attached:
+            new_sequence_id = current_sequence_id
+            reject_rag()
+            try:
+                response = prepare_special_model_response(
+                    local_llm_server='hfw-diffusers' if flux_diffusers else 'hfw-vision',
+                    stream_session_id=stream_session_id,
+                    user_query=user_query,
+                    current_sequence_id=current_sequence_id,
+                    new_sequence_id=new_sequence_id,
+                    formatted_prompt=formatted_prompt
+                )
+                print(f"Returning quick-return formatted_prompt: {response['formatted_user_prompt']}")
+                return jsonify(response)
+            except Exception as e:
+                return handle_api_error("Could not prepare special model response in method regenerate_response, encountered error: ", e)
+        
+            
+    # Perform similarity search on the vector DB
+    print("\n\nPerforming similarity search to determine if RAG necessary\n\n")
+    
+    embedding_function = get_embedding_function(use_sbert_embeddings, use_openai_embeddings, use_bge_base_embeddings, use_bge_large_embeddings)
+    
+    try:
+        docs_list_with_cosine_distance = VECTOR_STORE.similarity_search_with_score(user_query, fetch_top_k_results_from_vectordb, embedding_fn=embedding_function)
+    except Exception as e:
+        handle_error_no_return("Could not perform similarity_search to determine do_rag when attempting to regenerate_response, encountered error: ", e)
+
+    try:
+        whoosh_results = search_whoosh_index(user_query)
+    except Exception as e:
+        handle_error_no_return("Could not perform whoosh search to determine do_rag when attempting to regenerate_response, encountered error: ", e)
+
+    filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc,score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of a Document object and a float score!
+
+    if whoosh_results:  # Combine the whoosh and vector results
+        combined_docs = combine_whoosh_and_vector_results(whoosh_results, filtered_docs)
+    else:
+        combined_docs = filtered_docs
+
+    docs = []
+    if combined_docs:
+        docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
+        do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
+    else:
+        print("No documents for citations, setting do_rag to False")
+        do_rag = False
+    
+    print(f'Do RAG? {do_rag}')
+
+    try:
+        write_config({'do_rag':do_rag})
+    except Exception as e:
+        handle_error_no_return("Could not write do_rag to config during regenerate_response, encountered error: ", e)
+
+    if do_rag:  # add similarity search results for RAG if necessary!
+        try:
+            QUERIES[key_for_vector_results] = docs
+            user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference it in your response by name and page number:\n{docs}"
+        except Exception as e:
+            reject_rag()
+            handle_error_no_return("RAG Error: Could not update QUERIES dict and user_query during regenerate_response, proceeding without RAG. Encountered error: ", e)
+    
+    if local_llm_server == 'llama-cpp':
+        formatted_prompt = format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format)
+    elif local_llm_server == 'hf-waitress':
+        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, False, False, skip_system_prompt)
+    elif local_llm_server == 'hfw-vision':
+        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True, True)  # No base_template for hfw-vision
+    print("Returning formatted_prompt: ", formatted_prompt)
+
+    new_sequence_id = int(current_sequence_id) + 1
+    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
+
+
+
+@app.route('/setup_for_local_llm_response', methods=['POST'])
+def setup_for_local_llm_response():
+
+    print("\n\nSetting up for local LLM response\n\n")
+
+    global QUERIES
+    do_rag = True
+
+    try:
+        stream_session_id, key_for_vector_results = get_session_id_and_vector_key()
+    except Exception as e:
+        return handle_api_error("Could not get session_id and vector_key when attempting to setup_for_streaming_response, encountered error: ", e)
+
+    # Determine do_rag
+    try:
+        read_return = read_config_for_setup_for_local_llm_response()
+        use_sbert_embeddings = read_return['use_sbert_embeddings']
+        use_openai_embeddings = read_return['use_openai_embeddings']
+        use_bge_base_embeddings = read_return['use_bge_base_embeddings']
+        use_bge_large_embeddings = read_return['use_bge_large_embeddings']
+        force_enable_rag = read_return['force_enable_rag']
+        force_disable_rag = read_return['force_disable_rag']
+        local_llm_chat_template_format = read_return['local_llm_chat_template_format']
+        base_template = read_return['base_template']
+        local_llm_server = read_return['local_llm_server']
+        fetch_top_k_results_from_vectordb = read_return['fetch_top_k_results_from_vectordb']
+        filter_top_k_results_by_reranking = read_return['filter_top_k_results_by_reranking']
+        skip_system_prompt = read_return['skip_system_prompt']
+    except Exception as e:
+        return handle_api_error("Missing values in config.json when attempting to setup_for_streaming_response. Error: ", e)
+
+    try:
+        user_query, chat_id, file_attached = read_request_data_for_setup_for_local_llm_response(request)
+        QUERIES[stream_session_id] = user_query     # Store the query associated with the ID
+    except Exception as e:
+        return handle_api_error("Could not obtain and/or store user_query in setup_for_streaming_response, encountered error: ", e)
+
+    try:
+        current_sequence_id = determine_sequence_id_for_chat(chat_id)
+        print(f"Current Chat ID: {chat_id} & Sequence ID: {current_sequence_id}")
+    except Exception as e:
+        return handle_api_error("Could not determine current_sequence_id when attempting to setup_for_streaming_response, encountered error: ", e)
+
+    try:
+        formatted_prompt, current_sequence_id = get_formatted_prompt_for_setup_for_local_llm_response(chat_id, current_sequence_id)
+    except Exception as e:
+        return handle_api_error("Could not get formatted_prompt from history db in method setup_for_local_llm_response, encountered error: ", e)
+    
+    if local_llm_server == 'hf-waitress':
+        flux_diffusers, vision = determine_special_model_type_for_hf_waitress()
+        if vision: local_llm_server = 'hfw-vision'
+
+        elif flux_diffusers or file_attached:
+            new_sequence_id = prepare_for_quick_response(current_sequence_id)
+            try:
+                response = prepare_special_model_response(
+                    local_llm_server='hfw-diffusers' if flux_diffusers else 'hfw-vision',
+                    stream_session_id=stream_session_id,
+                    user_query=user_query,
+                    current_sequence_id=current_sequence_id,
+                    new_sequence_id=new_sequence_id,
+                    formatted_prompt=formatted_prompt
+                )
+                print(f"Returning quick-return formatted_prompt: {response['formatted_user_prompt']}")
+                return jsonify(response)
+            except Exception as e:
+                return handle_api_error("Could not prepare special model response in method setup_for_local_llm_response, encountered error: ", e)
+        
+            
+    # Perform similarity search on the vector DB
+    print("\n\nPerforming similarity search to determine if RAG necessary\n\n")
+    
+    embedding_function = get_embedding_function(use_sbert_embeddings, use_openai_embeddings, use_bge_base_embeddings, use_bge_large_embeddings)
+    
+    try:
+        docs_list_with_cosine_distance = VECTOR_STORE.similarity_search_with_score(user_query, fetch_top_k_results_from_vectordb, embedding_fn=embedding_function)
+    except Exception as e:
+        handle_error_no_return("Could not perform similarity_search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
+
+    try:
+        whoosh_results = search_whoosh_index(user_query)
+    except Exception as e:
+        handle_error_no_return("Could not perform whoosh search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
+
+    filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc,score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of a Document object and a float score!
+
+    if whoosh_results:  # Combine the whoosh and vector results
+        combined_docs = combine_whoosh_and_vector_results(whoosh_results, filtered_docs)
+    else:
+        combined_docs = filtered_docs
+
+    docs = []
+    if combined_docs:
+        docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
+        do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
+    else:
+        print("No documents for citations, setting do_rag to False")
+        do_rag = False
+    
+    print(f'Do RAG? {do_rag}')
+
+    try:
+        write_config({'do_rag':do_rag})
+    except Exception as e:
+        handle_error_no_return("Could not write do_rag to config during setup_for_streaming_response, encountered error: ", e)
+
+    if do_rag:  # add similarity search results for RAG if necessary!
+        try:
+            QUERIES[key_for_vector_results] = docs
+            user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference it in your response by name and page number:\n{docs}"
+        except Exception as e:
+            reject_rag()
+            handle_error_no_return("RAG Error: Could not update QUERIES dict and user_query during setup_for_streaming_response, proceeding without RAG. Encountered error: ", e)
+    
+    if local_llm_server == 'llama-cpp':
+        formatted_prompt = format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format)
+    elif local_llm_server == 'hf-waitress':
+        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, False, False, skip_system_prompt)
+    elif local_llm_server == 'hfw-vision':
+        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True, True)  # No base_template for hfw-vision
+    print("Returning formatted_prompt: ", formatted_prompt)
+
+    new_sequence_id = int(current_sequence_id) + 1
+    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
+
+
+
+@app.route('/setup_for_local_llm_response', methods=['POST'])
+def setup_for_local_llm_response():
+    print("\n\nSetting up for local LLM response\n\n")
+
+    global QUERIES
+    do_rag = True
+
+    # Determine do_rag
+    try:
+        read_return = read_config_for_setup_for_local_llm_response()
+        use_sbert_embeddings = read_return['use_sbert_embeddings']
+        use_openai_embeddings = read_return['use_openai_embeddings']
+        use_bge_base_embeddings = read_return['use_bge_base_embeddings']
+        use_bge_large_embeddings = read_return['use_bge_large_embeddings']
+        force_enable_rag = read_return['force_enable_rag']
+        force_disable_rag = read_return['force_disable_rag']
+        local_llm_chat_template_format = read_return['local_llm_chat_template_format']
+        base_template = read_return['base_template']
+        local_llm_server = read_return['local_llm_server']
+        fetch_top_k_results_from_vectordb = read_return['fetch_top_k_results_from_vectordb']
+        filter_top_k_results_by_reranking = read_return['filter_top_k_results_by_reranking']
+        skip_system_prompt = read_return['skip_system_prompt']
+    except Exception as e:
+        return handle_api_error("Missing values in config.json when attempting to setup_for_streaming_response. Error: ", e)
+    
+    try:
+        stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request = read_request_data_for_response_setup(request)
+        QUERIES[stream_session_id] = user_query     # Store the query associated with the ID
+    except Exception as e:
+        return handle_api_error("Could not obtain and/or store user_query in setup_for_streaming_response, encountered error: ", e)
+
+    # Set defaults for regeneration:
+    current_sequence_id = None
+    if regeneration_request:
+        print(f"\nSetting defaults for regeneration for request ID {stream_session_id}\n")
+        key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
+        file_attached = False
+        current_sequence_id = sequence_id
+    else:
+        try:
+            current_sequence_id = determine_sequence_id_for_chat(chat_id)   # determine_sequence_id_for_chat() has error handling so not required here
+            stream_session_id, key_for_vector_results = get_session_id_and_vector_key()
+        except Exception as e:
+            return handle_api_error("Error determining sequence_id and/or getting session_id and vector_key when attempting to setup_for_streaming_response, encountered error: ", e)
+        print(f"Current Chat ID: {chat_id} & Sequence ID: {current_sequence_id}")
+
+    try:
+        formatted_history_prompt, current_sequence_id = get_formatted_prompt_for_setup_for_local_llm_response(chat_id, current_sequence_id)
+    except Exception as e:
+        return handle_api_error("Could not get formatted_history_prompt from history db in method setup_for_local_llm_response, encountered error: ", e)
+    
+    if local_llm_server == 'hf-waitress':
+        flux_diffusers, vision = determine_special_model_type_for_hf_waitress()
+        if vision: local_llm_server = 'hfw-vision'
+
+        elif flux_diffusers or file_attached:
+            new_sequence_id = prepare_for_quick_response(current_sequence_id)
+            local_llm_server='hfw-diffusers' if flux_diffusers else 'hfw-vision'
+            try:
+                response = prepare_special_model_response(
+                    local_llm_server=local_llm_server,
+                    stream_session_id=stream_session_id,
+                    user_query=user_query,
+                    current_sequence_id=current_sequence_id,
+                    new_sequence_id=new_sequence_id,
+                    formatted_prompt=formatted_history_prompt
+                )
+                print(f"Returning quick-return formatted_user_prompt: {response['formatted_user_prompt']}")
+                return jsonify(response)
+            except Exception as e:
+                return handle_api_error("Could not prepare special model response in method setup_for_local_llm_response, encountered error: ", e)
+    
+    if force_disable_rag:
+        print(f"\nForce disabling RAG for request ID {stream_session_id}\n")
+        reject_rag()
+        try:
+            formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
+        except Exception as e:
+            return handle_api_error("Could not get formatted_updated_prompt in method setup_for_streaming_response, encountered error: ", e)
+        if not regeneration_request: current_sequence_id = int(current_sequence_id) + 1
+        return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
+            
+    # Perform similarity search on the vector DB
+    print("\n\nPerforming similarity search to determine if RAG necessary\n\n")
+    
+    embedding_function = get_embedding_function(use_sbert_embeddings, use_openai_embeddings, use_bge_base_embeddings, use_bge_large_embeddings)
+    
+    try:
+        docs_list_with_cosine_distance = VECTOR_STORE.similarity_search_with_score(user_query, fetch_top_k_results_from_vectordb, embedding_fn=embedding_function)
+    except Exception as e:
+        handle_error_no_return("Could not perform similarity_search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
+
+    try:
+        whoosh_results = search_whoosh_index(user_query)
+    except Exception as e:
+        handle_error_no_return("Could not perform whoosh search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
+
+    filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc,score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of a Document object and a float score!
+
+    if whoosh_results:  # Combine the whoosh and vector results
+        combined_docs = combine_whoosh_and_vector_results(whoosh_results, filtered_docs)
+    else:
+        combined_docs = filtered_docs
+
+    docs = []
+    if combined_docs:
+        docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
+        do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
+    else:
+        print("No documents for citations, setting do_rag to False")
+        do_rag = False
+    
+    print(f'Do RAG? {do_rag}')
+
+    try:
+        write_config({'do_rag':do_rag})
+    except Exception as e:
+        handle_error_no_return("Could not write do_rag to config during setup_for_streaming_response, encountered error: ", e)
+
+    if do_rag:  # add similarity search results for RAG if necessary!
+        try:
+            QUERIES[key_for_vector_results] = docs
+            user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference it in your response by name and page number:\n{docs}"
+        except Exception as e:
+            reject_rag()
+            handle_error_no_return("RAG Error: Could not update QUERIES dict and user_query during setup_for_streaming_response, proceeding without RAG. Encountered error: ", e)
+    
+    try:
+        formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
+    except Exception as e:
+        return handle_api_error("Could not get formatted_updated_prompt in method setup_for_streaming_response, encountered error: ", e)
+
+    new_sequence_id = int(current_sequence_id) + 1
+    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
