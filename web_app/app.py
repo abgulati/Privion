@@ -4009,6 +4009,7 @@ def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
         # Variations of the filename:
         source_filename_no_extension, _ = os.path.splitext(source_filename) # os.path.splitext() returns a tuple containing the path's name and extension. It handles edge cases and is platform-independent.
         source_filename_cleaned = re.sub(r'[-_+]', ' ', source_filename_no_extension)
+        source_filename_cleaned = re.sub(r' +', ' ', source_filename_cleaned)
 
         # Regex patterns for matching:
         """
@@ -4024,7 +4025,8 @@ def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
 
         responses_to_check = [
             llm_response,
-            re.sub(r'[-_+]', ' ', llm_response)
+            re.sub(r'[-_+]', ' ', llm_response),
+            re.sub(r' +', ' ', llm_response)
         ]
 
         is_relevant = any(
