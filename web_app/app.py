@@ -3994,6 +3994,10 @@ def setup_for_local_llm_response():
     return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
 
 
+def is_fuzzy_subset(string1: str, string2: str, threshold: int) -> bool:
+    score = fuzz.partial_ratio(string1, string2)
+    return score >= threshold
+
 
 def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
     print(f"Checking citation relevance: {source_filename} in LLM response?")
@@ -4011,28 +4015,24 @@ def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
         source_filename_cleaned = re.sub(r'[-_+]', ' ', source_filename_no_extension)
         source_filename_cleaned = re.sub(r' +', ' ', source_filename_cleaned)
 
+        llm_response_cleaned = re.sub(r'[-_+]', ' ', llm_response)
+        llm_response_cleaned = re.sub(r' +', ' ', llm_response_cleaned)
+
         # Regex patterns for matching:
         """
         re.escape() is used to escape special characters in the source filename, ensuring they are treated as literal characters in the regex pattern.
         \b is a word boundary, ensuring the pattern is a whole word. 
         rf'' is a raw f-string, allowing for the use of \b without it being interpreted as an escape character. This prevents partial matches, eg "doc1" matching on "doc123".
         """
-        # patterns = [
-        #     rf'\b{re.escape(source_filename)}\b', # Exact filename match with extension
-        #     rf'\b{re.escape(source_filename_cleaned)}\b', # Filename with dashes or underscores replaced by spaces
-        #     rf'\b{re.escape(source_filename_no_extension)}\b', # Filename without extension
-        # ]
-
         patterns = [
-            re.escape(source_filename), # Exact filename match with extension
-            re.escape(source_filename_cleaned), # Filename with dashes or underscores replaced by spaces
-            re.escape(source_filename_no_extension), # Filename without extension
+            rf'\b{re.escape(source_filename)}\b', # Exact filename match with extension
+            rf'\b{re.escape(source_filename_cleaned)}\b', # Filename with dashes or underscores replaced by spaces
+            rf'\b{re.escape(source_filename_no_extension)}\b', # Filename without extension
         ]
 
         responses_to_check = [
             llm_response,
-            re.sub(r'[-_+]', ' ', llm_response),
-            re.sub(r' +', ' ', llm_response)
+            llm_response_cleaned
         ]
 
         is_relevant = any(
@@ -4040,6 +4040,9 @@ def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
             for pattern in patterns
             for response in responses_to_check
         )
+
+        if not is_relevant: # No exact matches found, LLM may have mentioned the filename just differently enough, so time to check if a Fuzzy match is found
+            is_relevant = is_fuzzy_subset(llm_response_cleaned, source_filename_cleaned, threshold=80)
 
         print(f"Citation relevance check result: {is_relevant} for {source_filename}")
         return is_relevant
