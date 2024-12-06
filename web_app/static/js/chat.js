@@ -630,7 +630,8 @@ async function requestFormattedPrompt(regeneration_request=false, regen_stream_s
             'stream_session_id': stream_session_id,
             'user_query': userInput,
             'llm_response': totalContent,
-            'formatted_user_prompt': formatted_user_prompt
+            'formatted_user_prompt': formatted_user_prompt,
+            'regeneration_request': regeneration_request
         };
 
         await getReferences(do_rag, getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);

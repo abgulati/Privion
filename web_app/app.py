@@ -2484,15 +2484,12 @@ def llama_cpp_server_starter():
 
     # Before attempting to start the llama.cpp server, check if HF-Waitress is running and if so, shut it down:
     try:
-        if is_local_server_online('hf-waitress')['server_available']:
+        if HF_WAITRESS_PROCESS is not None and is_local_server_online('hf-waitress')['server_available']:
             print("\n\nThe HF-Waitress server is running. Attempting to shut it down before starting the llama.cpp server.\n\n")
             try:
-                if HF_WAITRESS_PROCESS is not None:
-                    terminate_local_llm_server_process(HF_WAITRESS_PROCESS)
-                    HF_WAITRESS_PROCESS = None
-                    LLM_LOADED_UP = False
-                else:
-                    raise Exception("HF_WAITRESS_PROCESS is None but server_available")
+                terminate_local_llm_server_process(HF_WAITRESS_PROCESS)
+                HF_WAITRESS_PROCESS = None
+                LLM_LOADED_UP = False
             except Exception as e:
                 LLM_LOADED_UP = True    # We know the HF-Waitress server is running, which means `hf_waitress.py` is available, so we set LLM_LOADED_UP to True
                 other_server_running = True # Set to True as we've determined the other server is running and we failed to terminate it
@@ -2609,15 +2606,12 @@ def hf_waitress_server_starter():
 
     # Before attempting to start the HF-Waitress server, check if llama.cpp is running and if so, shut it down:
     try:
-        if is_local_server_online('llama-cpp')['server_available']:
+        if LLAMA_CPP_PROCESS is not None and is_local_server_online('llama-cpp')['server_available']:
             print("\n\nThe llama.cpp server is running. Attempting to shut it down before starting the HF-Waitress server.\n\n")
             try:
-                if LLAMA_CPP_PROCESS is not None:
-                    terminate_local_llm_server_process(LLAMA_CPP_PROCESS)
-                    LLAMA_CPP_PROCESS = None
-                    LLM_LOADED_UP = False
-                else:
-                    raise Exception("LLAMA_CPP_PROCESS is None but server_available")
+                terminate_local_llm_server_process(LLAMA_CPP_PROCESS)
+                LLAMA_CPP_PROCESS = None
+                LLM_LOADED_UP = False
             except Exception as e:
                 LLM_LOADED_UP = True    # We know the llama.cpp server is running, which means `llama-server` is available, so we set LLM_LOADED_UP to True
                 other_server_running = True # Set to True as we've determined the other server is running and we failed to terminate it
@@ -3366,7 +3360,7 @@ def init_chat_history_db():
     return jsonify({'success': True, 'chat_id': chat_id})
 
 
-def update_llm_response_in_history_db(chat_id, stream_session_id, llm_response):
+def update_llm_response_in_history_db(chat_id, stream_session_id, user_query, llm_response):
 
     print(f"Updating LLM response in chat history DB for chat_id: {chat_id} and stream_session_id: {stream_session_id}")
 
@@ -3383,16 +3377,22 @@ def update_llm_response_in_history_db(chat_id, stream_session_id, llm_response):
     except Exception as e:
         return handle_local_error("Could not connect to chat history database, encountered error: ", e)
 
+    try:
+        current_datetime = datetime.datetime.now()
+        formatted_datetime = current_datetime.strftime('%d %b %Y - %I:%M %p %Z')
+    except Exception as e:
+        return handle_api_error("Could not obtain timestamp in update_llm_response_in_history_db, encountered error: ", e)
+    
     # Update the LLM response in the chat history DB for the given stream_session_id:
-    try:    
-        c.execute("UPDATE chat_history SET llm_response = ? WHERE stream_session_id = ?", (llm_response, stream_session_id))
+    try:
+        c.execute("UPDATE chat_history SET user_query = ?, llm_response = ?, date_time = ? WHERE stream_session_id = ?", (user_query, llm_response, formatted_datetime, stream_session_id))
         conn.commit()
     except Exception as e:
         return handle_local_error("Could not update LLM response in chat history DB, encountered error: ", e)
     
     conn.close()
 
-    return True
+    return formatted_datetime, chat_id
 
 
 def extract_significant_phrases(query):
@@ -4150,7 +4150,8 @@ def get_request_parameters_for_get_references(request: Request) -> tuple[str, st
         formatted_user_prompt = request.json['formatted_user_prompt']
         chat_id = request.json['chat_id']
         sequence_id = request.json['sequence_id']
-        return stream_session_id, user_query, llm_response, formatted_user_prompt, chat_id, sequence_id
+        regeneration_request = request.json['regeneration_request']
+        return stream_session_id, user_query, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request
     except Exception as e:
         return handle_local_error("Could not read request content in method get_request_parameters_for_get_references(), encountered error: ", e)
 
@@ -4328,7 +4329,7 @@ def get_references():
         return handle_api_error("Missing values in config.json when attempting to get_references. Error: ", e)
 
     try:
-        stream_session_id, user_query, llm_response, formatted_user_prompt, chat_id, sequence_id = get_request_parameters_for_get_references(request)
+        stream_session_id, user_query, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request = get_request_parameters_for_get_references(request)
     except Exception as e:
         return handle_api_error("Could not read request content in method get_references, encountered error: ", e)
 
@@ -4351,9 +4352,12 @@ def get_references():
     if not do_rag:
         print("\n\nRAG Citations unnecessary, storing chat history and returning\n\n")
         try:
-            stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+            if not regeneration_request:
+                stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+            else:
+                stored_datetime, chat_id = update_llm_response_in_history_db(chat_id, stream_session_id, user_query, llm_response)
         except Exception as e:
-            handle_error_no_return("Could not store_local_llm_chat_history_to_db in get_references(), encountered error: ", e)
+            handle_error_no_return("Could not store or update chat history DB in get_references(), encountered error: ", e)
         return jsonify({'success': True, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
     
 
@@ -4383,12 +4387,15 @@ def get_references():
         model_response_for_history_db = get_model_response_for_history_db_for_get_references(download_link_html, llm_response, reference_response)
         user_query_for_history_db = str(user_query).strip('\n') #formatted_user_query 
     except Exception as e:
-        handle_error_no_return("Could not prep data to store_local_llm_chat_history_to_db in get_references(), encountered error: ", e)
+        handle_error_no_return("Could not prep data to store to chat history DB in get_references(), encountered error: ", e)
 
     try:
-        stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query_for_history_db, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+        if not regeneration_request:
+            stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query_for_history_db, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+        else:
+            stored_datetime, chat_id = update_llm_response_in_history_db(chat_id, stream_session_id, user_query_for_history_db, model_response_for_history_db)
     except Exception as e:
-        handle_error_no_return("Could not store_local_llm_chat_history_to_db in get_references(), encountered error: ", e)
+        handle_error_no_return("Could not store or update chat history DB in get_references(), encountered error: ", e)
 
     return jsonify({'success': True, 'response': reference_response, 'pdf_frame':download_link_html, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
 
