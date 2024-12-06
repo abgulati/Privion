@@ -4017,10 +4017,16 @@ def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
         \b is a word boundary, ensuring the pattern is a whole word. 
         rf'' is a raw f-string, allowing for the use of \b without it being interpreted as an escape character. This prevents partial matches, eg "doc1" matching on "doc123".
         """
+        # patterns = [
+        #     rf'\b{re.escape(source_filename)}\b', # Exact filename match with extension
+        #     rf'\b{re.escape(source_filename_cleaned)}\b', # Filename with dashes or underscores replaced by spaces
+        #     rf'\b{re.escape(source_filename_no_extension)}\b', # Filename without extension
+        # ]
+
         patterns = [
-            rf'\b{re.escape(source_filename)}\b', # Exact filename match with extension
-            rf'\b{re.escape(source_filename_cleaned)}\b', # Filename with dashes or underscores replaced by spaces
-            rf'\b{re.escape(source_filename_no_extension)}\b' # Filename without extension
+            re.escape(source_filename), # Exact filename match with extension
+            re.escape(source_filename_cleaned), # Filename with dashes or underscores replaced by spaces
+            re.escape(source_filename_no_extension), # Filename without extension
         ]
 
         responses_to_check = [
