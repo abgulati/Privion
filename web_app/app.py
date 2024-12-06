@@ -3405,7 +3405,7 @@ def extract_significant_phrases(query):
     try:
         nltk.download('stopwords')
         stop_words = set(stopwords.words('english'))
-        custom_stop_words = {"you", "me", "anything", "tell", "can", "could", "would", "should"}
+        custom_stop_words = {"you", "me", "anything", "tell", "can", "could", "would", "should", "write", "writes", "wrote", "written", "read", "reads"}
         stop_words.update(custom_stop_words)
     except Exception as e:
         handle_error_no_return("Failed to download & set stopwords, encountered error: ", e)
@@ -3651,61 +3651,63 @@ def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_
 
     print("\n\nFormatting prompt for hf-waitress\n\n")
 
-    # base_template += " Important: The user will be reading your responses in a web browser, so make sure to use <br> liberally to ensure the user can read your responses easily. When in doubt, add a <br> tag!"
+    try:
     
-    # double curly braces necessitated by Python's f-string syntax, to escape the inner curly braces in the JSON string
-    if flux_diffusers:
-        formatted_prompt = f'''
-        {{
-            "messages": [
-                {{"prompt": {json.dumps(user_query)}}}
-            ]
-        }}
-        '''
-    else:
-        if current_sequence_id > 0:
-            history_prompt_json = json.loads(formatted_prompt)
-            new_message = {"role":"user", "content":user_query}
-            history_prompt_json['messages'].append(new_message)
-            updated_history_prompt_json = json.dumps(history_prompt_json, indent=4)
-            if vision:  
-                formatted_prompt = updated_history_prompt_json  # return json object
-            else:
-                formatted_prompt = str(updated_history_prompt_json)
-        else:   # first message in chat
-            if vision:
-                formatted_prompt = {
-                    "messages": [
-                        {
-                            "role": "user", 
-                            "content": [
-                                {"type": "image"},
-                                {"type": "text", "text": user_query}
-                            ]
-                        }
-                    ]
-                }
-                formatted_prompt = json.dumps(formatted_prompt) # Convert to a JSON string
-            else:
-                if skip_system_prompt:
-                    first_prompt_json = f'''
-                    {{
-                            "messages": [
-                                {{"role": "user", "content": {json.dumps(user_query)}}}
-                            ]
-                        }}
-                    '''
+        # double curly braces necessitated by Python's f-string syntax, to escape the inner curly braces in the JSON string
+        if flux_diffusers:
+            formatted_prompt = f'''
+            {{
+                "messages": [
+                    {{"prompt": {json.dumps(user_query)}}}
+                ]
+            }}
+            '''
+        else:
+            if current_sequence_id > 0:
+                history_prompt_json = json.loads(formatted_prompt)
+                new_message = {"role":"user", "content":user_query}
+                history_prompt_json['messages'].append(new_message)
+                updated_history_prompt_json = json.dumps(history_prompt_json, indent=4)
+                if vision:  
+                    formatted_prompt = updated_history_prompt_json  # return json object
                 else:
-                    first_prompt_json = f'''
-                    {{
-                            "messages": [
-                                {{"role": "system", "content": {json.dumps(base_template)}}},
-                                {{"role": "user", "content": {json.dumps(user_query)}}}
-                            ]
-                        }}
-                    '''                    
+                    formatted_prompt = str(updated_history_prompt_json)
+            else:   # first message in chat
+                if vision:
+                    formatted_prompt = {
+                        "messages": [
+                            {
+                                "role": "user", 
+                                "content": [
+                                    {"type": "image"},
+                                    {"type": "text", "text": user_query}
+                                ]
+                            }
+                        ]
+                    }
+                    formatted_prompt = json.dumps(formatted_prompt) # Convert to a JSON string
+                else:
+                    if skip_system_prompt:
+                        first_prompt_json = f'''
+                        {{
+                                "messages": [
+                                    {{"role": "user", "content": {json.dumps(user_query)}}}
+                                ]
+                            }}
+                        '''
+                    else:
+                        first_prompt_json = f'''
+                        {{
+                                "messages": [
+                                    {{"role": "system", "content": {json.dumps(base_template)}}},
+                                    {{"role": "user", "content": {json.dumps(user_query)}}}
+                                ]
+                            }}
+                        '''                    
 
-                formatted_prompt = str(first_prompt_json)
+                    formatted_prompt = str(first_prompt_json)
+    except Exception as e:
+        handle_error_no_return("Could not format prompt for hf-waitress in method format_prompt_for_hf_waitress, encountered error: ", e)
 
     return formatted_prompt
 
@@ -3804,11 +3806,11 @@ def determine_special_model_type_for_hf_waitress() -> tuple[bool, bool]:
 
 
 def prepare_special_model_response(formatted_prompt:str, user_query:str, current_sequence_id:int, new_sequence_id:int, stream_session_id:str, local_llm_server:str) -> dict:
-    '''Prepare a response for a special model type, such as hfw-diffusers or hfw-vision'''
+    print("\n\nPreparing special model response\n\n")
     try:
         is_diffusers = local_llm_server == 'hfw-diffusers'
         formatted_prompt = format_prompt_for_hf_waitress(
-            prompt="" if is_diffusers else formatted_prompt, 
+            formatted_prompt="" if is_diffusers else formatted_prompt, 
             user_query=user_query, 
             current_sequence_id=0 if is_diffusers else current_sequence_id, 
             base_template="", 
@@ -3837,11 +3839,11 @@ def reject_rag() -> dict:
         return {"success": False}
 
 
-def prepare_for_quick_response(current_sequence_id:int) -> int:
+def prepare_for_quick_response(current_sequence_id:int, regeneration_request:bool) -> int:
     print("Invoking quick-return route for hfw-diffusers or hfw-vision(file_attached)")
-    new_sequence_id = int(current_sequence_id) + 1
+    if not regeneration_request: current_sequence_id = int(current_sequence_id) + 1
     reject_rag()
-    return new_sequence_id
+    return current_sequence_id
 
 
 def get_embedding_function(use_sbert_embeddings:bool, use_openai_embeddings:bool, use_bge_base_embeddings:bool, use_bge_large_embeddings:bool) -> HuggingFaceEmbeddings:
@@ -3859,6 +3861,7 @@ def get_embedding_function(use_sbert_embeddings:bool, use_openai_embeddings:bool
 
 
 def get_formatted_prompt_for_setup_for_local_llm_response(chat_id:str, current_sequence_id:int) -> tuple[str, int]:
+    print("\n\nGetting formatted prompt for setup_for_local_llm_response\n\n")
     formatted_prompt = ""
     if current_sequence_id > 0:    # get the last prompt so we can continue the completions
         formatted_prompt = get_formatted_prompt_from_history_db(chat_id, current_sequence_id)
@@ -3868,80 +3871,85 @@ def get_formatted_prompt_for_setup_for_local_llm_response(chat_id:str, current_s
     return formatted_prompt, current_sequence_id
 
 
-@app.route('/setup_for_local_llm_response', methods=['POST'])
-def setup_for_local_llm_response():
+def read_request_data_for_response_setup(request: Request) -> tuple[str, str, str, int, bool, bool]:
+    stream_session_id = request.json.get('stream_session_id')
+    user_query = request.json.get('user_query')
+    chat_id = request.json.get('chat_id')
+    sequence_id = request.json.get('sequence_id')
+    file_attached = request.json.get('file_attached')
+    regeneration_request = request.json.get('regeneration_request')
+    return stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request
 
-    print("\n\nSetting up for local LLM response\n\n")
 
-    global QUERIES
-    do_rag = True
+def get_full_prompt_for_server(local_llm_server: str, formatted_history_prompt: str, user_query: str, current_sequence_id: int, base_template: str, local_llm_chat_template_format: str, skip_system_prompt: bool) -> str:
+    if local_llm_server == 'llama-cpp':
+        formatted_updated_prompt = format_prompt_for_llama_cpp(formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format)
+    elif local_llm_server == 'hf-waitress':
+        formatted_updated_prompt = format_prompt_for_hf_waitress(formatted_history_prompt, user_query, current_sequence_id, base_template, False, False, skip_system_prompt)
+    elif local_llm_server == 'hfw-vision':
+        formatted_updated_prompt = format_prompt_for_hf_waitress(formatted_history_prompt, user_query, current_sequence_id, "", False, True, True)  # No base_template for hfw-vision
+    print("Returning formatted_prompt: ", formatted_updated_prompt)
+    return formatted_updated_prompt
 
-    try:
-        stream_session_id, key_for_vector_results = get_session_id_and_vector_key()
-    except Exception as e:
-        return handle_api_error("Could not get session_id and vector_key when attempting to setup_for_streaming_response, encountered error: ", e)
 
-    # Determine do_rag
-    try:
-        read_return = read_config_for_setup_for_local_llm_response()
-        use_sbert_embeddings = read_return['use_sbert_embeddings']
-        use_openai_embeddings = read_return['use_openai_embeddings']
-        use_bge_base_embeddings = read_return['use_bge_base_embeddings']
-        use_bge_large_embeddings = read_return['use_bge_large_embeddings']
-        force_enable_rag = read_return['force_enable_rag']
-        force_disable_rag = read_return['force_disable_rag']
-        local_llm_chat_template_format = read_return['local_llm_chat_template_format']
-        base_template = read_return['base_template']
-        local_llm_server = read_return['local_llm_server']
-        fetch_top_k_results_from_vectordb = read_return['fetch_top_k_results_from_vectordb']
-        filter_top_k_results_by_reranking = read_return['filter_top_k_results_by_reranking']
-        skip_system_prompt = read_return['skip_system_prompt']
-    except Exception as e:
-        return handle_api_error("Missing values in config.json when attempting to setup_for_streaming_response. Error: ", e)
-
-    try:
-        user_query, chat_id, file_attached = read_request_data_for_setup_for_local_llm_response(request)
-        QUERIES[stream_session_id] = user_query     # Store the query associated with the ID
-    except Exception as e:
-        return handle_api_error("Could not obtain and/or store user_query in setup_for_streaming_response, encountered error: ", e)
-
+def get_base_values_for_setup_for_local_llm_response(stream_session_id:str, chat_id:str, sequence_id:int, regeneration_request:bool) -> tuple[str, str, int]:
+    if regeneration_request:
+        print(f"\nSetting defaults for regeneration for request ID {stream_session_id}\n")
+        key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
+        current_sequence_id = sequence_id
+        return stream_session_id, key_for_vector_results, current_sequence_id
+    
     try:
         current_sequence_id = determine_sequence_id_for_chat(chat_id)
+        new_stream_session_id, key_for_vector_results = get_session_id_and_vector_key()
         print(f"Current Chat ID: {chat_id} & Sequence ID: {current_sequence_id}")
+        return new_stream_session_id, key_for_vector_results, current_sequence_id
     except Exception as e:
-        return handle_api_error("Could not determine current_sequence_id when attempting to setup_for_streaming_response, encountered error: ", e)
+        return handle_api_error("Error determining sequence_id and/or getting session_id and vector_key in get_base_values_for_setup_for_local_llm_response, encountered error: ", e)
 
+
+def handle_special_model_case(local_llm_server:str, current_sequence_id:int, file_attached:bool, stream_session_id:str, user_query:str, formatted_history_prompt:str, regeneration_request:bool) -> tuple[str, Response]:
+    print("\n\nHandling special model case\n\n")
+    if local_llm_server != 'hf-waitress':   #if llama.cpp
+        return local_llm_server, None
+    
+    flux_diffusers, vision = determine_special_model_type_for_hf_waitress()
+
+    if flux_diffusers or file_attached:
+        new_sequence_id = prepare_for_quick_response(current_sequence_id, regeneration_request)
+        new_local_llm_server='hfw-diffusers' if flux_diffusers else 'hfw-vision'
+        try:
+            response = prepare_special_model_response(
+                local_llm_server=new_local_llm_server,
+                stream_session_id=stream_session_id,
+                user_query=user_query,
+                current_sequence_id=current_sequence_id,
+                new_sequence_id=new_sequence_id,
+                formatted_prompt=formatted_history_prompt
+            )
+            print(f"Returning quick-return formatted_user_prompt: {response['formatted_user_prompt']}")
+            return new_local_llm_server, jsonify(response)
+        except Exception as e:
+            return handle_api_error("Could not prepare special model response in method setup_for_local_llm_response, encountered error: ", e)
+    
+    if vision: 
+        return 'hfw-vision', None
+    
+    return local_llm_server, None   #if hf-waitress but not hfw-diffusers or hfw-vision
+
+
+def handle_force_disabled_rag(local_llm_server:str, formatted_history_prompt:str, user_query:str, current_sequence_id:int, stream_session_id:str, regeneration_request:bool, base_template:str, local_llm_chat_template_format:str, skip_system_prompt:bool) -> Response:
+    print(f"\nForce disabling RAG for request ID {stream_session_id}\n")
+    reject_rag()
     try:
-        formatted_prompt, current_sequence_id = get_formatted_prompt_for_setup_for_local_llm_response(chat_id, current_sequence_id)
+        formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
     except Exception as e:
-        return handle_api_error("Could not get formatted_prompt from history db in method setup_for_local_llm_response, encountered error: ", e)
-    
-    if local_llm_server == 'hf-waitress':
-        flux_diffusers, vision = determine_special_model_type_for_hf_waitress()
-        if vision: local_llm_server = 'hfw-vision'
+        return handle_api_error("Could not get formatted_updated_prompt in method setup_for_streaming_response, encountered error: ", e)
+    if not regeneration_request: current_sequence_id = int(current_sequence_id) + 1
+    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
 
-        elif flux_diffusers or file_attached:
-            new_sequence_id = prepare_for_quick_response(current_sequence_id)
-            try:
-                response = prepare_special_model_response(
-                    local_llm_server='hfw-diffusers' if flux_diffusers else 'hfw-vision',
-                    stream_session_id=stream_session_id,
-                    user_query=user_query,
-                    current_sequence_id=current_sequence_id,
-                    new_sequence_id=new_sequence_id,
-                    formatted_prompt=formatted_prompt
-                )
-                print(f"Returning quick-return formatted_prompt: {response['formatted_user_prompt']}")
-                return jsonify(response)
-            except Exception as e:
-                return handle_api_error("Could not prepare special model response in method setup_for_local_llm_response, encountered error: ", e)
-        
-            
-    # Perform similarity search on the vector DB
-    print("\n\nPerforming similarity search to determine if RAG necessary\n\n")
-    
-    embedding_function = get_embedding_function(use_sbert_embeddings, use_openai_embeddings, use_bge_base_embeddings, use_bge_large_embeddings)
-    
+
+def process_vector_search(user_query:str, embedding_function:HuggingFaceEmbeddings, force_enable_rag:bool, force_disable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int, ) -> tuple[list[Document], bool]:
     try:
         docs_list_with_cosine_distance = VECTOR_STORE.similarity_search_with_score(user_query, fetch_top_k_results_from_vectordb, embedding_fn=embedding_function)
     except Exception as e:
@@ -3959,39 +3967,68 @@ def setup_for_local_llm_response():
     else:
         combined_docs = filtered_docs
 
-    docs = []
-    if combined_docs:
-        docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
-        do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
-    else:
+    if not combined_docs:
         print("No documents for citations, setting do_rag to False")
         do_rag = False
-    
-    print(f'Do RAG? {do_rag}')
 
-    try:
-        write_config({'do_rag':do_rag})
+    docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
+    do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
+
+    return docs, do_rag
+
+
+@app.route('/setup_for_local_llm_response', methods=['POST'])
+def setup_for_local_llm_response():
+    print("\n\nSetting up for local LLM response\n\n")
+
+    global QUERIES
+    do_rag = True
+
+    try:    # Read config and request data, determine base values while handling regeneration case
+        config = read_config_for_setup_for_local_llm_response()
+        stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request = read_request_data_for_response_setup(request)
+        QUERIES[stream_session_id] = user_query     # Store the query associated with the ID
+        stream_session_id, key_for_vector_results, current_sequence_id = get_base_values_for_setup_for_local_llm_response(stream_session_id, chat_id, sequence_id, regeneration_request)
     except Exception as e:
-        handle_error_no_return("Could not write do_rag to config during setup_for_streaming_response, encountered error: ", e)
+        return handle_api_error("Error getting base values for setup_for_streaming_response, encountered error: ", e)
 
-    if do_rag:  # add similarity search results for RAG if necessary!
-        try:
+    try:    # Get formatted prompt from history db
+        formatted_history_prompt, current_sequence_id = get_formatted_prompt_for_setup_for_local_llm_response(chat_id, current_sequence_id)
+    except Exception as e:
+        return handle_api_error("Could not get formatted_history_prompt from history db in method setup_for_local_llm_response, encountered error: ", e)
+    
+    local_llm_server, special_response = handle_special_model_case(config['local_llm_server'], current_sequence_id, file_attached, stream_session_id, user_query, formatted_history_prompt, regeneration_request)
+    if special_response is not None:    # If a special model response is returned, quick-return here
+        print(f"Returning special model response: {special_response}")
+        return special_response
+    
+    if config['force_disable_rag']:
+        return handle_force_disabled_rag(local_llm_server, formatted_history_prompt, user_query, current_sequence_id, stream_session_id, regeneration_request, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
+            
+    try:    # RAG Routine Begins: Perform semantic search on the vector DB, lexical search on the whoosh index, combine and rerank results and determine if RAG is necessary
+        print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n") 
+        embedding_function = get_embedding_function(config['use_sbert_embeddings'], config['use_openai_embeddings'], config['use_bge_base_embeddings'], config['use_bge_large_embeddings'])
+        docs, do_rag = process_vector_search(user_query, embedding_function, config['force_enable_rag'], config['force_disable_rag'], config['filter_top_k_results_by_reranking'], config['fetch_top_k_results_from_vectordb'])
+    except Exception as e:
+        return handle_error_no_return("Could not process vector search in method setup_for_local_llm_response, encountered error: ", e)
+
+    try:    # Write do_rag to config and prepare RAG context if necessary
+        print(f'Do RAG? {do_rag}')
+        write_config({'do_rag':do_rag})
+        if do_rag:    # Add similarity search results for RAG if necessary!
             QUERIES[key_for_vector_results] = docs
             user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference it in your response by name and page number:\n{docs}"
-        except Exception as e:
-            reject_rag()
-            handle_error_no_return("RAG Error: Could not update QUERIES dict and user_query during setup_for_streaming_response, proceeding without RAG. Encountered error: ", e)
-    
-    if local_llm_server == 'llama-cpp':
-        formatted_prompt = format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format)
-    elif local_llm_server == 'hf-waitress':
-        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, base_template, False, False, skip_system_prompt)
-    elif local_llm_server == 'hfw-vision':
-        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt, user_query, current_sequence_id, "", False, True, True)  # No base_template for hfw-vision
-    print("Returning formatted_prompt: ", formatted_prompt)
+    except Exception as e:
+        reject_rag()
+        handle_error_no_return("Could not write do_rag or prepare RAG context during setup_for_streaming_response, encountered error: ", e)
 
-    new_sequence_id = int(current_sequence_id) + 1
-    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
+    try:    # Get full prompt for server
+        formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, formatted_history_prompt, user_query, current_sequence_id, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
+    except Exception as e:
+        return handle_api_error("Could not get formatted_updated_prompt in method setup_for_streaming_response, encountered error: ", e)
+
+    if not regeneration_request: current_sequence_id = int(current_sequence_id) + 1
+    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
 
 
 def is_fuzzy_subset(string1: str, string2: str, threshold: int) -> bool:

@@ -112,11 +112,11 @@ function appendContentToResponse(responseContentID, content) {
 }
 
 
-function setupLLMResponse(userInput, file_attached, current_chat_id) { //no need to async-await here as fetch() inherently returns a promise, so by returning fetch() directly we're providing the same Promise that the async function with await would return.
+function setupLLMResponse(userInput, file_attached, current_chat_id, regeneration_request, regen_stream_session_id, regen_sequence_id) { //no need to async-await here as fetch() inherently returns a promise, so by returning fetch() directly we're providing the same Promise that the async function with await would return.
     return fetch('/setup_for_local_llm_response', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({'user_query': userInput, 'chat_id': current_chat_id, 'file_attached': file_attached})
+        body: JSON.stringify({'user_query': userInput, 'chat_id': current_chat_id, 'file_attached': file_attached, 'regeneration_request': regeneration_request, 'stream_session_id': regen_stream_session_id, 'sequence_id': regen_sequence_id})
     });
 }
 
@@ -594,7 +594,7 @@ async function getReferences(do_rag, params, responseContentID, masterWrapperID,
 }
 
 
-async function requestFormattedPrompt() {
+async function requestFormattedPrompt(regeneration_request=false, regen_stream_session_id=null, regen_sequence_id=null) {
     initializePromptRequest();
 
     const current_chat_id = getChatId();
@@ -607,7 +607,7 @@ async function requestFormattedPrompt() {
 
     try {
         // 1- setup_for_local_llm_response
-        const response = await setupLLMResponse(userInput, file_attached, current_chat_id);
+        const response = await setupLLMResponse(userInput, file_attached, current_chat_id, regeneration_request, regen_stream_session_id, regen_sequence_id);
         const data = await response.json();
         data.user_message_html_unique_id = uniqueId;
         const {do_rag, stream_session_id, formatted_user_prompt, responseIDs, server_type} = handleSetupResponse(data);
