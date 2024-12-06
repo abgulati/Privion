@@ -1615,7 +1615,7 @@ def determine_sequence_id_for_chat(chat_id):
     return int(current_sequence_id)
 
 
-def store_local_llm_chat_history_to_db(chat_id, sequence_id, user_query_for_history_db, model_response_for_history_db, fully_formatted_prompt, local_llm_server, local_llm_chat_template_format):
+def store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query_for_history_db, model_response_for_history_db, fully_formatted_prompt, local_llm_server, local_llm_chat_template_format):
 
     print(f"\n\nStoring chat history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}")
 
@@ -1657,7 +1657,7 @@ def store_local_llm_chat_history_to_db(chat_id, sequence_id, user_query_for_hist
 
     try:
         # Store conversation history into DB
-        cursor.execute("INSERT INTO chat_history (chat_id, sequence_id, user_query, llm_response, llm_model, prompt_template, local_llm_server, prompt_template_format, date_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (int(chat_id), int(sequence_id), user_query_for_history_db, model_response_for_history_db, model_choice, str(fully_formatted_prompt), str(local_llm_server), str(local_llm_chat_template_format), str(formatted_datetime)))
+        cursor.execute("INSERT INTO chat_history (chat_id, sequence_id, stream_session_id, user_query, llm_response, llm_model, prompt_template, local_llm_server, prompt_template_format, date_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (int(chat_id), int(sequence_id), str(stream_session_id), user_query_for_history_db, model_response_for_history_db, model_choice, str(fully_formatted_prompt), str(local_llm_server), str(local_llm_chat_template_format), str(formatted_datetime)))
         conn.commit()
         print(f"\n\nInserted chat history into DB with chat_id: {chat_id}\n\n")
     except Exception as e:
@@ -3180,23 +3180,26 @@ def load_chat_history():
         try:
             c.execute("SELECT user_query FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (int(chat_id_for_history_search), int(sequence_id_for_history_search)))
             result = c.fetchone()
-            
             user_message = str(result[0])
+
+            c.execute("SELECT stream_session_id FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (int(chat_id_for_history_search), int(sequence_id_for_history_search)))
+            stream_session_id = c.fetchone()
+            stream_session_id = str(stream_session_id[0])
 
             user_message = user_message.strip('\n')
             regex_to_swap_multiple_spaces_with_newline = r' {2,}'
             user_message = re.sub(regex_to_swap_multiple_spaces_with_newline, '<br>', user_message)
 
-            user_message = '<div class="user-message glassmorphism">' + user_message + '</div>'
+            user_message = f'<div class="user-message glassmorphism" data-stream-session-id="{stream_session_id}" data-chat-id="{chat_id_for_history_search}" data-sequence-id="{sequence_id_for_history_search}">' + user_message + '</div>'
 
             chat_history.append(user_message)
 
             c.execute("SELECT llm_response FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (int(chat_id_for_history_search), int(sequence_id_for_history_search)))
             result = c.fetchone()
-
             result = str(result[0])
+
             result_parts = result.split("pdf_pane_data=",1)
-            llm_response = '<div class="response-and-viewer-container"><div class="llm-wrapper"> <div class="llm-response">' + result_parts[0]
+            llm_response = f'<div class="response-and-viewer-container" data-stream-session-id="{stream_session_id}"><div class="llm-wrapper"> <div class="llm-response">' + result_parts[0]
 
         except Exception as e:
             return handle_api_error("Could not retrieve chat history, encountered error: ", e)
@@ -3319,6 +3322,7 @@ def init_chat_history_db():
                         id INTEGER PRIMARY KEY,
                         chat_id INTEGER,
                         sequence_id INTEGER,
+                        stream_session_id TEXT,
                         user_query TEXT,
                         llm_response TEXT,
                         user_rating INTEGER,
@@ -3338,6 +3342,7 @@ def init_chat_history_db():
     try:
         add_column_if_not_exists(c, 'chat_history', 'chat_id', 'INTEGER')
         add_column_if_not_exists(c, 'chat_history', 'sequence_id', 'TEXT')
+        add_column_if_not_exists(c, 'chat_history', 'stream_session_id', 'TEXT')
         add_column_if_not_exists(c, 'chat_history', 'user_query', 'TEXT')
         add_column_if_not_exists(c, 'chat_history', 'llm_response', 'TEXT')
         add_column_if_not_exists(c, 'chat_history', 'user_rating', 'INTEGER')
@@ -3359,6 +3364,35 @@ def init_chat_history_db():
     conn.close()
 
     return jsonify({'success': True, 'chat_id': chat_id})
+
+
+def update_llm_response_in_history_db(chat_id, stream_session_id, llm_response):
+
+    print(f"Updating LLM response in chat history DB for chat_id: {chat_id} and stream_session_id: {stream_session_id}")
+
+    try:
+        read_return = read_config(['sqlite_history_db'])
+        sqlite_history_db = read_return['sqlite_history_db']
+    except Exception as e:
+        return handle_local_error("Missing sqlite_history_db in config.json in method update_llm_response_in_history_db. Error: ", e)
+
+    # Connect to chat_history.db to determine appropriate chat_id
+    try:
+        conn = sqlite3.connect(sqlite_history_db)
+        c = conn.cursor()
+    except Exception as e:
+        return handle_local_error("Could not connect to chat history database, encountered error: ", e)
+
+    # Update the LLM response in the chat history DB for the given stream_session_id:
+    try:    
+        c.execute("UPDATE chat_history SET llm_response = ? WHERE stream_session_id = ?", (llm_response, stream_session_id))
+        conn.commit()
+    except Exception as e:
+        return handle_local_error("Could not update LLM response in chat history DB, encountered error: ", e)
+    
+    conn.close()
+
+    return True
 
 
 def extract_significant_phrases(query):
@@ -3824,6 +3858,16 @@ def get_embedding_function(use_sbert_embeddings:bool, use_openai_embeddings:bool
         handle_error_no_return("Could not get embedding function in method get_embedding_function, encountered error: ", e)
 
 
+def get_formatted_prompt_for_setup_for_local_llm_response(chat_id:str, current_sequence_id:int) -> tuple[str, int]:
+    formatted_prompt = ""
+    if current_sequence_id > 0:    # get the last prompt so we can continue the completions
+        formatted_prompt = get_formatted_prompt_from_history_db(chat_id, current_sequence_id)
+    
+    if formatted_prompt == "":  # could not be updated above
+        current_sequence_id = 0 # so reset chat sequence id
+    return formatted_prompt, current_sequence_id
+
+
 @app.route('/setup_for_local_llm_response', methods=['POST'])
 def setup_for_local_llm_response():
 
@@ -3867,13 +3911,10 @@ def setup_for_local_llm_response():
     except Exception as e:
         return handle_api_error("Could not determine current_sequence_id when attempting to setup_for_streaming_response, encountered error: ", e)
 
-    formatted_prompt = ""
-    if current_sequence_id > 0:    # get the last prompt so we can continue the completions
-        formatted_prompt = get_formatted_prompt_from_history_db(chat_id, current_sequence_id)
-    
-    if formatted_prompt == "":  # could not be updated above
-        current_sequence_id = 0 # so reset chat sequence id
-
+    try:
+        formatted_prompt, current_sequence_id = get_formatted_prompt_for_setup_for_local_llm_response(chat_id, current_sequence_id)
+    except Exception as e:
+        return handle_api_error("Could not get formatted_prompt from history db in method setup_for_local_llm_response, encountered error: ", e)
     
     if local_llm_server == 'hf-waitress':
         flux_diffusers, vision = determine_special_model_type_for_hf_waitress()
@@ -4000,14 +4041,52 @@ def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
         return False
 
 
-def read_config_for_get_references() -> tuple[str, str, str, bool]:
+def filter_all_citations(docs: list[Document], llm_response: str, return_top_k: bool, user_query: str) -> list[Document]:
+    print(f"Pre-filtering citations to determine if any are relevant to the LLM response")
+    all_docs = []
+    for doc in docs:
+        
+        try:
+            relevant_page_text = str(doc.page_content)
+            source_filepath = str(doc.metadata.get('source'))
+        except Exception as e:
+            handle_error_no_return("Could not access doc.page_content and/or doc.metadata, encountered error: ", e)
+            continue
+        
+        relevant_page_text = relevant_page_text.replace('\n', ' ')
+        
+        try:
+            source_filename = os.path.basename(source_filepath)
+        except Exception as e:
+            handle_error_no_return("Could not parse path with OS lib, encountered error: ", e)
+            continue
+        
+        try:
+            if is_citation_relevant(llm_response, source_filename):
+                all_docs.append(doc)
+            else:
+                print(f"Citation {source_filename} is not relevant, skipping")
+                continue
+        except Exception as e:
+            handle_error_no_return("Could not determine if citation is relevant in filter_all_citations(), encountered error: ", e)
+            continue
+
+    if all_docs == [] and return_top_k:
+        print("No relevant citations found but top K requested, reranking all docs")
+        all_docs = rerank_results_ml(user_query, docs, top_n=3)
+
+    return all_docs
+
+
+def read_config_for_get_references() -> tuple[str, str, str, bool, bool]:
     try:
-        read_return = read_config(['local_llm_server', 'upload_folder', 'local_llm_chat_template_format', 'llm_filter_citations'])
+        read_return = read_config(['local_llm_server', 'upload_folder', 'local_llm_chat_template_format', 'llm_filter_citations', 'force_enable_rag'])
         local_llm_server = read_return['local_llm_server']
         upload_folder = read_return['upload_folder']
         local_llm_chat_template_format = read_return['local_llm_chat_template_format']
         llm_filter_citations = read_return['llm_filter_citations']
-        return local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations
+        force_enable_rag = read_return['force_enable_rag']
+        return local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations, force_enable_rag
     except Exception as e:
         return handle_local_error("Could not read config.json in method read_config_for_get_references(), encountered error: ", e)
 
@@ -4076,7 +4155,13 @@ def get_hf_waitress_formatted_user_prompt(formatted_user_prompt: str, llm_respon
     return str(updated_history_prompt_json)
 
 
-def get_sources_and_pages_for_get_references(docs: list[Document], llm_response: str, llm_filter_citations: bool, upload_folder: str) -> tuple[dict[str, str], dict[str, list[list[str]]]]:
+def get_sources_and_pages_for_get_references(docs: list[Document], llm_response: str, llm_filter_citations: bool, upload_folder: str, force_enable_rag: bool, user_query: str) -> tuple[dict[str, str], dict[str, list[list[str]]]]:
+    if llm_filter_citations:
+        try:
+            docs = filter_all_citations(docs=docs, llm_response=llm_response, return_top_k=force_enable_rag, user_query=user_query)
+        except Exception as e:
+            handle_error_no_return("Could not pre-filter citations in get_sources_and_pages_for_get_references(), proceeding without pre-filtering. Encountered error: ", e)
+    
     all_sources = {}
     reference_pages = {}
     for doc in docs:
@@ -4097,54 +4182,29 @@ def get_sources_and_pages_for_get_references(docs: list[Document], llm_response:
         except Exception as e:
             handle_error_no_return("Could not parse path with OS lib, encountered error: ", e)
             continue
-        
-        try:
-            if llm_filter_citations:
-                if not is_citation_relevant(llm_response, source_filename):
-                    print(f"Citation {source_filename} is not relevant, skipping")
-                    continue
-        except Exception as e:
-            handle_error_no_return("Could not determine if citation is relevant in get_references(). Considering it relevant and continuing. Encountered error: ", e)
 
-        if file_extension == '.txt':    # The source_filepath will likely always reference a TXT file because of how we're loading the VectorDB!
-
-            #print("\n\ntxt file\n\n")
-
-            pdf_version_path = os.path.join(upload_folder, os.path.basename(source_filepath).replace('.txt', '.pdf'))   # not catching an error here as os.path.basename(source_filepath) has already been caught just above! Construct the path to the potential PDF version.
-
-            if os.path.exists(pdf_version_path):
-
-                #print("\n\pdf exists\n\n")
-
-                source_filename = source_filename.replace('.txt', '.pdf')
-                
-                if pdf_version_path in reference_pages:
-                    reference_pages[pdf_version_path].extend([[relevant_page_text,relevant_page_number]])
-                else:
-                    reference_pages[pdf_version_path] = [[relevant_page_text,relevant_page_number]]
-
-                if source_filename not in all_sources:  # Add this file to our sources dictionary if it's not already present
-                    source_filepath = pdf_version_path
-                    all_sources.update({source_filename: source_filepath})
-
+        pdf_version_path = os.path.join(upload_folder, os.path.basename(source_filepath).replace('.txt', '.pdf'))   # not catching an error here as os.path.basename(source_filepath) has already been caught just above! Construct the path to the potential PDF version.
+        if os.path.exists(pdf_version_path):
+            #print("\n\pdf exists\n\n")
+            source_filename = source_filename.replace('.txt', '.pdf')
+            
+            if pdf_version_path in reference_pages:
+                reference_pages[pdf_version_path].extend([[relevant_page_text,relevant_page_number]])
             else:
-                print("\n\nNo PDF source doc found (TXT Source) in the 'uploaded_pdfs' dir, RAG ACTIVE BUT REFERENCING WILL NOT DISPLAY!\n\n")
-                if source_filename not in all_sources: # Do not duplicate if the TXT file is already in the sources dict
-                    try:
-                        source_filepath = os.path.join(upload_folder, source_filename) # reconstructed path using the OS module just to be safe
-                        all_sources.update({source_filename: source_filepath})
-                    except Exception as e:
-                        handle_error_no_return("Could not construct filepath for TXT file, encountered error: ", e)
+                reference_pages[pdf_version_path] = [[relevant_page_text,relevant_page_number]]
 
+            if source_filename not in all_sources:  # Add this file to our sources dictionary if it's not already present
+                source_filepath = pdf_version_path
+                all_sources.update({source_filename: source_filepath})
 
-        # If by any odd chance the file is not a TXT file
         else:
+            print("\n\nNo PDF source doc found (TXT Source) in the 'uploaded_pdfs' dir, RAG ACTIVE BUT REFERENCING WILL NOT DISPLAY!\n\n")
             if source_filename not in all_sources: # Do not duplicate if the TXT file is already in the sources dict
                 try:
                     source_filepath = os.path.join(upload_folder, source_filename) # reconstructed path using the OS module just to be safe
                     all_sources.update({source_filename: source_filepath})
                 except Exception as e:
-                    handle_error_no_return("Could not construct filepath for non-TXT file, encountered error: ", e)
+                    handle_error_no_return("Could not construct filepath for TXT file, encountered error: ", e)
 
     return all_sources, reference_pages
 
@@ -4212,7 +4272,7 @@ def get_references():
     print("\n\nStoring History Post-Response -- Determining if Citations are Necessary\n\n")
 
     try:
-        local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations = read_config_for_get_references()
+        local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations, force_enable_rag = read_config_for_get_references()
     except Exception as e:
         return handle_api_error("Missing values in config.json when attempting to get_references. Error: ", e)
 
@@ -4240,7 +4300,7 @@ def get_references():
     if not do_rag:
         print("\n\nRAG Citations unnecessary, storing chat history and returning\n\n")
         try:
-            stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, user_query, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+            stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
         except Exception as e:
             handle_error_no_return("Could not store_local_llm_chat_history_to_db in get_references(), encountered error: ", e)
         return jsonify({'success': True, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
@@ -4251,7 +4311,7 @@ def get_references():
     all_sources = {}
     reference_pages = {}
     try:
-        all_sources, reference_pages = get_sources_and_pages_for_get_references(docs, llm_response, llm_filter_citations, upload_folder)
+        all_sources, reference_pages = get_sources_and_pages_for_get_references(docs, llm_response, llm_filter_citations, upload_folder, force_enable_rag, user_query)
     except Exception as e:
         return handle_api_error("Could not get sources and pages for get_references(), encountered error: ", e)
     
@@ -4275,7 +4335,7 @@ def get_references():
         handle_error_no_return("Could not prep data to store_local_llm_chat_history_to_db in get_references(), encountered error: ", e)
 
     try:
-        stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, user_query_for_history_db, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+        stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query_for_history_db, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
     except Exception as e:
         handle_error_no_return("Could not store_local_llm_chat_history_to_db in get_references(), encountered error: ", e)
 
