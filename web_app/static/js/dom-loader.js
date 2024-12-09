@@ -18,11 +18,27 @@ function initializeScrollDownButton() {
     });
 }
 
+function initializeRegenerateResponseButton() {
+    document.getElementById('chat-area').addEventListener('click', function(e) {
+        if (e.target.classList.contains('regenerate-option')) {
+            const userMessageDiv = e.target.closest('.user-message');
+            
+            const userMessage = getUserMessageContent(userMessageDiv);
+            document.getElementById('user-input').value = userMessage;
+            
+            const streamSessionId = userMessageDiv.getAttribute('data-stream-session-id');
+            const sequenceId = userMessageDiv.getAttribute('data-sequence-id');
+            requestFormattedPrompt(true, streamSessionId, sequenceId);
+        }
+    });
+}
+
 
 function initializeUI() {
     attachWindowEvents();
     initializeChatLink();
     initializeScrollDownButton();
+    initializeRegenerateResponseButton();
 }
 
 

@@ -3860,7 +3860,7 @@ def get_embedding_function(use_sbert_embeddings:bool, use_openai_embeddings:bool
         handle_error_no_return("Could not get embedding function in method get_embedding_function, encountered error: ", e)
 
 
-def get_formatted_prompt_for_setup_for_local_llm_response(chat_id:str, current_sequence_id:int) -> tuple[str, int]:
+def get_formatted_prompt_for_setup_for_local_llm_response(chat_id:int, current_sequence_id:int) -> tuple[str, int]:
     print("\n\nGetting formatted prompt for setup_for_local_llm_response\n\n")
     formatted_prompt = ""
     if current_sequence_id > 0:    # get the last prompt so we can continue the completions
@@ -3993,7 +3993,7 @@ def setup_for_local_llm_response():
         return handle_api_error("Error getting base values for setup_for_streaming_response, encountered error: ", e)
 
     try:    # Get formatted prompt from history db
-        formatted_history_prompt, current_sequence_id = get_formatted_prompt_for_setup_for_local_llm_response(chat_id, current_sequence_id)
+        formatted_history_prompt, current_sequence_id = get_formatted_prompt_for_setup_for_local_llm_response(int(chat_id), int(current_sequence_id))
     except Exception as e:
         return handle_api_error("Could not get formatted_history_prompt from history db in method setup_for_local_llm_response, encountered error: ", e)
     

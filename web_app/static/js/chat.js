@@ -57,10 +57,29 @@ function handleAutoScroll(chatContainer) {
     }
 }
 
-function updateChatAreaWithUserInput(userInputForHtml) {
+function createUserMessageHTML(userInputForHtml){
     const uniqueId = getUniqueId();
     const current_chat_id = getChatId();
-    document.getElementById('chat-area').innerHTML += `<div class="user-message glassmorphism" data-unique-id="${uniqueId}" data-chat-id="${current_chat_id}">${userInputForHtml}</div>`;
+    const chatArea = document.getElementById('chat-area');    
+    chatArea.innerHTML += `
+        <div class="user-message glassmorphism" data-unique-id="${uniqueId}" data-chat-id="${current_chat_id}">
+            ${userInputForHtml}
+            <div class="regenerate-menu">
+                <i class="fas fa-ellipsis-v"></i>
+                <div class="regenerate-menu-options">
+                    <span class="regenerate-menu-option regenerate-option">Regenerate Response</span>
+                </div>
+            </div>
+        </div>
+    `;
+    return uniqueId;
+}
+
+function updateChatAreaWithUserInput(userInputForHtml) {
+    // const uniqueId = getUniqueId();
+    // const current_chat_id = getChatId();
+    //document.getElementById('chat-area').innerHTML += `<div class="user-message glassmorphism" data-unique-id="${uniqueId}" data-chat-id="${current_chat_id}">${userInputForHtml}</div>`;
+    const uniqueId = createUserMessageHTML(userInputForHtml);
     scrollChatAreaToBottom();
     return uniqueId;
 }
@@ -75,8 +94,8 @@ function appendStreamSessionIdToUserMessage(uniqueId, stream_session_id) {
     userMessageElement.setAttribute('data-stream-session-id', stream_session_id);
 }
 
-function appendSequenceIdToUserMessage(uniqueId, sequence_id) {
-    const userMessageElement = document.querySelector(`[data-unique-id="${uniqueId}"]`);
+function appendSequenceIdToUserMessage(uniqueId, stream_session_id, regeneration_request, sequence_id) {
+    const userMessageElement = regeneration_request ? document.querySelector(`[data-stream-session-id="${stream_session_id}"]`) : document.querySelector(`[data-unique-id="${uniqueId}"]`);
     userMessageElement.setAttribute('data-sequence-id', sequence_id);
 }
 
@@ -141,7 +160,7 @@ function handleSetupResponse(data) {
     console.log("formatted_user_prompt: ", formatted_user_prompt);
     console.log("server_type: ", server_type);
     setSequenceId(sequence_id);
-    appendSequenceIdToUserMessage(data.user_message_html_unique_id, sequence_id);
+    appendSequenceIdToUserMessage(data.user_message_html_unique_id, stream_session_id, data.regeneration_request, sequence_id);
 
     const responseIDs = {
         responseWrapperID: `ResponseWrapper${stream_session_id}`,
@@ -149,7 +168,7 @@ function handleSetupResponse(data) {
         masterWrapperID: `MasterWrapper${stream_session_id}`
     }
 
-    appendResponseContainerToChatArea(responseIDs.masterWrapperID, responseIDs.responseWrapperID, responseIDs.responseContentID, stream_session_id);
+    if (!data.regeneration_request) { appendResponseContainerToChatArea(responseIDs.masterWrapperID, responseIDs.responseWrapperID, responseIDs.responseContentID, stream_session_id); }
     displayProcessingStatus('Generating...');
 
     return { do_rag, stream_session_id, formatted_user_prompt, responseIDs, server_type };
@@ -505,7 +524,7 @@ async function fetchEventStream(serverType, formattedPrompt, responseContentID, 
 }
 
 
-function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, stream_session_id, user_message_html_unique_id) {
+function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, stream_session_id, user_message_html_unique_id, regeneration_request) {
     const latest_sequence_id = getSequenceId();
     const current_chat_id = data.chat_id;
 
@@ -514,7 +533,7 @@ function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapper
         console.log("Updating chatID in the InfoBox");
         setChatId(current_chat_id);
         setModelHeaderInfoBox(current_chat_id, getLlmModel());
-        appendChatIdToUserMessage(user_message_html_unique_id, current_chat_id);
+        if (!regeneration_request) { appendChatIdToUserMessage(user_message_html_unique_id, current_chat_id); }
     }
 
     if (parseInt(latest_sequence_id) == 1) { 
@@ -587,7 +606,7 @@ async function getReferences(do_rag, params, responseContentID, masterWrapperID,
             throw new Error(`Internal Server Error: Check server-log and server command-line for more details. Error: ${data.error}`);
         }
 
-        handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, params.stream_session_id, user_message_html_unique_id);
+        handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, params.stream_session_id, user_message_html_unique_id, params.regeneration_request);
     } catch (error) {
         errorHandler("fetching relevant reference material", "getReferences()", String(error))
     }
@@ -599,8 +618,8 @@ async function requestFormattedPrompt(regeneration_request=false, regen_stream_s
 
     const current_chat_id = getChatId();
     const {userInput, file} = getUserInput();
-    const userInputForHtml = formatTabsAndSpaces(userInput);
-    const uniqueId = updateChatAreaWithUserInput(userInputForHtml);
+    const userInputForHtml = regeneration_request ? '' : formatTabsAndSpaces(userInput);
+    const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);
     
     let file_attached = false;
     if (file) { file_attached = true; }
@@ -610,8 +629,9 @@ async function requestFormattedPrompt(regeneration_request=false, regen_stream_s
         const response = await setupLLMResponse(userInput, file_attached, current_chat_id, regeneration_request, regen_stream_session_id, regen_sequence_id);
         const data = await response.json();
         data.user_message_html_unique_id = uniqueId;
+        data.regeneration_request = regeneration_request;
         const {do_rag, stream_session_id, formatted_user_prompt, responseIDs, server_type} = handleSetupResponse(data);
-        appendStreamSessionIdToUserMessage(uniqueId, stream_session_id);
+        if (!regeneration_request) { appendStreamSessionIdToUserMessage(uniqueId, stream_session_id); }
 
         // 2- fetchEventStream()
         const chatContainer = document.getElementById('chat-area');

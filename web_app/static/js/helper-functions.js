@@ -44,6 +44,12 @@ function getUniqueId() {
     return crypto.randomUUID();
 }
 
+function getUserMessageContent(element) {
+    const childNodes = Array.from(element.childNodes);  //childNodes is a property that returns a live collection of all child nodes of an element, including text nodes, comment nodes, and element nodes
+    const textNode = childNodes.find(node => node.nodeType === Node.TEXT_NODE);
+    return textNode ? textNode.textContent.trim() : '';
+}
+
 function setModelHeaderInfoBox(chat_id, model_id) {
     setLlmModel(model_id);
     chatID = " Chat ".concat(String(chat_id))

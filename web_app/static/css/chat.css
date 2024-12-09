@@ -110,7 +110,7 @@ body {
     height: 100%;
     width: 0;
     position: fixed;
-    z-index: 1;
+    z-index: 10;
     top: 0;
     left: -2px;
     background-color: #1e2021; /*was #111 - changed to better style search bar*/
@@ -186,6 +186,71 @@ body {
 }
 
 .three-dot-menu-option:hover {
+    background-color: #555;
+}
+
+.regenerate-menu {
+    position: absolute;
+    top: 0;
+    right: 10px;
+    cursor: pointer;
+    color: white;
+    padding: 10px;
+}
+
+.regenerate-menu i {
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.regenerate-menu i {
+    opacity: 1;
+}
+
+.regenerate-menu-options {
+    display: none;
+    position: fixed;
+    right: 0;
+    background-color: #333;
+    min-width: 170px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    border-radius: 10px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+}
+
+.regenerate-menu:hover .regenerate-menu-options {
+    display: block;
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Add hover area for the menu */
+/* .regenerate-menu::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    right: 0;
+    width: 170px;
+    height: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: #333 transparent transparent transparent;
+} */
+
+.regenerate-menu-option {
+    padding: 12px 16px;
+    text-decoration: none;
+    display: block;
+    color: white;
+    border-radius: 10px;
+    transition: background-color 0.3s;
+}
+
+.regenerate-menu-option:hover {
     background-color: #555;
 }
 
@@ -338,6 +403,8 @@ body {
 }
 
 .user-message {
+    position: relative;
+    z-index: 1;
     font-weight: 500; /* Medium thickness */
     margin-bottom: 0.5rem; /* Spacing between messages */
     background-color: #2F2F2F;
