@@ -50,6 +50,45 @@ function getUserMessageContent(element) {
     return textNode ? textNode.textContent.trim() : '';
 }
 
+function resetResponseAndViewerContainerWithStreamSessionId(streamSessionId) {
+    const responseAndViewerContainer = document.querySelector(`.response-and-viewer-container[data-stream-session-id="${streamSessionId}"]`);
+    if (responseAndViewerContainer) {
+        //<div class="response-and-viewer-container" id="MasterWrapper${streamSessionId}" data-stream-session-id="${streamSessionId}"></div>
+        responseAndViewerContainer.id = `MasterWrapper${streamSessionId}`;
+        responseAndViewerContainer.innerHTML = `
+            <div class="llm-wrapper" style="display:none;" id="ResponseWrapper${streamSessionId}">
+                <div class="llm-response" id="ResponseContent${streamSessionId}"></div>
+            </div>
+        `;
+    }
+    document.getElementById(`ResponseWrapper${streamSessionId}`).style.display  = 'block';
+    scrollChatAreaToBottom();
+}
+
+function prepareAttributeForUserMessage(userMessageDiv) {
+    // Get the user message content 
+    const userMessage = getUserMessageContent(userMessageDiv);
+    document.getElementById('user-input').value = userMessage;
+    
+    // Get the stream session id and sequence id
+    const streamSessionId = userMessageDiv.getAttribute('data-stream-session-id');
+    const sequenceId = userMessageDiv.getAttribute('data-sequence-id');
+    return { streamSessionId, sequenceId };
+}
+
+function deleteChatAreaElements(currentElement) {
+    const elementsToDelete = []
+    while (currentElement && currentElement.nextElementSibling) {
+        currentElement = currentElement.nextElementSibling;
+
+        if (currentElement.matches('.user-message') || currentElement.matches('.response-and-viewer-container')) {
+            elementsToDelete.push(currentElement);
+            console.log("currentElement: ", currentElement);
+        }
+    }
+    elementsToDelete.forEach(element => element.remove());
+}
+
 function setModelHeaderInfoBox(chat_id, model_id) {
     setLlmModel(model_id);
     chatID = " Chat ".concat(String(chat_id))

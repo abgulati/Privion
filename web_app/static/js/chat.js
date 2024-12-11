@@ -68,6 +68,8 @@ function createUserMessageHTML(userInputForHtml){
                 <i class="fas fa-ellipsis-v"></i>
                 <div class="regenerate-menu-options">
                     <span class="regenerate-menu-option regenerate-option">Regenerate Response</span>
+                    <span class="regenerate-menu-option regenerate-with-citations-enabled-option">Regenerate Response with Citations Force Enabled</span>
+                    <span class="regenerate-menu-option regenerate-with-citations-disabled-option">Regenerate Response with Citations Force Disabled</span>
                 </div>
             </div>
         </div>
@@ -131,11 +133,11 @@ function appendContentToResponse(responseContentID, content) {
 }
 
 
-function setupLLMResponse(userInput, file_attached, current_chat_id, regeneration_request, regen_stream_session_id, regen_sequence_id) { //no need to async-await here as fetch() inherently returns a promise, so by returning fetch() directly we're providing the same Promise that the async function with await would return.
+function setupLLMResponse(userInput, file_attached, current_chat_id, regeneration_request, regen_stream_session_id, regen_sequence_id, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled) { //no need to async-await here as fetch() inherently returns a promise, so by returning fetch() directly we're providing the same Promise that the async function with await would return.
     return fetch('/setup_for_local_llm_response', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({'user_query': userInput, 'chat_id': current_chat_id, 'file_attached': file_attached, 'regeneration_request': regeneration_request, 'stream_session_id': regen_stream_session_id, 'sequence_id': regen_sequence_id})
+        body: JSON.stringify({'user_query': userInput, 'chat_id': current_chat_id, 'file_attached': file_attached, 'regeneration_request': regeneration_request, 'stream_session_id': regen_stream_session_id, 'sequence_id': regen_sequence_id, 'regenerate_with_citations_force_enabled': regenerate_with_citations_force_enabled, 'regenerate_with_citations_force_disabled': regenerate_with_citations_force_disabled})
     });
 }
 
@@ -536,7 +538,7 @@ function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapper
         if (!regeneration_request) { appendChatIdToUserMessage(user_message_html_unique_id, current_chat_id); }
     }
 
-    if (parseInt(latest_sequence_id) == 1) { 
+    if (parseInt(latest_sequence_id) == 1 && document.querySelector(`.nav-item[data-chat-id="${getChatId()}"]`) == null) {
         const sidenav = document.getElementById('sidenav-content');
 
         new_chat = {
@@ -613,20 +615,21 @@ async function getReferences(do_rag, params, responseContentID, masterWrapperID,
 }
 
 
-async function requestFormattedPrompt(regeneration_request=false, regen_stream_session_id=null, regen_sequence_id=null) {
+async function requestFormattedPrompt(regeneration_request=false, regenerate_with_citations_force_enabled=false, regenerate_with_citations_force_disabled=false, regen_stream_session_id=null, regen_sequence_id=null) {
     initializePromptRequest();
 
     const current_chat_id = getChatId();
     const {userInput, file} = getUserInput();
     const userInputForHtml = regeneration_request ? '' : formatTabsAndSpaces(userInput);
     const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);
-    
+    if (regeneration_request) { resetResponseAndViewerContainerWithStreamSessionId(regen_stream_session_id); }
+
     let file_attached = false;
     if (file) { file_attached = true; }
 
     try {
         // 1- setup_for_local_llm_response
-        const response = await setupLLMResponse(userInput, file_attached, current_chat_id, regeneration_request, regen_stream_session_id, regen_sequence_id);
+        const response = await setupLLMResponse(userInput, file_attached, current_chat_id, regeneration_request, regen_stream_session_id, regen_sequence_id, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled);
         const data = await response.json();
         data.user_message_html_unique_id = uniqueId;
         data.regeneration_request = regeneration_request;
@@ -651,7 +654,8 @@ async function requestFormattedPrompt(regeneration_request=false, regen_stream_s
             'user_query': userInput,
             'llm_response': totalContent,
             'formatted_user_prompt': formatted_user_prompt,
-            'regeneration_request': regeneration_request
+            'regeneration_request': regeneration_request,
+            'regenerate_with_citations_force_enabled': regenerate_with_citations_force_enabled
         };
 
         await getReferences(do_rag, getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);

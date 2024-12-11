@@ -22,13 +22,19 @@ function initializeRegenerateResponseButton() {
     document.getElementById('chat-area').addEventListener('click', function(e) {
         if (e.target.classList.contains('regenerate-option')) {
             const userMessageDiv = e.target.closest('.user-message');
-            
-            const userMessage = getUserMessageContent(userMessageDiv);
-            document.getElementById('user-input').value = userMessage;
-            
-            const streamSessionId = userMessageDiv.getAttribute('data-stream-session-id');
-            const sequenceId = userMessageDiv.getAttribute('data-sequence-id');
-            requestFormattedPrompt(true, streamSessionId, sequenceId);
+            const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
+            requestFormattedPrompt(true, false, false, streamSessionId, sequenceId);    // Request the formatted prompt
+            deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
+        } else if (e.target.classList.contains('regenerate-with-citations-enabled-option')) {
+            const userMessageDiv = e.target.closest('.user-message');
+            const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
+            requestFormattedPrompt(true, true, false, streamSessionId, sequenceId);    // Request the formatted prompt
+            deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
+        } else if (e.target.classList.contains('regenerate-with-citations-disabled-option')) {
+            const userMessageDiv = e.target.closest('.user-message');
+            const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
+            requestFormattedPrompt(true, false, true, streamSessionId, sequenceId);    // Request the formatted prompt
+            deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
         }
     });
 }

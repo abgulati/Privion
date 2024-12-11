@@ -1612,7 +1612,7 @@ def determine_sequence_id_for_chat(chat_id):
     except Exception as e:
         handle_local_error("Could not determine sequence ID for storage to chat history DB, encountered error: ", e)
 
-    return int(current_sequence_id)
+    return int(current_sequence_id) # returning current max sequence_id, this will be incremented by 1 when a new response is stored to the db
 
 
 def store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query_for_history_db, model_response_for_history_db, fully_formatted_prompt, local_llm_server, local_llm_chat_template_format):
@@ -3184,7 +3184,19 @@ def load_chat_history():
             regex_to_swap_multiple_spaces_with_newline = r' {2,}'
             user_message = re.sub(regex_to_swap_multiple_spaces_with_newline, '<br>', user_message)
 
-            user_message = f'<div class="user-message glassmorphism" data-stream-session-id="{stream_session_id}" data-chat-id="{chat_id_for_history_search}" data-sequence-id="{sequence_id_for_history_search}">' + user_message + '</div>'
+            user_message = f'''
+            <div class="user-message glassmorphism" data-stream-session-id="{stream_session_id}" data-chat-id="{chat_id_for_history_search}" data-sequence-id="{sequence_id_for_history_search}">
+                {user_message}
+                <div class="regenerate-menu">
+                    <i class="fas fa-ellipsis-v"></i>
+                    <div class="regenerate-menu-options">
+                        <span class="regenerate-menu-option regenerate-option">Regenerate Response</span>
+                        <span class="regenerate-menu-option regenerate-with-citations-enabled-option">Regenerate Response with Citations Force Enabled</span>
+                        <span class="regenerate-menu-option regenerate-with-citations-disabled-option">Regenerate Response with Citations Force Disabled</span>
+                    </div>
+                </div>
+            </div>
+            '''
 
             chat_history.append(user_message)
 
@@ -3283,7 +3295,7 @@ def load_chat_history():
 
 def determine_latest_chat_id(c):
     print("Determining chat ID")
-    c.execute("SELECT COALESCE(MAX(chat_id), 0) FROM chat_history")
+    c.execute("SELECT COALESCE(MAX(chat_id), 0) FROM chat_history") # "The COALESCE function accepts two or more arguments and returns the first non-null argument."
     result = c.fetchone()
     max_chat_id = result[0]
     new_chat_id = max_chat_id + 1
@@ -3360,7 +3372,21 @@ def init_chat_history_db():
     return jsonify({'success': True, 'chat_id': chat_id})
 
 
-def update_llm_response_in_history_db(chat_id, stream_session_id, user_query, llm_response):
+def delete_chat_history_for_chat_if_from_sequence_id(c: sqlite3.Cursor, conn: sqlite3.Connection, chat_id: int, sequence_id: int) -> bool:
+    print(f"Deleting chat history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}")
+
+    # Delete all chat hsitory for the given chat_id where sequence_id is greater than the given sequence_id, if it exists
+    try:
+        c.execute("DELETE FROM chat_history WHERE chat_id = ? AND sequence_id > ?", (chat_id, sequence_id))
+        deleted_count = c.rowcount
+        conn.commit()
+        print(f"Deleted {deleted_count} rows of chat history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}")
+        return True
+    except Exception as e:
+        return handle_local_error(f"Could not delete chat history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}, encountered error: ", e)
+
+
+def update_llm_response_in_history_db(chat_id: int, stream_session_id: str, user_query: str, llm_response: str) -> tuple[datetime.datetime, int]:
 
     print(f"Updating LLM response in chat history DB for chat_id: {chat_id} and stream_session_id: {stream_session_id}")
 
@@ -3389,6 +3415,14 @@ def update_llm_response_in_history_db(chat_id, stream_session_id, user_query, ll
         conn.commit()
     except Exception as e:
         return handle_local_error("Could not update LLM response in chat history DB, encountered error: ", e)
+    
+    try:
+        c.execute("SELECT sequence_id FROM chat_history WHERE chat_id = ? AND stream_session_id = ?", (chat_id, stream_session_id))
+        result = c.fetchone()
+        sequence_id = result[0]
+        delete_chat_history_for_chat_if_from_sequence_id(c, conn, chat_id, sequence_id)
+    except Exception as e:
+        return handle_local_error("Could not determine sequence_id / delete chat history in update_llm_response_in_history_db, encountered error: ", e)
     
     conn.close()
 
@@ -3554,13 +3588,7 @@ def get_formatted_prompt_from_history_db(chat_id, sequence_id):
         handle_error_no_return("Could not establish connection to DB for chat history storage, encountered error: ", e)
 
     try:
-        # Determine sequence_id
         cursor.execute("SELECT prompt_template FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (int(chat_id), int(sequence_id)))
-        # "The COALESCE function accepts two or more arguments and returns the first non-null argument."
-        # This accounts for a new chat!
-        # Note that trailing comma! Without it, the simple select query will produce an error: "parameters are of unsupported type" !!
-        # This is because the SQLite3 module can have trouble recognizing single-item tuples as tuples, so a trailing comma helps alleviate this! 
-
         result = cursor.fetchone()
         formatted_prompt = str(result[0])
         
@@ -3871,14 +3899,16 @@ def get_formatted_prompt_for_setup_for_local_llm_response(chat_id:int, current_s
     return formatted_prompt, current_sequence_id
 
 
-def read_request_data_for_response_setup(request: Request) -> tuple[str, str, str, int, bool, bool]:
+def read_request_data_for_response_setup(request: Request) -> tuple[str, str, str, int, bool, bool, bool, bool]:
     stream_session_id = request.json.get('stream_session_id')
     user_query = request.json.get('user_query')
     chat_id = request.json.get('chat_id')
     sequence_id = request.json.get('sequence_id')
     file_attached = request.json.get('file_attached')
     regeneration_request = request.json.get('regeneration_request')
-    return stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request
+    regenerate_with_citations_force_enabled = request.json.get('regenerate_with_citations_force_enabled')
+    regenerate_with_citations_force_disabled = request.json.get('regenerate_with_citations_force_disabled')
+    return stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled
 
 
 def get_full_prompt_for_server(local_llm_server: str, formatted_history_prompt: str, user_query: str, current_sequence_id: int, base_template: str, local_llm_chat_template_format: str, skip_system_prompt: bool) -> str:
@@ -3892,11 +3922,11 @@ def get_full_prompt_for_server(local_llm_server: str, formatted_history_prompt: 
     return formatted_updated_prompt
 
 
-def get_base_values_for_setup_for_local_llm_response(stream_session_id:str, chat_id:str, sequence_id:int, regeneration_request:bool) -> tuple[str, str, int]:
+def get_base_values_for_setup_for_local_llm_response(stream_session_id:str, chat_id:str, sequence_id:str, regeneration_request:bool) -> tuple[str, str, int]:
     if regeneration_request:
         print(f"\nSetting defaults for regeneration for request ID {stream_session_id}\n")
         key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
-        current_sequence_id = sequence_id
+        current_sequence_id = int(sequence_id) - 1   # since we're regenerating a response, we must act as if the current sequence id does not exist in the history db!
         return stream_session_id, key_for_vector_results, current_sequence_id
     
     try:
@@ -3986,7 +4016,7 @@ def setup_for_local_llm_response():
 
     try:    # Read config and request data, determine base values while handling regeneration case
         config = read_config_for_setup_for_local_llm_response()
-        stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request = read_request_data_for_response_setup(request)
+        stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled = read_request_data_for_response_setup(request)
         QUERIES[stream_session_id] = user_query     # Store the query associated with the ID
         stream_session_id, key_for_vector_results, current_sequence_id = get_base_values_for_setup_for_local_llm_response(stream_session_id, chat_id, sequence_id, regeneration_request)
     except Exception as e:
@@ -4002,13 +4032,16 @@ def setup_for_local_llm_response():
         print(f"Returning special model response: {special_response}")
         return special_response
     
-    if config['force_disable_rag']:
+    if config['force_disable_rag'] or regenerate_with_citations_force_disabled:
         return handle_force_disabled_rag(local_llm_server, formatted_history_prompt, user_query, current_sequence_id, stream_session_id, regeneration_request, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
             
     try:    # RAG Routine Begins: Perform semantic search on the vector DB, lexical search on the whoosh index, combine and rerank results and determine if RAG is necessary
         print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n") 
         embedding_function = get_embedding_function(config['use_sbert_embeddings'], config['use_openai_embeddings'], config['use_bge_base_embeddings'], config['use_bge_large_embeddings'])
-        docs, do_rag = process_vector_search(user_query, embedding_function, config['force_enable_rag'], config['force_disable_rag'], config['filter_top_k_results_by_reranking'], config['fetch_top_k_results_from_vectordb'])
+        docs, do_rag = process_vector_search(user_query, embedding_function, 
+        (config['force_enable_rag'] or regenerate_with_citations_force_enabled), 
+        (config['force_disable_rag'] or regenerate_with_citations_force_disabled), 
+        config['filter_top_k_results_by_reranking'], config['fetch_top_k_results_from_vectordb'])
     except Exception as e:
         return handle_error_no_return("Could not process vector search in method setup_for_local_llm_response, encountered error: ", e)
 
@@ -4142,7 +4175,7 @@ def read_config_for_get_references() -> tuple[str, str, str, bool, bool]:
         return handle_local_error("Could not read config.json in method read_config_for_get_references(), encountered error: ", e)
 
 
-def get_request_parameters_for_get_references(request: Request) -> tuple[str, str, str, str, str, str]:
+def get_request_parameters_for_get_references(request: Request) -> tuple[str, str, str, str, str, str, bool, bool]:
     try:
         stream_session_id = request.json['stream_session_id']
         user_query = request.json['user_query']
@@ -4151,7 +4184,8 @@ def get_request_parameters_for_get_references(request: Request) -> tuple[str, st
         chat_id = request.json['chat_id']
         sequence_id = request.json['sequence_id']
         regeneration_request = request.json['regeneration_request']
-        return stream_session_id, user_query, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request
+        regenerate_with_citations_force_enabled = request.json['regenerate_with_citations_force_enabled']
+        return stream_session_id, user_query, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request, regenerate_with_citations_force_enabled
     except Exception as e:
         return handle_local_error("Could not read request content in method get_request_parameters_for_get_references(), encountered error: ", e)
 
@@ -4329,7 +4363,7 @@ def get_references():
         return handle_api_error("Missing values in config.json when attempting to get_references. Error: ", e)
 
     try:
-        stream_session_id, user_query, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request = get_request_parameters_for_get_references(request)
+        stream_session_id, user_query, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request, regenerate_with_citations_force_enabled = get_request_parameters_for_get_references(request)
     except Exception as e:
         return handle_api_error("Could not read request content in method get_references, encountered error: ", e)
 
@@ -4366,7 +4400,7 @@ def get_references():
     all_sources = {}
     reference_pages = {}
     try:
-        all_sources, reference_pages = get_sources_and_pages_for_get_references(docs, llm_response, llm_filter_citations, upload_folder, force_enable_rag, user_query)
+        all_sources, reference_pages = get_sources_and_pages_for_get_references(docs, llm_response, llm_filter_citations, upload_folder, (force_enable_rag or regenerate_with_citations_force_enabled), user_query)
     except Exception as e:
         return handle_api_error("Could not get sources and pages for get_references(), encountered error: ", e)
     
