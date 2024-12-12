@@ -3193,6 +3193,7 @@ def load_chat_history():
                         <span class="regenerate-menu-option regenerate-option">Regenerate Response</span>
                         <span class="regenerate-menu-option regenerate-with-citations-enabled-option">Regenerate Response with Citations Force Enabled</span>
                         <span class="regenerate-menu-option regenerate-with-citations-disabled-option">Regenerate Response with Citations Force Disabled</span>
+                        <span class="regenerate-menu-option delete-option">Delete</span>
                     </div>
                 </div>
             </div>
@@ -3372,18 +3373,53 @@ def init_chat_history_db():
     return jsonify({'success': True, 'chat_id': chat_id})
 
 
-def delete_chat_history_for_chat_if_from_sequence_id(c: sqlite3.Cursor, conn: sqlite3.Connection, chat_id: int, sequence_id: int) -> bool:
-    print(f"Deleting chat history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}")
+def delete_chat_history_for_chat_id_from_sequence_id(c: sqlite3.Cursor, conn: sqlite3.Connection, chat_id: int, sequence_id: int) -> bool:
+    print(f"Deleting chat history for chat with chat_id: {chat_id} and sequence_id greater than: {sequence_id}")
 
     # Delete all chat hsitory for the given chat_id where sequence_id is greater than the given sequence_id, if it exists
     try:
         c.execute("DELETE FROM chat_history WHERE chat_id = ? AND sequence_id > ?", (chat_id, sequence_id))
         deleted_count = c.rowcount
         conn.commit()
-        print(f"Deleted {deleted_count} rows of chat history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}")
+        print(f"Deleted {deleted_count} rows of chat history for chat with chat_id: {chat_id} and sequence_id greater than: {sequence_id}")
         return True
     except Exception as e:
-        return handle_local_error(f"Could not delete chat history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}, encountered error: ", e)
+        return handle_local_error(f"Could not delete chat history for chat with chat_id: {chat_id} and sequence_id greater than: {sequence_id}, encountered error: ", e)
+
+
+@app.route('/delete_messages', methods=['POST'])
+def delete_messages():
+    print("delete_messages route triggered")
+
+    try:
+        chat_id = request.form['chat_id']
+        sequence_id = request.form['sequence_id']
+    except Exception as e:
+        return handle_local_error("Could not read chat_id or sequence_id from request, encountered error: ", e)
+    
+    try:
+        read_return = read_config(['sqlite_history_db'])
+        sqlite_history_db = read_return['sqlite_history_db']
+    except Exception as e:
+        return handle_local_error("Missing sqlite_history_db in config.json in method update_llm_response_in_history_db. Error: ", e)
+
+    # Connect to chat_history.db to determine appropriate chat_id
+    try:
+        conn = sqlite3.connect(sqlite_history_db)
+        c = conn.cursor()
+    except Exception as e:
+        return handle_local_error("Could not connect to chat history database, encountered error: ", e)
+
+    try:
+        c.execute("DELETE FROM chat_history WHERE chat_id = ? AND sequence_id >= ?", (chat_id, sequence_id))
+        deleted_count = c.rowcount
+        conn.commit()
+        print(f"Deleted {deleted_count} rows of chat history for chat with chat_id: {chat_id} beginning with sequence_id: {sequence_id}")
+    except Exception as e:
+        return handle_local_error(f"Could not delete chat history for chat with chat_id: {chat_id} beginning with sequence_id: {sequence_id}, encountered error: ", e)
+
+    conn.close()
+    return jsonify({'success': True})
 
 
 def update_llm_response_in_history_db(chat_id: int, stream_session_id: str, user_query: str, llm_response: str) -> tuple[datetime.datetime, int]:
@@ -3420,7 +3456,7 @@ def update_llm_response_in_history_db(chat_id: int, stream_session_id: str, user
         c.execute("SELECT sequence_id FROM chat_history WHERE chat_id = ? AND stream_session_id = ?", (chat_id, stream_session_id))
         result = c.fetchone()
         sequence_id = result[0]
-        delete_chat_history_for_chat_if_from_sequence_id(c, conn, chat_id, sequence_id)
+        delete_chat_history_for_chat_id_from_sequence_id(c, conn, chat_id, sequence_id)
     except Exception as e:
         return handle_local_error("Could not determine sequence_id / delete chat history in update_llm_response_in_history_db, encountered error: ", e)
     
@@ -3888,15 +3924,12 @@ def get_embedding_function(use_sbert_embeddings:bool, use_openai_embeddings:bool
         handle_error_no_return("Could not get embedding function in method get_embedding_function, encountered error: ", e)
 
 
-def get_formatted_prompt_for_setup_for_local_llm_response(chat_id:int, current_sequence_id:int) -> tuple[str, int]:
+def get_formatted_prompt_for_setup_for_local_llm_response(chat_id:int, current_sequence_id:int) -> str:
     print("\n\nGetting formatted prompt for setup_for_local_llm_response\n\n")
     formatted_prompt = ""
     if current_sequence_id > 0:    # get the last prompt so we can continue the completions
         formatted_prompt = get_formatted_prompt_from_history_db(chat_id, current_sequence_id)
-    
-    if formatted_prompt == "":  # could not be updated above
-        current_sequence_id = 0 # so reset chat sequence id
-    return formatted_prompt, current_sequence_id
+    return formatted_prompt
 
 
 def read_request_data_for_response_setup(request: Request) -> tuple[str, str, str, int, bool, bool, bool, bool]:
@@ -3926,7 +3959,7 @@ def get_base_values_for_setup_for_local_llm_response(stream_session_id:str, chat
     if regeneration_request:
         print(f"\nSetting defaults for regeneration for request ID {stream_session_id}\n")
         key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
-        current_sequence_id = int(sequence_id) - 1   # since we're regenerating a response, we must act as if the current sequence id does not exist in the history db!
+        current_sequence_id = int(sequence_id)
         return stream_session_id, key_for_vector_results, current_sequence_id
     
     try:
@@ -4023,7 +4056,8 @@ def setup_for_local_llm_response():
         return handle_api_error("Error getting base values for setup_for_streaming_response, encountered error: ", e)
 
     try:    # Get formatted prompt from history db
-        formatted_history_prompt, current_sequence_id = get_formatted_prompt_for_setup_for_local_llm_response(int(chat_id), int(current_sequence_id))
+        formatted_history_prompt = get_formatted_prompt_for_setup_for_local_llm_response(int(chat_id), int(current_sequence_id) if not regeneration_request else int(current_sequence_id) - 1) # if regeneration_request, we must act as if the current sequence id does not exist in the history db when formatting the prompt!
+        if formatted_history_prompt == "": current_sequence_id = 0
     except Exception as e:
         return handle_api_error("Could not get formatted_history_prompt from history db in method setup_for_local_llm_response, encountered error: ", e)
     
