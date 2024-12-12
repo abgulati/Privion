@@ -3905,7 +3905,7 @@ def reject_rag() -> dict:
 
 def prepare_for_quick_response(current_sequence_id:int, regeneration_request:bool) -> int:
     print("Invoking quick-return route for hfw-diffusers or hfw-vision(file_attached)")
-    if not regeneration_request: current_sequence_id = int(current_sequence_id) + 1
+    if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1
     reject_rag()
     return current_sequence_id
 
@@ -4008,7 +4008,7 @@ def handle_force_disabled_rag(local_llm_server:str, formatted_history_prompt:str
         formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
     except Exception as e:
         return handle_api_error("Could not get formatted_updated_prompt in method setup_for_streaming_response, encountered error: ", e)
-    if not regeneration_request: current_sequence_id = int(current_sequence_id) + 1
+    if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1
     return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
 
 
@@ -4094,7 +4094,7 @@ def setup_for_local_llm_response():
     except Exception as e:
         return handle_api_error("Could not get formatted_updated_prompt in method setup_for_streaming_response, encountered error: ", e)
 
-    if not regeneration_request: current_sequence_id = int(current_sequence_id) + 1
+    if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1
     return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
 
 
