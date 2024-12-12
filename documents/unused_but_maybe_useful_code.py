@@ -2414,3 +2414,23 @@ def setup_for_local_llm_response():
 
     new_sequence_id = int(current_sequence_id) + 1
     return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":new_sequence_id, "server_type":local_llm_server})
+
+
+    function xdrp_populateGoogleDriveTable(gdrive_files) {
+    const gdriveTableBody = document.querySelector('#google_drive_files_tables tbody');
+
+    gdrive_files.forEach((file, index) => {
+        const iconClass = getFileIconClass(file.type);
+        const rowHTML = `
+            <tr data-gdrive-file-id="${file.id}" data-gdrive-mime-type="${file.mimeType}">
+                <td class="checkbox-cell"><input type="checkbox" id="select-${parseInt(index)+1}"></td>
+                <td style="text-align:left">${file.name}</td>
+                <td style="text-align:left">${file.type}</td>
+                <td style="text-align:center"><i class="file-icon fa-solid ${iconClass}"></i></td>
+                <td style="text-align:center">v${file.version}</td>
+                <td style="text-align:center"><i class="fas fa-cloud-arrow-down"></i></td>
+            </tr>
+        `;
+        gdriveTableBody.insertAdjacentHTML('beforeend', rowHTML);
+    });
+}
