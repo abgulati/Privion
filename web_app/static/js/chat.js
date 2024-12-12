@@ -70,6 +70,7 @@ function createUserMessageHTML(userInputForHtml){
                     <span class="regenerate-menu-option regenerate-option">Regenerate Response</span>
                     <span class="regenerate-menu-option regenerate-with-citations-enabled-option">Regenerate Response with Citations Force Enabled</span>
                     <span class="regenerate-menu-option regenerate-with-citations-disabled-option">Regenerate Response with Citations Force Disabled</span>
+                    <span class="regenerate-menu-option delete-option">Delete</span>
                 </div>
             </div>
         </div>
@@ -78,9 +79,6 @@ function createUserMessageHTML(userInputForHtml){
 }
 
 function updateChatAreaWithUserInput(userInputForHtml) {
-    // const uniqueId = getUniqueId();
-    // const current_chat_id = getChatId();
-    //document.getElementById('chat-area').innerHTML += `<div class="user-message glassmorphism" data-unique-id="${uniqueId}" data-chat-id="${current_chat_id}">${userInputForHtml}</div>`;
     const uniqueId = createUserMessageHTML(userInputForHtml);
     scrollChatAreaToBottom();
     return uniqueId;

@@ -35,6 +35,11 @@ function initializeRegenerateResponseButton() {
             const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
             requestFormattedPrompt(true, false, true, streamSessionId, sequenceId);    // Request the formatted prompt
             deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
+        } else if (e.target.classList.contains('delete-option')) {
+            const userMessageDiv = e.target.closest('.user-message');
+            const chatId = userMessageDiv.getAttribute('data-chat-id');
+            const sequenceId = userMessageDiv.getAttribute('data-sequence-id');
+            delete_messages(chatId, sequenceId, userMessageDiv);
         }
     });
 }

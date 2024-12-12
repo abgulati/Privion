@@ -53,7 +53,6 @@ function getUserMessageContent(element) {
 function resetResponseAndViewerContainerWithStreamSessionId(streamSessionId) {
     const responseAndViewerContainer = document.querySelector(`.response-and-viewer-container[data-stream-session-id="${streamSessionId}"]`);
     if (responseAndViewerContainer) {
-        //<div class="response-and-viewer-container" id="MasterWrapper${streamSessionId}" data-stream-session-id="${streamSessionId}"></div>
         responseAndViewerContainer.id = `MasterWrapper${streamSessionId}`;
         responseAndViewerContainer.innerHTML = `
             <div class="llm-wrapper" style="display:none;" id="ResponseWrapper${streamSessionId}">
@@ -89,6 +88,22 @@ function deleteChatAreaElements(currentElement) {
     elementsToDelete.forEach(element => element.remove());
 }
 
+function deleteChatAreaElementsFromCurrentElement(currentElement) {
+    const elementsToDelete = []
+    while (currentElement) {
+        if (currentElement.matches('.user-message') || currentElement.matches('.response-and-viewer-container')) {
+            elementsToDelete.push(currentElement);
+            console.log("currentElement: ", currentElement);
+        }
+        if (currentElement.nextElementSibling) {
+            currentElement = currentElement.nextElementSibling;
+        } else {
+            break;
+        }
+    }
+    elementsToDelete.forEach(element => element.remove());
+}
+
 function setModelHeaderInfoBox(chat_id, model_id) {
     setLlmModel(model_id);
     chatID = " Chat ".concat(String(chat_id))
@@ -97,6 +112,37 @@ function setModelHeaderInfoBox(chat_id, model_id) {
     document.getElementById('model_header').innerHTML = display_chatid_and_model;
 }
 
+async function delete_messages(chatId, sequenceId, userMessageDiv) {
+    console.log("Deleting messages & responses for chat with chat_id: ", chatId, " from sequence_id: ", sequenceId);
+    let formData = new FormData();
+    formData.append('chat_id', chatId);
+    formData.append('sequence_id', sequenceId);
+
+    const response = await fetch('/delete_messages', {
+        method: 'POST',
+        body: formData
+    }) 
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error)});
+        }
+        return response.json()
+    })
+    .then(data => {
+        if (data.success) {
+            console.log("Messages & responses deleted from chat history successfully");
+            deleteChatAreaElementsFromCurrentElement(userMessageDiv); // Delete everything from this user message onwards
+            if (sequenceId == 1) {
+               location.reload();
+            }
+        } else {
+            throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+        }
+    })
+    .catch(error => {
+        errorHandler("deleting the specified messages & responses", "/delete_messages", String(error.message))
+    });
+}
 
 function goToPage(iframeId, url) {
     var iframe = document.getElementById(iframeId)
@@ -621,9 +667,15 @@ function populateDocsLoadedTable() {
                 // var row = table.insertRow(rowCount);    // since HTML tables are initialized with row 0, rowCount will specify the current position to insert the new row
 
                 var row = table.insertRow(-1);    // Or simply, use -1 to auto-append at the end of the table!
+                var unique_id = getUniqueId();
+                row.id = `vector_list_row_${unique_id}`;
 
                 // Now create and insert new cells into the row while simulataneously setting their content:
-                row.insertCell(0).innerHTML = row_list[i][0];   // Name
+                var nameCell = row.insertCell(0);
+                nameCell.innerHTML = row_list[i][0];   // Name
+                nameCell.className = 'vector_list_doc_name';
+                nameCell.setAttribute('data-vector-list-row-id', unique_id);
+
                 row.insertCell(1).innerHTML = row_list[i][1];   // VectorDB
                 row.insertCell(2).innerHTML = row_list[i][2];   // Chunk Size
                 row.insertCell(3).innerHTML = row_list[i][3];   // Chunk Overlap
@@ -695,26 +747,6 @@ function openImageGalleryModal(modalId) {
 
 function closeImageGalleryModal(modalId) {
     document.getElementById(modalId).style.display = 'none';
-}
-
-
-function xdrp_populateGoogleDriveTable(gdrive_files) {
-    const gdriveTableBody = document.querySelector('#google_drive_files_tables tbody');
-
-    gdrive_files.forEach((file, index) => {
-        const iconClass = getFileIconClass(file.type);
-        const rowHTML = `
-            <tr data-gdrive-file-id="${file.id}" data-gdrive-mime-type="${file.mimeType}">
-                <td class="checkbox-cell"><input type="checkbox" id="select-${parseInt(index)+1}"></td>
-                <td style="text-align:left">${file.name}</td>
-                <td style="text-align:left">${file.type}</td>
-                <td style="text-align:center"><i class="file-icon fa-solid ${iconClass}"></i></td>
-                <td style="text-align:center">v${file.version}</td>
-                <td style="text-align:center"><i class="fas fa-cloud-arrow-down"></i></td>
-            </tr>
-        `;
-        gdriveTableBody.insertAdjacentHTML('beforeend', rowHTML);
-    });
 }
 
 function sortSelected() {
@@ -1104,7 +1136,7 @@ function coreFilterFunction(search_words, items) {
 }
 
 
-function coreFilterRowsFunction(search_words, items) {
+function coreFilterGDriveRowsFunction(search_words, items) {
     const searchQuery = search_words.toLowerCase();
 
     Array.from(items).forEach(item => {
@@ -1119,6 +1151,19 @@ function coreFilterRowsFunction(search_words, items) {
     })
 }
 
+function coreFilterVectorListRowsFunction(search_words, items) {
+    const searchQuery = search_words.toLowerCase();
+    Array.from(items).forEach(item => {
+        const text = item.textContent.toLowerCase();
+        const row_id = item.getAttribute('data-vector-list-row-id');
+        const row = document.getElementById(`vector_list_row_${row_id}`);
+        if (text.includes(searchQuery)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    })
+}
 
 function filterCustomDropdown(search_words) {
     const customDropdownList = document.getElementById('hf-waitress-llm-custom-dropdown-items-list');
@@ -1137,7 +1182,13 @@ function filterChatHistoryItems(search_words) {
 function filterGoogleDriveTable(search_words) {
     const fullGdriveTable = document.getElementById('google_drive_files_tables');
     const gdrive_doc_name_cells = fullGdriveTable.getElementsByClassName('gdrive_doc_name');
-    coreFilterRowsFunction(search_words, gdrive_doc_name_cells);
+    coreFilterGDriveRowsFunction(search_words, gdrive_doc_name_cells);
+}
+
+function filterVectorListTable(search_words) {
+    const fullVectorListTable = document.getElementById('vector_embeddings_details');
+    const vector_doc_name_cells = fullVectorListTable.getElementsByClassName('vector_list_doc_name');
+    coreFilterVectorListRowsFunction(search_words, vector_doc_name_cells);
 }
 
 function addNewHfwModel(model) {
