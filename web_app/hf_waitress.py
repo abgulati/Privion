@@ -1,6 +1,6 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel, CLIPTextModel, AutoProcessor
 from transformers import StoppingCriteria, StoppingCriteriaList
-from huggingface_hub import login
+from huggingface_hub import login, snapshot_download, scan_cache_dir
 import torch
 
 from diffusers import FluxPipeline, FluxTransformer2DModel
@@ -513,18 +513,72 @@ def safe_float(value, default):
         return default
 
 
+def os_sanitize_path(path):
+    normalized_path = os.path.normpath(path)    # Normalize the path to handle any platform-specific separators
+    expanded_path = os.path.expanduser(normalized_path) # Expand any tilde (~) to the user's home directory
+    return expanded_path
+
+
+def download_model_from_hf_hub(model_to_download):
+    try:
+        latest_snapshot_path = snapshot_download(repo_id=model_to_download)
+        print(f"\n\nlatest_snapshot_path for {model_to_download} is:\n\n{latest_snapshot_path}\n\n")
+        return os_sanitize_path(latest_snapshot_path)
+    except Exception as e:
+        handle_error_no_return("Could not download model from HF-Hub, encountered error: ", e)
+
+
+def get_repo_info_for_model(model_id):
+    try:
+        cache_info = scan_cache_dir()
+    except Exception as e:
+        handle_error_no_return(f"Could not get cache_info for model {model_id}, encountered error: ", e)
+    
+    repo_info = next((repo for repo in cache_info.repos if repo.repo_id == model_id), None)
+    if repo_info is None: return None
+    
+    return repo_info
+
+
+def get_latest_revision_for_model(model_id):
+    try:
+        repo_info = get_repo_info_for_model(model_id)
+    except Exception as e:
+        return handle_error_no_return(f"Could not get repo_info for model {model_id}, encountered error: ", e)
+    
+    if repo_info is None:
+        print(f"No cache info found for {model_id}, attempting to download model from HF-Hub")
+        try:
+            download_model_from_hf_hub(model_id)
+            repo_info = get_repo_info_for_model(model_id)
+        except Exception as e:
+            return handle_local_error(f"Could not download model {model_id} from HF-Hub, encountered error: ", e)
+    
+    try:
+        revisions = list(repo_info.revisions)
+        latest_revision = max(revisions, key=lambda rev: rev.last_modified)
+        print(f"Determined latest revision details for {model_id}:")
+        print(f"Commit Hash: {latest_revision.commit_hash}")
+        print(f"Snapshot Path: {latest_revision.snapshot_path}")
+        print(f"Last modified: {latest_revision.last_modified}")
+        print(f"Number of Files: {len(latest_revision.files)}")
+        return latest_revision
+    except Exception as e:
+        return handle_local_error(f"Could not determine latest revision details for {model_id}, encountered error: ", e)
+
+
 def hf_login_for_gated_models():
     access_token = ""
     try:
         read_return = read_config(['access_token'])
         access_token = str(read_return['access_token'])
     except Exception as e:
-        handle_api_error("403 - No access token found, please submit an access token via the /hf_login endpoint")
+        handle_error_no_return("403 - No access token found, please submit an access token via the /hf_login endpoint")
 
     try:
         login(token=access_token)   # imported from huggingface_hub
     except Exception as e:
-        handle_api_error("Unable to login to the HuggingFace-Hub, please ensure the correct access token has been provided. Encountered error: ", e)
+        handle_error_no_return("Unable to login to the HuggingFace-Hub, please ensure the correct access token has been provided. Encountered error: ", e)
 
 
 def parse_arguments():
@@ -730,7 +784,7 @@ def parse_arguments():
                 try:
                     hf_login_for_gated_models()
                 except Exception as e:
-                    handle_local_error("Login to HF-Hub unsuccessful, encountered error: ", e)
+                    handle_error_no_return("Login to HF-Hub unsuccessful, encountered error: ", e)
 
         return args
 
@@ -794,7 +848,7 @@ def get_model_params():
         pipeline_task = str(read_return['pipeline_task'])
         vision = str(read_return['vision']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when trying to parse_arguments(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when trying to get_model_params(), encountered error: ", e)
 
     if gguf:
         print(gguf)
@@ -847,12 +901,11 @@ def get_model_params():
 
     quantize = quantize.lower().strip()
     if quantize != "n":
+        try:
+            if quantize == "bitsandbytes":
+                print("Quantizing with BitsAndBytes")
+                quant_level = quant_level.lower().strip()
 
-        if quantize == "bitsandbytes":
-            print("Quantizing with BitsAndBytes")
-            quant_level = quant_level.lower().strip()
-
-            try:
                 if quant_level == "int8":
                     print("Proceeding with BitsAndBytes-Int8 Quant")
                     quantization_config = BitsAndBytesConfig(load_in_8bit=True)
@@ -866,61 +919,61 @@ def get_model_params():
                     print("Proceeding with BitsAndBytes-Int4 Quant")
                     quantization_config = BitsAndBytesConfig(load_in_4bit=True)
                     model_params["quantization_config"] = quantization_config
-            except Exception as e:
-                handle_local_error("Could not set BitsAndBytes config to initialize_model(), encountered error: ", e)
-        elif quantize == "quanto":
-            print("Quanto-Quantizing")
-            quant_level = quant_level.lower().strip()
+            elif quantize == "quanto":
+                print("Quanto-Quantizing")
+                quant_level = quant_level.lower().strip()
 
-            if quant_level == "int8":
-                print("Proceeding with Quanto-Int8 Weights")
-                quantization_config  = QuantoConfig(weights="int8")
-                model_params["quantization_config"] = quantization_config
-            elif quant_level == "float8":
-                print("Proceeding with Quanto-Float8 Weights")
-                quantization_config  = QuantoConfig(weights="float8")
-                model_params["quantization_config"] = quantization_config
-            elif quant_level == "int4":
-                print("Proceeding with Quanto-Int4 Weights")
-                quantization_config  = QuantoConfig(weights="int4")
-                model_params["quantization_config"] = quantization_config
-            elif quant_level == "int2":
-                print("Proceeding with Quanto-Int2 Weights")
-                quantization_config  = QuantoConfig(weights="int2")
-                model_params["quantization_config"] = quantization_config
-            else:
-                print(f"Invalid quant_level setting, Quanto supports only int8, int4 and int2 quants but you set {quant_level}; proceeding with Quanto-Int4 Quant")
-                quantization_config  = QuantoConfig(weights="int4")
-                model_params["quantization_config"] = quantization_config
-        elif quantize == "hqq":
-            print("HQQ-Quantizing - Force-setting torch_dtype to torch.bfloat16")
-            model_params["torch_dtype"] = torch.bfloat16
-            quant_level = quant_level.lower().strip()
+                if quant_level == "int8":
+                    print("Proceeding with Quanto-Int8 Weights")
+                    quantization_config  = QuantoConfig(weights="int8")
+                    model_params["quantization_config"] = quantization_config
+                elif quant_level == "float8":
+                    print("Proceeding with Quanto-Float8 Weights")
+                    quantization_config  = QuantoConfig(weights="float8")
+                    model_params["quantization_config"] = quantization_config
+                elif quant_level == "int4":
+                    print("Proceeding with Quanto-Int4 Weights")
+                    quantization_config  = QuantoConfig(weights="int4")
+                    model_params["quantization_config"] = quantization_config
+                elif quant_level == "int2":
+                    print("Proceeding with Quanto-Int2 Weights")
+                    quantization_config  = QuantoConfig(weights="int2")
+                    model_params["quantization_config"] = quantization_config
+                else:
+                    print(f"Invalid quant_level setting, Quanto supports only int8, int4 and int2 quants but you set {quant_level}; proceeding with Quanto-Int4 Quant")
+                    quantization_config  = QuantoConfig(weights="int4")
+                    model_params["quantization_config"] = quantization_config
+            elif quantize == "hqq":
+                print("HQQ-Quantizing - Force-setting torch_dtype to torch.bfloat16")
+                model_params["torch_dtype"] = torch.bfloat16
+                quant_level = quant_level.lower().strip()
 
-            if quant_level == "int8":
-                print("Proceeding with HQQ-Int8 Weights")
-                quantization_config  = HqqConfig(nbits=8, group_size=hqq_group_size)
-                model_params["quantization_config"] = quantization_config
-            elif quant_level == "int4":
-                print("Proceeding with HQQ-Int4 Weights")
-                quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size)
-                model_params["quantization_config"] = quantization_config
-            elif quant_level == "int3":
-                print("Proceeding with HQQ-Int3 Weights")
-                quantization_config  = HqqConfig(nbits=3, group_size=hqq_group_size)
-                model_params["quantization_config"] = quantization_config
-            elif quant_level == "int2":
-                print("Proceeding with HQQ-Int2 Weights")
-                quantization_config  = HqqConfig(nbits=2, group_size=hqq_group_size)
-                model_params["quantization_config"] = quantization_config
-            elif quant_level == "int1":
-                print("Proceeding with HQQ-Int1 Weights")
-                quantization_config  = HqqConfig(nbits=1, group_size=hqq_group_size)
-                model_params["quantization_config"] = quantization_config
-            else:
-                print(f"Invalid quant_level setting, HQQ supports int8, int4, int3, int2 & int1 quants but you set {quant_level}; proceeding with HQQ-Int4 Quant")
-                quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size)
-                model_params["quantization_config"] = quantization_config
+                if quant_level == "int8":
+                    print("Proceeding with HQQ-Int8 Weights")
+                    quantization_config  = HqqConfig(nbits=8, group_size=hqq_group_size)
+                    model_params["quantization_config"] = quantization_config
+                elif quant_level == "int4":
+                    print("Proceeding with HQQ-Int4 Weights")
+                    quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size)
+                    model_params["quantization_config"] = quantization_config
+                elif quant_level == "int3":
+                    print("Proceeding with HQQ-Int3 Weights")
+                    quantization_config  = HqqConfig(nbits=3, group_size=hqq_group_size)
+                    model_params["quantization_config"] = quantization_config
+                elif quant_level == "int2":
+                    print("Proceeding with HQQ-Int2 Weights")
+                    quantization_config  = HqqConfig(nbits=2, group_size=hqq_group_size)
+                    model_params["quantization_config"] = quantization_config
+                elif quant_level == "int1":
+                    print("Proceeding with HQQ-Int1 Weights")
+                    quantization_config  = HqqConfig(nbits=1, group_size=hqq_group_size)
+                    model_params["quantization_config"] = quantization_config
+                else:
+                    print(f"Invalid quant_level setting, HQQ supports int8, int4, int3, int2 & int1 quants but you set {quant_level}; proceeding with HQQ-Int4 Quant")
+                    quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size)
+                    model_params["quantization_config"] = quantization_config
+        except Exception as e:
+            handle_local_error("Could not create quantization_config when attempting to get_model_params(), encountered error: ", e)
 
     return model_params
 
@@ -935,7 +988,7 @@ def load_flux_pipeline(pipeline):
         flux_low_vram_optimizations = str(read_return['flux_low_vram_optimizations']).lower() == 'true'
         load_quantized_flux = str(read_return['load_quantized_flux']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when attempting to load_flux_pipeline(), encountered error: ", e)
 
     if load_quantized_flux:
         print("Loading quantized Flux Pipeline")
@@ -996,7 +1049,7 @@ def load_vision_pipeline(pipeline, model_params):
         model_id = str(read_return['model_id'])
         torch_device_map = str(read_return['torch_device_map'])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when attempting to load_vision_pipeline(), encountered error: ", e)
 
     model_params.pop('trust_remote_code', None)
 
@@ -1068,7 +1121,7 @@ def restart_server_stream():
         flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
         vision = str(read_return['vision']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when attempting /restart_server_stream, encountered error: ", e)
 
     model_params = {}
 
@@ -1472,7 +1525,7 @@ def completions():
             flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
             vision = str(read_return['vision']).lower() == 'true'
         except Exception as e:
-            handle_local_error("Could not read values from hf_config.json when trying to parse_arguments(), encountered error: ", e)
+            handle_local_error("Could not read values from hf_config.json when attempting /completions, encountered error: ", e)
 
         if flux_diffusers:
             try:
@@ -1671,7 +1724,7 @@ def completions_stream():
         min_p = float(read_return['min_p'])
         n_keep = int(read_return['n_keep'])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when trying to parse_arguments(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when attempting /completions_stream, encountered error: ", e)
 
     try:
         generation_args = {
