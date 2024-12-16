@@ -2434,3 +2434,11 @@ def setup_for_local_llm_response():
         gdriveTableBody.insertAdjacentHTML('beforeend', rowHTML);
     });
 }
+
+
+from transformers.utils import default_cache_path
+print(f"Default cache directory: {default_cache_path}")
+
+from huggingface_hub import scan_cache_dir
+hf_cache_info = scan_cache_dir()
+hf_cache_info
