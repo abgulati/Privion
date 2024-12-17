@@ -665,7 +665,7 @@ def parse_arguments():
         parser.add_argument("--model_id", type=str, default=model_id, help="model_id for for LLM in HF-Transformers format obtained from the model card. Remembers previously set value and falls-back to Phi3-mini-4k-instruct as the default.")
         parser.add_argument("--exl2", action="store_true", default=False, help="Add this flag when loading models via ExLlamaV2. Defaults to False.")
         parser.add_argument("--exl2_bpw", type=float, default=exl2_bpw, help="Specify the bpw to be used when quantizing ExLlamaV2 models. Remembers previously set value and falls-back to 3.0 as the default.")
-        parser.add_argument("--force_exl2_measurement_file_generation", action="store_true", default=force_exl2_measurement_file_generation, help="Add this flag required to re-generate the measurement file for ExLlamaV2 models. Defaults to False.")
+        parser.add_argument("--force_exl2_measurement_file_generation", action="store_true", default=False, help="Add this flag required to re-generate the measurement file for ExLlamaV2 models. Defaults to False.")
         parser.add_argument("--gguf", action="store_true", default=False, help="Add this flag if you'll be loading a GGUF LLM. Defaults to False.")
         parser.add_argument("--awq", action="store_true", default=False, help="Add this flag when loading AWQ-quantized models directly off the HF-Hub.")
         parser.add_argument("--flux_diffusers", action="store_true", default=False, help="Add this flag when loading FLUX-diffusers models directly off the HF-Hub.")
