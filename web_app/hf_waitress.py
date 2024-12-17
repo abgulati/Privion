@@ -218,6 +218,9 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'access_gated':False,
                     'access_token':"",
                     'model_id':"microsoft/Phi-3-mini-4k-instruct",
+                    'exl2':False,
+                    'exl2_bpw':3.0,
+                    'force_exl2_measurement_file_generation':False,
                     'gguf':False,
                     'awq':False,
                     'flux_diffusers':False,
@@ -594,6 +597,9 @@ def parse_arguments():
             'access_gated',
             'access_token',
             'model_id',
+            'exl2',
+            'exl2_bpw',
+            'force_exl2_measurement_file_generation',
             'gguf',
             'awq',
             'flux_diffusers',
@@ -626,6 +632,9 @@ def parse_arguments():
         access_gated = str(read_return['access_gated']).lower() == 'true'
         access_token = str(read_return['access_token'])
         model_id = str(read_return['model_id'])
+        exl2 = str(read_return['exl2']).lower() == 'true'
+        exl2_bpw = float(read_return['exl2_bpw'])
+        force_exl2_measurement_file_generation = str(read_return['force_exl2_measurement_file_generation']).lower() == 'true'
         quantize = str(read_return['quantize'])
         quant_level = str(read_return['quant_level'])
         hqq_group_size = int(read_return['hqq_group_size'])
@@ -654,6 +663,9 @@ def parse_arguments():
         parser.add_argument("--access_gated", action="store_true", default=access_gated, help="Specify True if you will be accessing gated models you've been approved to access")
         parser.add_argument("--access_token", type=str, default=access_token, help="Access Token obtained from HF-Settings -> Access Tokens")
         parser.add_argument("--model_id", type=str, default=model_id, help="model_id for for LLM in HF-Transformers format obtained from the model card. Remembers previously set value and falls-back to Phi3-mini-4k-instruct as the default.")
+        parser.add_argument("--exl2", action="store_true", default=False, help="Add this flag when loading models via ExLlamaV2. Defaults to False.")
+        parser.add_argument("--exl2_bpw", type=float, default=exl2_bpw, help="Specify the bpw to be used when quantizing ExLlamaV2 models. Remembers previously set value and falls-back to 3.0 as the default.")
+        parser.add_argument("--force_exl2_measurement_file_generation", action="store_true", default=force_exl2_measurement_file_generation, help="Add this flag required to re-generate the measurement file for ExLlamaV2 models. Defaults to False.")
         parser.add_argument("--gguf", action="store_true", default=False, help="Add this flag if you'll be loading a GGUF LLM. Defaults to False.")
         parser.add_argument("--awq", action="store_true", default=False, help="Add this flag when loading AWQ-quantized models directly off the HF-Hub.")
         parser.add_argument("--flux_diffusers", action="store_true", default=False, help="Add this flag when loading FLUX-diffusers models directly off the HF-Hub.")
@@ -699,6 +711,9 @@ def parse_arguments():
                     'access_gated',
                     'access_token',
                     'model_id',
+                    'exl2',
+                    'exl2_bpw',
+                    'force_exl2_measurement_file_generation',
                     'gguf',
                     'awq',
                     'flux_diffusers',
@@ -749,6 +764,9 @@ def parse_arguments():
                     'access_gated':args.access_gated,
                     'access_token':args.access_token,
                     'model_id':args.model_id,
+                    'exl2':args.exl2,
+                    'exl2_bpw':args.exl2_bpw,
+                    'force_exl2_measurement_file_generation':args.force_exl2_measurement_file_generation,
                     'gguf':args.gguf,
                     'awq':args.awq,
                     'gguf_model_id':args.gguf_model_id,
@@ -988,7 +1006,7 @@ def load_flux_pipeline(pipeline):
         flux_low_vram_optimizations = str(read_return['flux_low_vram_optimizations']).lower() == 'true'
         load_quantized_flux = str(read_return['load_quantized_flux']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting to load_flux_pipeline(), encountered error: ", e)
+        return handle_local_error("Could not read values from hf_config.json when attempting to load_flux_pipeline(), encountered error: ", e)
 
     if load_quantized_flux:
         print("Loading quantized Flux Pipeline")
@@ -1049,7 +1067,7 @@ def load_vision_pipeline(pipeline, model_params):
         model_id = str(read_return['model_id'])
         torch_device_map = str(read_return['torch_device_map'])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting to load_vision_pipeline(), encountered error: ", e)
+        return handle_local_error("Could not read values from hf_config.json when attempting to load_vision_pipeline(), encountered error: ", e)
 
     model_params.pop('trust_remote_code', None)
 
@@ -1070,6 +1088,129 @@ def load_vision_pipeline(pipeline, model_params):
     except Exception as e:
         handle_model_loading_error("Could not load Vision Pipeline, encountered error: ", e)
         return False
+
+
+def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_path: os.PathLike) -> os.PathLike:
+    try:
+        read_return = read_config(['transformer_models_folder', 'force_exl2_measurement_file_generation'])
+        transformer_models_folder = str(read_return['transformer_models_folder'])
+        force_exl2_measurement_file_generation = str(read_return['force_exl2_measurement_file_generation']).lower() == 'true'
+    except Exception as e:
+        return handle_local_error("Could not read values from hf_config.json when attempting to generate_exllama_measurement_file_for_model(), encountered error: ", e)
+
+    try:
+        temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
+        os.makedirs(temp_dir, exist_ok=True)
+
+        measurement_file_path = os.path.join(transformer_models_folder, model_id, "exllama-measurements-file", "measurement.json")
+        os.makedirs(os.path.dirname(measurement_file_path), exist_ok=True)
+    except Exception as e:
+        return handle_local_error("Could not create measurement file directory when attempting to generate_exllama_measurement_file_for_model(), encountered error: ", e)
+    
+    if os.path.exists(measurement_file_path) and not force_exl2_measurement_file_generation:
+        print(f"\nMeasurement file for {model_id} already exists. Skipping measurement file generation.\n")
+        return measurement_file_path
+    
+    convert_script_path = os.path.normpath(os.path.join(os.getcwd(), "exllamav2", "convert.py"))
+    command = [
+        'python' if platform.system() == 'Windows' else 'python3',
+        convert_script_path,
+        '-i', model_snapshot_path,
+        '-o', temp_dir,
+        '-nr',
+        '-om', measurement_file_path
+    ]
+
+    try:
+        print(f"\nRunning ExLlamaV2 measurement file generator for {model_id}...\n")
+        subprocess.run(command, check=True) # check=True ensures that the command will raise an exception if it fails
+        print(f"\nExLlamaV2 measurement file generator for {model_id} completed successfully!\n")
+    except Exception as e:
+        return handle_local_error("Could not run ExLlamaV2 measurement file generator, encountered error: ", e)
+
+    return measurement_file_path
+
+
+def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike, model_snapshot_path: os.PathLike, exl2_bpw: float) -> os.PathLike:
+    try:
+        read_return = read_config(['transformer_models_folder'])
+        transformer_models_folder = str(read_return['transformer_models_folder'])
+    except Exception as e:
+        return handle_local_error("Could not read values from hf_config.json when attempting to exllama_bpw_quantize_model(), encountered error: ", e)
+
+    try:
+        temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
+        os.makedirs(temp_dir, exist_ok=True)
+
+        quantized_model_path = os.path.join(transformer_models_folder, model_id, "exl2-qaunts", f"{exl2_bpw}bpw")
+        os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)
+    except Exception as e:
+        return handle_local_error("Could not create directory to store quantized model when attempting to exllama_bpw_quantize_model(), encountered error: ", e)
+    
+    convert_script_path = os.path.normpath(os.path.join(os.getcwd(), "exllamav2", "convert.py"))
+    command = [
+        'python' if platform.system() == 'Windows' else 'python3',
+        convert_script_path,
+        '-i', model_snapshot_path,
+        '-o', temp_dir,
+        '-nr',
+        '-m', measurement_file_path,
+        '-cf', quantized_model_path,
+        '-b', str(exl2_bpw)
+    ]
+
+    try:
+        print(f"\nRunning ExLlamaV2 bpw quantizer for {model_id}...\n")
+        subprocess.run(command, check=True) # check=True ensures that the command will raise an exception if it fails
+        print(f"\nExLlamaV2 Conversion of {model_id} to {exl2_bpw}bpw completed successfully!\n")
+    except Exception as e:
+        return handle_local_error("Could not run ExLlamaV2 bpw quantizer, encountered error: ", e)
+
+    return quantized_model_path
+
+
+def launch_exllama_server(quantized_model_path: os.PathLike) -> os.PathLike:
+    pass
+
+
+def load_exllama_pipeline(pipeline):
+    try:
+        read_return = read_config(['model_id', 'exl2_bpw'])
+        model_id = str(read_return['model_id'])
+        exl2_bpw = float(read_return['exl2_bpw'])
+    except Exception as e:
+        return handle_local_error("Could not read values from hf_config.json when attempting to load_exllama_pipeline(), encountered error: ", e)
+
+    latest_snapshot_path = None
+    try:
+        latest_snapshot_path = download_model_from_hf_hub(model_id)
+    except Exception as e:
+        handle_error_no_return(f"Could not download {model_id} from HF-Hub. Attempting to scan for pre-existing local snapshots. Encountered error: ", e)
+        try:
+            latest_revision = get_latest_revision_for_model(model_id)
+            latest_snapshot_path = os_sanitize_path(latest_revision.snapshot_path)
+        except Exception as e:
+            return handle_local_error(f"Error attempting to work with local snapshot for {model_id}. Encountered error: ", e)
+    
+    if latest_snapshot_path is None:
+        return handle_local_error(f"Could not find a local snapshot for {model_id}. Please check your connection and access token if you're using a private model.")
+    
+    try:
+        measurement_file_path = generate_exllama_measurement_file_for_model(model_id, latest_snapshot_path)
+    except Exception as e:
+        return handle_local_error(f"Error generating ExLlamaV2 measurement file for {model_id}. Encountered error: ", e)
+
+    try:
+        quantized_model_path = exllama_bpw_quantize_model(model_id, measurement_file_path, latest_snapshot_path, exl2_bpw)
+    except Exception as e:
+        return handle_local_error(f"Error ExLlamaV2 quantizing {model_id} to {exl2_bpw} bits per word. Encountered error: ", e)
+
+    try:
+        pipeline = launch_exllama_server(quantized_model_path)
+    except Exception as e:
+        return handle_local_error(f"Error loading ExLlamaV2 quantized model from {quantized_model_path}. Encountered error: ", e)
+
+    return pipeline
 
 
 
@@ -1205,13 +1346,14 @@ def initialize_model():
     global PIPE
 
     try:
-        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision'])
+        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision', 'exl2'])
         model_id = str(read_return['model_id'])
         push_to_hub = str(read_return['push_to_hub']).lower() == 'true'
         quant_level = str(read_return['quant_level'])
         pipeline_task = str(read_return['pipeline_task'])
         flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
         vision = str(read_return['vision']).lower() == 'true'
+        exl2 = str(read_return['exl2']).lower() == 'true'
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
     
@@ -1220,6 +1362,11 @@ def initialize_model():
     if flux_diffusers:
         print("\n\nFlux Diffusers Selected - Loading...\n\n")
         PIPE = load_flux_pipeline(PIPE)
+
+    if exl2:
+        print("\n\nExLlamaV2 Selected - Loading...\n\n")
+        PIPE = load_exllama_pipeline(PIPE)
+        return True
     
     else:
         model_params = get_model_params()
