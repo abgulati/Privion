@@ -2442,3 +2442,22 @@ print(f"Default cache directory: {default_cache_path}")
 from huggingface_hub import scan_cache_dir
 hf_cache_info = scan_cache_dir()
 hf_cache_info
+
+# To capture output (won't display in terminal):
+result = subprocess.run(command, check=True, capture_output=True, text=True)
+print(f"Output: {result.stdout}")
+print(f"Errors: {result.stderr}")
+
+# To pipe to terminal AND capture:
+result = subprocess.run(command, check=True, text=True,
+                       stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE)
+
+# To suppress output entirely:
+result = subprocess.run(command, check=True,
+                       stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL)
+
+# To redirect stderr to stdout:
+result = subprocess.run(command, check=True,
+                       stderr=subprocess.STDOUT)
