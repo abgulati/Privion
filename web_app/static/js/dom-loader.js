@@ -169,7 +169,12 @@ function loadCoreHfValues() {
         'flux_diffusers',
         'flux_low_vram_optimizations',
         'load_quantized_flux',
-        'vision'
+        'vision',
+        'exl2',
+        'exl2_bpw',
+        'exl2_max_seq_len',
+        'exl2_cache_type',
+        'exl2_force_regenerate_measurement'
     ]
     
     const hfWaitress_URL = getHfwUrl();
@@ -193,21 +198,6 @@ function loadCoreHfValues() {
         errorHandler("reading hf_config.json (likely means the HF-Waitress server is offline)", "loadCoreHfValues()", String(error.message))
     });
 }
-
-
-// function initializeHfModelDropdown(model_list, model_id) {
-//     const hfDropdown = document.getElementById('hfModelDropdown');
-//     for (let i = 0; i < model_list.length; i++) {
-//         const option = document.createElement('option');
-//         option.value = model_list[i];
-//         option.textContent = model_list[i];
-
-//         if (model_list[i].toLowerCase() == model_id.toLowerCase()) {
-//             option.selected = true;
-//         }
-//         hfDropdown.appendChild(option);
-//     }
-// }
 
 
 function initializeHfWaitressCustomDropdown(model_list, model_id) {
@@ -290,10 +280,22 @@ function initializeHfSettingsDropdowns(all_values) {
             break;
         }
     }
+
+    const hfExl2CacheType = document.getElementById('hf_waitress_exl2_cache_type_choice');
+
+    for (let option of hfExl2CacheType.options) {
+        if (option.value == all_values.exl2_cache_type) {
+            option.selected = true;
+            break;
+        }
+    }
 }
 
 
 function initializeHfRadioButtons(all_values) {
+    document.getElementById('hf_waitress_exl2_yes').checked = all_values.exl2;
+    document.getElementById('hf_waitress_exl2_no').checked = !all_values.exl2;
+
     document.getElementById('hf_waitress_is_awq_yes').checked = all_values.awq;
     document.getElementById('hf_waitress_is_awq_no').checked = !all_values.awq;
 
@@ -307,6 +309,7 @@ function initializeHfRadioButtons(all_values) {
     document.getElementById('hf_waitress_vision_no').checked = !all_values.vision;
 
     toggleHfwDiffusersConfig();
+    toggleHfwExl2Config();
 
     document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').checked = all_values.flux_low_vram_optimizations;
     document.getElementById('hf_waitress_diffusers_low_vram_optimizations_no').checked = !all_values.flux_low_vram_optimizations;
@@ -333,13 +336,17 @@ function setHfSlidersAndTextAreas(values) {
     document.getElementById('HfwToppSliderValue').textContent = values.top_p;
     document.getElementById('HfwMinpSlider').value = values.min_p;
     document.getElementById('HfwMinpSliderValue').textContent = values.min_p;
+    document.getElementById('HfwExl2Bpw').value = values.exl2_bpw;
+    document.getElementById('HfwExl2MaxSeqLen').value = values.exl2_max_seq_len;
+    document.getElementById('hf_waitress_exl2_force_regenerate_measurement').checked = values.exl2_force_regenerate_measurement;
 }
 
 
 function initializeHfwServerConfig() {
     loadCoreHfValues()
         .then(hf_values => {
-            // initializeHfModelDropdown(hf_values.model_list, hf_values.model_id);
+            setVision(hf_values.vision);
+            setExl2(hf_values.exl2);
             initializeHfWaitressCustomDropdown(hf_values.model_list, hf_values.model_id);
             initializeHfSettingsDropdowns(hf_values);
             initializeHfRadioButtons(hf_values);
@@ -488,11 +495,25 @@ function toggleHfwDiffusersConfig() {
     var selection = document.querySelector('input[name="hf_use_diffusers"]:checked').value;
     if (selection === 'y') {
         document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'block';
+        document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'none';
         disableTransformersSettings();
         collapseAdvancedSettings('advancedHfLlmSettings');
     } else {
         document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
         enableTransformersSettings();
+    }
+}
+
+
+function toggleHfwExl2Config() {
+    var selection = document.querySelector('input[name="hf_use_exl2"]:checked').value;
+    if (selection === 'y') {
+        document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'block';
+        document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
+        disableNonExl2Settings();
+    } else {
+        document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'none';
+        enableNonExl2Settings();
     }
 }
 
@@ -601,6 +622,10 @@ function initializeEventListenersForLLMTab() {
     // Event listener for toggle Diffusers:
     document.getElementById('hf_waitress_diffusers_yes').addEventListener('change', toggleHfwDiffusersConfig);
     document.getElementById('hf_waitress_diffusers_no').addEventListener('change', toggleHfwDiffusersConfig);
+
+    // Event listener for toggle Exl2:
+    document.getElementById('hf_waitress_exl2_yes').addEventListener('change', toggleHfwExl2Config);
+    document.getElementById('hf_waitress_exl2_no').addEventListener('change', toggleHfwExl2Config);
 
     // Event listener for toggle Flux Low Vram:
     document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').addEventListener('change', disableFluxQuantization);
