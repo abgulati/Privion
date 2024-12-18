@@ -3,6 +3,13 @@ from transformers import StoppingCriteria, StoppingCriteriaList
 from huggingface_hub import login, snapshot_download, scan_cache_dir
 import torch
 
+try:
+    from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Tokenizer
+    from exllamav2.generator import ExLlamaV2StreamingGenerator
+    from exllamav2 import ExLlamaV2Cache, ExLlamaV2Cache_8bit, ExLlamaV2Cache_Q4, ExLlamaV2Cache_Q6, ExLlamaV2Cache_Q8
+except ImportError:
+    print("exllamav2 is not installed. Skipping import.")
+
 from diffusers import FluxPipeline, FluxTransformer2DModel
 
 try:
@@ -220,6 +227,8 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'model_id':"microsoft/Phi-3-mini-4k-instruct",
                     'exl2':False,
                     'exl2_bpw':3.0,
+                    'exl2_cache_type':"ExLlamaV2Cache",
+                    'exl2_max_seq_len':2048,
                     'force_exl2_measurement_file_generation':False,
                     'gguf':False,
                     'awq':False,
@@ -523,17 +532,20 @@ def os_sanitize_path(path):
 
 
 def download_model_from_hf_hub(model_to_download):
+    print(f"\n\nAttempting to download model {model_to_download} from HF-Hub...\n\n")
     try:
         latest_snapshot_path = snapshot_download(repo_id=model_to_download)
-        print(f"\n\nlatest_snapshot_path for {model_to_download} is:\n\n{latest_snapshot_path}\n\n")
+        print(f"\n\nDownload Successful. Latest snapshot path for {model_to_download} is:\n\n{latest_snapshot_path}\n\n")
         return os_sanitize_path(latest_snapshot_path)
     except Exception as e:
         handle_error_no_return("Could not download model from HF-Hub, encountered error: ", e)
 
 
 def get_repo_info_for_model(model_id):
+    print(f"\n\nScanning cache for model {model_id}...\n\n")
     try:
         cache_info = scan_cache_dir()
+        print("\nCache Scan Complete.\n")
     except Exception as e:
         handle_error_no_return(f"Could not get cache_info for model {model_id}, encountered error: ", e)
     
@@ -544,6 +556,8 @@ def get_repo_info_for_model(model_id):
 
 
 def get_latest_revision_for_model(model_id):
+    print(f"\n\nAttempting to get latest local revision for model {model_id}\n\n")
+
     try:
         repo_info = get_repo_info_for_model(model_id)
     except Exception as e:
@@ -599,6 +613,8 @@ def parse_arguments():
             'model_id',
             'exl2',
             'exl2_bpw',
+            'exl2_cache_type',
+            'exl2_max_seq_len',
             'force_exl2_measurement_file_generation',
             'gguf',
             'awq',
@@ -634,6 +650,8 @@ def parse_arguments():
         model_id = str(read_return['model_id'])
         exl2 = str(read_return['exl2']).lower() == 'true'
         exl2_bpw = float(read_return['exl2_bpw'])
+        exl2_cache_type = str(read_return['exl2_cache_type'])
+        exl2_max_seq_len = int(read_return['exl2_max_seq_len'])
         force_exl2_measurement_file_generation = str(read_return['force_exl2_measurement_file_generation']).lower() == 'true'
         quantize = str(read_return['quantize'])
         quant_level = str(read_return['quant_level'])
@@ -663,9 +681,6 @@ def parse_arguments():
         parser.add_argument("--access_gated", action="store_true", default=access_gated, help="Specify True if you will be accessing gated models you've been approved to access")
         parser.add_argument("--access_token", type=str, default=access_token, help="Access Token obtained from HF-Settings -> Access Tokens")
         parser.add_argument("--model_id", type=str, default=model_id, help="model_id for for LLM in HF-Transformers format obtained from the model card. Remembers previously set value and falls-back to Phi3-mini-4k-instruct as the default.")
-        parser.add_argument("--exl2", action="store_true", default=False, help="Add this flag when loading models via ExLlamaV2. Defaults to False.")
-        parser.add_argument("--exl2_bpw", type=float, default=exl2_bpw, help="Specify the bpw to be used when quantizing ExLlamaV2 models. Remembers previously set value and falls-back to 3.0 as the default.")
-        parser.add_argument("--force_exl2_measurement_file_generation", action="store_true", default=False, help="Add this flag required to re-generate the measurement file for ExLlamaV2 models. Defaults to False.")
         parser.add_argument("--gguf", action="store_true", default=False, help="Add this flag if you'll be loading a GGUF LLM. Defaults to False.")
         parser.add_argument("--awq", action="store_true", default=False, help="Add this flag when loading AWQ-quantized models directly off the HF-Hub.")
         parser.add_argument("--flux_diffusers", action="store_true", default=False, help="Add this flag when loading FLUX-diffusers models directly off the HF-Hub.")
@@ -693,6 +708,13 @@ def parse_arguments():
         parser.add_argument("--n_keep", type=int, default=n_keep, help="Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded. Remembers previously set value and falls-back to 0 as a default, meaning no tokens are kept. Use -1 to retain all tokens from the prompt.")
         parser.add_argument("--port", type=int, default=port, help="Specify the port to be used by the server. Remembers previously set value and falls-back to 9069 as a default.")
         parser.add_argument("--host", type=str, default=host, help="Specify the host to be used by the server. Remembers previously set value and falls-back to 0.0.0.0 as a default.")
+
+        # ExLlamaV2:
+        parser.add_argument("--exl2", action="store_true", default=False, help="Add this flag when loading models via ExLlamaV2. Defaults to False.")
+        parser.add_argument("--exl2_bpw", type=float, default=exl2_bpw, help="Specify the bpw to be used when quantizing ExLlamaV2 models. Remembers previously set value and falls-back to 3.0 as the default.")
+        parser.add_argument("--force_exl2_measurement_file_generation", action="store_true", default=False, help="Add this flag required to re-generate the measurement file for ExLlamaV2 models. Defaults to False.")
+        parser.add_argument("--exl2_cache_type", type=str, default=exl2_cache_type, help="Specify the cache type to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to full ExLlamaV2Cache as the default.")
+        parser.add_argument("--exl2_max_seq_len", type=int, default=exl2_max_seq_len, help="Specify the max sequence length (context size) to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to 2048 as the default.")
         
         args = parser.parse_args()
         print(f"\n\nparser.parse_args():\n\n{args}\n\n")
@@ -713,6 +735,8 @@ def parse_arguments():
                     'model_id',
                     'exl2',
                     'exl2_bpw',
+                    'exl2_cache_type',
+                    'exl2_max_seq_len',
                     'force_exl2_measurement_file_generation',
                     'gguf',
                     'awq',
@@ -767,6 +791,8 @@ def parse_arguments():
                     'exl2':args.exl2,
                     'exl2_bpw':args.exl2_bpw,
                     'force_exl2_measurement_file_generation':args.force_exl2_measurement_file_generation,
+                    'exl2_cache_type':args.exl2_cache_type,
+                    'exl2_max_seq_len':args.exl2_max_seq_len,
                     'gguf':args.gguf,
                     'awq':args.awq,
                     'gguf_model_id':args.gguf_model_id,
@@ -1091,6 +1117,8 @@ def load_vision_pipeline(pipeline, model_params):
 
 
 def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_path: os.PathLike) -> os.PathLike:
+    print(f"\n\nAttempting to generate measurement file for model {model_id}...\n\n")
+
     try:
         read_return = read_config(['transformer_models_folder', 'force_exl2_measurement_file_generation'])
         transformer_models_folder = str(read_return['transformer_models_folder'])
@@ -1132,6 +1160,8 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
 
 
 def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike, model_snapshot_path: os.PathLike, exl2_bpw: float) -> os.PathLike:
+    print(f"\n\nAttempting to quantize model {model_id} to {exl2_bpw}bpw...\n\n")
+    
     try:
         read_return = read_config(['transformer_models_folder'])
         transformer_models_folder = str(read_return['transformer_models_folder'])
@@ -1146,6 +1176,10 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
         os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)
     except Exception as e:
         return handle_local_error("Could not create directory to store quantized model when attempting to exllama_bpw_quantize_model(), encountered error: ", e)
+
+    if os.path.exists(quantized_model_path):
+        print(f"\nQuantized model for {model_id} already exists. Skipping quantization.\n")
+        return quantized_model_path
     
     convert_script_path = os.path.normpath(os.path.join(os.getcwd(), "exllamav2", "convert.py"))
     command = [
@@ -1169,11 +1203,79 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
     return quantized_model_path
 
 
-def launch_exllama_server(quantized_model_path: os.PathLike) -> os.PathLike:
-    pass
+def get_exl2_cache_type(exl2_cache_type: str) -> ExLlamaV2Cache:
+    print(f"\nDetermining ExLlamaV2 cache type for {exl2_cache_type}...\n")
+    try:
+        if exl2_cache_type == "c8":
+            return ExLlamaV2Cache_8bit
+        elif exl2_cache_type == "cq4":
+            return ExLlamaV2Cache_Q4
+        elif exl2_cache_type == "cq6":
+            return ExLlamaV2Cache_Q6
+        elif exl2_cache_type == "cq8":
+                return ExLlamaV2Cache_Q8
+        else:
+            return ExLlamaV2Cache
+    except Exception as e:
+        return handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
+
+
+def define_exllama_generator(quantized_model_path: os.PathLike) -> ExLlamaV2StreamingGenerator:
+    print(f"\n\nAttempting to define ExLlamaV2 generator for model {quantized_model_path}...\n\n")
+
+    try:
+        config = ExLlamaV2Config(quantized_model_path)
+        print("\nConfig defined successfully\n")
+    except Exception as e:
+        return handle_local_error("Could not define ExLlamaV2 config, encountered error: ", e)
+    
+    try:
+        model = ExLlamaV2(config)
+        print("\nModel defined successfully\n")
+    except Exception as e:
+        return handle_local_error("Could not define ExLlamaV2 model, encountered error: ", e)
+    
+    try:
+        exl2_cache_type = str(read_config(['exl2_cache_type'])['exl2_cache_type'])
+    except Exception as e:
+        return handle_local_error("Could not read cache type from hf_config.json, encountered error: ", e)
+    
+    try:
+        cache_type = get_exl2_cache_type(exl2_cache_type)
+        print(f"\nCache type determined successfully: {cache_type}\n")
+    except Exception as e:
+        return handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
+
+    try:
+        cache = cache_type(model, lazy = True)
+        print("\nCache defined successfully\n")
+    except Exception as e:
+        return handle_local_error("Could not define ExLlamaV2 cache, encountered error: ", e)
+
+    try:
+        model.load_autosplit(cache)
+        print("\nModel loaded with autosplit successfully\n")
+    except Exception as e:
+        return handle_local_error("Could not load ExLlamaV2 model with autosplit, encountered error: ", e)
+
+    try:
+        tokenizer = ExLlamaV2Tokenizer(config)
+        print("\nTokenizer defined successfully\n")
+    except Exception as e:
+        return handle_local_error("Could not define ExLlamaV2 tokenizer, encountered error: ", e)
+    
+    try:
+        generator = ExLlamaV2StreamingGenerator(model = model, cache = cache, tokenizer = tokenizer)
+        print("\nGenerator defined successfully\n")
+    except Exception as e:
+        return handle_local_error("Could not define ExLlamaV2 generator, encountered error: ", e)
+
+    return generator
 
 
 def load_exllama_pipeline(pipeline):
+    print("\n\nLoading ExLlamaV2 Pipeline\n\n")
+    
     try:
         read_return = read_config(['model_id', 'exl2_bpw'])
         model_id = str(read_return['model_id'])
@@ -1206,10 +1308,11 @@ def load_exllama_pipeline(pipeline):
         return handle_local_error(f"Error ExLlamaV2 quantizing {model_id} to {exl2_bpw} bits per word. Encountered error: ", e)
 
     try:
-        pipeline = launch_exllama_server(quantized_model_path)
+        pipeline = define_exllama_generator(quantized_model_path)
     except Exception as e:
         return handle_local_error(f"Error loading ExLlamaV2 quantized model from {quantized_model_path}. Encountered error: ", e)
 
+    print("\n\nExLlamaV2 Pipeline Loaded Successfully!\n\n")
     return pipeline
 
 
