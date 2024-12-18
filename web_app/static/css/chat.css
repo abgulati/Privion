@@ -833,7 +833,7 @@ tr:hover {
     background-color: darkslategray;
 }
 
-.settings-requiring-restart-container, .hf-waitress-diffusers-configuration-div {
+.settings-requiring-restart-container, .hf-waitress-diffusers-configuration-div, .hf-waitress-exl2-configuration-div {
     border: 1px solid #3A3E41;
     padding: 10px;
     position: relative;
@@ -847,6 +847,10 @@ tr:hover {
 .hf-select-settings-divs-group {
     display: flex;
     align-items: center;
+}
+
+.llm-settings-standard-styling {
+    margin-bottom: 25px;
 }
 
 .hf-select-settings-labels-group {
