@@ -230,7 +230,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'exl2_bpw':3.0,
                     'exl2_cache_type':"ExLlamaV2Cache",
                     'exl2_max_seq_len':2048,
-                    'force_exl2_measurement_file_generation':False,
+                    'exl2_force_regenerate_measurement':False,
                     'gguf':False,
                     'awq':False,
                     'flux_diffusers':False,
@@ -616,7 +616,7 @@ def parse_arguments():
             'exl2_bpw',
             'exl2_cache_type',
             'exl2_max_seq_len',
-            'force_exl2_measurement_file_generation',
+            'exl2_force_regenerate_measurement',
             'gguf',
             'awq',
             'flux_diffusers',
@@ -649,11 +649,9 @@ def parse_arguments():
         access_gated = str(read_return['access_gated']).lower() == 'true'
         access_token = str(read_return['access_token'])
         model_id = str(read_return['model_id'])
-        exl2 = str(read_return['exl2']).lower() == 'true'
         exl2_bpw = float(read_return['exl2_bpw'])
         exl2_cache_type = str(read_return['exl2_cache_type'])
         exl2_max_seq_len = int(read_return['exl2_max_seq_len'])
-        force_exl2_measurement_file_generation = str(read_return['force_exl2_measurement_file_generation']).lower() == 'true'
         quantize = str(read_return['quantize'])
         quant_level = str(read_return['quant_level'])
         hqq_group_size = int(read_return['hqq_group_size'])
@@ -713,7 +711,7 @@ def parse_arguments():
         # ExLlamaV2:
         parser.add_argument("--exl2", action="store_true", default=False, help="Add this flag when loading models via ExLlamaV2. Defaults to False.")
         parser.add_argument("--exl2_bpw", type=float, default=exl2_bpw, help="Specify the bpw to be used when quantizing ExLlamaV2 models. Remembers previously set value and falls-back to 3.0 as the default.")
-        parser.add_argument("--force_exl2_measurement_file_generation", action="store_true", default=False, help="Add this flag required to re-generate the measurement file for ExLlamaV2 models. Defaults to False.")
+        parser.add_argument("--exl2_force_regenerate_measurement", action="store_true", default=False, help="Add this flag required to re-generate the measurement file for ExLlamaV2 models. Defaults to False.")
         parser.add_argument("--exl2_cache_type", type=str, default=exl2_cache_type, help="Specify the cache type to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to full ExLlamaV2Cache as the default.")
         parser.add_argument("--exl2_max_seq_len", type=int, default=exl2_max_seq_len, help="Specify the max sequence length (context size) to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to 2048 as the default.")
         
@@ -738,7 +736,7 @@ def parse_arguments():
                     'exl2_bpw',
                     'exl2_cache_type',
                     'exl2_max_seq_len',
-                    'force_exl2_measurement_file_generation',
+                    'exl2_force_regenerate_measurement',
                     'gguf',
                     'awq',
                     'flux_diffusers',
@@ -791,7 +789,7 @@ def parse_arguments():
                     'model_id':args.model_id,
                     'exl2':args.exl2,
                     'exl2_bpw':args.exl2_bpw,
-                    'force_exl2_measurement_file_generation':args.force_exl2_measurement_file_generation,
+                    'exl2_force_regenerate_measurement':args.exl2_force_regenerate_measurement,
                     'exl2_cache_type':args.exl2_cache_type,
                     'exl2_max_seq_len':args.exl2_max_seq_len,
                     'gguf':args.gguf,
@@ -1121,9 +1119,9 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
     print(f"\n\nAttempting to generate measurement file for model {model_id}...\n\n")
 
     try:
-        read_return = read_config(['transformer_models_folder', 'force_exl2_measurement_file_generation'])
+        read_return = read_config(['transformer_models_folder', 'exl2_force_regenerate_measurement'])
         transformer_models_folder = str(read_return['transformer_models_folder'])
-        force_exl2_measurement_file_generation = str(read_return['force_exl2_measurement_file_generation']).lower() == 'true'
+        exl2_force_regenerate_measurement = str(read_return['exl2_force_regenerate_measurement']).lower() == 'true'
     except Exception as e:
         return handle_local_error("Could not read values from hf_config.json when attempting to generate_exllama_measurement_file_for_model(), encountered error: ", e)
 
@@ -1136,7 +1134,7 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
     except Exception as e:
         return handle_local_error("Could not create measurement file directory when attempting to generate_exllama_measurement_file_for_model(), encountered error: ", e)
     
-    if os.path.exists(measurement_file_path) and not force_exl2_measurement_file_generation:
+    if os.path.exists(measurement_file_path) and not exl2_force_regenerate_measurement:
         print(f"\nMeasurement file for {model_id} already exists. Skipping measurement file generation.\n")
         return measurement_file_path
     
