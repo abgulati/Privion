@@ -1238,11 +1238,11 @@ function disableTransformersSettings() {
 
 
 function enableTransformersSettings() {
+    enableNonExl2Settings();
     document.getElementById('advancedHfLlmSettingsToggle').style.display = 'inline-block';
     document.getElementById('hf_waitress_is_awq').style.display = 'block';
     document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
     document.getElementById('hf_waitress_exl2').style.display = 'block';
-    enableNonExl2Settings();
     // document.getElementById('hf_waitress_vision').style.display = 'block';
 }
 
