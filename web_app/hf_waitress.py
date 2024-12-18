@@ -5,7 +5,7 @@ import torch
 
 try:
     from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Tokenizer
-    from exllamav2.generator import ExLlamaV2StreamingGenerator, ExLlamaV2Sampler
+    from exllamav2.generator import ExLlamaV2StreamingGenerator, ExLlamaV2DynamicGenerator, ExLlamaV2Sampler, ExLlamaV2DynamicJob
     from exllamav2 import ExLlamaV2Cache, ExLlamaV2Cache_8bit, ExLlamaV2Cache_Q4, ExLlamaV2Cache_Q6, ExLlamaV2Cache_Q8
 except ImportError:
     print("exllamav2 is not installed. Skipping import.")
@@ -53,6 +53,7 @@ CORS(app)
 
 PIPE = None
 MODEL = None
+EXL2_TOKENIZER = None
 
 STOP_GENERATION = False
 llm_semaphore = threading.Semaphore(1)
@@ -1220,7 +1221,7 @@ def get_exl2_cache_type(exl2_cache_type: str) -> ExLlamaV2Cache:
         return handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
 
 
-def define_exllama_generator(quantized_model_path: os.PathLike) -> ExLlamaV2StreamingGenerator:
+def define_exllama_generator(quantized_model_path: os.PathLike) -> ExLlamaV2DynamicGenerator:
     print(f"\n\nAttempting to define ExLlamaV2 generator for model {quantized_model_path}...\n\n")
 
     try:
@@ -1237,6 +1238,7 @@ def define_exllama_generator(quantized_model_path: os.PathLike) -> ExLlamaV2Stre
     
     try:
         exl2_cache_type = str(read_config(['exl2_cache_type'])['exl2_cache_type'])
+        exl2_max_seq_len = int(read_config(['exl2_max_seq_len'])['exl2_max_seq_len'])
     except Exception as e:
         return handle_local_error("Could not read cache type from hf_config.json, encountered error: ", e)
     
@@ -1247,8 +1249,8 @@ def define_exllama_generator(quantized_model_path: os.PathLike) -> ExLlamaV2Stre
         return handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
 
     try:
-        cache = cache_type(model, lazy = True)
-        print("\nCache defined successfully\n")
+        cache = cache_type(model, max_seq_len = exl2_max_seq_len, lazy = True)
+        print(f"\nCache defined successfully with max_seq_len: {exl2_max_seq_len}\n")
     except Exception as e:
         return handle_local_error("Could not define ExLlamaV2 cache, encountered error: ", e)
 
@@ -1259,13 +1261,14 @@ def define_exllama_generator(quantized_model_path: os.PathLike) -> ExLlamaV2Stre
         return handle_local_error("Could not load ExLlamaV2 model with autosplit, encountered error: ", e)
 
     try:
-        tokenizer = ExLlamaV2Tokenizer(config)
+        global EXL2_TOKENIZER
+        EXL2_TOKENIZER = ExLlamaV2Tokenizer(config)
         print("\nTokenizer defined successfully\n")
     except Exception as e:
         return handle_local_error("Could not define ExLlamaV2 tokenizer, encountered error: ", e)
     
     try:
-        generator = ExLlamaV2StreamingGenerator(model = model, cache = cache, tokenizer = tokenizer)
+        generator = ExLlamaV2DynamicGenerator(model = model, cache = cache, tokenizer = EXL2_TOKENIZER)
         print("\nGenerator defined successfully\n")
     except Exception as e:
         return handle_local_error("Could not define ExLlamaV2 generator, encountered error: ", e)
@@ -1355,8 +1358,10 @@ def restart_server_stream():
     #     shutdown_model()
     global PIPE
     global MODEL
+    global EXL2_TOKENIZER
     PIPE = None
     MODEL = None
+    EXL2_TOKENIZER = None
 
     try:
         read_return = read_config(['model_id', 'pipeline_task', 'flux_diffusers', 'vision', 'exl2'])
@@ -2063,7 +2068,8 @@ def exl2_stream():
 
     try:
         data = request.json
-        messages = data.get('messages', [])
+        print(f"\nRead request - data received: {data}\n")
+        messages = str(data)
         print(f"\nRead request - message received: {messages}\n")
     except Exception as e:
         handle_api_error("Could not read POST-request messages for /exl2_stream, encountered error: ", e)
@@ -2081,7 +2087,7 @@ def exl2_stream():
 
     try:
         print("\nExLlamaV2Sampler.Settings In-Progress...\n")
-        settings = ExLlamaV2Sampler.Settings(
+        gen_settings = ExLlamaV2Sampler.Settings(
             temperature = float(request.headers.get('X-Temperature', str(temperature))),
             top_k = int(request.headers.get('X-Top-K', str(top_k))),
             top_p = float(request.headers.get('X-Top-P', str(top_p)))
@@ -2091,62 +2097,60 @@ def exl2_stream():
     except Exception as e:
         handle_error_no_return("Could not set generation-arguments for /exl2_stream, proceeding without them. Encountered error: ", e)
 
-    stop_event = threading.Event()
+    try:
+        print("\nCreating ExLlamaV2DynamicJob Object...\n")
+        job = ExLlamaV2DynamicJob(
+            input_ids= EXL2_TOKENIZER.encode(messages, add_bos=True),
+            max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
+            stop_conditions = [EXL2_TOKENIZER.eos_token_id],
+            gen_settings = gen_settings
+        )
+        PIPE.enqueue(job)
+        print("\nExLlamaV2DynamicJob Defined & Enqueued Successfully\n")
+    except Exception as e:
+        handle_error_no_return("Could not create ExLlamaV2DynamicJob object for /exl2_stream, proceeding without them. Encountered error: ", e)
 
-    data_queue = queue.Queue()
+    stop_thread = threading.Event()
 
-    def callback(data):
-        data_queue.put(data)
-
-    custom_streamer = CustomTextStreamer(PIPE.tokenizer, skip_special_tokens=True, skip_prompt=True)
-    custom_streamer.callback = callback
+    output_queue = queue.Queue()
+    custom_stdout = ThreadSafeStream(output_queue)
+    original_stdout = sys.stdout    # seperate stream objects!
 
     def llm_task():
 
         global PIPE
 
-        try:                
-            if generation_args:
-                generation_args["streamer"] = custom_streamer
-                generation_args["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
-                output = PIPE(messages, **generation_args)
-            else:
-                output = PIPE(messages, streamer=custom_streamer, stopping_criteria=StoppingCriteriaList([StopOnEvent(stop_event)]))
+        try:
+            sys.stdout = custom_stdout
+            
+            while PIPE.num_remaining_jobs():
+                # print(PIPE.iterate()[0])  # Will print dict with keys: dict_keys(['job', 'stage', 'eos', 'serial', 'text', 'token_ids'])
+                current_token = PIPE.iterate()[0]   # directly trying to access the 'text' key here will result in a KeyError as iteration may not have completed yet!
+                if 'text' in current_token:
+                    print(current_token['text'])    # thus best to capture the current iteration's output and then access the 'text' key!
+        except Exception as e:
+            return handle_error_no_return("Response generation failed, encountered error: ", e)
         finally:
-            data_queue.put(None)
+            output_queue.put(None)
+            sys.stdout = original_stdout
             print("\n\nLLM stream done, releasing semaphore\n\n")
             llm_semaphore.release()
+            stop_thread.set()
 
-    def generate():        
-        
-        global STOP_GENERATION
-        STOP_GENERATION = False
-
-        thread = threading.Thread(target=llm_task)
-        thread.start()
-
+    def generate():
         while True:
-            if STOP_GENERATION:
-                print("\n\nStopping generation with stop_event\n\n")
-                stop_event.set()
-                thread.join()
-                break
-            line = data_queue.get()
+            line = output_queue.get()
             if line is None:
-                print("\n\nNone read, breaking and stopping thread\n\n")
-                thread.join()
+                print("\nNone read, breaking and stopping thread\n")
                 break
             yield f"data: {json.dumps(line)}\n\n"
         
         yield f"event: END\ndata: \"null\"\n\n"
+        print("\n/exl2_stream done\n")
 
-        STOP_GENERATION = False
+    thread = threading.Thread(target=llm_task)
+    thread.start()
 
-        try:
-            empty_cuda_cache()
-        except Exception as e:
-            handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
-            
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
 
@@ -2304,8 +2308,10 @@ def restart_server():
                     #     shutdown_model()
                     global PIPE
                     global MODEL
+                    global EXL2_TOKENIZER
                     PIPE = None
                     MODEL = None
+                    EXL2_TOKENIZER = None
                     initialize_model()
                 except Exception as e:
                     handle_api_error("Could not restart server, encountered error: ", e)
