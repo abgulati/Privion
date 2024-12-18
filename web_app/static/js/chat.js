@@ -310,7 +310,8 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
     let formdata = null;
     let rawBodyJSONStringified = null;
 
-    const vision = document.getElementById('hf_waitress_vision_yes').checked;
+    const vision = getVision();
+    const exl2 = getExl2();
     if (vision) {
         console.log("Invoking vision_stream");
         const hfWaitress_URL = getHfwUrl();
@@ -325,7 +326,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         const parsedPrompt = JSON.parse(formattedPrompt);
         formdata.append("messages", JSON.stringify(parsedPrompt.messages));
         if (file) { formdata.append("file", file); }
-    } else {
+    } else if (vision) {
         console.log("Invoking completions_stream");
         const hfWaitress_URL = getHfwUrl();
         url = `${hfWaitress_URL}/completions_stream`;
@@ -339,6 +340,21 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         hfwHeaders.append("X-Min-P", document.getElementById('HfwMinpSlider').value);
         hfwHeaders.append("X-Do-Sample", document.getElementById('HfwTempSlider').value > 0 ? "True" : "False");
         
+        rawBodyJSONObj = JSON.parse(formattedPrompt);                                
+        rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
+    } else if (exl2) {
+        console.log("Invoking exl2_stream");
+        const hfWaitress_URL = getHfwUrl();
+        url = `${hfWaitress_URL}/exl2_stream`;
+
+        hfwHeaders = new Headers();
+        hfwHeaders.append("Content-Type", "application/json");
+        hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
+        hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
+        hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
+        hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
+        hfwHeaders.append("X-Min-P", document.getElementById('HfwMinpSlider').value);
+
         rawBodyJSONObj = JSON.parse(formattedPrompt);                                
         rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
     }
