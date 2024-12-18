@@ -190,6 +190,11 @@ function getHfWaitressConfig() {
         'flux_low_vram_optimizations': document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').checked,
         'load_quantized_flux': document.getElementById('hf_waitress_diffusers_fp8_yes').checked,
         'vision': document.getElementById('hf_waitress_vision_yes').checked,
+        'exl2': document.getElementById('hf_waitress_exl2_yes').checked,
+        'exl2_bpw': parseFloat(document.getElementById('HfwExl2Bpw').value),
+        'exl2_max_seq_len': parseInt(document.getElementById('HfwExl2MaxSeqLen').value),
+        'exl2_cache_type': document.getElementById('hf_waitress_exl2_cache_type_choice').value,
+        'exl2_force_regenerate_measurement': document.getElementById('hf_waitress_exl2_force_regenerate_measurement').checked,
         'awq': document.getElementById('hf_waitress_is_awq_yes').checked,
         'pipeline_task': document.getElementById('hf_waitress_pipeline_task_choice').value,
         'max_new_tokens': parseInt(document.getElementById('HfwMaxNewToks').value),
@@ -435,23 +440,30 @@ function handleSaveChanges() {
                     console.log("HF-Waitress server changes saved successfully.");
                     
                     let chatID = getChatId();
-                    setModelHeaderInfoBox(chatID, hf_config.model_id);
                     if (hf_config.model_id.toLowerCase().includes('vision-instruct')) { // we have switched to a Vision-Instruct model...
                         console.log("Loaded up a Vision model");
                         document.getElementById('textAttachmentButton').disabled = false;
-                        let current_sequence_id = getSequenceId();
-                        if (current_sequence_id != null && parseInt(current_sequence_id) > 0 && !String(getOldLlmModel()).toLowerCase().includes('vision-instruct')) {  //...midway through a chat, or while browsing chat history, and the old LLM model was not a Vision-Instruct model...
-                            console.log("Reloading the page to clear the previous model context");
+                        if (!String(getLlmModel()).toLowerCase().includes('vision-instruct')) {  // First check the current model...
+                            console.log("Reloading the page as we've switched to a Vision-Instruct model");
                             needsReload = true;
                         }
-                    } else {    //...we have switched to a non-Vision-Instruct model...
+                        if (!needsReload && String(getOldLlmModel()) != null && !String(getOldLlmModel()).toLowerCase().includes('vision-instruct')) { //...midway through a chat, or while browsing chat history, and the old LLM model was not a Vision-Instruct model...
+                            console.log("Reloading page as we've switched to a Vision-Instruct model in the middle of a chat");
+                            needsReload = true;
+                        }
+                    } else {    //...we have loaded up a non-Vision-Instruct model...
                         console.log("Loaded up a non-Vision model");
                         document.getElementById('textAttachmentButton').disabled = true;
-                        if (String(getOldLlmModel()).toLowerCase().includes('vision-instruct') || String(getOldLlmModel()).toLowerCase().includes('gguf') || String(getOldLlmModel()).toLowerCase().includes('flux')) {    //...from a Vision-Instruct, FLUX, or a GGUF model...
+                        if (String(getLlmModel()).toLowerCase().includes('vision-instruct')) {  // First check the current model...
+                            console.log("Reloading the page as we've switched to a non-Vision model");
+                            needsReload = true;
+                        }
+                        if ((!needsReload && String(getOldLlmModel()) != null) && (String(getOldLlmModel()).toLowerCase().includes('vision-instruct') || String(getOldLlmModel()).toLowerCase().includes('gguf') || String(getOldLlmModel()).toLowerCase().includes('flux'))) {    //...from a Vision-Instruct, FLUX, or a GGUF model...
                             console.log("Reloading the page to clear the previous model context");
                             needsReload = true;
                         }
                     }
+                    setModelHeaderInfoBox(chatID, hf_config.model_id);
                     return needsReload;
                 })
                 .catch(error => {
