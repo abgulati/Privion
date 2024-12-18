@@ -2621,7 +2621,7 @@ def hf_waitress_server_starter():
 
     model_choice = 'microsoft/Phi-3-mini-4k-instruct'   # match default in hf_waitress.py as this will only be used in the very first run, as the hf_config.json file is created in the first run!
     try:
-        hf_read_return = read_hf_config(['model_id', 'awq', 'use_flash_attention_2', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux', 'vision'])
+        hf_read_return = read_hf_config(['model_id', 'awq', 'use_flash_attention_2', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux', 'vision', 'exl2'])
         model_choice = hf_read_return['model_id']
         is_awq = str(hf_read_return['awq']).lower() == 'true'
         use_flash_attention_2 = str(hf_read_return['use_flash_attention_2']).lower() == 'true'
@@ -2629,6 +2629,7 @@ def hf_waitress_server_starter():
         flux_low_vram_optimizations = str(hf_read_return['flux_low_vram_optimizations']).lower() == 'true'
         load_quantized_flux = str(hf_read_return['load_quantized_flux']).lower() == 'true'
         vision = str(hf_read_return['vision']).lower() == 'true'
+        exl2 = str(hf_read_return['exl2']).lower() == 'true'
     except Exception as e:
         return handle_api_error("Could not read hf_config.json in method hf_waitress_server_starter, encountered error: ", e)
 
@@ -2658,6 +2659,8 @@ def hf_waitress_server_starter():
         launch_args += '--load_quantized_flux '
     if vision:
         launch_args += '--vision '
+    if exl2:
+        launch_args += '--exl2 '
     launch_args = launch_args.strip()
     base_command = 'python' if platform.system() == 'Windows' else 'python3'
     full_command = f"{base_command} hf_waitress.py {launch_args}"
