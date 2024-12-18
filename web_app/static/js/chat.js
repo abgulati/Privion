@@ -353,7 +353,6 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
         hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
         hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
-        hfwHeaders.append("X-Min-P", document.getElementById('HfwMinpSlider').value);
 
         rawBodyJSONObj = JSON.parse(formattedPrompt);                                
         rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
