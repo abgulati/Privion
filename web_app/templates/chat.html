@@ -242,7 +242,7 @@
 
                                             <br> -->
 
-                                            <div class="hf-waitress-llm-custom-select" id="hf-waitress-llm-custom-select">
+                                            <div class="hf-waitress-llm-custom-select llm-settings-standard-styling" id="hf-waitress-llm-custom-select">
                                                 <label style="margin-bottom: 3px;">Select a local LLM:</label>
                                                 <br>
                                                 <div class="hf-waitress-llm-custom-select-header" id="hf-waitress-llm-custom-select-header">
@@ -262,33 +262,31 @@
                                                 </div>
                                             </div>
 
-                                            <br>
+                                            <div id="hf_waitress_exl2" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">EXL2 Backend (--exl2):</label>
+                                                <input type="radio" id="hf_waitress_exl2_yes" name="hf_use_exl2" value="y" style="margin-left: 7px;"> Yes
+                                                <input type="radio" id="hf_waitress_exl2_no" name="hf_use_exl2" value="n" style="margin-left: 7px;"> No (Default)
+                                            </div>
 
-                                            <div id="hf_waitress_trust_remote_code">
+                                            <div id="hf_waitress_trust_remote_code" class="llm-settings-standard-styling">
                                                 <label class="hf-select-settings-labels-group">Trust Remote Code (--trust_remote_code):</label>
                                                 <input type="radio" id="hf_waitress_trust_remote_code_yes" name="hf_trust_remote" value="y" style="margin-left: 7px;"> Yes (Default)
                                                 <input type="radio" id="hf_waitress_trust_remote_code_no" name="hf_trust_remote" value="n" style="margin-left: 7px;"> No
                                             </div>
 
-                                            <br>
-
-                                            <div id="hf_waitress_is_awq">
+                                            <div id="hf_waitress_is_awq" class="llm-settings-standard-styling">
                                                 <label class="hf-select-settings-labels-group">Activation-aware Weight Quantized (AWQ) Model? (--awq):</label>
                                                 <input type="radio" id="hf_waitress_is_awq_yes" name="hf_use_awq" value="y" style="margin-left: 7px;"> Yes
                                                 <input type="radio" id="hf_waitress_is_awq_no" name="hf_use_awq" value="n" style="margin-left: 7px;"> No (Default)
                                             </div>
 
-                                            <br>
-
-                                            <div id="hf_waitress_diffusers">
+                                            <div id="hf_waitress_diffusers" class="llm-settings-standard-styling">
                                                 <label class="hf-select-settings-labels-group">Diffusers ImageGen Model? (Enable for FLUX Inferencing)</label>
                                                 <input type="radio" id="hf_waitress_diffusers_yes" name="hf_use_diffusers" value="y" style="margin-left: 7px;"> Yes
                                                 <input type="radio" id="hf_waitress_diffusers_no" name="hf_use_diffusers" value="n" style="margin-left: 7px;"> No (Default)
                                             </div>
 
-                                            <br>
-
-                                            <div id="hf_waitress_vision" style="display: none;">
+                                            <div id="hf_waitress_vision" class="llm-settings-standard-styling" style="display: none;">
                                                 <label class="hf-select-settings-labels-group">Vision Model? (Enable for Vision Inferencing)</label>
                                                 <input type="radio" id="hf_waitress_vision_yes" name="hf_use_vision" value="y" style="margin-left: 7px;"> Yes
                                                 <input type="radio" id="hf_waitress_vision_no" name="hf_use_vision" value="n" style="margin-left: 7px;"> No (Default)
@@ -296,59 +294,76 @@
 
                                             <!-- <br> -->
 
+                                            <div class="hf-waitress-exl2-configuration-div" id="hf-waitress-exl2-configuration-div" style="display: none; margin-bottom: 25px;">
+                                                
+                                                <div id="hf_waitress_exl2_bpw" class="restart-settings-group llm-settings-standard-styling">
+                                                    <label for="HfwExl2Bpw" class="hf-select-settings-labels-group">Bits Per Word (--exl2_bpw): </label>
+                                                    <input type="number" id="HfwExl2Bpw" min="2.0" max="8.0" step="0.01" class="settings-input-fields" value="3.0">
+                                                </div>
+
+                                                <div id="hf_waitress_exl2_max_seq_len" class="restart-settings-group llm-settings-standard-styling">
+                                                    <label for="HfwExl2MaxSeqLen" class="hf-select-settings-labels-group">Max Sequence Length (--exl2_max_seq_len): </label>
+                                                    <input type="number" id="HfwExl2MaxSeqLen" min="1024" step="1" class="settings-input-fields" value="2048">
+                                                </div>
+
+                                                <div id="hf_waitress_exl2_cache_type" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
+                                                    <label class="hf-select-settings-labels-group">Cache Type (--exl2_cache_type):</label>
+                                                    <br>
+                                                    <select class="modal-selects" id="hf_waitress_exl2_cache_type_choice">
+                                                        <option value="ExLlamaV2Cache">Full ExLlamaV2Cache (default)</option>
+                                                        <option value="c8">FP8-bit</option>
+                                                        <option value="cq4">Q4 (Recommended)</option>
+                                                        <option value="cq6">Q6</option>
+                                                        <option value="cq8">Q8</option>
+                                                    </select>
+                                                </div>
+
+                                                <div class="form-group">
+                                                    <input type="checkbox" id="hf_waitress_exl2_force_regenerate_measurement" name="hf_waitress_exl2_force_regenerate_measurement">
+                                                    <label for="hf_waitress_exl2_force_regenerate_measurement">Force Regenerate Measurement File?</label>
+                                                </div>
+
+                                            </div>
+
                                             <div class="hf-waitress-diffusers-configuration-div" id="hf-waitress-diffusers-configuration-div" style="display: none;">
                                                 
-                                                <div id="hf_waitress_diffusers_low_vram_optimizations" title="Instant load-times, slow CPU renders. Recommended for most users.">
+                                                <div id="hf_waitress_diffusers_low_vram_optimizations" title="Instant load-times, slow CPU renders. Recommended for most users." class="llm-settings-standard-styling">
                                                     <label class="hf-select-settings-labels-group">Low VRAM Optimizations for FLUX - Enable CPU Offload, VAE Slicing & Tiling?</label>
                                                     <input type="radio" id="hf_waitress_diffusers_low_vram_optimizations_yes" name="hf_diffusers_use_low_vram_optimizations" value="y" style="margin-left: 7px;"> Yes (Default)
                                                     <input type="radio" id="hf_waitress_diffusers_low_vram_optimizations_no" name="hf_diffusers_use_low_vram_optimizations" value="n" style="margin-left: 7px;"> No
                                                 </div>
     
-                                                <br>
-
-                                                <div id="hf_waitress_diffusers_fp8" title="Very slow load-times, fast GPU renders. Requires Optimum-Quanto Python package. NOT recommended for most users!">
+                                                <div id="hf_waitress_diffusers_fp8" title="Very slow load-times, fast GPU renders. Requires Optimum-Quanto Python package. NOT recommended for most users!" class="llm-settings-standard-styling">
                                                     <label class="hf-select-settings-labels-group">FP8 Quantized FLUX Inferencing - GPU Inferencing Under 16GB VRAM?</label>
                                                     <input type="radio" id="hf_waitress_diffusers_fp8_yes" name="hf_diffusers_use_fp8" value="y" style="margin-left: 7px;"> Yes
                                                     <input type="radio" id="hf_waitress_diffusers_fp8_no" name="hf_diffusers_use_fp8" value="n" style="margin-left: 7px;"> No (Default)
                                                 </div>
     
-                                                <br>
-
-                                                <div id="hf_waitress_diffusers_guidance_scale">
+                                                <div id="hf_waitress_diffusers_guidance_scale" class="llm-settings-standard-styling">
                                                     <label for="HfDGuidanceScaleSlider" class="hf-select-settings-labels-group">Guidance Scale (Only for Guidance-Distilled Models, example: Flux-Dev (default: 7.0). Enable by setting > 1) (X-Guidance-Scale): </label>
                                                     <input type="range" id="HfDGuidanceScaleSlider" min="0" max="2" step="0.1" value="0.0">
                                                     <span id="HfDGuidanceScaleSliderValue">0.0</span>
                                                 </div>
     
-                                                <br>
-
-                                                <div id="hf_waitress_diffusers_height" class="restart-settings-group">
+                                                <div id="hf_waitress_diffusers_height" class="restart-settings-group llm-settings-standard-styling">
                                                     <label for="HfDHeight" class="hf-select-settings-labels-group">Height (Y-Height): </label>
                                                     <input type="number" id="HfDHeight" min="0" class="settings-input-fields" value="768">
                                                 </div>
 
-                                                <br>
-
-                                                <div id="hf_waitress_diffusers_width" class="restart-settings-group">
+                                                <div id="hf_waitress_diffusers_width" class="restart-settings-group llm-settings-standard-styling">
                                                     <label for="HfDWidth" class="hf-select-settings-labels-group">Width (X-Width): </label>
                                                     <input type="number" id="HfDWidth" min="0" class="settings-input-fields" value="1360">
                                                 </div>
 
-                                                <br>
-                                                
-                                                <div id="hf_waitress_diffusers_num_inference_steps" class="restart-settings-group">
+                                                <div id="hf_waitress_diffusers_num_inference_steps" class="restart-settings-group llm-settings-standard-styling">
                                                     <label for="HfDNumInfSteps" class="hf-select-settings-labels-group">Number of Inference Steps (X-Num-Inference-Steps): </label>
                                                     <input type="number" id="HfDNumInfSteps" min="0" class="settings-input-fields" value="3">
                                                 </div>
 
-                                                <br>
-
-                                                <div id="hf_waitress_diffusers_sequence_length" class="restart-settings-group">
+                                                <div id="hf_waitress_diffusers_sequence_length" class="restart-settings-group llm-settings-standard-styling">
                                                     <label for="HfDSeqLen" class="hf-select-settings-labels-group">Sequence Length (X-Max-Sequence-Length): </label>
                                                     <input type="number" id="HfDSeqLen" min="0"  max="65535" class="settings-input-fields" value="256">
                                                 </div>
-
-                                                <br>
 
                                                 <div id="hf_waitress_diffusers_num_images_per_prompt" class="restart-settings-group">
                                                     <label for="HfDNumImgPerPrompt" class="hf-select-settings-labels-group">Number of Images per Prompt (X-Num-Images-Per-Prompt): </label>
@@ -367,29 +382,23 @@
                                                     
                                                     <!-- Add options here | TODO: style "Advanced Settings" button! -->
         
-                                                    <button class="btn btn-primary" type="button" id="resetHfLlmAdvancedDefaults">Reset to Defaults</button>
+                                                    <button class="btn btn-primary llm-settings-standard-styling" type="button" id="resetHfLlmAdvancedDefaults">Reset to Defaults</button>
         
-                                                    <br>
-
-                                                    <div class="form-group" style="display: flex; align-items: center;">
+                                                    <div class="form-group llm-settings-standard-styling" style="display: flex; align-items: center;">
                                                         <input type="checkbox" id="update_hf_access_token" name="update_hf_access_token" style="margin-right: 10px;">
                                                         <label for="update_hf_access_token" style="margin-right: 20px;">Update HF Access Token for Gated Models</label>
                                                         <input type="text" id="hf_access_token" name="hf_access_token" style="width: 100%;" disabled>
                                                     </div>  
-
-                                                    <br>
         
-                                                    <div class="settings-requiring-restart-container">
+                                                    <div class="settings-requiring-restart-container llm-settings-standard-styling">
 
-                                                        <div id="hf_waitress_use_flash_attention_2" class="restart-settings-group">
+                                                        <div id="hf_waitress_use_flash_attention_2" class="restart-settings-group llm-settings-standard-styling">
                                                             <label class="hf-select-settings-labels-group">Use Flash Attention 2? Ensure hardware and software requirements met (--use_flash_attention_2):</label>
                                                             <input type="radio" id="hf_waitress_use_flash_attention_2_yes" name="hf_use_fa2" value="y" style="margin-left: 7px;"> Yes
                                                             <input type="radio" id="hf_waitress_use_flash_attention_2_no" name="hf_use_fa2" value="n" style="margin-left: 7px;"> No (Default)
                                                         </div>
     
-                                                        <br>
-
-                                                        <div id="hf_waitress_torch_device_map" class="restart-settings-group hf-select-settings-divs-group">
+                                                        <div id="hf_waitress_torch_device_map" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
                                                             <label class="hf-select-settings-labels-group">Select Inference Device basis appropriate PyTorch Installation (--torch_device_map):</label>
                                                             <br>
                                                             <select class="modal-selects" id="hf_waitress_torch_device_map_choice">
@@ -400,9 +409,7 @@
                                                             </select>
                                                         </div>
             
-                                                        <br>
-
-                                                        <div id="hf_waitress_torch_dtype" class="restart-settings-group hf-select-settings-divs-group">
+                                                        <div id="hf_waitress_torch_dtype" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
                                                             <label class="hf-select-settings-labels-group">Select Torch data type basis model Tensor type (--torch_dtype):</label>
                                                             <br>
                                                             <select class="modal-selects" id="hf_waitress_torch_dtype_choice">
@@ -420,9 +427,7 @@
                                                             </select>
                                                         </div>
 
-                                                        <br>
-
-                                                        <div id="hf_waitress_pipeline_task" class="restart-settings-group hf-select-settings-divs-group" style="display: none;">
+                                                        <div id="hf_waitress_pipeline_task" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
                                                             <label class="hf-select-settings-labels-group">Select Pipeline Task (--pipeline_task):</label>
                                                             <br>
                                                             <select class="modal-selects" id="hf_waitress_pipeline_task_choice">
@@ -459,9 +464,7 @@
                                                             </select>
                                                         </div>
 
-                                                        <!-- <br> -->
-
-                                                        <div id="hf_waitress_quantization" class="restart-settings-group hf-select-settings-divs-group">
+                                                        <div id="hf_waitress_quantization" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
                                                             <label class="hf-select-settings-labels-group">Quantization Method (--quantize):</label>
                                                             <br>
                                                             <select class="modal-selects" id="hf_waitress_quantization_choice">
@@ -472,9 +475,8 @@
                                                             </select>
                                                         </div>
 
-                                                        <br>
 
-                                                        <div id="hf_waitress_quantization_level" class="restart-settings-group hf-select-settings-divs-group">
+                                                        <div id="hf_waitress_quantization_level" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
                                                             <label class="hf-select-settings-labels-group">Quantization Level (--quant_level):</label>
                                                             <br>
                                                             <select class="modal-selects" id="hf_waitress_quantization_level_choice">
@@ -487,82 +489,62 @@
                                                             </select>
                                                         </div>
             
-                                                        <div id="hf_waitress_hqq_group_size" class="restart-settings-group" style="display: none; margin-top: 20px;">
+                                                        <div id="hf_waitress_hqq_group_size" class="restart-settings-group llm-settings-standard-styling" style="display: none;">
                                                             <label for="HfwHqqGroupSize" class="hf-select-settings-labels-group">HQQ Group Size (must be divisible by group_size) (--hqq_group_size): </label>
                                                             <input class="settings-input-fields" type="number" id="HfwHqqGroupSize" min="0" value="64">
                                                         </div>
 
-                                                        <br>
-
-                                                        <div id="hf_waitress_serving_url" class="restart-settings-group">
+                                                        <div id="hf_waitress_serving_url" class="restart-settings-group llm-settings-standard-styling">
                                                             <label for="HfwServingUrl" class="hf-select-settings-labels-group">HF-Waitress Server Serving URL on Host Machine (default: 0.0.0.0) (--hf_waitress_serving_url): </label>
                                                             <input class="settings-input-fields" type="text" id="HfwServingUrl" value="0.0.0.0">
                                                         </div>
 
-                                                        <br>
-
-                                                        <div id="hf_waitress_access_url" class="restart-settings-group">
+                                                        <div id="hf_waitress_access_url" class="restart-settings-group llm-settings-standard-styling">
                                                             <label for="HfwAccessUrl" class="hf-select-settings-labels-group">HF-Waitress Server Access URL from Web Browser (default: localhost) (--hf_waitress_access_url): </label>
                                                             <input class="settings-input-fields" type="text" id="HfwAccessUrl" value="localhost">
                                                         </div>
-
-                                                        <br>
         
-                                                        <div id="hf_waitress_port" class="restart-settings-group">
+                                                        <div id="hf_waitress_port" class="restart-settings-group llm-settings-standard-styling">
                                                             <label for="HfwPort" class="hf-select-settings-labels-group">HF-Waitress Server Port (default: 9069) (--hf_waitress_server_port): </label>
                                                             <input class="settings-input-fields" type="number" id="HfwPort" min="0"  max="65535" value="9069">
                                                         </div>
-        
-                                                        <br>
-        
+                
                                                         <div class="restart-warning">
                                                             <i class="fa-solid fa-exclamation-triangle"></i> Changes trigger restart!
                                                         </div>
         
                                                     </div>
-        
-                                                    <br>
-            
-                                                    <div id="hf_waitress_max_new_tokens">
+                    
+                                                    <div id="hf_waitress_max_new_tokens" class="llm-settings-standard-styling">
                                                         <label for="HfwMaxNewToks" class="hf-select-settings-labels-group">Maximum New Tokens (X-Max-New-Tokens): </label>
                                                         <input type="number" id="HfwMaxNewToks" min="100" class="settings-input-fields" value="500">
                                                     </div>
 
-                                                    <br>
-
-                                                    <div id="hf_waitress_return_full_text" class="hf-select-settings-divs-group">
+                                                    <div id="hf_waitress_return_full_text" class="hf-select-settings-divs-group llm-settings-standard-styling">
                                                         <label class="hf-select-settings-labels-group">Return Full Text (X-Return-Full-Text):</label>
-                                                        <input type="radio" id="hf_waitress_return_full_text_yes" name="hf_return_full_text" value="y" style="margin-left: 7px;"> Yes (Default)
-                                                        <input type="radio" id="hf_waitress_return_full_text_no" name="hf_return_full_text" value="n" style="margin-left: 7px;"> No
+                                                        <input type="radio" id="hf_waitress_return_full_text_yes" name="hf_return_full_text" value="y" style="margin-left: 7px;"> Yes
+                                                        <input type="radio" id="hf_waitress_return_full_text_no" name="hf_return_full_text" value="n" style="margin-left: 7px;"> No (Default)
                                                     </div>
-
-                                                    <br>
         
-                                                    <div id="hf_waitress_temperature_value">
+                                                    <div id="hf_waitress_temperature_value" class="llm-settings-standard-styling">
                                                         <label for="HfwTempSlider" class="hf-select-settings-labels-group">Temperature (Randomness of generated text) (X-Temperature): </label>
                                                         <input type="range" id="HfwTempSlider" min="0" max="2" step="0.1" value="0.3">
                                                         <span id="HfwTempSliderValue">0.3</span>
                                                     </div>
-        
-                                                    <br>
-        
-                                                    <div id="hf_waitress_topk_value">
+                
+                                                    <div id="hf_waitress_topk_value" class="llm-settings-standard-styling">
                                                         <label for="HfwTopkSlider" class="hf-select-settings-labels-group">Limit to K most probable tokens (X-Top-K): </label>
                                                         <input type="range" id="HfwTopkSlider" min="-1" max="100" step="1" value="40">
                                                         <span id="HfwTopkSliderValue">40</span>
                                                     </div>
-        
-                                                    <br>
-        
-                                                    <div id="hf_waitress_topp_value">
+                
+                                                    <div id="hf_waitress_topp_value" class="llm-settings-standard-styling">
                                                         <label for="HfwToppSlider" class="hf-select-settings-labels-group">Limit to a subset of tokens with a cumulative probability above (X-Top-P): </label>
                                                         <input type="range" id="HfwToppSlider" min="0" max="1" step="0.01" value="0.95">
                                                         <span id="HfwToppSliderValue">0.95</span>
                                                     </div>
-        
-                                                    <br>
-        
-                                                    <div id="hf_waitress_minp_value">
+                
+                                                    <div id="hf_waitress_minp_value" class="llm-settings-standard-styling">
                                                         <label for="HfwMinpSlider" class="hf-select-settings-labels-group">Minimum probability for considering a token, relative to most likely (X-Min-P): </label>
                                                         <input type="range" id="HfwMinpSlider" min="0" max="1" step="0.01" value="0.05">
                                                         <span id="HfwMinpSliderValue">0.05</span>
