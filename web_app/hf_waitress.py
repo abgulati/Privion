@@ -5,7 +5,7 @@ import torch
 
 try:
     from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Tokenizer
-    from exllamav2.generator import ExLlamaV2StreamingGenerator
+    from exllamav2.generator import ExLlamaV2StreamingGenerator, ExLlamaV2Sampler
     from exllamav2 import ExLlamaV2Cache, ExLlamaV2Cache_8bit, ExLlamaV2Cache_Q4, ExLlamaV2Cache_Q6, ExLlamaV2Cache_Q8
 except ImportError:
     print("exllamav2 is not installed. Skipping import.")
@@ -1359,11 +1359,12 @@ def restart_server_stream():
     MODEL = None
 
     try:
-        read_return = read_config(['model_id', 'pipeline_task', 'flux_diffusers', 'vision'])
+        read_return = read_config(['model_id', 'pipeline_task', 'flux_diffusers', 'vision', 'exl2'])
         model_id = str(read_return['model_id'])
         pipeline_task = str(read_return['pipeline_task'])
         flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
         vision = str(read_return['vision']).lower() == 'true'
+        exl2 = str(read_return['exl2']).lower() == 'true'
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting /restart_server_stream, encountered error: ", e)
 
@@ -1395,6 +1396,9 @@ def restart_server_stream():
             if flux_diffusers:
                 print("\nFlux Diffusers Selected - Loading...\n")
                 PIPE = load_flux_pipeline(PIPE)
+            elif exl2:
+                print("\n\nExLlamaV2 Selected - Loading...\n\n")
+                PIPE = load_exllama_pipeline(PIPE)
             elif vision:
                 print("\nVision Model Selected - Loading...\n")
                 PIPE = load_vision_pipeline(PIPE, model_params)
@@ -1469,7 +1473,6 @@ def initialize_model():
     if exl2:
         print("\n\nExLlamaV2 Selected - Loading...\n\n")
         PIPE = load_exllama_pipeline(PIPE)
-        return True
     
     else:
         model_params = get_model_params()
@@ -1988,6 +1991,105 @@ def completions_stream():
         }
     except Exception as e:
         handle_error_no_return("Could not set generation-arguments for /completions_stream, proceeding without them. Encountered error: ", e)
+
+    stop_event = threading.Event()
+
+    data_queue = queue.Queue()
+
+    def callback(data):
+        data_queue.put(data)
+
+    custom_streamer = CustomTextStreamer(PIPE.tokenizer, skip_special_tokens=True, skip_prompt=True)
+    custom_streamer.callback = callback
+
+    def llm_task():
+
+        global PIPE
+
+        try:                
+            if generation_args:
+                generation_args["streamer"] = custom_streamer
+                generation_args["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
+                output = PIPE(messages, **generation_args)
+            else:
+                output = PIPE(messages, streamer=custom_streamer, stopping_criteria=StoppingCriteriaList([StopOnEvent(stop_event)]))
+        finally:
+            data_queue.put(None)
+            print("\n\nLLM stream done, releasing semaphore\n\n")
+            llm_semaphore.release()
+
+    def generate():        
+        
+        global STOP_GENERATION
+        STOP_GENERATION = False
+
+        thread = threading.Thread(target=llm_task)
+        thread.start()
+
+        while True:
+            if STOP_GENERATION:
+                print("\n\nStopping generation with stop_event\n\n")
+                stop_event.set()
+                thread.join()
+                break
+            line = data_queue.get()
+            if line is None:
+                print("\n\nNone read, breaking and stopping thread\n\n")
+                thread.join()
+                break
+            yield f"data: {json.dumps(line)}\n\n"
+        
+        yield f"event: END\ndata: \"null\"\n\n"
+
+        STOP_GENERATION = False
+
+        try:
+            empty_cuda_cache()
+        except Exception as e:
+            handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
+            
+    print("\n\nInferencing Begins!\n\n")
+    return Response(generate(), content_type='text/event-stream')
+
+
+@app.route('/exl2_stream', methods=['POST'])
+def exl2_stream():
+
+    print("\n\nexl2_stream route triggered - attempting to acquire LLM semaphore\n\n")
+
+    llm_semaphore.acquire()
+
+    print("\nLLM semaphore acquired by /exl2_stream\n")
+
+    try:
+        data = request.json
+        messages = data.get('messages', [])
+        print(f"\nRead request - message received: {messages}\n")
+    except Exception as e:
+        handle_api_error("Could not read POST-request messages for /exl2_stream, encountered error: ", e)
+
+    try:
+        read_return = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'min_p', 'n_keep'])
+        temperature = float(read_return['temperature'])
+        top_k = int(read_return['top_k'])
+        top_p = float(read_return['top_p'])
+        max_new_tokens = int(read_return['max_new_tokens'])
+        min_p = float(read_return['min_p'])
+        n_keep = int(read_return['n_keep'])
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when attempting /exl2_stream, encountered error: ", e)
+
+    try:
+        print("\nExLlamaV2Sampler.Settings In-Progress...\n")
+        settings = ExLlamaV2Sampler.Settings(
+            temperature = float(request.headers.get('X-Temperature', str(temperature))),
+            top_k = int(request.headers.get('X-Top-K', str(top_k))),
+            top_p = float(request.headers.get('X-Top-P', str(top_p)))
+            # min_p = float(request.headers.get('X-Min-P', str(min_p)))
+        )
+        print("\nExLlamaV2Sampler.Settings Defined Successfully\n")
+    except Exception as e:
+        handle_error_no_return("Could not set generation-arguments for /exl2_stream, proceeding without them. Encountered error: ", e)
 
     stop_event = threading.Event()
 
