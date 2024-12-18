@@ -20,6 +20,22 @@ function setHfwUrl(host, port) {
     document.getElementById('chatState').setAttribute('data-hf-waitress-url', `http://${host}:${port}`);
 }
 
+function setExl2(exl2) {
+    document.getElementById('chatState').setAttribute('data-exl2', exl2);
+}
+
+function setVision(vision) {
+    document.getElementById('chatState').setAttribute('data-vision', vision);
+}
+
+function getVision() {
+    return document.getElementById('chatState').getAttribute('data-vision');
+}
+
+function getExl2() {
+    return document.getElementById('chatState').getAttribute('data-exl2');
+}
+
 function getChatId() {
     return document.getElementById('chatState').getAttribute('data-ongoing-chat-id');
 }
@@ -1212,10 +1228,12 @@ function addNewHfwModel(model) {
 
 
 function disableTransformersSettings() {
+    enableNonExl2Settings();
     document.getElementById('advancedHfLlmSettingsToggle').style.display = 'none';
     document.getElementById('hf_waitress_is_awq').style.display = 'none';
     document.getElementById('hf_waitress_trust_remote_code').style.display = 'none';
-    document.getElementById('hf_waitress_vision').style.display = 'none';
+    document.getElementById('hf_waitress_exl2').style.display = 'none';
+    // document.getElementById('hf_waitress_vision').style.display = 'none';
 }
 
 
@@ -1223,7 +1241,40 @@ function enableTransformersSettings() {
     document.getElementById('advancedHfLlmSettingsToggle').style.display = 'inline-block';
     document.getElementById('hf_waitress_is_awq').style.display = 'block';
     document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
+    document.getElementById('hf_waitress_exl2').style.display = 'block';
+    enableNonExl2Settings();
     // document.getElementById('hf_waitress_vision').style.display = 'block';
+}
+
+
+function disableNonExl2Settings() {
+    document.getElementById('hf_waitress_is_awq').style.display = 'none';
+    document.getElementById('hf_waitress_trust_remote_code').style.display = 'none';
+    document.getElementById('hf_waitress_diffusers').style.display = 'none';
+    document.getElementById('hf_waitress_use_flash_attention_2').style.display = 'none';
+    document.getElementById('hf_waitress_torch_device_map').style.display = 'none';
+    document.getElementById('hf_waitress_torch_dtype').style.display = 'none';
+    document.getElementById('hf_waitress_pipeline_task').style.display = 'none';
+    document.getElementById('hf_waitress_quantization').style.display = 'none';
+    document.getElementById('hf_waitress_quantization_level').style.display = 'none';
+    document.getElementById('hf_waitress_hqq_group_size').style.display = 'none';
+    document.getElementById('hf_waitress_minp_value').style.display = 'none';
+    document.getElementById('hf_waitress_return_full_text').style.display = 'none';
+}
+
+function enableNonExl2Settings() {
+    document.getElementById('hf_waitress_is_awq').style.display = 'block';
+    document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
+    document.getElementById('hf_waitress_diffusers').style.display = 'block';
+    document.getElementById('hf_waitress_use_flash_attention_2').style.display = 'block';
+    document.getElementById('hf_waitress_torch_device_map').style.display = 'block';
+    document.getElementById('hf_waitress_torch_dtype').style.display = 'block';
+    document.getElementById('hf_waitress_pipeline_task').style.display = 'block';
+    document.getElementById('hf_waitress_quantization').style.display = 'block';
+    document.getElementById('hf_waitress_quantization_level').style.display = 'block';
+    document.getElementById('hf_waitress_hqq_group_size').style.display = 'block';
+    document.getElementById('hf_waitress_minp_value').style.display = 'block';
+    document.getElementById('hf_waitress_return_full_text').style.display = 'block';
 }
 
 
