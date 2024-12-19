@@ -312,7 +312,9 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
 
     const vision = getVision();
     const exl2 = getExl2();
-    if (vision) {
+    console.log("vision: ", vision, "typeof:", typeof vision);
+    console.log("exl2: ", exl2, "typeof:", typeof exl2);
+    if (vision === "true") {
         console.log("Invoking vision_stream");
         const hfWaitress_URL = getHfwUrl();
         url = `${hfWaitress_URL}/vision_stream`;
@@ -326,7 +328,20 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         const parsedPrompt = JSON.parse(formattedPrompt);
         formdata.append("messages", JSON.stringify(parsedPrompt.messages));
         if (file) { formdata.append("file", file); }
-    } else if (vision) {
+    } else if (exl2 === "true") {
+        console.log("Invoking exl2_stream");
+        const hfWaitress_URL = getHfwUrl();
+        url = `${hfWaitress_URL}/exl2_stream`;
+
+        hfwHeaders = new Headers();
+        hfwHeaders.append("Content-Type", "application/json");
+        hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
+        hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
+        hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
+        hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
+
+        rawBodyJSONStringified = JSON.stringify(formattedPrompt);
+    } else {
         console.log("Invoking completions_stream");
         const hfWaitress_URL = getHfwUrl();
         url = `${hfWaitress_URL}/completions_stream`;
@@ -342,25 +357,12 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         
         rawBodyJSONObj = JSON.parse(formattedPrompt);                                
         rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
-    } else if (exl2) {
-        console.log("Invoking exl2_stream");
-        const hfWaitress_URL = getHfwUrl();
-        url = `${hfWaitress_URL}/exl2_stream`;
-
-        hfwHeaders = new Headers();
-        hfwHeaders.append("Content-Type", "application/json");
-        hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
-        hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
-        hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
-        hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
-
-        rawBodyJSONObj = JSON.parse(formattedPrompt);                                
-        rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
     }
     
     try {
 
-        const request_body = vision ? formdata : rawBodyJSONStringified;
+        const request_body = vision === "true" ? formdata : rawBodyJSONStringified;
+        console.log("request_body: ", request_body);
 
         const hfwResponse = await fetch(url, {
             method: 'POST',
