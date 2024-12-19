@@ -2130,28 +2130,22 @@ def exl2_stream():
         handle_error_no_return("Could not create ExLlamaV2DynamicJob object for /exl2_stream, proceeding without them. Encountered error: ", e)
 
     stop_thread = threading.Event()
-
     output_queue = queue.Queue()
-    custom_stdout = ThreadSafeStream(output_queue)
-    original_stdout = sys.stdout    # seperate stream objects!
 
     def llm_task():
 
         global PIPE
 
-        try:
-            sys.stdout = custom_stdout
-            
+        try:            
             while PIPE.num_remaining_jobs():
                 # print(PIPE.iterate()[0])  # Will print dict with keys: dict_keys(['job', 'stage', 'eos', 'serial', 'text', 'token_ids'])
                 current_token = PIPE.iterate()[0]   # directly trying to access the 'text' key here will result in a KeyError as iteration may not have completed yet!
                 if 'text' in current_token:
-                    print(current_token['text'])    # thus best to capture the current iteration's output and then access the 'text' key!
+                    output_queue.put(current_token['text'])    # thus best to capture the current iteration's output and then access the 'text' key!
         except Exception as e:
             return handle_error_no_return("Response generation failed, encountered error: ", e)
         finally:
             output_queue.put(None)
-            sys.stdout = original_stdout
             print("\n\nLLM stream done, releasing semaphore\n\n")
             llm_semaphore.release()
             stop_thread.set()
