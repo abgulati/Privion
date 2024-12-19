@@ -317,6 +317,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'llm_filter_citations':True,
                 'local_llm_model_type':'llama',
                 'local_llm_chat_template_format':'llama3',
+                'exl2_prompt_template_format':'raw',
                 'local_llm_context_length':8192,
                 'local_llm_max_new_tokens':2048,
                 'local_llm_gpu_layers':47,
@@ -3637,7 +3638,7 @@ def get_formatted_prompt_from_history_db(chat_id, sequence_id):
     return formatted_prompt
 
 
-def format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format):
+def format_prompt_for_llama_cpp(formatted_prompt:str, user_query:str, current_sequence_id:int, base_template:str, local_llm_chat_template_format:str) -> str:
 
     print("\n\nFormatting prompt for llama-cpp\n\n")
 
@@ -3717,6 +3718,15 @@ def format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_i
 def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_sequence_id:int, base_template:str, flux_diffusers:bool, vision:bool, skip_system_prompt:bool) -> str:
 
     print("\n\nFormatting prompt for hf-waitress\n\n")
+
+    try:
+        exl2 = read_hf_config(['exl2'])['exl2']
+        exl2_prompt_template_format = read_config(['exl2_prompt_template_format'])['exl2_prompt_template_format']
+    except Exception as e:
+        handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
+
+    if exl2:
+        return(format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_id, base_template, exl2_prompt_template_format))
 
     try:
     
