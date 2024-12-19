@@ -4209,15 +4209,16 @@ def filter_all_citations(docs: list[Document], llm_response: str, return_top_k: 
     return all_docs
 
 
-def read_config_for_get_references() -> tuple[str, str, str, bool, bool]:
+def read_config_for_get_references() -> tuple[str, str, str, bool, bool, str]:
     try:
-        read_return = read_config(['local_llm_server', 'upload_folder', 'local_llm_chat_template_format', 'llm_filter_citations', 'force_enable_rag'])
+        read_return = read_config(['local_llm_server', 'upload_folder', 'local_llm_chat_template_format', 'llm_filter_citations', 'force_enable_rag', 'exl2_prompt_template_format'])
         local_llm_server = read_return['local_llm_server']
         upload_folder = read_return['upload_folder']
         local_llm_chat_template_format = read_return['local_llm_chat_template_format']
         llm_filter_citations = read_return['llm_filter_citations']
         force_enable_rag = read_return['force_enable_rag']
-        return local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations, force_enable_rag
+        exl2_prompt_template_format = read_return['exl2_prompt_template_format']
+        return local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations, force_enable_rag, exl2_prompt_template_format
     except Exception as e:
         return handle_local_error("Could not read config.json in method read_config_for_get_references(), encountered error: ", e)
 
@@ -4405,7 +4406,8 @@ def get_references():
     print("\n\nStoring History Post-Response -- Determining if Citations are Necessary\n\n")
 
     try:
-        local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations, force_enable_rag = read_config_for_get_references()
+        local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations, force_enable_rag, exl2_prompt_template_format = read_config_for_get_references()
+        exl2 = read_hf_config(['exl2'])['exl2']
     except Exception as e:
         return handle_api_error("Missing values in config.json when attempting to get_references. Error: ", e)
 
@@ -4428,7 +4430,7 @@ def get_references():
         if flux_diffusers:
             do_rag = False
         else:
-            formatted_user_prompt = get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response)
+            formatted_user_prompt = get_llama_cpp_formatted_user_prompt(exl2_prompt_template_format, llm_response) if exl2 else get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response) 
 
     if not do_rag:
         print("\n\nRAG Citations unnecessary, storing chat history and returning\n\n")
