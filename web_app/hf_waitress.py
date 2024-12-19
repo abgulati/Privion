@@ -165,7 +165,28 @@ def write_config(config_updates, filename='hf_config.json'):
 
         #restart logic in write_config() might be unnecessary, circle back later
         restart_required = False
-        triggers_for_hf_restart = ['torch_device_map', 'torch_dtype', 'model_id', 'awq', 'attn_implementation', 'pipeline_task', 'quantize', 'quant_level', 'port', 'use_flash_attention_2', 'hqq_group_size', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux', 'vision']
+        triggers_for_hf_restart = [
+            'torch_device_map',
+            'torch_dtype',
+            'model_id',
+            'awq',
+            'attn_implementation',
+            'pipeline_task',
+            'quantize',
+            'quant_level',
+            'port',
+            'use_flash_attention_2',
+            'hqq_group_size',
+            'flux_diffusers',
+            'flux_low_vram_optimizations',
+            'load_quantized_flux',
+            'vision',
+            'exl2',
+            'exl2_bpw',
+            'exl2_cache_type',
+            'exl2_max_seq_len',
+            'exl2_force_regenerate_measurement'
+        ]
         for key in config_updates:
             if key in triggers_for_hf_restart and config_updates[key] != hf_config.get(key):
                 restart_required = True
