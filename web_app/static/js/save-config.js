@@ -29,6 +29,7 @@ function getLlmConfig() {
             config.hf_waitress_serving_url = document.getElementById('HfwServingUrl').value;
             config.hf_waitress_access_url = document.getElementById('HfwAccessUrl').value;
             config.hf_waitress_server_port = parseInt(document.getElementById('HfwPort').value);
+            config.exl2_prompt_template_format = document.getElementById('hf_waitress_exl2_prompt_template_format_choice').value;
         }
     } else if (useApiRadioButton.checked) {
         config.model_choice = document.getElementById('llmApiDropdown').value;

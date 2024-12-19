@@ -79,6 +79,7 @@ function loadAndSetCoreValues() {
         'use_ocr',
         'ocr_service_choice',
         'local_llm_chat_template_format',
+        'exl2_prompt_template_format',
         'force_enable_rag',
         'force_disable_rag',
         'base_template',
@@ -285,6 +286,15 @@ function initializeHfSettingsDropdowns(all_values) {
 
     for (let option of hfExl2CacheType.options) {
         if (option.value == all_values.exl2_cache_type) {
+            option.selected = true;
+            break;
+        }
+    }
+
+    const hfExl2PromptTemplateFormat = document.getElementById('hf_waitress_exl2_prompt_template_format_choice');
+
+    for (let option of hfExl2PromptTemplateFormat.options) {
+        if (option.value == all_values.exl2_prompt_template_format) {
             option.selected = true;
             break;
         }
