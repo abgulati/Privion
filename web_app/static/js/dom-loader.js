@@ -130,7 +130,7 @@ function loadAndSetCoreValues() {
 }
 
 
-function initializeLocalLLMServerDropdown(local_llm_server) {
+function initializeLocalLLMServerDropdown(local_llm_server, exl2_prompt_template_format) {
     const llmServerDd = document.getElementById('local_llm_server_select_dropdown');
 
     for (let option of llmServerDd.options) {
@@ -142,6 +142,15 @@ function initializeLocalLLMServerDropdown(local_llm_server) {
 
     document.getElementById('llama_cpp_div').style.display = local_llm_server === 'llama-cpp' ? 'block' : 'none';
     document.getElementById('hf_waitress_div').style.display = local_llm_server === 'hf-waitress' ? 'block' : 'none';
+
+    const hfExl2PromptTemplateFormat = document.getElementById('hf_waitress_exl2_prompt_template_format_choice');
+
+    for (let option of hfExl2PromptTemplateFormat.options) {
+        if (option.value == exl2_prompt_template_format) {
+            option.selected = true;
+            break;
+        }
+    }
 }
 
 
@@ -286,15 +295,6 @@ function initializeHfSettingsDropdowns(all_values) {
 
     for (let option of hfExl2CacheType.options) {
         if (option.value == all_values.exl2_cache_type) {
-            option.selected = true;
-            break;
-        }
-    }
-
-    const hfExl2PromptTemplateFormat = document.getElementById('hf_waitress_exl2_prompt_template_format_choice');
-
-    for (let option of hfExl2PromptTemplateFormat.options) {
-        if (option.value == all_values.exl2_prompt_template_format) {
             option.selected = true;
             break;
         }
@@ -743,7 +743,7 @@ function initializeHfwUrlComponents(hf_waitress_serving_url, hf_waitress_access_
 
 
 function initializeLLMTabComponents(values) {
-    initializeLocalLLMServerDropdown(values.local_llm_server);
+    initializeLocalLLMServerDropdown(values.local_llm_server, values.exl2_prompt_template_format);
     initializeModelDropdown(values.model_choice);   
     initializeLLMTemplateDropdown(values.local_llm_chat_template_format);
     initializeGPURadioButtons(values.use_gpu);
