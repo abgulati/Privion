@@ -829,12 +829,20 @@ def parse_arguments():
                 if "flux" in args.model_id.lower():
                     print("Flux model auto-detected, setting flux_diffusers=True")
                     args.flux_diffusers = True
+                    args.vision = False
+                    args.gguf = False
+                    args.awq = False
+                    args.exl2 = False
                 else:
                     args.flux_diffusers = False
                 
                 if "llama-3.2" in args.model_id.lower() and "vision" in args.model_id.lower():
                     print("Llama-3.2-Vision model auto-detected, setting vision=True")
                     args.vision = True
+                    args.flux_diffusers = False
+                    args.gguf = False
+                    args.awq = False
+                    args.exl2 = False
                 else:
                     args.vision = False
                 
