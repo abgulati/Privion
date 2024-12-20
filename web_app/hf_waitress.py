@@ -54,6 +54,7 @@ CORS(app)
 PIPE = None
 MODEL = None
 EXL2_TOKENIZER = None
+EXL2_CACHE = None
 
 STOP_GENERATION = False
 llm_semaphore = threading.Semaphore(1)
@@ -520,6 +521,39 @@ def shutdown_pipe():
             PIPE = None
             empty_cuda_cache()
     print("\n\nPipeline offloading complete\n\n")
+
+def shutdown_exl2():
+    print("\n\nShutting down ExLlamaV2 model\n\n")
+    global EXL2_CACHE
+    global EXL2_TOKENIZER
+    
+    if EXL2_CACHE:
+        try:
+            print("Attempting to free ExLlamaV2 cache")
+            del EXL2_CACHE
+            print("ExLlamaV2 cache freed successfully")
+        except Exception as e:
+            handle_error_no_return("Could not free ExLlamaV2 cache, encountered error: ", e)
+        finally:
+            EXL2_CACHE = None
+    
+    if EXL2_TOKENIZER:
+        try:
+            print("Attempting to free ExLlamaV2 tokenizer")
+            del EXL2_TOKENIZER
+            print("ExLlamaV2 tokenizer freed successfully")
+        except Exception as e:
+            handle_error_no_return("Could not free ExLlamaV2 tokenizer, encountered error: ", e)
+        finally:
+            EXL2_TOKENIZER = None
+    
+    try:
+        empty_cuda_cache()
+    except Exception as e:
+        handle_error_no_return("Could not empty CUDA cache after ExLlamaV2 cleanup, encountered error: ", e)
+    
+    print("\n\nExLlamaV2 cleanup complete\n\n")
+
 ############################-----------------------------------------------###############################
 
 
@@ -1268,13 +1302,14 @@ def define_exllama_generator(quantized_model_path: os.PathLike) -> ExLlamaV2Dyna
         return handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
 
     try:
-        cache = cache_type(model, max_seq_len = exl2_max_seq_len, lazy = True)
+        global EXL2_CACHE
+        EXL2_CACHE = cache_type(model, max_seq_len = exl2_max_seq_len, lazy = True)
         print(f"\nCache defined successfully with max_seq_len: {exl2_max_seq_len}\n")
     except Exception as e:
         return handle_local_error("Could not define ExLlamaV2 cache, encountered error: ", e)
 
     try:
-        model.load_autosplit(cache)
+        model.load_autosplit(EXL2_CACHE)
         print("\nModel loaded with autosplit successfully\n")
     except Exception as e:
         return handle_local_error("Could not load ExLlamaV2 model with autosplit, encountered error: ", e)
@@ -1287,7 +1322,7 @@ def define_exllama_generator(quantized_model_path: os.PathLike) -> ExLlamaV2Dyna
         return handle_local_error("Could not define ExLlamaV2 tokenizer, encountered error: ", e)
     
     try:
-        generator = ExLlamaV2DynamicGenerator(model = model, cache = cache, tokenizer = EXL2_TOKENIZER)
+        generator = ExLlamaV2DynamicGenerator(model = model, cache = EXL2_CACHE, tokenizer = EXL2_TOKENIZER)
         print("\nGenerator defined successfully\n")
     except Exception as e:
         return handle_local_error("Could not define ExLlamaV2 generator, encountered error: ", e)
@@ -1377,10 +1412,10 @@ def restart_server_stream():
     #     shutdown_model()
     global PIPE
     global MODEL
-    global EXL2_TOKENIZER
+    
+    shutdown_exl2()
     PIPE = None
     MODEL = None
-    EXL2_TOKENIZER = None
 
     try:
         read_return = read_config(['model_id', 'pipeline_task', 'flux_diffusers', 'vision', 'exl2'])
@@ -2138,10 +2173,15 @@ def exl2_stream():
 
         try:            
             while PIPE.num_remaining_jobs():
-                # print(PIPE.iterate()[0])  # Will print dict with keys: dict_keys(['job', 'stage', 'eos', 'serial', 'text', 'token_ids'])
-                current_token = PIPE.iterate()[0]   # directly trying to access the 'text' key here will result in a KeyError as iteration may not have completed yet!
-                if 'text' in current_token:
-                    output_queue.put(current_token['text'])    # thus best to capture the current iteration's output and then access the 'text' key!
+                # output_queue.put(PIPE.iterate()[0])  # Will print dict with keys: dict_keys(['job', 'stage', 'eos', 'serial', 'text', 'token_ids']) ### USE: yield f"data: {(line)}\n\n"
+                current_token = PIPE.iterate()   # directly trying to access the 'text' key here will result in a KeyError as iteration may not have completed yet!
+                if current_token[0]['stage'] == 'started':
+                    if 'text' in current_token[2]:
+                        output_queue.put(current_token[2]['text'])
+                else:
+                    if 'text' in current_token[0]:
+                        output_queue.put(current_token[0]['text'])    # thus best to capture the current iteration's output and then access the 'text' key!
+                # output_queue.put(current_token[2]['text']) if current_token[0]['stage'] == 'started' else output_queue.put(current_token[0]['text'])
         except Exception as e:
             return handle_error_no_return("Response generation failed, encountered error: ", e)
         finally:
@@ -2159,6 +2199,12 @@ def exl2_stream():
             yield f"data: {json.dumps(line)}\n\n"
         
         yield f"event: END\ndata: \"null\"\n\n"
+
+        try:
+            empty_cuda_cache()
+        except Exception as e:
+            handle_error_no_return("Could not empty CUDA cache after ExLlamaV2 cleanup, encountered error: ", e)
+
         print("\n/exl2_stream done\n")
 
     thread = threading.Thread(target=llm_task)
@@ -2321,10 +2367,10 @@ def restart_server():
                     #     shutdown_model()
                     global PIPE
                     global MODEL
-                    global EXL2_TOKENIZER
+
+                    shutdown_exl2()
                     PIPE = None
                     MODEL = None
-                    EXL2_TOKENIZER = None
                     initialize_model()
                 except Exception as e:
                     handle_api_error("Could not restart server, encountered error: ", e)
