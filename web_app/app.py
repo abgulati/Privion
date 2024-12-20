@@ -3662,6 +3662,13 @@ def format_prompt_for_llama_cpp(formatted_prompt:str, user_query:str, current_se
             formatted_prompt += f"\n<|im_start|>user\n{user_query}<|im_end|>\n"
         else:
             formatted_prompt += f"<|im_start|>system\n{base_template}<|im_end|>\n<|im_start|>user\n{user_query}<|im_end|>\n<|im_start|>assistant\n"
+    
+    elif local_llm_chat_template_format == 'qwen-chatml':
+        
+        if current_sequence_id > 0:
+            formatted_prompt += f"\n<|im_start|>user\n{user_query}<|im_end|>\n"
+        else:
+            formatted_prompt += f"<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.\n{base_template}<|im_end|>\n<|im_start|>user\n{user_query}<|im_end|>\n<|im_start|>assistant\n"
 
     elif local_llm_chat_template_format == 'phi3':
 
@@ -4268,6 +4275,8 @@ def get_llama_cpp_formatted_user_prompt(local_llm_chat_template_format: str, llm
     elif local_llm_chat_template_format == 'llama2':
         return f"{llm_response}</s>"
     elif local_llm_chat_template_format == 'chatml':
+        return f"{llm_response}<|im_end|>\n"
+    elif local_llm_chat_template_format == 'qwen-chatml':
         return f"{llm_response}<|im_end|>\n"
     elif local_llm_chat_template_format == 'phi3':
         return f"{llm_response}<|end|>\n"
