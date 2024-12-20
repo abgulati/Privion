@@ -362,7 +362,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
     try {
 
         const request_body = vision === "true" ? formdata : rawBodyJSONStringified;
-        console.log("request_body: ", request_body);
+        // console.log("request_body: ", request_body);
 
         const hfwResponse = await fetch(url, {
             method: 'POST',
