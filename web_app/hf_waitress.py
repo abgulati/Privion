@@ -1227,7 +1227,7 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
         os.makedirs(temp_dir, exist_ok=True)
 
         quantized_model_path = os.path.join(transformer_models_folder, model_id, "exl2-qaunts", f"{exl2_bpw}bpw")
-        os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)
+        os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)   # Create parent directory structure - final `{exl2_bpw}bpw` directory will be created by ExLlamaV2 converter
     except Exception as e:
         return handle_local_error("Could not create directory to store quantized model when attempting to exllama_bpw_quantize_model(), encountered error: ", e)
 
