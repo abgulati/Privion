@@ -2598,7 +2598,7 @@ def get_hf_waitress_serving_host_and_port():
 def hf_waitress_server_starter():
     print("\n\nStarting HF-Waitress Server\n\n")
 
-    global LLM_CHANGE_RELOAD_TRIGGER_SET
+    global LLM_CHANGE_RELOAD_TRIGGER_SET    # This is only set by LARS basis llama.cpp, so we simply handle it here!
     global LLM_LOADED_UP
     global HF_WAITRESS_PROCESS
     global LLAMA_CPP_PROCESS
@@ -3712,16 +3712,33 @@ def format_prompt_for_llama_cpp(formatted_prompt:str, user_query:str, current_se
         else:
             formatted_prompt += f"<start_of_turn>user\n{base_template}\n{user_query}<end_of_turn>\n<start_of_turn>model\n"
 
+    elif local_llm_chat_template_format == 'raw':
+
+        if current_sequence_id > 0:
+            formatted_prompt += f"User: {user_query}\nAssistant: "
+        else:
+            formatted_prompt += f"{base_template}\nUser: {user_query}\nAssistant: "
+
     return formatted_prompt
 
 
-def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_sequence_id:int, base_template:str, flux_diffusers:bool, vision:bool, skip_system_prompt:bool) -> str:
+def read_config_for_hf_waitress_prompt_formatting() -> tuple[bool, str, bool, bool]:
+    try:
+        exl2 = read_hf_config(['exl2'])['exl2']
+        exl2_prompt_template_format = read_config(['exl2_prompt_template_format'])['exl2_prompt_template_format']
+        vision = read_hf_config(['vision'])['vision']
+        flux_diffusers = read_hf_config(['flux_diffusers'])['flux_diffusers']
+        return exl2, exl2_prompt_template_format, vision, flux_diffusers
+    except Exception as e:
+        handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
+
+
+def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_sequence_id:int, base_template:str, skip_system_prompt:bool) -> str:
 
     print("\n\nFormatting prompt for hf-waitress\n\n")
 
     try:
-        exl2 = read_hf_config(['exl2'])['exl2']
-        exl2_prompt_template_format = read_config(['exl2_prompt_template_format'])['exl2_prompt_template_format']
+        exl2, exl2_prompt_template_format, vision, flux_diffusers = read_config_for_hf_waitress_prompt_formatting()
     except Exception as e:
         handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
 
@@ -3890,9 +3907,7 @@ def prepare_special_model_response(formatted_prompt:str, user_query:str, current
             formatted_prompt="" if is_diffusers else formatted_prompt, 
             user_query=user_query, 
             current_sequence_id=0 if is_diffusers else current_sequence_id, 
-            base_template="", 
-            flux_diffusers=is_diffusers, 
-            vision=not is_diffusers, 
+            base_template="",  
             skip_system_prompt=True
         )
         return {
@@ -3961,9 +3976,9 @@ def get_full_prompt_for_server(local_llm_server: str, formatted_history_prompt: 
     if local_llm_server == 'llama-cpp':
         formatted_updated_prompt = format_prompt_for_llama_cpp(formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format)
     elif local_llm_server == 'hf-waitress':
-        formatted_updated_prompt = format_prompt_for_hf_waitress(formatted_history_prompt, user_query, current_sequence_id, base_template, False, False, skip_system_prompt)
+        formatted_updated_prompt = format_prompt_for_hf_waitress(formatted_history_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
     elif local_llm_server == 'hfw-vision':
-        formatted_updated_prompt = format_prompt_for_hf_waitress(formatted_history_prompt, user_query, current_sequence_id, "", False, True, True)  # No base_template for hfw-vision
+        formatted_updated_prompt = format_prompt_for_hf_waitress(formatted_history_prompt, user_query, current_sequence_id, "", True)  # No base_template for hfw-vision
     print("Returning formatted_prompt: ", formatted_updated_prompt)
     return formatted_updated_prompt
 
@@ -4268,6 +4283,8 @@ def get_llama_cpp_formatted_user_prompt(local_llm_chat_template_format: str, llm
         return f"{llm_response}<|end_of_turn|>"
     elif local_llm_chat_template_format == 'gemma2':
         return f"{llm_response}<end_of_turn>\n"
+    elif local_llm_chat_template_format == 'raw':
+        return f"{llm_response}\n"
     else:
         return False
 
@@ -4430,7 +4447,10 @@ def get_references():
         if flux_diffusers:
             do_rag = False
         else:
-            formatted_user_prompt = get_llama_cpp_formatted_user_prompt(exl2_prompt_template_format, llm_response) if exl2 else get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response) 
+            if exl2:
+                formatted_user_prompt += get_llama_cpp_formatted_user_prompt(exl2_prompt_template_format, llm_response)
+            else:
+                formatted_user_prompt = get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response)
 
     if not do_rag:
         print("\n\nRAG Citations unnecessary, storing chat history and returning\n\n")
