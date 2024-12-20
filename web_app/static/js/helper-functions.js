@@ -1267,11 +1267,11 @@ function enableNonExl2Settings() {
     document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
     document.getElementById('hf_waitress_diffusers').style.display = 'block';
     document.getElementById('hf_waitress_use_flash_attention_2').style.display = 'block';
-    document.getElementById('hf_waitress_torch_device_map').style.display = 'block';
-    document.getElementById('hf_waitress_torch_dtype').style.display = 'block';
-    document.getElementById('hf_waitress_pipeline_task').style.display = 'block';
-    document.getElementById('hf_waitress_quantization').style.display = 'block';
-    document.getElementById('hf_waitress_quantization_level').style.display = 'block';
+    document.getElementById('hf_waitress_torch_device_map').style.display = 'flex';
+    document.getElementById('hf_waitress_torch_dtype').style.display = 'flex';
+    document.getElementById('hf_waitress_pipeline_task').style.display = 'flex';
+    document.getElementById('hf_waitress_quantization').style.display = 'flex';
+    document.getElementById('hf_waitress_quantization_level').style.display = 'flex';
     document.getElementById('hf_waitress_hqq_group_size').style.display = 'block';
     document.getElementById('hf_waitress_minp_value').style.display = 'block';
     document.getElementById('hf_waitress_return_full_text').style.display = 'block';
