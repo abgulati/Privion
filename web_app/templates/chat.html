@@ -294,56 +294,6 @@
 
                                             <!-- <br> -->
 
-                                            <div class="hf-waitress-exl2-configuration-div" id="hf-waitress-exl2-configuration-div" style="display: none; margin-bottom: 25px;">
-                                                
-                                                <div id="hf_waitress_exl2_bpw" class="restart-settings-group llm-settings-standard-styling">
-                                                    <label for="HfwExl2Bpw" class="hf-select-settings-labels-group">Bits Per Word (--exl2_bpw): </label>
-                                                    <input type="number" id="HfwExl2Bpw" min="2.0" max="8.0" step="0.01" class="settings-input-fields" value="3.0">
-                                                </div>
-
-                                                <div id="hf_waitress_exl2_max_seq_len" class="restart-settings-group llm-settings-standard-styling">
-                                                    <label for="HfwExl2MaxSeqLen" class="hf-select-settings-labels-group">Max Sequence Length (--exl2_max_seq_len): </label>
-                                                    <input type="number" id="HfwExl2MaxSeqLen" min="1024" step="1" class="settings-input-fields" value="2048">
-                                                </div>
-
-                                                <div id="hf_waitress_exl2_cache_type" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
-                                                    <label class="hf-select-settings-labels-group">Cache Type (--exl2_cache_type):</label>
-                                                    <br>
-                                                    <select class="modal-selects" id="hf_waitress_exl2_cache_type_choice">
-                                                        <option value="ExLlamaV2Cache">Full ExLlamaV2Cache (default)</option>
-                                                        <option value="c8">FP8-bit</option>
-                                                        <option value="cq4">Q4 (Recommended)</option>
-                                                        <option value="cq6">Q6</option>
-                                                        <option value="cq8">Q8</option>
-                                                    </select>
-                                                </div>
-
-                                                <div id="hf_waitress_exl2_prompt_template_format" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
-                                                    <label class="hf-select-settings-labels-group">Prompt Template Format:</label>
-                                                    <br>
-                                                    <select class="modal-selects" id="hf_waitress_exl2_prompt_template_format_choice">
-                                                        <option value="raw">Model Agnostic - Raw (default)</option>
-                                                        <option value="llama2">Llama-2 Prompt Template Format (Mistral Nemo-12B Instruct, Instruct-7B & MoE - v0.1 & v0.2, etc.)</option>
-                                                        <option value="llama3">Llama-3 & 3.1 Prompt Template Format</option>
-                                                        <option value="chatml">ChatML Prompt Template Format (Open & Nous Hermes-Mistral & MoE, etc.) </option>
-                                                        <option value="qwen-chatml">Qwen Prompt Template Format (Qwen1.5, Qwen2, Qwen2-Math, Qwen2.5, Qwen2.5-Coder, QwQ, etc.)</option>
-                                                        <option value="phi3">Microsoft Phi-3 Prompt Template Format</option>
-                                                        <option value="command-r">Cohere Command-R & Command-R+ Prompt Template Format</option>
-                                                        <option value="deepseek">Deepseek-Coder Prompt Template Format</option>
-                                                        <option value="deepseek-coder-v2">Deepseek-Coder-V2 Prompt Template Format</option>
-                                                        <option value="gemma2">Google Gemma2 Prompt Template Format</option>
-                                                        <option value="vicuna">Nous-Capybara Vicuna Prompt Template Format</option>
-                                                        <option value="openchat">OpenChat-3.5-0106 Prompt Template Format</option>
-                                                    </select>
-                                                </div>
-
-                                                <div class="form-group">
-                                                    <input type="checkbox" id="hf_waitress_exl2_force_regenerate_measurement" name="hf_waitress_exl2_force_regenerate_measurement">
-                                                    <label for="hf_waitress_exl2_force_regenerate_measurement">Force Regenerate Measurement File?</label>
-                                                </div>
-
-                                            </div>
-
                                             <div class="hf-waitress-diffusers-configuration-div" id="hf-waitress-diffusers-configuration-div" style="display: none;">
                                                 
                                                 <div id="hf_waitress_diffusers_low_vram_optimizations" title="Instant load-times, slow CPU renders. Recommended for most users." class="llm-settings-standard-styling">
@@ -410,6 +360,56 @@
                                                     </div>  
         
                                                     <div class="settings-requiring-restart-container llm-settings-standard-styling">
+
+                                                        <div class="hf-waitress-exl2-configuration-div" id="hf-waitress-exl2-configuration-div" style="display: none; margin-bottom: 25px;">
+                                                
+                                                            <div id="hf_waitress_exl2_bpw" class="restart-settings-group llm-settings-standard-styling">
+                                                                <label for="HfwExl2Bpw" class="hf-select-settings-labels-group">Bits Per Word (--exl2_bpw): </label>
+                                                                <input type="number" id="HfwExl2Bpw" min="2.0" max="8.0" step="0.01" class="settings-input-fields" value="3.0">
+                                                            </div>
+            
+                                                            <div id="hf_waitress_exl2_max_seq_len" class="restart-settings-group llm-settings-standard-styling">
+                                                                <label for="HfwExl2MaxSeqLen" class="hf-select-settings-labels-group">Max Sequence Length (--exl2_max_seq_len): </label>
+                                                                <input type="number" id="HfwExl2MaxSeqLen" min="1024" step="1" class="settings-input-fields" value="2048">
+                                                            </div>
+            
+                                                            <div id="hf_waitress_exl2_cache_type" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
+                                                                <label class="hf-select-settings-labels-group">Cache Type (--exl2_cache_type):</label>
+                                                                <br>
+                                                                <select class="modal-selects" id="hf_waitress_exl2_cache_type_choice">
+                                                                    <option value="ExLlamaV2Cache">Full ExLlamaV2Cache (default)</option>
+                                                                    <option value="c8">FP8-bit</option>
+                                                                    <option value="cq4">Q4 (Recommended)</option>
+                                                                    <option value="cq6">Q6</option>
+                                                                    <option value="cq8">Q8</option>
+                                                                </select>
+                                                            </div>
+            
+                                                            <div id="hf_waitress_exl2_prompt_template_format" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
+                                                                <label class="hf-select-settings-labels-group">Prompt Template Format:</label>
+                                                                <br>
+                                                                <select class="modal-selects" id="hf_waitress_exl2_prompt_template_format_choice">
+                                                                    <option value="raw">Model Agnostic - Raw (default)</option>
+                                                                    <option value="llama2">Llama-2 Prompt Template Format (Mistral Nemo-12B Instruct, Instruct-7B & MoE - v0.1 & v0.2, etc.)</option>
+                                                                    <option value="llama3">Llama-3 & 3.1 Prompt Template Format</option>
+                                                                    <option value="chatml">ChatML Prompt Template Format (Open & Nous Hermes-Mistral & MoE, etc.) </option>
+                                                                    <option value="qwen-chatml">Qwen Prompt Template Format (Qwen1.5, Qwen2, Qwen2-Math, Qwen2.5, Qwen2.5-Coder, QwQ, etc.)</option>
+                                                                    <option value="phi3">Microsoft Phi-3 Prompt Template Format</option>
+                                                                    <option value="command-r">Cohere Command-R & Command-R+ Prompt Template Format</option>
+                                                                    <option value="deepseek">Deepseek-Coder Prompt Template Format</option>
+                                                                    <option value="deepseek-coder-v2">Deepseek-Coder-V2 Prompt Template Format</option>
+                                                                    <option value="gemma2">Google Gemma2 Prompt Template Format</option>
+                                                                    <option value="vicuna">Nous-Capybara Vicuna Prompt Template Format</option>
+                                                                    <option value="openchat">OpenChat-3.5-0106 Prompt Template Format</option>
+                                                                </select>
+                                                            </div>
+            
+                                                            <div class="form-group">
+                                                                <input type="checkbox" id="hf_waitress_exl2_force_regenerate_measurement" name="hf_waitress_exl2_force_regenerate_measurement">
+                                                                <label for="hf_waitress_exl2_force_regenerate_measurement">Force Regenerate Measurement File?</label>
+                                                            </div>
+            
+                                                        </div>
 
                                                         <div id="hf_waitress_use_flash_attention_2" class="restart-settings-group llm-settings-standard-styling">
                                                             <label class="hf-select-settings-labels-group">Use Flash Attention 2? Ensure hardware and software requirements met (--use_flash_attention_2):</label>
