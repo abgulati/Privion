@@ -1870,7 +1870,6 @@ def completions():
         try:
             generation_args = {
                 "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
-                "return_full_text": request.headers.get('X-Return-Full-Text', str(return_full_text)).lower() == 'true',
                 "temperature": float(request.headers.get('X-Temperature', str(temperature))),
                 "do_sample": request.headers.get('X-Do-Sample', str(do_sample)).lower() == 'true',
                 "top_k": int(request.headers.get('X-Top-K', str(top_k))),
@@ -1881,12 +1880,37 @@ def completions():
             handle_error_no_return("Could not set generation-arguments for /completions, proceeding without them. Encountered error: ", e)
 
         try:
-            if generation_args:
-                output = PIPE(messages, **generation_args)
-            else:
-                output = PIPE(messages)
+            print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
+            inputs = PIPE.tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_dict=True, return_tensors="pt")
         except Exception as e:
-            handle_api_error("Could not generate output, encountered error: ", e)
+            handle_local_error("Could not apply chat template, encountered error: ", e)
+            return False
+
+        try:
+            print("\n\nLoading Input to Model\n\n")
+            inputs.to(PIPE.model.device)
+        except Exception as e:
+            handle_local_error("Could not load input to model, encountered error: ", e)
+            return False
+
+        inference_output = ""
+        try:
+            print("\n\nGenerating Output\n\n")
+            if generation_args:
+                output = PIPE.model.generate(**inputs, **generation_args)    # `output` is a tensor and needs to be decoded!
+            else:
+                output = PIPE.model.generate(**inputs, max_new_tokens=max_new_tokens)
+            
+            input_length = inputs.input_ids.shape[1]   # Check inference_with_vision_model(request) for detailed explanation!
+            
+            # Slice the tensor and decode only the output!
+            decoded_output = PIPE.tokenizer.decode(output[0][input_length:], skip_special_tokens=True)    # Setting skip_special_tokens=True to remove: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
+
+            print(f"\n\ndecoded_output: {decoded_output}\n\n")
+            inference_output += decoded_output
+        except Exception as e:
+            handle_local_error("Could not generate output, encountered error: ", e)
+            return False
 
         print("\n\nCompletions done - releasing LLM semaphore\n\n")
 
@@ -1895,7 +1919,7 @@ def completions():
         except Exception as e:
             handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
 
-        return jsonify({"success": True, "response": output})
+        return jsonify({"success": True, "response": inference_output})
 
 
 
