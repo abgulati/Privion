@@ -2602,7 +2602,7 @@ def hf_waitress_server_starter(hard_reboot_required = False):
     global HF_WAITRESS_PROCESS
     global LLAMA_CPP_PROCESS
 
-    
+    other_server_running = False
     if hard_reboot_required:
         print("\nHard-Reboot of HF-Waitress server requested.\n")
         if is_local_server_online('hf-waitress')['server_available']:
@@ -2610,14 +2610,13 @@ def hf_waitress_server_starter(hard_reboot_required = False):
             try:
                 terminate_local_llm_server_process(HF_WAITRESS_PROCESS)
             except Exception as e:
+                other_server_running = True
                 handle_error_no_return("Could not terminate running HF-Waitress process before hard-reboot. It was likely launched by a previous session or external process. Consider manually shutting down this server to conserve memory. Technical error-details follow: ", e)
             finally:
                 HF_WAITRESS_PROCESS = None
                 LLM_LOADED_UP = False
         else:
             print("\nHF-Waitress server is not running, proceeding to hard-reboot.\n")
-
-    other_server_running = False
 
     # Before attempting to start the HF-Waitress server, check if llama.cpp is running and if so, shut it down:
     try:
