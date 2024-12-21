@@ -367,6 +367,23 @@ async function fetchRestartEventStream() {
 }
 
 
+function requestHFWaitressHardReboot() {
+    console.log("Hard-Reboot of HF-Waitress server requested. Restarting server...");
+    return fetch('/hf_waitress_server_starter_endpoint', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({'hard_reboot_required': true})
+    }).then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error) });
+        }
+        return response.json();
+    }).then(data => {
+        console.log("HF-Waitress server starter endpoint response: ", data);
+    });
+}
+
+
 function handleHfWaitressChanges(hf_config) {
     return new Promise((resolve, reject) => {
         document.getElementById('hf-model-loader-stream').innerHTML = '';
@@ -389,11 +406,15 @@ function handleHfWaitressChanges(hf_config) {
             return response.json();
         })
         .then(data => {
-            console.log(data);
+            console.log("HF-Waitress server starter endpoint response: ", data);
             if (data.restart_required) {
                 // Restart HF-Waitress Server
-                console.log("HF-Waitress server changes saved successfully, restarting server.");
-                return fetchRestartEventStream();   // Call to an async function will return a promise, so we need to return the promise...
+                if (data.hard_reboot_required) {
+                    return requestHFWaitressHardReboot();
+                } else {
+                    console.log("HF-Waitress server changes saved successfully, restarting server...");
+                    return fetchRestartEventStream();   // Call to an async function will return a promise, so we need to return the promise...
+                }
             } else {
                 console.log("HF-Waitress server changes saved successfully, restart unnecessary.");
                 resolve();
