@@ -2222,12 +2222,13 @@ def exl2_stream():
             while PIPE.num_remaining_jobs():
                 # output_queue.put(PIPE.iterate()[0])  # Will print dict with keys: dict_keys(['job', 'stage', 'eos', 'serial', 'text', 'token_ids']) ### USE: yield f"data: {(line)}\n\n"
                 current_token = PIPE.iterate()   # directly trying to access the 'text' key here will result in a KeyError as iteration may not have completed yet!
-                if len(current_token) > 0 and current_token[0]['stage'] == 'started':
-                    if len(current_token) > 2 and 'text' in current_token[2]:
-                        output_queue.put(current_token[2]['text'])
-                else:
-                    if len(current_token) > 0 and 'text' in current_token[0]:
-                        output_queue.put(current_token[0]['text'])    # thus best to capture the current iteration's output and then access the 'text' key!
+                if len(current_token) == 1 and 'text' in current_token[0]:
+                    output_queue.put(current_token[0]['text'])  # thus best to capture the current iteration's output and then access the 'text' key!
+                elif len(current_token) > 1:
+                    for job in current_token:
+                        if 'stage' in job and job['stage'] == 'streaming':
+                            if 'text' in job: 
+                                output_queue.put(job['text'])   
                 # output_queue.put(current_token[2]['text']) if current_token[0]['stage'] == 'started' else output_queue.put(current_token[0]['text'])
         except Exception as e:
             return handle_error_no_return("Response generation failed, encountered error: ", e)
