@@ -166,6 +166,8 @@ def write_config(config_updates, filename='hf_config.json'):
 
         #restart logic in write_config() might be unnecessary, circle back later
         restart_required = False
+        hard_reboot_required = False
+        model_changed = False
         triggers_for_hf_restart = [
             'torch_device_map',
             'torch_dtype',
@@ -188,9 +190,22 @@ def write_config(config_updates, filename='hf_config.json'):
             'exl2_max_seq_len',
             'exl2_force_regenerate_measurement'
         ]
+
+        triggers_for_hard_reboot = [
+            'exl2',
+            'exl2_bpw',
+            'exl2_cache_type'
+        ]
+        
         for key in config_updates:
             if key in triggers_for_hf_restart and config_updates[key] != hf_config.get(key):
                 restart_required = True
+                if key == 'model_id': model_changed = True
+                if key in triggers_for_hard_reboot: hard_reboot_required = True
+
+        if config_updates.get('exl2', False) and model_changed:
+            print("ExL2 status changed and model changed, setting hard_reboot_required to True")
+            hard_reboot_required = True
 
         # Auto-detect Flux and Llama-3.2-Vision models
         if "flux" in config_updates.get('model_id', '').lower():
@@ -214,7 +229,7 @@ def write_config(config_updates, filename='hf_config.json'):
         except Exception as e:
             handle_local_error("Could not update hf_config.json, encountered error: ", e)
         
-        return {'success': True, 'restart_required':restart_required}
+        return {'success': True, 'restart_required':restart_required, 'hard_reboot_required':hard_reboot_required}
             
 
 # Method to read from hf_config.json | input- list of keys to be read from hf_config.json; output- dict of key:value pairs; MANAGE DEFAULTS HERE!
@@ -364,7 +379,7 @@ def hf_config_writer_api():
     except Exception as e:
         handle_api_error("Server-side error - could not write keys to hf_config.json. Encountered error: ", e)
     
-    return jsonify({"success": write_return['success'], "restart_required": write_return['restart_required']})
+    return jsonify({"success": write_return['success'], "restart_required": write_return['restart_required'], "hard_reboot_required": write_return['hard_reboot_required']})
 
 
 ############################----------------------------------------------###############################
