@@ -2607,9 +2607,13 @@ def hf_waitress_server_starter(hard_reboot_required = False):
         print("\nHard-Reboot of HF-Waitress server requested.\n")
         if is_local_server_online('hf-waitress')['server_available']:
             print("\nHF-Waitress server is running, terminating it before hard-reboot.\n")
-            terminate_local_llm_server_process(HF_WAITRESS_PROCESS)
-            HF_WAITRESS_PROCESS = None
-            LLM_LOADED_UP = False
+            try:
+                terminate_local_llm_server_process(HF_WAITRESS_PROCESS)
+            except Exception as e:
+                handle_error_no_return("Could not terminate running HF-Waitress process before hard-reboot. It was likely launched by a previous session or external process. Consider manually shutting down this server to conserve memory. Technical error-details follow: ", e)
+            finally:
+                HF_WAITRESS_PROCESS = None
+                LLM_LOADED_UP = False
         else:
             print("\nHF-Waitress server is not running, proceeding to hard-reboot.\n")
 
