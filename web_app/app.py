@@ -2594,14 +2594,24 @@ def get_hf_waitress_serving_host_and_port():
         return '0.0.0.0', 9069
 
 
-@app.route('/hf_waitress_server_starter')
-def hf_waitress_server_starter():
+def hf_waitress_server_starter(hard_reboot_required = False):
     print("\n\nStarting HF-Waitress Server\n\n")
 
     global LLM_CHANGE_RELOAD_TRIGGER_SET    # This is only set by LARS basis llama.cpp, so we simply handle it here!
     global LLM_LOADED_UP
     global HF_WAITRESS_PROCESS
     global LLAMA_CPP_PROCESS
+
+    
+    if hard_reboot_required:
+        print("\nHard-Reboot of HF-Waitress server requested.\n")
+        if is_local_server_online('hf-waitress')['server_available']:
+            print("\nHF-Waitress server is running, terminating it before hard-reboot.\n")
+            terminate_local_llm_server_process(HF_WAITRESS_PROCESS)
+            HF_WAITRESS_PROCESS = None
+            LLM_LOADED_UP = False
+        else:
+            print("\nHF-Waitress server is not running, proceeding to hard-reboot.\n")
 
     other_server_running = False
 
@@ -2699,6 +2709,22 @@ def hf_waitress_server_starter():
         handle_error_no_return("Could not check server status after launch attempt, printing error and retrying: ", e)
 
     return handle_api_error("Failed to start HF-Waitress Server. It may be taking a while to download the model, try refreshing LARS in a few minutes.")
+
+
+@app.route('/hf_waitress_server_starter_endpoint', methods=['POST'])
+def hf_waitress_server_starter_endpoint():
+    print("\n\nHF-Waitress server starter endpoint called\n\n")
+    try:
+        data = request.get_json()
+        hard_reboot_required = data.get('hard_reboot_required', 'false')
+        print(f"\n\nhard_reboot_required: {hard_reboot_required}\n\n")
+    except Exception as e:
+        return handle_api_error("Could not read hard_reboot_required from the POST request in method hf_waitress_server_starter_endpoint, encountered error: ", e)
+
+    try:
+        return hf_waitress_server_starter(hard_reboot_required)
+    except Exception as e:
+        return handle_api_error("Could not start HF-Waitress server in method hf_waitress_server_starter_endpoint, encountered error: ", e)
 
 
 @app.route('/check_local_llm_server_status', methods=['POST'])
