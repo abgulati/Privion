@@ -373,10 +373,10 @@
                                                                 <input type="number" id="HfwExl2MaxSeqLen" min="1024" step="1" class="settings-input-fields" value="2048">
                                                             </div>
             
-                                                            <div id="hf_waitress_exl2_cache_type" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
+                                                            <div id="hf_waitress_exl2_cache_type" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling" style="width: 100%;">
                                                                 <label class="hf-select-settings-labels-group">Cache Type (--exl2_cache_type):</label>
                                                                 <br>
-                                                                <select class="modal-selects" id="hf_waitress_exl2_cache_type_choice">
+                                                                <select class="modal-selects" id="hf_waitress_exl2_cache_type_choice" style="width: 100%; max-width: 20vh;">
                                                                     <option value="ExLlamaV2Cache">Full ExLlamaV2Cache (default)</option>
                                                                     <option value="c8">FP8-bit</option>
                                                                     <option value="cq4">Q4 (Recommended)</option>
@@ -385,10 +385,10 @@
                                                                 </select>
                                                             </div>
             
-                                                            <div id="hf_waitress_exl2_prompt_template_format" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
+                                                            <div id="hf_waitress_exl2_prompt_template_format" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling" style="width: 100%;">
                                                                 <label class="hf-select-settings-labels-group">Prompt Template Format:</label>
                                                                 <br>
-                                                                <select class="modal-selects" id="hf_waitress_exl2_prompt_template_format_choice">
+                                                                <select class="modal-selects" id="hf_waitress_exl2_prompt_template_format_choice" style="width: 100%; max-width: 60vh;">
                                                                     <option value="raw">Model Agnostic - Raw (default)</option>
                                                                     <option value="llama2">Llama-2 Prompt Template Format (Mistral Nemo-12B Instruct, Instruct-7B & MoE - v0.1 & v0.2, etc.)</option>
                                                                     <option value="llama3">Llama-3 & 3.1 Prompt Template Format</option>
@@ -582,20 +582,20 @@
                                             <br>
                                             <br>
 
-                                            <div  id="localLlmSelection">
+                                            <div  id="localLlmSelection" style="width: 100%;">
                                                 <label style="margin-bottom: 3px;">Select a local LLM:</label>
                                                 <br>
-                                                <select class="modal-selects" name="model_choice" id="modelDropdown">
+                                                <select class="modal-selects" name="model_choice" id="modelDropdown" style="width: 100%; max-width: 60vh;">
                                                     
                                                 </select>
                                             </div>
 
                                             <br>
 
-                                            <div  id="localLlmTemplateSelection">
+                                            <div  id="localLlmTemplateSelection" style="width: 100%;">
                                                 <label style="margin-bottom: 3px;">Select a Prompt-Template Format</label>
                                                 <br>
-                                                <select class="modal-selects" name="llm_template_choice" id="llmTemplateDropdown">
+                                                <select class="modal-selects" name="llm_template_choice" id="llmTemplateDropdown" style="width: 100%; max-width: 60vh;">
                                                     <option value="">Please select</option>
                                                     <option value="llama3">Llama-3 & 3.1 Prompt Template Format</option>
                                                     <option value="llama2">Llama-2 Prompt Template Format (Mistral Nemo-12B Instruct, Instruct-7B & MoE - v0.1 & v0.2, etc.)</option>
