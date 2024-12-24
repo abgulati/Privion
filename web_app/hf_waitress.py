@@ -2098,6 +2098,24 @@ def completions_stream():
     except Exception as e:
         handle_error_no_return("Could not set generation-arguments for /completions_stream, proceeding without them. Encountered error: ", e)
 
+    try:
+        print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
+        inputs = PIPE.tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_dict=True, return_tensors="pt")    
+        # `PIPE.tokenizer.apply_chat_template` outputs a dict to `inputs` with keys: input_ids, attention_mask, labels, token_type_ids
+        # type(inputs): <class 'transformers.tokenization_utils_base.BatchEncoding'>
+        # type(inputs['input_ids']): <class 'torch.Tensor'>
+    except Exception as e:
+        handle_error_no_return("Could not apply chat template, encountered error: ", e)
+        return False
+
+    try:
+        # Slice the tensor and decode only the output!
+        decoded_inputs = PIPE.tokenizer.decode(inputs['input_ids'][0].tolist(), skip_special_tokens=False)    # Setting skip_special_tokens=False to keep: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
+        print(f"\n\ndecoded_inputs: {decoded_inputs}\n\n")
+    except Exception as e:
+        handle_error_no_return("Could not decode inputs, encountered error: ", e)
+
+
     stop_event = threading.Event()
 
     data_queue = queue.Queue()
@@ -2105,7 +2123,7 @@ def completions_stream():
     def callback(data):
         data_queue.put(data)
 
-    custom_streamer = CustomTextStreamer(PIPE.tokenizer, skip_special_tokens=True, skip_prompt=True)
+    custom_streamer = CustomTextStreamer(PIPE.tokenizer, skip_special_tokens=True, skip_prompt=True)    # special tokens need not be streamed though!
     custom_streamer.callback = callback
 
     def llm_task():
@@ -2116,9 +2134,9 @@ def completions_stream():
             if generation_args:
                 generation_args["streamer"] = custom_streamer
                 generation_args["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
-                output = PIPE(messages, **generation_args)
+                output = PIPE(decoded_inputs, **generation_args)
             else:
-                output = PIPE(messages, streamer=custom_streamer, stopping_criteria=StoppingCriteriaList([StopOnEvent(stop_event)]))
+                output = PIPE(decoded_inputs, streamer=custom_streamer, stopping_criteria=StoppingCriteriaList([StopOnEvent(stop_event)]))
         finally:
             data_queue.put(None)
             print("\n\nLLM stream done, releasing semaphore\n\n")
