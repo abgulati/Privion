@@ -2461,3 +2461,88 @@ result = subprocess.run(command, check=True,
 # To redirect stderr to stdout:
 result = subprocess.run(command, check=True,
                        stderr=subprocess.STDOUT)
+
+
+
+### APPLY PROMPT TEMPLATE TO STREAM:
+What's a better way to do this:
+
+Option 1:
+
+```
+    try:
+        print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
+        formatted_text = PIPE.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+    except Exception as e:
+        handle_error_no_return("Could not apply chat template, encountered error: ", e)
+        return False
+
+    try:
+        inputs = PIPE.tokenizer(formatted_text, return_tensors="pt")
+    except Exception as e:
+        handle_error_no_return("Could not tokenize formatted_text, encountered error: ", e)
+        return False
+
+    try:
+        # Slice the tensor and decode only the output!
+        decoded_inputs = PIPE.tokenizer.decode(inputs['input_ids'][0].tolist(), skip_special_tokens=True)    # Setting skip_special_tokens=True to remove: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
+        print(f"\n\ndecoded_inputs: {decoded_inputs}\n\n")
+    except Exception as e:
+        handle_error_no_return("Could not decode inputs, encountered error: ", e)
+
+    PIPE(decoded_inputs, **generation_args)
+```
+
+OR Option 2:
+
+```
+    try:
+        print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
+        inputs = PIPE.tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_dict=True, return_tensors="pt")
+    except Exception as e:
+        handle_error_no_return("Could not apply chat template, encountered error: ", e)
+        return False
+
+    try:
+        # Slice the tensor and decode only the output!
+        decoded_inputs = PIPE.tokenizer.decode(inputs['input_ids'][0].tolist(), skip_special_tokens=True)    # Setting skip_special_tokens=True to remove: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
+        print(f"\n\ndecoded_inputs: {decoded_inputs}\n\n")
+    except Exception as e:
+        handle_error_no_return("Could not decode inputs, encountered error: ", e)
+
+    PIPE(decoded_inputs, **generation_args)
+```
+
+Because both seem to work!
+
+Option 2 is better for several reasons:
+Efficiency: Option 2 performs the tokenization in a single step within apply_chat_template, while Option 1 requires two separate operations (template application and tokenization). This means Option 2 is more computationally efficient.
+Cleaner Code: Option 2 is more concise and has fewer potential points of failure since it combines the template application and tokenization into a single operation.
+Memory Usage: Option 2 avoids creating an intermediate string representation (formatted_text) that's only used once, making it more memory efficient.
+Consistency: Option 2 uses the tokenizer's built-in functionality to handle the entire process in one go, which is more likely to maintain consistency with how the model expects the input to be formatted.
+
+
+Here's a clean version of Option 2:
+
+try:
+    print(f\n\nApplying Chat Template for messages: {messages}\n\n")
+   inputs = PIPE.tokenizer.apply_chat_template(
+       messages, 
+       add_generation_prompt=True, 
+       return_dict=True, 
+       return_tensors="pt"
+   )
+   
+   # Decode and print for debugging
+   decoded_inputs = PIPE.tokenizer.decode(
+       inputs['input_ids'][0].tolist(), 
+       skip_special_tokens=True
+   )
+   print(f"\n\ndecoded_inputs: {decoded_inputs}\n\n")
+   
+   # Process with pipeline
+   PIPE(decoded_inputs, **generation_args)
+   
+except Exception as e:
+   handle_error_no_return("Error in chat template processing: ", e)
+   return False
