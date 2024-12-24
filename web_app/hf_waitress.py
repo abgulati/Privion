@@ -2109,7 +2109,7 @@ def completions_stream():
         return False
 
     try:
-        # Slice the tensor and decode only the output!
+        # Slice the tensor and decode only the input!
         decoded_inputs = PIPE.tokenizer.decode(inputs['input_ids'][0].tolist(), skip_special_tokens=False)    # Setting skip_special_tokens=False to keep: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
         print(f"\n\ndecoded_inputs: {decoded_inputs}\n\n")
     except Exception as e:
