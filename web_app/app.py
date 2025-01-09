@@ -3688,14 +3688,14 @@ def format_prompt_for_llama_cpp(formatted_prompt:str, user_query:str, current_se
     elif local_llm_chat_template_format == 'chatml':
         
         if current_sequence_id > 0:
-            formatted_prompt += f"\n<|im_start|>user\n{user_query}<|im_end|>\n"
+            formatted_prompt += f"<|im_start|>user\n{user_query}<|im_end|>\n<|im_start|>assistant\n"
         else:
             formatted_prompt += f"<|im_start|>system\n{base_template}<|im_end|>\n<|im_start|>user\n{user_query}<|im_end|>\n<|im_start|>assistant\n"
     
     elif local_llm_chat_template_format == 'qwen-chatml':
         
         if current_sequence_id > 0:
-            formatted_prompt += f"\n<|im_start|>user\n{user_query}<|im_end|>\n"
+            formatted_prompt += f"<|im_start|>user\n{user_query}<|im_end|>\n<|im_start|>assistant\n"
         else:
             formatted_prompt += f"<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.\n{base_template}<|im_end|>\n<|im_start|>user\n{user_query}<|im_end|>\n<|im_start|>assistant\n"
 
@@ -3705,6 +3705,13 @@ def format_prompt_for_llama_cpp(formatted_prompt:str, user_query:str, current_se
             formatted_prompt += f"<|user|>\n{user_query}<|end|>\n<|assistant|>\n"
         else:
             formatted_prompt += f"<|system|>\n{base_template}<|end|>\n<|user|>\n{user_query}<|end|>\n<|assistant|>\n"
+
+    elif local_llm_chat_template_format == 'phi4':
+        
+        if current_sequence_id > 0:
+            formatted_prompt += f"<|im_start|>user<|im_sep|>\n{user_query}<|im_end|>\n<|im_start|>assistant<|im_sep|>\n"
+        else:
+            formatted_prompt += f"<|im_start|>system<|im_sep|>\n{base_template}<|im_end|>\n<|im_start|>user<|im_sep|>\n{user_query}<|im_end|>\n<|im_start|>assistant<|im_sep|>\n"
 
     elif local_llm_chat_template_format == 'command-r':
 
@@ -4309,6 +4316,8 @@ def get_llama_cpp_formatted_user_prompt(local_llm_chat_template_format: str, llm
         return f"{llm_response}<|im_end|>\n"
     elif local_llm_chat_template_format == 'phi3':
         return f"{llm_response}<|end|>\n"
+    elif local_llm_chat_template_format == 'phi4':
+        return f"{llm_response}<|im_end|>\n"
     elif local_llm_chat_template_format == 'command-r':
         return f"{llm_response}<|END_OF_TURN_TOKEN|>"
     elif local_llm_chat_template_format == 'deepseek':
