@@ -2546,3 +2546,77 @@ try:
 except Exception as e:
    handle_error_no_return("Error in chat template processing: ", e)
    return False
+
+
+function googleDriveLogin() {
+    showLoader();
+    fetch('/login_to_google_drive')
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error)});
+        }
+        return response
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            //alert("Google Drive Login Successful!")
+            document.getElementById('googleDriveUserName').textContent = "Logged in as: " + data.user_name;
+            document.getElementById('googleDriveUserName').style.display = 'block';
+
+            fetch('/fetch_file_list_from_google_drive')
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw new Error(err.error)});
+                }
+                return response.json()
+            })
+            .then(data => {
+                if (data.success) {
+                    hideLoader();
+                    console.log("GDrive Files Fetched");
+                    console.log(data.gdrive_files);
+                    if (data.gdrive_files.length > 0) {
+                        clearGoogleDriveTable();
+                        populateGoogleDriveTable(data.gdrive_files);
+                        document.getElementById('googleDriveSyncAction').style.display = 'block';
+                    }
+                } else {
+                    throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+                }
+            })
+            .catch(error => {
+                errorHandler("fetching file list from Google Drive", "/fetch_file_list_from_google_drive", String(error.message))
+            });
+
+        } else {
+            throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+        }
+    })
+    .catch(error => {
+        errorHandler("logging into Google Drive", "/login_to_google_drive", String(error.message))
+    });
+}
+
+@app.route('/login_to_google_drive')
+def login_to_google_drive():
+    global GDRIVE_CREDS
+    if os.path.exists("gdrive_token.json"):
+        GDRIVE_CREDS = Credentials.from_authorized_user_file("gdrive_token.json", GDRIVE_SCOPES)
+    if not GDRIVE_CREDS or not GDRIVE_CREDS.valid:
+        flow = InstalledAppFlow.from_client_secrets_file(
+            "gdrive_credentials.json", GDRIVE_SCOPES
+        )
+        GDRIVE_CREDS = flow.run_local_server(port=6003)
+        with open("gdrive_token.json", "w") as token:
+            token.write(GDRIVE_CREDS.to_json())
+
+    # Get name of the user
+    try:
+        service = build('drive', 'v3', credentials=GDRIVE_CREDS)
+        about_result = service.about().get(fields="user").execute()
+        user_name = about_result.get('user', {}).get('emailAddress', 'Unknown User')
+        return jsonify(success=True, user_name=user_name)
+    except Exception as e:
+        handle_error_no_return("Could not get user name from Google Drive, encountered error: ", e)
+        return jsonify(success=True)
