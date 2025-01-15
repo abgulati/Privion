@@ -65,7 +65,7 @@ from whoosh import scoring
 
 from waitress import serve
 
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Allow insecure traffic - Needed to bypass HTTPS requirement for Google Drive OAuth
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Allow insecure traffic - Needed to bypass HTTPS requirement for Google Drive OAuth. FOR DEV USE ONLY! SWITCH TO SELF-SIGNED CERTIFICATES & HTTPS FOR PRODUCTION!
 
 app = Flask(__name__)
 CORS(app)
@@ -2009,8 +2009,8 @@ def fetch_file_list_from_google_drive():
                     q="trashed=false",  # If working with specific file types or folders, consider enhancing the q parameter (e.g., q="'<folder_id>' in parents and trashed=false")
                     pageSize=1000,
                     fields="nextPageToken, files(id, name, mimeType, version)",
-                    supportsAllDrives=True,  # Include support for Share Drive files
-                    includeItemsFromAllDrives=True,  # Include items from Shared Drives
+                    supportsAllDrives=True,  #  Required to include Shared Drive Files: Without it, the API assumes the files are only in the user's private Drive!
+                    includeItemsFromAllDrives=True,  # Search and listing operations will include items from Shared Drives in the results if this is set to True.
                     pageToken=page_token    # Handle pagination
                 ).execute()
             )
