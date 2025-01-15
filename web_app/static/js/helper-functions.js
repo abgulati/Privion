@@ -1011,54 +1011,63 @@ function triggerSyncGoogleDrive() {
     });
 }
 
-function googleDriveLogin() {
-    showLoader();
-    fetch('/login_to_google_drive')
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(err => { throw new Error(err.error)});
-        }
-        return response
-    })
+function handleGoogleDrivePostAuth() {
+    fetch('/check_gdrive_auth')
     .then(response => response.json())
     .then(data => {
-        if (data.success) {
-            //alert("Google Drive Login Successful!")
-            document.getElementById('googleDriveUserName').textContent = "Logged in as: " + data.user_name;
-            document.getElementById('googleDriveUserName').style.display = 'block';
-
-            fetch('/fetch_file_list_from_google_drive')
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => { throw new Error(err.error)});
-                }
-                return response.json()
-            })
-            .then(data => {
-                if (data.success) {
-                    hideLoader();
-                    console.log("GDrive Files Fetched");
-                    console.log(data.gdrive_files);
-                    if (data.gdrive_files.length > 0) {
-                        clearGoogleDriveTable();
-                        populateGoogleDriveTable(data.gdrive_files);
-                        document.getElementById('googleDriveSyncAction').style.display = 'block';
-                    }
-                } else {
-                    throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
-                }
-            })
-            .catch(error => {
-                errorHandler("fetching file list from Google Drive", "/fetch_file_list_from_google_drive", String(error.message))
-            });
-
-        } else {
-            throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+        if (!data.is_authenticated) {
+            console.log("User not authenticated to GDrive, skipping Google Drive sync.");
+            return;
         }
+        console.log("User authenticated to GDrive, proceeding with Google Drive sync.");
+        showLoader();
+        fetch('/get_google_drive_user')
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw new Error(err.error)});
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                document.getElementById('googleDriveUserName').textContent = "Logged in as: " + data.user_name;
+                document.getElementById('googleDriveUserName').style.display = 'block';
+
+                return fetch('/fetch_file_list_from_google_drive');
+            } else {
+                throw new Error("Failed to fetch Google Drive user.");
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Failed to fetch Google Drive files.");
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                hideLoader();
+                console.log("GDrive Files Fetched");
+                console.log(data.gdrive_files);
+                if (data.gdrive_files.length > 0) {
+                    clearGoogleDriveTable();
+                    populateGoogleDriveTable(data.gdrive_files);
+                    document.getElementById('googleDriveSyncAction').style.display = 'block';
+                }
+            } else {
+                throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+            }
+        })
     })
     .catch(error => {
-        errorHandler("logging into Google Drive", "/login_to_google_drive", String(error.message))
+        errorHandler("Google Auth Check Failed", "handleGoogleDrivePostAuth()", String(error.message));
     });
+}
+
+function googleDriveLogin() {
+    showLoader();
+    const currentUrl = encodeURIComponent(window.location.href);
+    window.location.href = `/web_login_to_google_drive?redirect=${currentUrl}`; // Redirecting without fetch to avoid CORS issues!
 }
 
 function googleDriveLogout() {
