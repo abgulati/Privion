@@ -1151,6 +1151,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 showStopGenerationButton();
             }
             loadChatHistoryMenu();  // should be done regardless of errors
+            handleGoogleDrivePostAuth();
         })
         .catch(error => {
             errorHandler("initializing the application", "DOMContentLoaded", String(error.message));
