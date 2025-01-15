@@ -10,7 +10,7 @@ from werkzeug.utils import secure_filename
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import InstalledAppFlow, Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload, MediaDownloadProgress
@@ -65,6 +65,8 @@ from whoosh import scoring
 
 from waitress import serve
 
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Allow insecure traffic - Needed to bypass HTTPS requirement for Google Drive OAuth
+
 app = Flask(__name__)
 CORS(app)
 
@@ -113,7 +115,11 @@ HISTORY_SUMMARY = {}    #Set in stream() via HISTORY_MEMORY_WITH_BUFFER.load_mem
 QUERIES = {}
 
 # If modifying these scopes, delete the file token.json.
-GDRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.metadata.readonly", "https://www.googleapis.com/auth/drive.readonly"]
+GDRIVE_SCOPES = [
+    "https://www.googleapis.com/auth/drive.metadata.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive" # broader access needed for Share Drive files
+]
 GDRIVE_CREDS = None
 #########################------------------------------------------------###############################
 
@@ -1667,20 +1673,112 @@ def store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, 
     return formatted_datetime, chat_id
 
 
-@app.route('/login_to_google_drive')
-def login_to_google_drive():
+@app.route('/check_gdrive_auth')
+def check_gdrive_auth():
     global GDRIVE_CREDS
-    if os.path.exists("gdrive_token.json"):
-        GDRIVE_CREDS = Credentials.from_authorized_user_file("gdrive_token.json", GDRIVE_SCOPES)
-    if not GDRIVE_CREDS or not GDRIVE_CREDS.valid:
-        flow = InstalledAppFlow.from_client_secrets_file(
-            "gdrive_credentials.json", GDRIVE_SCOPES
-        )
-        GDRIVE_CREDS = flow.run_local_server(port=6003)
-        with open("gdrive_token.json", "w") as token:
-            token.write(GDRIVE_CREDS.to_json())
 
-    # Get name of the user
+    try:
+        if not GDRIVE_CREDS:
+            if os.path.exists("gdrive_token.json"):
+                try:
+                    GDRIVE_CREDS = Credentials.from_authorized_user_file("gdrive_token.json", GDRIVE_SCOPES)
+
+                    # Check if we have a refresh token
+                    if not hasattr(GDRIVE_CREDS, 'refresh_token') or not GDRIVE_CREDS.refresh_token:
+                        print("No refresh token found in credentials")
+                        return jsonify(is_authenticated=False)
+                    
+                    if GDRIVE_CREDS.valid:
+                        return jsonify(is_authenticated=True)
+                    elif GDRIVE_CREDS.expired:
+                        GDRIVE_CREDS.refresh(Request())
+                        # Save refreshed credentials
+                        with open("gdrive_token.json", "w") as token:
+                            token.write(GDRIVE_CREDS.to_json())
+                        return jsonify(is_authenticated=True)
+                    else:
+                        return jsonify(is_authenticated=False)
+                except Exception as e:
+                    print(f"Error loading credentials from file: {str(e)}")
+                    # If there's an error with the token file, consider deleting it
+                    os.remove("gdrive_token.json")
+                    return jsonify(is_authenticated=False)
+            else:
+                return jsonify(is_authenticated=False)
+            
+        # Check if credentials exist and are valid
+        if GDRIVE_CREDS and GDRIVE_CREDS.valid:
+            return jsonify(is_authenticated=True)
+        
+        # Check if credentials exist but need refresh
+        if (GDRIVE_CREDS and GDRIVE_CREDS.expired and hasattr(GDRIVE_CREDS, 'refresh_token') and GDRIVE_CREDS.refresh_token):
+            GDRIVE_CREDS.refresh(Request())
+            # Save refreshed credentials
+            with open("gdrive_token.json", "w") as token:
+                token.write(GDRIVE_CREDS.to_json())
+            return jsonify(is_authenticated=True)
+            
+        return jsonify(is_authenticated=False)
+    except Exception as e:
+        # Log the error but return false for authentication status
+        print(f"Error checking Google Drive auth status: {str(e)}")
+        return jsonify(is_authenticated=False)
+
+
+@app.route('/web_login_to_google_drive')
+def web_login_to_google_drive():
+    # Get the redirect URL from query parameters, default to "/"
+    redirect_url = request.args.get('redirect', '/')
+    
+    # Create the OAuth flow
+    flow = Flow.from_client_secrets_file(
+        "gdrive_webapp_creds.json",
+        GDRIVE_SCOPES,
+        redirect_uri=url_for('google_drive_callback', _external=True)
+    )
+
+    # Generate the Google OAuth URL
+    auth_url, state = flow.authorization_url(
+        access_type='offline',
+        include_granted_scopes='true'
+    )
+
+    # Add redirect URL to the URL (but not state, as it's already included)
+    auth_url += f"&redirect_url={redirect_url}"
+
+    # Redirect the user to the Google OAuth URL
+    return redirect(auth_url)
+
+
+@app.route('/google_drive_callback')
+def google_drive_callback():
+    global GDRIVE_CREDS
+
+    # Get the redirect URL from query parameters
+    redirect_url = request.args.get('redirect_url', '/')
+    state = request.args.get('state')   # Get the state from the query parameters
+
+    # Create the OAuth flow with the state and redirect URL
+    flow = Flow.from_client_secrets_file(
+        "gdrive_webapp_creds.json",
+        scopes=GDRIVE_SCOPES,
+        state=state,
+        redirect_uri=url_for('google_drive_callback', _external=True)
+    )
+
+    # Fetch the token from the authorization response
+    flow.fetch_token(authorization_response=request.url)
+    GDRIVE_CREDS = flow.credentials
+
+    # Save the token to a file
+    with open("gdrive_token.json", "w") as token:
+        token.write(GDRIVE_CREDS.to_json())
+    
+    return redirect(redirect_url)
+
+
+@app.route('/get_google_drive_user')
+def get_google_drive_user():
     try:
         service = build('drive', 'v3', credentials=GDRIVE_CREDS)
         about_result = service.about().get(fields="user").execute()
@@ -1695,6 +1793,29 @@ def login_to_google_drive():
 def logout_from_google_drive():
     global GDRIVE_CREDS
     try:
+        if GDRIVE_CREDS:
+            # Revoke the credentials on Google's side
+            revoke_url = "https://oauth2.googleapis.com/revoke"
+            headers = {'content-type': 'application/x-www-form-urlencoded'}
+            
+            # If we have a refresh token, revoke that (it will revoke access token too)
+            if hasattr(GDRIVE_CREDS, 'refresh_token') and GDRIVE_CREDS.refresh_token:
+                token_to_revoke = GDRIVE_CREDS.refresh_token
+            else:
+                # Otherwise revoke the access token
+                token_to_revoke = GDRIVE_CREDS.token
+
+            # Make the revocation request
+            response = requests.post(
+                revoke_url,
+                params={'token': token_to_revoke},
+                headers=headers
+            )
+
+            if response.status_code != 200:
+                print(f"Failed to revoke token: {response.text}")
+                # Continue with local cleanup even if revocation fails
+
         # Remove token file if it exists
         if os.path.exists("gdrive_token.json"):
             os.remove("gdrive_token.json")
@@ -1704,6 +1825,14 @@ def logout_from_google_drive():
         
         return jsonify(success=True, message="Successfully logged out from Google Drive")
     except Exception as e:
+        print(f"Error during logout: {str(e)}")
+        # Still try to clean up locally even if there was an error
+        try:
+            if os.path.exists("gdrive_token.json"):
+                os.remove("gdrive_token.json")
+            GDRIVE_CREDS = None
+        except:
+            pass
         return handle_api_error("Failed to logout from Google Drive: ", e)
 
 
@@ -1871,33 +2000,43 @@ def fetch_file_list_from_google_drive():
         about_result = service.about().get(fields="storageQuota,user").execute()
         print(f"about_result: {about_result}")
 
-        results = (
-            service.files().list(
-                q="trashed=false",
-                pageSize=1000,
-                fields="nextPageToken, files(id, name, mimeType, version)"
-            ).execute()
-        )
+        items = []
+        page_token = None
+
+        while True:
+            results = (
+                service.files().list(
+                    q="trashed=false",  # If working with specific file types or folders, consider enhancing the q parameter (e.g., q="'<folder_id>' in parents and trashed=false")
+                    pageSize=1000,
+                    fields="nextPageToken, files(id, name, mimeType, version)",
+                    supportsAllDrives=True,  # Include support for Share Drive files
+                    includeItemsFromAllDrives=True,  # Include items from Shared Drives
+                    pageToken=page_token    # Handle pagination
+                ).execute()
+            )
+            
+            files = results.get("files", [])
+            items.extend(files)
+            page_token = results.get("nextPageToken", None) # If users report missing files, log the nextPageToken and current page count for debugging
+            if not page_token:
+                break
         
-        items = results.get("files", [])
-        print(f"len(items): {len(items)}")
+        print(f"All files retrieved, total count: {len(items)}")
 
         if not items:
             print("No files found.")
             return jsonify(success=True, gdrive_files=gdrive_files)
-        else:
-            # print("\n\nFiles:\n\n")
-            # print("Name       ID      mimeType        fileExtension       Category      version")
-            for item in items:
-                category = categorize_mimetype(item['mimeType'])
-                #print(f"{item['name']}      ({item['id']})      {item['mimeType']}      {category}        {item['version']}")
-                gdrive_files.append({
-                    'name': item['name'],
-                    'id': item['id'],
-                    'mimeType': item['mimeType'],
-                    'version': item['version'],
-                    'type': category
-                })
+        
+        # Categorize files and format the output        
+        for item in items:
+            category = categorize_mimetype(item['mimeType'])
+            gdrive_files.append({
+                'name': item['name'],
+                'id': item['id'],
+                'mimeType': item['mimeType'],
+                'version': item['version'],
+                'type': category
+            })
 
     except Exception as e:
         return handle_api_error("Could not fetch GDrive files, encountered error: ", e)
@@ -2039,7 +2178,7 @@ def google_drive_loader():
         return handle_api_error("Could not create Google service handler in the google_drive_loader() method, check credentials and re-try: ", e)
 
     try:
-        file_metadata = service.files().get(fileId=gdrive_file_id, fields='name, mimeType').execute()
+        file_metadata = service.files().get(fileId=gdrive_file_id, fields='name, mimeType', supportsAllDrives=True).execute()   # includeItemsFromAllDrives=True not need here because it's a search and listing operation!
         original_filename = file_metadata.get('name', 'untitled')
         mime_type = file_metadata.get('mimeType', gdrive_file_mimeType)
     except Exception as e:
