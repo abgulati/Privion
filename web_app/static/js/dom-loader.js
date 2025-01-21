@@ -1115,7 +1115,8 @@ function startLLMAndVectorDB() {
             setServerStatusIndicator("Online");
             const llm_model = data.llm_model;
             setLlmModel(llm_model);
-            return loadVectorDB(llm_model);
+            // return loadVectorDB(llm_model);
+            return initChatHistoryDB(llm_model);
         } else {
             setServerStatusIndicator("Error");
             throw new Error('Internal Server Error: Check server-log and server command-line for more details.');

@@ -2620,3 +2620,250 @@ def login_to_google_drive():
     except Exception as e:
         handle_error_no_return("Could not get user name from Google Drive, encountered error: ", e)
         return jsonify(success=True)
+
+
+####################
+####################
+####LANG-UNCHAINING:
+####################
+####################
+
+from langchain_community.embeddings import HuggingFaceBgeEmbeddings
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import Chroma
+
+#From write_config() in app.py:
+    if VECTORDB_LOADED_UP:
+        vectordb_trigger_keys_for_app_restart = ['embedding_model_choice']
+
+        for key in vectordb_trigger_keys_for_app_restart:
+            if key in config_updates and config_updates[key] != config.get(key):
+                global VECTORDB_CHANGE_RELOAD_TRIGGER_SET
+                VECTORDB_CHANGE_RELOAD_TRIGGER_SET = True
+                restart_required = True
+                break
+
+
+def reload_vector_store():
+    global VECTOR_STORE
+    print("\nRe-Loading VectorDB: ChromaDB")
+
+    vectordb_used = ""
+
+    try:
+        read_return = read_config(['use_sbert_embeddings', 'use_openai_embeddings', 'use_bge_base_embeddings', 'use_bge_large_embeddings', 'vectordb_sbert_folder', 'vectordb_openai_folder', 'vectordb_bge_base_folder', 'vectordb_bge_large_folder', 'embedding_model_choice'])
+        use_sbert_embeddings = read_return['use_sbert_embeddings']
+        use_openai_embeddings = read_return['use_openai_embeddings']
+        use_bge_base_embeddings = read_return['use_bge_base_embeddings']
+        use_bge_large_embeddings = read_return['use_bge_large_embeddings']
+        vectordb_sbert_folder = read_return['vectordb_sbert_folder']
+        vectordb_openai_folder = read_return['vectordb_openai_folder']
+        vectordb_bge_base_folder = read_return['vectordb_bge_base_folder']
+        vectordb_bge_large_folder = read_return['vectordb_bge_large_folder']
+        embedding_model_choice = read_return['embedding_model_choice']
+    except Exception as e:
+        handle_local_error("Missing values in config.json when reloading VectorDB, could not fully complete process_new_file. Please try restarting the application. Error: ", e)
+
+    try:
+        if use_sbert_embeddings:
+            VECTOR_STORE = Chroma(persist_directory=vectordb_sbert_folder, embedding_function=HuggingFaceEmbeddings())
+            vectordb_used = vectordb_sbert_folder
+        elif use_openai_embeddings:
+            VECTOR_STORE = Chroma(persist_directory=vectordb_openai_folder, embedding_function=AZURE_OPENAI_EMBEDDINGS)
+            vectordb_used = vectordb_openai_folder
+        elif use_bge_base_embeddings:
+            VECTOR_STORE = Chroma(persist_directory=vectordb_bge_base_folder, embedding_function=HF_BGE_EMBEDDINGS)
+            vectordb_used = vectordb_bge_base_folder
+        elif use_bge_large_embeddings:
+            VECTOR_STORE = Chroma(persist_directory=vectordb_bge_large_folder, embedding_function=HF_BGE_EMBEDDINGS)
+            vectordb_used = vectordb_bge_large_folder
+    except Exception as e:
+        handle_local_error("Could not reload VectorDB when trying to process_new_file. Please try restarting the application. Error: ", e)
+    
+    return embedding_model_choice, vectordb_used
+
+# From reset_vector_db_on_disk() in app.py:
+restart_required = True # Defined here in case try/except block below fails and the if/else fails to define it, thus failing the return!
+    try:
+        global VECTORDB_CHANGE_RELOAD_TRIGGER_SET
+        read_return = read_config(['embedding_model_choice'])
+        set_embedding_model_choice = read_return['embedding_model_choice']
+        if set_embedding_model_choice != selected_embedding_model_choice:   # If the selected embedding model is different from the one currently set in config.json, then no restart is required
+            restart_required = False
+            VECTORDB_CHANGE_RELOAD_TRIGGER_SET = False
+        else:
+            VECTORDB_CHANGE_RELOAD_TRIGGER_SET = True
+    except Exception as e:
+        handle_error_no_return("Could not compare selected and set embedding models when determining if restart_required in reset_vector_db_on_disk(), encountered error: ", e)
+
+
+
+# Route to handle the submission of the first form (LLM & embeddings model and GPU selection)
+@app.route('/process_model', methods=['POST'])
+def process_model():
+    
+    global HF_BGE_EMBEDDINGS
+
+    ###---New config.json---###
+
+    config_update_dict = {}
+
+    use_azure_open_ai = 'use_azure' in request.form
+    use_openai_embeddings = 'use_openai_embeddings' in request.form
+    use_sbert_embeddings = 'use_sbert_embeddings' in request.form
+    use_bge_large_embeddings = 'use_bge_large_embeddings' in request.form
+    use_bge_base_embeddings = 'use_bge_base_embeddings' in request.form
+    use_gpu_for_embeddings = request.form.get('use_gpu_for_embeds', False)    # default no
+    model_choice = str(request.form['model_choice'])
+    use_gpu = request.form.get('use_gpu', False)
+
+    config_update_dict.update({'use_azure_open_ai':use_azure_open_ai, 'use_openai_embeddings':use_openai_embeddings, 'use_sbert_embeddings':use_sbert_embeddings, 'use_bge_large_embeddings':use_bge_large_embeddings, 'use_bge_base_embeddings':use_bge_base_embeddings, 'use_gpu_for_embeddings':use_gpu_for_embeddings, 'model_choice':model_choice, 'use_gpu':use_gpu})
+
+    try:
+        if use_bge_base_embeddings or use_bge_large_embeddings:
+            model_name = ""
+            if use_bge_base_embeddings:
+                model_name = "BAAI/bge-base-en"
+            elif use_bge_large_embeddings:
+                model_name = "BAAI/bge-large-en"
+            model_kwargs = {}
+            if use_gpu_for_embeddings:
+                model_kwargs.update({"device": "cuda"})
+            else:
+                model_kwargs.update({"device": "cpu"})
+            encode_kwargs = {"normalize_embeddings": True}
+            HF_BGE_EMBEDDINGS = HuggingFaceBgeEmbeddings(
+                model_name=model_name, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs
+            )
+    except Exception as e:
+        return handle_api_error("Could not load BGE embeddings in process_model, encountered error: ", e)
+    
+    try:
+        write_config(config_update_dict)
+    except Exception as e:
+        handle_local_error("Could not write updates to config.json, encountered error: ", e)
+
+    # Redirect to the next step
+    return redirect(url_for('load_file'))
+
+
+def get_embedding_function(use_sbert_embeddings:bool, use_openai_embeddings:bool, use_bge_base_embeddings:bool, use_bge_large_embeddings:bool) -> HuggingFaceEmbeddings:
+    try:
+        if use_sbert_embeddings:
+            return HuggingFaceEmbeddings()
+        elif use_openai_embeddings:
+            return AZURE_OPENAI_EMBEDDINGS
+        elif use_bge_base_embeddings:
+            return HF_BGE_EMBEDDINGS
+        elif use_bge_large_embeddings:
+            return HF_BGE_EMBEDDINGS
+    except Exception as e:
+        handle_error_no_return("Could not get embedding function in method get_embedding_function, encountered error: ", e)
+
+
+
+@app.route('/load_vectordb')
+def load_vectordb():
+
+    global VECTOR_STORE
+    global HF_BGE_EMBEDDINGS
+    global AZURE_OPENAI_EMBEDDINGS
+    global VECTORDB_CHANGE_RELOAD_TRIGGER_SET
+    global VECTORDB_LOADED_UP
+
+    if VECTORDB_LOADED_UP and not VECTORDB_CHANGE_RELOAD_TRIGGER_SET:
+        print(f'\n\nVectorDB already loaded! Simply returning.\n\n')
+        return jsonify({'success': True})
+    elif VECTORDB_CHANGE_RELOAD_TRIGGER_SET:
+        print('\n\nProceeding to reload VectorDB & resetting the VECTORDB_CHANGE_RELOAD_TRIGGER_SET flag.\n\n')
+        VECTORDB_CHANGE_RELOAD_TRIGGER_SET = False
+
+    try:
+        read_return = read_config(['use_gpu_for_embeddings', 'use_sbert_embeddings', 'use_openai_embeddings', 'use_bge_base_embeddings', 'use_bge_large_embeddings', 'vectordb_sbert_folder', 'vectordb_openai_folder', 'vectordb_bge_base_folder', 'vectordb_bge_large_folder'])
+        use_gpu_for_embeddings = read_return['use_gpu_for_embeddings']
+        use_sbert_embeddings = read_return['use_sbert_embeddings']
+        use_openai_embeddings = read_return['use_openai_embeddings']
+        use_bge_base_embeddings = read_return['use_bge_base_embeddings']
+        use_bge_large_embeddings = read_return['use_bge_large_embeddings']
+        vectordb_sbert_folder = read_return['vectordb_sbert_folder']
+        vectordb_openai_folder = read_return['vectordb_openai_folder']
+        vectordb_bge_base_folder = read_return['vectordb_bge_base_folder']
+        vectordb_bge_large_folder = read_return['vectordb_bge_large_folder']
+    except Exception as e:
+        return handle_api_error("Missing values in config.json when attempting to load_vectordb. Error: ", e)
+    
+    
+    ### 1 - Load VectorDB from disk
+    print("\n\nLoading VectorDB: ChromaDB\n\n")
+    try:
+        if use_sbert_embeddings:
+            VECTOR_STORE = Chroma(persist_directory=vectordb_sbert_folder, embedding_function=HuggingFaceEmbeddings())
+            # try:
+            #     # chroma_client = VECTOR_STORE.PersistentClient
+            #     # max_batch_size = chroma_client._producer.max_batch_size
+            #     max_batch_size = VECTOR_STORE.max_batch_size
+            #     print(f"max_batch_size: {max_batch_size}")
+            # except Exception as e:
+            #     print(f"Could not get max_batch_size. Error: {e}")
+        
+        elif use_openai_embeddings:
+
+            try:
+                read_return = read_config(['azure_openai_text_ada_api_url', 'azure_openai_text_ada_api_key', 'azure_openai_api_type', 'azure_openai_api_version', 'azure_openai_text_ada_deployment_name'])
+                azure_openai_text_ada_api_url = read_return['azure_openai_text_ada_api_url']
+                azure_openai_text_ada_api_key = read_return['azure_openai_text_ada_api_key']
+                azure_openai_api_type = read_return['azure_openai_api_type']
+                azure_openai_api_version = read_return['azure_openai_api_version']
+                azure_openai_text_ada_deployment_name = read_return['azure_openai_text_ada_deployment_name']
+            except Exception as e:
+                return handle_api_error("Missing values for Azure OpenAI Embeddings in method load_model_and_vectordb in config.json. Error: ", e)
+            
+            try:
+                os.environ["OPENAI_API_BASE"] = azure_openai_text_ada_api_url
+                os.environ["OPENAI_API_KEY"] = azure_openai_text_ada_api_key
+                os.environ["OPENAI_API_TYPE"] = azure_openai_api_type
+                os.environ["OPENAI_API_VERSION"] = azure_openai_api_version
+            except Exception as e:
+                return handle_api_error("Could not set OS environment variables for Azure OpenAI Embeddings in load_model_and_vectordb, encountered error: ", e)
+
+            
+            AZURE_OPENAI_EMBEDDINGS = OpenAIEmbeddings(deployment=azure_openai_text_ada_deployment_name)
+            VECTOR_STORE = Chroma(persist_directory=vectordb_openai_folder, embedding_function=AZURE_OPENAI_EMBEDDINGS)
+        
+        elif use_bge_base_embeddings:
+            model_name = "BAAI/bge-base-en"
+            model_kwargs = {}
+            if use_gpu_for_embeddings:
+                model_kwargs.update({"device": "cuda"})
+            else:
+                model_kwargs.update({"device": "cpu"})
+            encode_kwargs = {"normalize_embeddings": True}
+            HF_BGE_EMBEDDINGS = HuggingFaceBgeEmbeddings(
+                model_name=model_name, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs
+            )
+            VECTOR_STORE = Chroma(persist_directory=vectordb_bge_base_folder, embedding_function=HF_BGE_EMBEDDINGS)
+                
+        
+        elif use_bge_large_embeddings:
+            model_name = "BAAI/bge-large-en"
+            model_kwargs = {}
+            if use_gpu_for_embeddings:
+                model_kwargs.update({"device": "cuda"})
+            else:
+                model_kwargs.update({"device": "cpu"})
+            encode_kwargs = {"normalize_embeddings": True}
+            HF_BGE_EMBEDDINGS = HuggingFaceBgeEmbeddings(
+                model_name=model_name, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs
+            )
+            VECTOR_STORE = Chroma(persist_directory=vectordb_bge_large_folder, embedding_function=HF_BGE_EMBEDDINGS)
+        
+        #VECTOR_STORE = Chroma(persist_directory=VECTORDB_SBERT_FOLDER, embedding_function=HuggingFaceEmbeddings())
+    except Exception as e:
+        return handle_api_error("Could not load VectorDB, encountered error: ", e)
+    
+    VECTORDB_LOADED_UP = True
+    return jsonify(success=True)
+
+
+

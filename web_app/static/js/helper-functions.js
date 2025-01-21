@@ -662,7 +662,11 @@ function clearGoogleDriveTable() {
 function populateDocsLoadedTable() {
     
     let formData = new FormData();
-    formData.append('embedding_model_choice', document.getElementById('embedding_model_dropdown').value);
+    //formData.append('embedding_model_choice', document.getElementById('embedding_model_dropdown').value);
+    //formData.append('knowledge_domain', document.getElementById('knowledge_domain_dropdown').value);
+
+    formData.append('embedding_model_choice', 'sentence-transformers/all-mpnet-base-v2');
+    formData.append('knowledge_domain', "General");
 
     fetch('/fetch_file_list_for_vector_db', {
         method: 'POST',
@@ -720,7 +724,8 @@ function resetVectorDBtoBlank() {
     }
 
     let formData = new FormData();
-    formData.append('embedding_model_choice', document.getElementById('embedding_model_dropdown').value);
+    //formData.append('embedding_model_choice', document.getElementById('embedding_model_dropdown').value);
+    formData.append('embedding_model_choice', 'sentence-transformers/all-mpnet-base-v2');
 
     fetch('/reset_vector_db_on_disk', {
         method: 'POST',

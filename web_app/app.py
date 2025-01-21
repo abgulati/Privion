@@ -1,54 +1,41 @@
-from flask import Flask, render_template, request, redirect, url_for, Response, stream_with_context
+from flask import Flask, render_template, request, redirect, url_for, Response
 from flask import send_from_directory
 from flask_cors import CORS
 from flask import jsonify
 
 from sentence_transformers import SentenceTransformer, util
 
-from pdfminer.high_level import extract_text
 from werkzeug.utils import secure_filename
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow, Flow
+from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaIoBaseDownload, MediaDownloadProgress
+from googleapiclient.http import MediaIoBaseDownload
 
-from langchain_community.embeddings import HuggingFaceBgeEmbeddings
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
+import chromadb
 
 from pdf2image import convert_from_path
 from PIL import Image
 
 import fitz # PyMuPDF
-from rapidfuzz import process, fuzz
+from rapidfuzz import fuzz
 
-from urllib.parse import unquote
-from threading import Thread
 import subprocess
-import threading
 import traceback
 import platform
 import argparse
-import tempfile
 import datetime
 import requests
 import logging
 import sqlite3
 import signal
 import PyPDF2
-import base64
-import queue
+import shutil   # Shell Utilities is part of Python's standard library and is used for file operations
 import uuid
 import json
 import time
 import nltk
-import zlib
-import ast
-import sys
 import os
 import io
 import re
@@ -56,7 +43,6 @@ import re
 from logging.handlers import RotatingFileHandler
 from nltk.corpus import stopwords
 
-import whoosh
 from whoosh.index import create_in, open_dir
 from whoosh.fields import Schema, TEXT, ID
 from whoosh.qparser import QueryParser, OrGroup
@@ -102,14 +88,7 @@ HF_WAITRESS_PROCESS = None
 LLM = None
 LOADED_UP = False
 LLM_LOADED_UP = False
-VECTORDB_LOADED_UP = False
 LLM_CHANGE_RELOAD_TRIGGER_SET = False
-VECTORDB_CHANGE_RELOAD_TRIGGER_SET = False
-VECTOR_STORE = None
-HF_BGE_EMBEDDINGS = None
-AZURE_OPENAI_EMBEDDINGS = None
-HISTORY_MEMORY_WITH_BUFFER = None   #Init in load_model_and_vectordb(); reset in load_chat_history() when old chats loaded, and in load_model_and_vectordb() when 'New Chat' selected; used for non-RAG convChain init in stream, and for saving context in stream for RAG chains and lastly, for setting HISTORY_SUMMARY in stream() via load_memory_variables({})
-HISTORY_SUMMARY = {}    #Set in stream() via HISTORY_MEMORY_WITH_BUFFER.load_memory_variables({}), and in load_chat_history() from chat_history DB; cleared in load_model_and_vectordb() when 'New Chat' selected; used to init prompt templates in stream() and lastly, for storage to chat_history DB in stream() and get_references()
 
 # Dict for user queries:  queries[session_id] = user_input
 QUERIES = {}
@@ -224,16 +203,6 @@ def write_config(config_updates, filename='config.json'):
                 LLM_CHANGE_RELOAD_TRIGGER_SET = True
                 restart_required = True
                 break
-    
-    if VECTORDB_LOADED_UP:
-        vectordb_trigger_keys_for_app_restart = ['embedding_model_choice']
-
-        for key in vectordb_trigger_keys_for_app_restart:
-            if key in config_updates and config_updates[key] != config.get(key):
-                global VECTORDB_CHANGE_RELOAD_TRIGGER_SET
-                VECTORDB_CHANGE_RELOAD_TRIGGER_SET = True
-                restart_required = True
-                break
 
     config.update(config_updates)
 
@@ -271,14 +240,6 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'unix_and_docker_base_directory':'/app/lars_storage',
                 'mac_base_directory':'app',
                 'upload_folder':base_directory + '/uploaded_pdfs',
-                'vectordb_sbert_folder':base_directory + '/chroma_db_sbert_embeddings',
-                'vectordb_openai_folder':base_directory + '/chroma_db_openai_embeddings',
-                'vectordb_bge_large_folder':base_directory + '/chroma_db_bge_large_embeddings',
-                'vectordb_bge_base_folder':base_directory + '/chroma_db_bge_base_embeddings',
-                'whooshIdx_for_sbert_folder':base_directory + '/whoosh_index_sbert',
-                'whooshIdx_for_openai_folder':base_directory + '/whoosh_index_openai',
-                'whooshIdx_for_bge_large_folder':base_directory + '/whoosh_index_bge_large',
-                'whooshIdx_for_bge_base_folder':base_directory + '/whoosh_index_bge_base',
                 'sqlite_images_db':base_directory + '/images_database_main.db',
                 'sqlite_history_db':base_directory + '/chat_history.db',
                 'sqlite_docs_loaded_db':base_directory + '/docs_loaded.db',
@@ -308,15 +269,10 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'use_gpu_for_embeddings':False,
                 'azure_cv_free_tier':True,
                 'use_azure_open_ai':False,
-                'use_openai_embeddings':False,
                 'azure_openai_api_type':'azure',
                 'azure_openai_api_version':'2023-05-15',
                 'azure_openai_max_tokens':4096,
                 'azure_openai_temperature':0.7,
-                'use_bge_large_embeddings':False,
-                'use_bge_base_embeddings':False,
-                'use_sbert_embeddings':True,
-                'embedding_model_choice':'sbert_mpnet_base_v2',
                 'use_ocr':False,
                 'ocr_service_choice':'None',
                 'force_extract_previously_extracted_text':False,
@@ -339,7 +295,27 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'fetch_top_k_results_from_vectordb':11,
                 'filter_top_k_results_by_reranking':50,
                 'base_template':"You are a helpful assistant designed to answer user questions with accuracy and detail. Follow these instructions carefully:\n\n1. Accuracy and Truthfulness: Always provide accurate information. Do not fabricate or guess answers. If unsure, clearly state that you don't know.\n\n2. Using Additional Context:\n\na. If additional context is provided, identify and mention only the document names and page numbers that are directly relevant to the user's query.\nb. Say any relevant document names exactly as they appear in the context, including any special characters or formatting.\n\n3. Avoiding Irrelevant Information:\na. Do not mention or acknowledge irrelevant documents or context.\nb. Be mindful that the user cannot see the additional context. Ensure your response does not confuse them by referencing irrelevant or unnecessary details.\n\n4. Clarity in Responses: Structure your response so that it is clear, concise, and easy to understand.\n\nImportant: Only include references to sources when additional context is provided and when the source is directly helpful for answering the user's query. If no additional context is provided, answer based solely on your internal knowledge.\n\n",
-                'skip_system_prompt':False
+                'skip_system_prompt':False,
+                'embedding_models_list':[
+                    'sentence-transformers/all-mpnet-base-v2',
+                    'BAAI/bge-large-en-v1.5',
+                    'BAAI/bge-base-en-v1.5',
+                    'BAAI/bge-small-en-v1.5',
+                    'nvidia/NV-Embed-v2'
+                ],
+                'selected_embedding_model':'sentence-transformers/all-mpnet-base-v2',
+                'knowledge_domain_list':[
+                    'General',
+                    'Technical',
+                    'Legal',
+                    'Financial',
+                    'Medical',
+                    'Business',
+                    'Education',
+                    'Casual'
+                ],
+                'selected_knowledge_domain':'General',
+                'knowledge_domain_base_directory': base_directory + '/knowledge_domains'
             }.get(key, 'undefined')
 
             if default_value == 'undefined':
@@ -570,30 +546,34 @@ def clean_text_string(text_to_be_cleaned):
     return clean_text
 
 
+def get_path_to_knowledge_domain():
+    print("Getting path to knowledge domain")
+    try:
+        read_return = read_config(['selected_knowledge_domain', 'knowledge_domain_base_directory'])
+        selected_knowledge_domain = read_return['selected_knowledge_domain']
+        knowledge_domain_base_directory = read_return['knowledge_domain_base_directory']
+    except Exception as e:
+        handle_local_error("Missing values in config.json, could not read_embeddings_config. Error: ", e)
+
+    try:
+        path_to_knowledge_domain = os.path.join(knowledge_domain_base_directory, selected_knowledge_domain)
+        if not os.path.exists(path_to_knowledge_domain):
+            os.makedirs(path_to_knowledge_domain, exist_ok=True)
+            print(f"\n\nCreated knowledge domain directory: {path_to_knowledge_domain}\n\n")
+        return path_to_knowledge_domain
+    except Exception as e:
+        return handle_local_error("Could not create knowledge domain folder, encountered error: ", e)
+
+
 def determine_whoosh_index_folder():
     print("Determining Whoosh Index Folder")
 
-    try:
-        read_return = read_config(['embedding_model_choice', 'whooshIdx_for_sbert_folder', 'whooshIdx_for_openai_folder', 'whooshIdx_for_bge_large_folder', 'whooshIdx_for_bge_base_folder'])
-        embedding_model_choice = read_return['embedding_model_choice']
-        whooshIdx_for_sbert_folder = read_return['whooshIdx_for_sbert_folder']
-        whooshIdx_for_openai_folder = read_return['whooshIdx_for_openai_folder']
-        whooshIdx_for_bge_large_folder = read_return['whooshIdx_for_bge_large_folder']
-        whooshIdx_for_bge_base_folder = read_return['whooshIdx_for_bge_base_folder']
-    except Exception as e:
-        handle_local_error("Missing whoosh_index_folder in config.json for whoosh_indexer. Error: ", e)
+    path_to_knowledge_domain = get_path_to_knowledge_domain()
 
-    whoosh_index_folder = ""
-    if embedding_model_choice == "sbert_mpnet_base_v2":
-        whoosh_index_folder = whooshIdx_for_sbert_folder
-    elif embedding_model_choice == "openai_text_ada":
-        whoosh_index_folder = whooshIdx_for_openai_folder
-    elif embedding_model_choice == "bge_large":
-        whoosh_index_folder = whooshIdx_for_bge_large_folder
-    elif embedding_model_choice == "bge_base":
-        whoosh_index_folder = whooshIdx_for_bge_base_folder
-    else:
-        handle_local_error(f"Invalid embedding_model_choice of {embedding_model_choice} in config.json for method determine_whoosh_index_folder. Error: ", embedding_model_choice)
+    try:
+        whoosh_index_folder = os.path.join(path_to_knowledge_domain, "whoosh_index")
+    except Exception as e:
+        handle_local_error("Could not determine whoosh index folder, encountered error: ", e)
 
     return whoosh_index_folder
 
@@ -716,7 +696,8 @@ def search_whoosh_index(query):
             return [{'content': result['content'], 'source': result['source'], 'page_number': result['page_number']} for result in results]
 
     except Exception as e:
-        handle_local_error("Failed to search Whoosh Index, encountered error: ", e)
+        handle_error_no_return("Failed to search Whoosh Index, encountered error: ", e)
+        return []
 
 
 def PDFtoAzureDocAiTXT(input_filepath):
@@ -1273,7 +1254,7 @@ def add_column_if_not_exists(cursor, table_name, column_name, column_type):
         handle_error_no_return(f"Error adding column {column_name} to {table_name}: ", e)
 
 
-def record_doc_loaded_to_db(document_name, embedding_model, vectordb_used, chunk_size, chunk_overlap):
+def record_doc_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
 
     print("\n\nRecording document loading to records DB\n\n")
 
@@ -1298,7 +1279,8 @@ def record_doc_loaded_to_db(document_name, embedding_model, vectordb_used, chunk
                     embedding_model TEXT NOT NULL,
                     vectordb_used TEXT,
                     chunk_size INTEGER,
-                    chunk_overlap INTEGER
+                    chunk_overlap INTEGER,
+                    knowledge_domain TEXT
             )
         ''')
 
@@ -1312,11 +1294,12 @@ def record_doc_loaded_to_db(document_name, embedding_model, vectordb_used, chunk
         add_column_if_not_exists(cursor, 'document_records', 'vectordb_used', 'TEXT')
         add_column_if_not_exists(cursor, 'document_records', 'chunk_size', 'INTEGER')
         add_column_if_not_exists(cursor, 'document_records', 'chunk_overlap', 'INTEGER')
+        add_column_if_not_exists(cursor, 'document_records', 'knowledge_domain', 'TEXT')
     except Exception as e:
         return handle_api_error("Could not add necessary columns to chat history db, encountered error: ", e)
     
     try:
-        cursor.execute("INSERT INTO document_records (document_name, embedding_model, vectordb_used, chunk_size, chunk_overlap) VALUES (?, ?, ?, ?, ?)", (document_name, embedding_model, vectordb_used, chunk_size, chunk_overlap))
+        cursor.execute("INSERT INTO document_records (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain) VALUES (?, ?, ?, ?, ?)", (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain))
         conn.commit()
         conn.close()
     except Exception as e:
@@ -1395,88 +1378,94 @@ def chunk_docs_with_page_numbers(input_file, chunk_size=250):
     return documents
 
 
-# Document vectorization and chunking
-def whoosh_and_embed_doc_chunks(input_file):
-
-    global VECTOR_STORE
-    
-    ### L1 - Load Data from Source ###
-    print("\nLoading Document")
+def read_embeddings_config() -> tuple[str, str]:
 
     try:
-        read_return = read_config(['use_sbert_embeddings', 'use_openai_embeddings', 'use_bge_base_embeddings', 'use_bge_large_embeddings', 'vectordb_sbert_folder', 'vectordb_openai_folder', 'vectordb_bge_base_folder', 'vectordb_bge_large_folder'])
-        use_sbert_embeddings = read_return['use_sbert_embeddings']
-        use_openai_embeddings = read_return['use_openai_embeddings']
-        use_bge_base_embeddings = read_return['use_bge_base_embeddings']
-        use_bge_large_embeddings = read_return['use_bge_large_embeddings']
-        vectordb_sbert_folder = read_return['vectordb_sbert_folder']
-        vectordb_openai_folder = read_return['vectordb_openai_folder']
-        vectordb_bge_base_folder = read_return['vectordb_bge_base_folder']
-        vectordb_bge_large_folder = read_return['vectordb_bge_large_folder']
+        read_return = read_config(['selected_embedding_model'])
+        selected_embedding_model = read_return['selected_embedding_model']
     except Exception as e:
-        handle_local_error("Missing values in config.json, could not whoosh_and_embed_doc_chunks. Error: ", e)
+        handle_local_error("Missing values in config.json, could not read_embeddings_config. Error: ", e)
+
+    path_to_knowledge_domain = get_path_to_knowledge_domain()
+
+    return selected_embedding_model, path_to_knowledge_domain
+
+
+def create_vector_db_directory(path_to_knowledge_domain, embedding_function):
+    try:
+        vector_db_path = os.path.join(path_to_knowledge_domain, "vector_db", embedding_function)
+        if not os.path.exists(vector_db_path):
+            os.makedirs(vector_db_path, exist_ok=True)
+            print(f"\n\nCreated vector_db directory: {vector_db_path}\n\n")
+        else:
+            print(f"\n\nVector_db directory already exists, returning path: {vector_db_path}\n\n")
+        return vector_db_path
+    except Exception as e:
+        return handle_local_error("Could not create vector_db directory, encountered error: ", e)
+
+
+# Document vectorization and chunking
+def whoosh_and_embed_doc_chunks(input_file):
+    print("\n\nCore Document Vectorization and Chunking Function Invoked\n\n")
+
+    # Read Embeddings Config
+    try:
+        selected_embedding_model, path_to_knowledge_domain = read_embeddings_config()
+    except Exception as e:
+        handle_local_error("Could not read embeddings config, encountered error: ", e)
 
     chunk_sz = 250
     chunk_olp = 0
 
-    ### L2 - Chunk Source Data ###
+    # Chunk Source Data
     print("Chunking Doc")
     try:
-        chunks = chunk_docs_with_page_numbers(input_file, chunk_sz)
+        chunks = chunk_docs_with_page_numbers(input_file, chunk_sz) # Generates a list of dictionaries, each containing 'content', 'source', and 'page_number' as keys
         whoosh_indexer(chunks)
-        # print(f"\n\nnumbered_splits sample: {numbered_splits[:3]}\n\n")
-        # print(f"\n\nnumbered_splits type: {type(numbered_splits[3])}\n\n")
     except Exception as e:
         handle_local_error("Failed to chunk document for storage to VectorDB, encountered error: ", e)
 
-    # convert chunks dictionary to Document objects:
+    # Convert Chunks to Document objects:
     try:
-        numbered_splits = [Document(page_content=chunk['content'], metadata={'source': chunk['source'], 'page_number': chunk['page_number']}) for chunk in chunks]
+        numbered_splits = [Document(page_content=chunk['content'], metadata={'source': chunk['source'], 'page_number': chunk['page_number']}) for chunk in chunks]  # Generates a list of Document objects, each containing a 'page_content' string, and a 'metadata' dictionary with 'source' and 'page_number' keys
     except Exception as e:
         handle_local_error("Failed to convert chunks to Document objects for storage to VectorDB, encountered error: ", e)
 
-    ### L3 - Store Chunks in VectorDB ###
+    # Load Embedding Model
+    try:
+        embedding_model = SentenceTransformer(selected_embedding_model)
+    except Exception as e:
+        handle_local_error("Could not load embedding model, encountered error: ", e)
+
+    # Generate Embeddings for just the page_content
+    try:
+        texts_to_embed = [doc.page_content for doc in numbered_splits]
+        embeddings = embedding_model.encode(texts_to_embed)    # By default, convert_to_tensor=False and this is what we want because ChromaDB expects numpy arrays, not PyTorch tensors!
+    except Exception as e:
+        handle_local_error("Could not generate embeddings, encountered error: ", e)
+
+    # Get VectorDB Directory
+    vector_db_path = create_vector_db_directory(path_to_knowledge_domain, selected_embedding_model)
+
+    # Store Chunks in VectorDB
     print("Storing to VectorDB: ChromaDB")
     try:
-        # Return VectorStore initialized from documents and embeddings.
-        if use_sbert_embeddings:
-            # Ideally should use MAX_BATCH_SIZE obtained elsewhere 
-            if len(numbered_splits) > 5000:
-                split_docs = split_embeddings_list(numbered_splits, 5000)
-                for split_docs_list in split_docs:
-                    VECTOR_STORE = Chroma.from_documents(documents=split_docs_list, embedding=HuggingFaceEmbeddings(), persist_directory=vectordb_sbert_folder)
-            else:
-                VECTOR_STORE = Chroma.from_documents(documents=numbered_splits, embedding=HuggingFaceEmbeddings(), persist_directory=vectordb_sbert_folder)
-        
-        elif use_openai_embeddings:
-            print("Using OpenAI Text Ada Model via Azure OpenAI")
+        # Initialize Chroma Client and collection
+        chroma_client = chromadb.PersistentClient(path=vector_db_path)
+        collection = chroma_client.get_or_create_collection(name="knowledge_domain", metadata={"hnsw:space": "cosine"}) # By default, ChromaDB returns the L2 distance (lower is better), but we want cosine distance (higher is better)
 
-            list_position = 0
-            token_count = 0
+        # Prepare the data for ChromaDB format
+        documents = [chunk.page_content for chunk in numbered_splits]
+        metadatas = [chunk.metadata for chunk in numbered_splits]
+        ids = [str(uuid.uuid4()) for _ in numbered_splits]
 
-            for i in range(list_position, len(numbered_splits)):
-
-                token_count += len(str(numbered_splits[i]))
-                if token_count >= 108000:
-                    VECTOR_STORE = Chroma.from_documents(documents=numbered_splits[list_position:i+1], embedding=AZURE_OPENAI_EMBEDDINGS, persist_directory=vectordb_openai_folder)  #AZURE_OPENAI_EMBEDDINGS defined on line 407
-                    list_position = i+1
-                    token_count = 0
-                    print("Loaded batch, sleeping for one minute to stay within rate-limit")
-                    time.sleep(63)
-                    continue
-
-            # post-loop, if any splits are left to be processed but were missed due to token_count not reaching the limit:
-            if list_position < len(numbered_splits):
-                VECTOR_STORE = Chroma.from_documents(documents=numbered_splits[list_position:], embedding=AZURE_OPENAI_EMBEDDINGS, persist_directory=vectordb_openai_folder) #AZURE_OPENAI_EMBEDDINGS defined on line 407
-
-        elif use_bge_base_embeddings or use_bge_large_embeddings:
-            persist_directory = ""
-            if use_bge_base_embeddings:
-                persist_directory = vectordb_bge_base_folder
-            elif use_bge_large_embeddings:
-                persist_directory = vectordb_bge_large_folder
-            VECTOR_STORE = Chroma.from_documents(documents=numbered_splits, embedding=HF_BGE_EMBEDDINGS, persist_directory=persist_directory)    #HF_BGE_EMBEDDINGS defined in process_model() line 2133
-
+        # Add the data to the collection
+        collection.add(
+            documents=documents,
+            metadatas=metadatas,
+            ids=ids,
+            embeddings=embeddings.tolist()  # Convert embeddings from NumPy arrays to list of lists
+        )
     except Exception as e:
         handle_local_error("Could not store to VectorDB, encountered error: ", e)
 
@@ -2259,100 +2248,12 @@ def upload_new_llm():
     return jsonify(success=True)
 
 
-# Route to handle the submission of the first form (LLM & embeddings model and GPU selection)
-@app.route('/process_model', methods=['POST'])
-def process_model():
-    
-    global HF_BGE_EMBEDDINGS
-
-    ###---New config.json---###
-
-    config_update_dict = {}
-
-    use_azure_open_ai = 'use_azure' in request.form
-    use_openai_embeddings = 'use_openai_embeddings' in request.form
-    use_sbert_embeddings = 'use_sbert_embeddings' in request.form
-    use_bge_large_embeddings = 'use_bge_large_embeddings' in request.form
-    use_bge_base_embeddings = 'use_bge_base_embeddings' in request.form
-    use_gpu_for_embeddings = request.form.get('use_gpu_for_embeds', False)    # default no
-    model_choice = str(request.form['model_choice'])
-    use_gpu = request.form.get('use_gpu', False)
-
-    config_update_dict.update({'use_azure_open_ai':use_azure_open_ai, 'use_openai_embeddings':use_openai_embeddings, 'use_sbert_embeddings':use_sbert_embeddings, 'use_bge_large_embeddings':use_bge_large_embeddings, 'use_bge_base_embeddings':use_bge_base_embeddings, 'use_gpu_for_embeddings':use_gpu_for_embeddings, 'model_choice':model_choice, 'use_gpu':use_gpu})
-
-    try:
-        if use_bge_base_embeddings or use_bge_large_embeddings:
-            model_name = ""
-            if use_bge_base_embeddings:
-                model_name = "BAAI/bge-base-en"
-            elif use_bge_large_embeddings:
-                model_name = "BAAI/bge-large-en"
-            model_kwargs = {}
-            if use_gpu_for_embeddings:
-                model_kwargs.update({"device": "cuda"})
-            else:
-                model_kwargs.update({"device": "cpu"})
-            encode_kwargs = {"normalize_embeddings": True}
-            HF_BGE_EMBEDDINGS = HuggingFaceBgeEmbeddings(
-                model_name=model_name, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs
-            )
-    except Exception as e:
-        return handle_api_error("Could not load BGE embeddings in process_model, encountered error: ", e)
-    
-    try:
-        write_config(config_update_dict)
-    except Exception as e:
-        handle_local_error("Could not write updates to config.json, encountered error: ", e)
-
-    # Redirect to the next step
-    return redirect(url_for('load_file'))
-
-
 def convert_to_pdf_with_unoconv(input_file_path, output_file_path):
     print("\n\nConverting non-PDF document to PDF format\n\n")
     if platform.system() == 'Windows':
         subprocess.run(['python', 'unoconv.py', '-f', 'pdf', '-o', output_file_path, input_file_path], check=True)
     else:
         subprocess.run(['unoconv', '-f', 'pdf', '-o', output_file_path, input_file_path], check=True)
-
-
-def reload_vector_store():
-    global VECTOR_STORE
-    print("\nRe-Loading VectorDB: ChromaDB")
-
-    vectordb_used = ""
-
-    try:
-        read_return = read_config(['use_sbert_embeddings', 'use_openai_embeddings', 'use_bge_base_embeddings', 'use_bge_large_embeddings', 'vectordb_sbert_folder', 'vectordb_openai_folder', 'vectordb_bge_base_folder', 'vectordb_bge_large_folder', 'embedding_model_choice'])
-        use_sbert_embeddings = read_return['use_sbert_embeddings']
-        use_openai_embeddings = read_return['use_openai_embeddings']
-        use_bge_base_embeddings = read_return['use_bge_base_embeddings']
-        use_bge_large_embeddings = read_return['use_bge_large_embeddings']
-        vectordb_sbert_folder = read_return['vectordb_sbert_folder']
-        vectordb_openai_folder = read_return['vectordb_openai_folder']
-        vectordb_bge_base_folder = read_return['vectordb_bge_base_folder']
-        vectordb_bge_large_folder = read_return['vectordb_bge_large_folder']
-        embedding_model_choice = read_return['embedding_model_choice']
-    except Exception as e:
-        handle_local_error("Missing values in config.json when reloading VectorDB, could not fully complete process_new_file. Please try restarting the application. Error: ", e)
-
-    try:
-        if use_sbert_embeddings:
-            VECTOR_STORE = Chroma(persist_directory=vectordb_sbert_folder, embedding_function=HuggingFaceEmbeddings())
-            vectordb_used = vectordb_sbert_folder
-        elif use_openai_embeddings:
-            VECTOR_STORE = Chroma(persist_directory=vectordb_openai_folder, embedding_function=AZURE_OPENAI_EMBEDDINGS)
-            vectordb_used = vectordb_openai_folder
-        elif use_bge_base_embeddings:
-            VECTOR_STORE = Chroma(persist_directory=vectordb_bge_base_folder, embedding_function=HF_BGE_EMBEDDINGS)
-            vectordb_used = vectordb_bge_base_folder
-        elif use_bge_large_embeddings:
-            VECTOR_STORE = Chroma(persist_directory=vectordb_bge_large_folder, embedding_function=HF_BGE_EMBEDDINGS)
-            vectordb_used = vectordb_bge_large_folder
-    except Exception as e:
-        handle_local_error("Could not reload VectorDB when trying to process_new_file. Please try restarting the application. Error: ", e)
-    
-    return embedding_model_choice, vectordb_used
 
 
 def convert_non_pdf_to_pdf_with_unoconv(filename, filepath):
@@ -2379,9 +2280,11 @@ def document_extractor_and_loader(filename, filepath):
 
     use_ocr = False
     try:
-        read_return = read_config(['use_ocr', 'ocr_service_choice'])
+        read_return = read_config(['use_ocr', 'ocr_service_choice', 'selected_embedding_model', 'selected_knowledge_domain'])
         use_ocr = read_return['use_ocr']
         ocr_service_choice = read_return['ocr_service_choice']
+        selected_embedding_model = read_return['selected_embedding_model']
+        selected_knowledge_domain = read_return['selected_knowledge_domain']
     except Exception as e:
         handle_local_error("Could not determine use_ocr in config.json for process_new_file. Disabling OCR and proceeding. Error: ", e)
     
@@ -2413,14 +2316,9 @@ def document_extractor_and_loader(filename, filepath):
         chunk_size, chunk_overlap = whoosh_and_embed_doc_chunks(input_file)
     except Exception as e:
         handle_local_error("Failed to extract text from PDF: ", e)
-    
-    try:
-        embedding_model_choice, vectordb_used = reload_vector_store()
-    except Exception as e:
-        handle_local_error("Could not reload vector store when attempting to document_extractor_and_loader(), encountered error: ", e)
 
     try:
-        record_doc_loaded_to_db(filename, embedding_model_choice, vectordb_used, chunk_size, chunk_overlap)
+        record_doc_loaded_to_db(filename, selected_embedding_model, chunk_size, chunk_overlap, selected_knowledge_domain)
     except Exception as e:
         handle_error_no_return("Unable to record document loading to records DB, encountered error: ", e)
 
@@ -2907,110 +2805,7 @@ def local_llm_server_starter():
     except Exception as e:
         return handle_api_error("Server-side error, could not start local LLM server in method local_llm_server_starter, encountered error: ", e)
 
-    return jsonify({'success': True})
-
-
-@app.route('/load_vectordb')
-def load_vectordb():
-
-    global VECTOR_STORE
-    global HF_BGE_EMBEDDINGS
-    global AZURE_OPENAI_EMBEDDINGS
-    global VECTORDB_CHANGE_RELOAD_TRIGGER_SET
-    global VECTORDB_LOADED_UP
-
-    if VECTORDB_LOADED_UP and not VECTORDB_CHANGE_RELOAD_TRIGGER_SET:
-        print(f'\n\nVectorDB already loaded! Simply returning.\n\n')
-        return jsonify({'success': True})
-    elif VECTORDB_CHANGE_RELOAD_TRIGGER_SET:
-        print('\n\nProceeding to reload VectorDB & resetting the VECTORDB_CHANGE_RELOAD_TRIGGER_SET flag.\n\n')
-        VECTORDB_CHANGE_RELOAD_TRIGGER_SET = False
-
-    try:
-        read_return = read_config(['use_gpu_for_embeddings', 'use_sbert_embeddings', 'use_openai_embeddings', 'use_bge_base_embeddings', 'use_bge_large_embeddings', 'vectordb_sbert_folder', 'vectordb_openai_folder', 'vectordb_bge_base_folder', 'vectordb_bge_large_folder'])
-        use_gpu_for_embeddings = read_return['use_gpu_for_embeddings']
-        use_sbert_embeddings = read_return['use_sbert_embeddings']
-        use_openai_embeddings = read_return['use_openai_embeddings']
-        use_bge_base_embeddings = read_return['use_bge_base_embeddings']
-        use_bge_large_embeddings = read_return['use_bge_large_embeddings']
-        vectordb_sbert_folder = read_return['vectordb_sbert_folder']
-        vectordb_openai_folder = read_return['vectordb_openai_folder']
-        vectordb_bge_base_folder = read_return['vectordb_bge_base_folder']
-        vectordb_bge_large_folder = read_return['vectordb_bge_large_folder']
-    except Exception as e:
-        return handle_api_error("Missing values in config.json when attempting to load_vectordb. Error: ", e)
-    
-    
-    ### 1 - Load VectorDB from disk
-    print("\n\nLoading VectorDB: ChromaDB\n\n")
-    try:
-        if use_sbert_embeddings:
-            VECTOR_STORE = Chroma(persist_directory=vectordb_sbert_folder, embedding_function=HuggingFaceEmbeddings())
-            # try:
-            #     # chroma_client = VECTOR_STORE.PersistentClient
-            #     # max_batch_size = chroma_client._producer.max_batch_size
-            #     max_batch_size = VECTOR_STORE.max_batch_size
-            #     print(f"max_batch_size: {max_batch_size}")
-            # except Exception as e:
-            #     print(f"Could not get max_batch_size. Error: {e}")
-        
-        elif use_openai_embeddings:
-
-            try:
-                read_return = read_config(['azure_openai_text_ada_api_url', 'azure_openai_text_ada_api_key', 'azure_openai_api_type', 'azure_openai_api_version', 'azure_openai_text_ada_deployment_name'])
-                azure_openai_text_ada_api_url = read_return['azure_openai_text_ada_api_url']
-                azure_openai_text_ada_api_key = read_return['azure_openai_text_ada_api_key']
-                azure_openai_api_type = read_return['azure_openai_api_type']
-                azure_openai_api_version = read_return['azure_openai_api_version']
-                azure_openai_text_ada_deployment_name = read_return['azure_openai_text_ada_deployment_name']
-            except Exception as e:
-                return handle_api_error("Missing values for Azure OpenAI Embeddings in method load_model_and_vectordb in config.json. Error: ", e)
-            
-            try:
-                os.environ["OPENAI_API_BASE"] = azure_openai_text_ada_api_url
-                os.environ["OPENAI_API_KEY"] = azure_openai_text_ada_api_key
-                os.environ["OPENAI_API_TYPE"] = azure_openai_api_type
-                os.environ["OPENAI_API_VERSION"] = azure_openai_api_version
-            except Exception as e:
-                return handle_api_error("Could not set OS environment variables for Azure OpenAI Embeddings in load_model_and_vectordb, encountered error: ", e)
-
-            
-            AZURE_OPENAI_EMBEDDINGS = OpenAIEmbeddings(deployment=azure_openai_text_ada_deployment_name)
-            VECTOR_STORE = Chroma(persist_directory=vectordb_openai_folder, embedding_function=AZURE_OPENAI_EMBEDDINGS)
-        
-        elif use_bge_base_embeddings:
-            model_name = "BAAI/bge-base-en"
-            model_kwargs = {}
-            if use_gpu_for_embeddings:
-                model_kwargs.update({"device": "cuda"})
-            else:
-                model_kwargs.update({"device": "cpu"})
-            encode_kwargs = {"normalize_embeddings": True}
-            HF_BGE_EMBEDDINGS = HuggingFaceBgeEmbeddings(
-                model_name=model_name, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs
-            )
-            VECTOR_STORE = Chroma(persist_directory=vectordb_bge_base_folder, embedding_function=HF_BGE_EMBEDDINGS)
-                
-        
-        elif use_bge_large_embeddings:
-            model_name = "BAAI/bge-large-en"
-            model_kwargs = {}
-            if use_gpu_for_embeddings:
-                model_kwargs.update({"device": "cuda"})
-            else:
-                model_kwargs.update({"device": "cpu"})
-            encode_kwargs = {"normalize_embeddings": True}
-            HF_BGE_EMBEDDINGS = HuggingFaceBgeEmbeddings(
-                model_name=model_name, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs
-            )
-            VECTOR_STORE = Chroma(persist_directory=vectordb_bge_large_folder, embedding_function=HF_BGE_EMBEDDINGS)
-        
-        #VECTOR_STORE = Chroma(persist_directory=VECTORDB_SBERT_FOLDER, embedding_function=HuggingFaceEmbeddings())
-    except Exception as e:
-        return handle_api_error("Could not load VectorDB, encountered error: ", e)
-    
-    VECTORDB_LOADED_UP = True
-    return jsonify(success=True)
+    # return jsonify({'success': True})
 
 
 @app.route('/set_prompt_template', methods=['POST'])
@@ -3038,33 +2833,9 @@ def fetch_file_list_for_vector_db():
 
     try:
         selected_embedding_model_choice = request.form['embedding_model_choice']
+        knowledge_domain = request.form['knowledge_domain']
     except Exception as e:
-        return handle_api_error("Server-side error, could not read embedding_model_choice from the POST request in method fetch_file_list_for_vector_db, encountered error: ", e)
-
-    # For the VectorDB presently picked by the user in the dropdown, obtain the associated VectorDB folder for the select query:
-    vdb_for_select = ""
-    try:
-        if selected_embedding_model_choice == 'bge_large':
-            read_return = read_config(['vectordb_bge_large_folder'])
-            vdb_for_select = read_return['vectordb_bge_large_folder']
-            
-        elif selected_embedding_model_choice == 'bge_base':
-            read_return = read_config(['vectordb_bge_base_folder'])
-            vdb_for_select = read_return['vectordb_bge_base_folder']
-
-        elif selected_embedding_model_choice == 'sbert_mpnet_base_v2':
-            read_return = read_config(['vectordb_sbert_folder'])
-            vdb_for_select = read_return['vectordb_sbert_folder']
-
-        elif selected_embedding_model_choice == 'openai_text_ada':
-            read_return = read_config(['vectordb_openai_folder'])
-            vdb_for_select = read_return['vectordb_openai_folder']
-
-        vdb_for_select = '%' + os.path.basename(vdb_for_select)
-        #print(f'vdb_for_select: {vdb_for_select}')
-
-    except Exception as e:
-        return handle_api_error("Could not determine vectorDB folder in method fetch_file_list_for_vector_db, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read embedding_model_choice or knowledge_domain from the POST request in method fetch_file_list_for_vector_db, encountered error: ", e)
 
     try:
         read_return = read_config(['sqlite_docs_loaded_db'])
@@ -3089,7 +2860,8 @@ def fetch_file_list_for_vector_db():
                     embedding_model TEXT NOT NULL,
                     vectordb_used TEXT,
                     chunk_size INTEGER,
-                    chunk_overlap INTEGER
+                    chunk_overlap INTEGER,
+                    knowledge_domain TEXT
             )
         ''')
 
@@ -3103,11 +2875,12 @@ def fetch_file_list_for_vector_db():
         add_column_if_not_exists(c, 'document_records', 'vectordb_used', 'TEXT')
         add_column_if_not_exists(c, 'document_records', 'chunk_size', 'INTEGER')
         add_column_if_not_exists(c, 'document_records', 'chunk_overlap', 'INTEGER')
+        add_column_if_not_exists(c, 'document_records', 'knowledge_domain', 'TEXT')
     except Exception as e:
         return handle_api_error("Could not add necessary columns to chat history db, encountered error: ", e)
 
     try:
-        c.execute("SELECT document_name, vectordb_used, chunk_size, chunk_overlap FROM document_records where vectordb_used LIKE ?", (vdb_for_select,))
+        c.execute("SELECT document_name, embedding_model, chunk_size, chunk_overlap FROM document_records where embedding_model LIKE ? AND knowledge_domain LIKE ?", (selected_embedding_model_choice, knowledge_domain))
     except Exception as e:
         return handle_api_error("Could not get document list from document_records db, encountered error: ", e)
     
@@ -3124,6 +2897,17 @@ def fetch_file_list_for_vector_db():
     return jsonify({'success': True, 'file_row_list': file_row_list})
 
 
+def shell_delete_folder(folder_path):
+    try:
+        if os.path.exists(folder_path):
+            shutil.rmtree(folder_path)
+            print(f"Removed existing folder: {folder_path}")
+        else:
+            print(f"No existing folder found at: {folder_path}")
+    except Exception as e:
+        return handle_api_error("Could not remove existing folder, encountered error: ", e)
+
+
 @app.route('/reset_vector_db_on_disk', methods=['POST'])
 def reset_vector_db_on_disk():
 
@@ -3134,58 +2918,17 @@ def reset_vector_db_on_disk():
     except Exception as e:
         return handle_api_error("Server-side error, could not read embedding_model_choice from the POST request in method reset_vector_db_on_disk, encountered error: ", e)
 
-    try:
-        read_return = read_config(['base_directory'])
-        base_directory = read_return['base_directory']
-    except Exception as e:
-        handle_local_error("Could not read base_directory from config.json for reset_vector_db_on_disk. Error: ", e)
-
-    try:
-        current_datetime = datetime.datetime.now()
-        formatted_datetime = current_datetime.strftime('%Y-%m-%d-%Hhr-%Mmin-%Ssec')
-    except Exception as e:
-        return handle_api_error("Could not obtain timestamp in reset_vector_db_on_disk, encountered error: ", e)
-
-    # Now that we have all pre-requisite data to create a new VectorDB, proceed to do so by checking the model the user had currently picked from the dropdown:
-    try:
-        if selected_embedding_model_choice == 'bge_large':
-            vectordb_bge_large_folder = base_directory + '/chroma_db_bge_large_embeddings' + '-' + formatted_datetime
-            whooshIdx_for_bge_large_folder = base_directory + '/whoosh_index_bge_large' + '-' + formatted_datetime
-            write_config({'vectordb_bge_large_folder':vectordb_bge_large_folder, 'whooshIdx_for_bge_large_folder':whooshIdx_for_bge_large_folder})
-            
-        elif selected_embedding_model_choice == 'bge_base':
-            vectordb_bge_base_folder = base_directory + '/chroma_db_bge_base_embeddings' + '-' + formatted_datetime
-            whooshIdx_for_bge_base_folder = base_directory + '/whoosh_index_bge_base' + '-' + formatted_datetime
-            write_config({'vectordb_bge_base_folder':vectordb_bge_base_folder, 'whooshIdx_for_bge_base_folder':whooshIdx_for_bge_base_folder})
-
-        elif selected_embedding_model_choice == 'sbert_mpnet_base_v2':
-            vectordb_sbert_folder = base_directory + '/chroma_db_sbert_embeddings' + '-' + formatted_datetime
-            whooshIdx_for_sbert_folder = base_directory + '/whoosh_index_sbert' + '-' + formatted_datetime
-            write_config({'vectordb_sbert_folder':vectordb_sbert_folder, 'whooshIdx_for_sbert_folder':whooshIdx_for_sbert_folder})
-
-        elif selected_embedding_model_choice == 'openai_text_ada':
-            vectordb_openai_folder = base_directory + '/chroma_db_openai_embeddings' + '-' + formatted_datetime
-            whooshIdx_for_openai_folder = base_directory + '/whoosh_index_openai' + '-' + formatted_datetime
-            write_config({'vectordb_openai_folder':vectordb_openai_folder, 'whooshIdx_for_openai_folder':whooshIdx_for_openai_folder})
-
-    except Exception as e:
-        return handle_api_error("Could not create new VectorDB in reset_vector_db_on_disk, encountered error: ", e)
+    path_to_knowledge_domain = get_path_to_knowledge_domain()
+    vector_db_path = os.path.join(path_to_knowledge_domain, "vector_db", selected_embedding_model_choice)
+    whoosh_index_path = os.path.join(path_to_knowledge_domain, "whoosh_index")
     
-    restart_required = True
-    global VECTORDB_CHANGE_RELOAD_TRIGGER_SET
-    VECTORDB_CHANGE_RELOAD_TRIGGER_SET = True
-    try:
-        read_return = read_config(['embedding_model_choice'])
-        set_embedding_model_choice = read_return['embedding_model_choice']
-        if set_embedding_model_choice != selected_embedding_model_choice:   # If the selected embedding model is different from the one currently set in config.json, then no restart is required
-            restart_required = False
-            VECTORDB_CHANGE_RELOAD_TRIGGER_SET = False
-    except Exception as e:
-        handle_error_no_return("Could not compare selected and set embedding models when determining if restart_required in reset_vector_db_on_disk(), encountered error: ", e)
-
-    #print(f'returning docs loaded list: {file_row_list}')
-
-    return jsonify({'success': True, "restart_required": restart_required})
+    shell_delete_folder(vector_db_path)
+    print(f"Removed existing VectorDB folder: {vector_db_path}")
+    
+    shell_delete_folder(whoosh_index_path)
+    print(f"Removed existing Whoosh index folder: {whoosh_index_path}")
+    
+    return jsonify({'success': True})
 
 
 @app.route('/delete_chat', methods=['POST'])
@@ -4034,10 +3777,6 @@ def get_session_id_and_vector_key() -> tuple[str, str]:
 def read_config_for_setup_for_local_llm_response() -> dict:
     read_return = read_config([
         'local_llm_server',
-        'use_sbert_embeddings', 
-        'use_openai_embeddings', 
-        'use_bge_base_embeddings', 
-        'use_bge_large_embeddings',
         'force_enable_rag', 
         'force_disable_rag', 
         'local_llm_chat_template_format', 
@@ -4047,10 +3786,6 @@ def read_config_for_setup_for_local_llm_response() -> dict:
         'skip_system_prompt'
     ])
     return {
-        'use_sbert_embeddings': read_return['use_sbert_embeddings'],
-        'use_openai_embeddings': read_return['use_openai_embeddings'],
-        'use_bge_base_embeddings': read_return['use_bge_base_embeddings'],
-        'use_bge_large_embeddings': read_return['use_bge_large_embeddings'],
         'force_enable_rag': read_return['force_enable_rag'],
         'force_disable_rag': read_return['force_disable_rag'],
         'local_llm_chat_template_format': read_return['local_llm_chat_template_format'],
@@ -4118,20 +3853,6 @@ def prepare_for_quick_response(current_sequence_id:int, regeneration_request:boo
     if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1
     reject_rag()
     return current_sequence_id
-
-
-def get_embedding_function(use_sbert_embeddings:bool, use_openai_embeddings:bool, use_bge_base_embeddings:bool, use_bge_large_embeddings:bool) -> HuggingFaceEmbeddings:
-    try:
-        if use_sbert_embeddings:
-            return HuggingFaceEmbeddings()
-        elif use_openai_embeddings:
-            return AZURE_OPENAI_EMBEDDINGS
-        elif use_bge_base_embeddings:
-            return HF_BGE_EMBEDDINGS
-        elif use_bge_large_embeddings:
-            return HF_BGE_EMBEDDINGS
-    except Exception as e:
-        handle_error_no_return("Could not get embedding function in method get_embedding_function, encountered error: ", e)
 
 
 def get_formatted_prompt_for_setup_for_local_llm_response(chat_id:int, current_sequence_id:int) -> str:
@@ -4222,27 +3943,76 @@ def handle_force_disabled_rag(local_llm_server:str, formatted_history_prompt:str
     return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
 
 
-def process_vector_search(user_query:str, embedding_function:HuggingFaceEmbeddings, force_enable_rag:bool, force_disable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int, ) -> tuple[list[Document], bool]:
+def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results_from_vectordb: int):
+    path_to_knowledge_domain = get_path_to_knowledge_domain()
+    vector_db_path = create_vector_db_directory(path_to_knowledge_domain, embedding_function)
+
+     # Load Embedding Model
     try:
-        docs_list_with_cosine_distance = VECTOR_STORE.similarity_search_with_score(user_query, fetch_top_k_results_from_vectordb, embedding_fn=embedding_function)
+        embedding_model = SentenceTransformer(embedding_function)
+    except Exception as e:
+        handle_local_error("Could not load embedding model, encountered error: ", e)
+
+
+    try:
+        # Initialize Chroma Client and collection
+        chroma_client = chromadb.PersistentClient(path=vector_db_path)
+        collection = chroma_client.get_or_create_collection(name="knowledge_domain", metadata={"hnsw:space": "cosine"}) # By default, ChromaDB returns the L2 distance (lower is better), but we want cosine distance (higher is better)
+
+        query_embedding = embedding_model.encode(user_query)
+
+        # Perform the semantic search - 'results' is a dictionary with keys 'documents', 'metadatas', 'distances', whose values are lists of length = fetch_top_k_results_from_vectordb
+        results = collection.query(
+            query_embeddings=query_embedding.tolist(),  # Convert embeddings from NumPy arrays to list of lists
+            n_results=fetch_top_k_results_from_vectordb,
+            include=["documents", "metadatas", "distances"]
+        )
+
+        # Format similar to LangChain's Output so as to maintain consistency
+        docs_list_with_cosine_distance = [
+            (
+                Document(
+                    page_content=doc,
+                    metadata=metadata
+                ),
+                distance
+            )
+            for doc, metadata, distance in zip(
+                results['documents'][0],
+                results['metadatas'][0],
+                results['distances'][0]
+            )
+        ]   # The zip() function combines multiple iterables (lists, tuples, etc.) element by element and helps iterate over multiple lists simultaneously
+        return docs_list_with_cosine_distance
     except Exception as e:
         handle_error_no_return("Could not perform similarity_search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
+        return []
 
+
+def search_knowledge_base(user_query:str, embedding_function:str, force_enable_rag:bool, force_disable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int, ) -> tuple[list[Document], bool]:
+
+    filtered_docs = []
+    try:
+        docs_list_with_cosine_distance = search_vector_db(user_query, embedding_function, fetch_top_k_results_from_vectordb)
+        filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc,score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of a Document object and a float score!
+    except Exception as e:
+        handle_error_no_return("Could not perform vector search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
+
+    whoosh_results = []
     try:
         whoosh_results = search_whoosh_index(user_query)
     except Exception as e:
         handle_error_no_return("Could not perform whoosh search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
-
-    filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc,score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of a Document object and a float score!
 
     if whoosh_results:  # Combine the whoosh and vector results
         combined_docs = combine_whoosh_and_vector_results(whoosh_results, filtered_docs)
     else:
         combined_docs = filtered_docs
 
-    if not combined_docs:
+    if not combined_docs:   # i.e. if blank
         print("No documents for citations, setting do_rag to False")
         do_rag = False
+        return [], do_rag
 
     docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
     do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
@@ -4281,8 +4051,8 @@ def setup_for_local_llm_response():
             
     try:    # RAG Routine Begins: Perform semantic search on the vector DB, lexical search on the whoosh index, combine and rerank results and determine if RAG is necessary
         print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n") 
-        embedding_function = get_embedding_function(config['use_sbert_embeddings'], config['use_openai_embeddings'], config['use_bge_base_embeddings'], config['use_bge_large_embeddings'])
-        docs, do_rag = process_vector_search(user_query, embedding_function, 
+        selected_embedding_function = read_config(['selected_embedding_model'])['selected_embedding_model']
+        docs, do_rag = search_knowledge_base(user_query, selected_embedding_function, 
         (config['force_enable_rag'] or regenerate_with_citations_force_enabled), 
         (config['force_disable_rag'] or regenerate_with_citations_force_disabled), 
         config['filter_top_k_results_by_reranking'], config['fetch_top_k_results_from_vectordb'])
