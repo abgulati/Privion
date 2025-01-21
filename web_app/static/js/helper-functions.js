@@ -726,6 +726,7 @@ function resetVectorDBtoBlank() {
     let formData = new FormData();
     //formData.append('embedding_model_choice', document.getElementById('embedding_model_dropdown').value);
     formData.append('embedding_model_choice', 'sentence-transformers/all-mpnet-base-v2');
+    formData.append('knowledge_domain', "General");
 
     fetch('/reset_vector_db_on_disk', {
         method: 'POST',

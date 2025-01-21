@@ -1254,22 +1254,19 @@ def add_column_if_not_exists(cursor, table_name, column_name, column_type):
         handle_error_no_return(f"Error adding column {column_name} to {table_name}: ", e)
 
 
-def record_doc_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
-
-    print("\n\nRecording document loading to records DB\n\n")
-
+def init_and_connect_to_docs_loaded_db() -> tuple[sqlite3.Connection, sqlite3.Cursor]:
     try:
         read_return = read_config(['sqlite_docs_loaded_db'])
         sqlite_docs_loaded_db = read_return['sqlite_docs_loaded_db']
     except Exception as e:
-        handle_local_error("Missing sqlite_docs_loaded_db in config.json for method record_doc_loaded_to_db. Error: ", e)
+        return handle_local_error("Missing sqlite_docs_loaded_db in config.json for method init_and_get_cursor_fordocs_loaded_db. Error: ", e)
 
     try:
         conn = sqlite3.connect(sqlite_docs_loaded_db)
         cursor = conn.cursor()
     except Exception as e:
-        handle_local_error("Could not establish connection to document_records DB, encountered error: ", e)
-    
+        return handle_local_error("Could not establish connection to sqlite_docs_loaded_db, encountered error: ", e)
+
     # If the database does not currently exist...
     try:
         cursor.execute('''
@@ -1286,7 +1283,7 @@ def record_doc_loaded_to_db(document_name, embedding_model, chunk_size, chunk_ov
 
         conn.commit()
     except Exception as e:
-        handle_local_error("Could not create document_records DB, encountered error: ", e)
+        return handle_local_error("Could not create document_records DB, encountered error: ", e)
     
     try:
         add_column_if_not_exists(cursor, 'document_records', 'document_name', 'TEXT')
@@ -1296,7 +1293,19 @@ def record_doc_loaded_to_db(document_name, embedding_model, chunk_size, chunk_ov
         add_column_if_not_exists(cursor, 'document_records', 'chunk_overlap', 'INTEGER')
         add_column_if_not_exists(cursor, 'document_records', 'knowledge_domain', 'TEXT')
     except Exception as e:
-        return handle_api_error("Could not add necessary columns to chat history db, encountered error: ", e)
+        return handle_local_error("Could not add necessary columns to document_records db, encountered error: ", e)
+
+    return conn, cursor
+
+
+def record_doc_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
+
+    print("\n\nRecording document loading to records DB\n\n")
+
+    try:
+        conn, cursor = init_and_connect_to_docs_loaded_db()
+    except Exception as e:
+        handle_local_error("Could not initialize and connect to docs_loaded_db to record_doc_loaded_to_db, encountered error: ", e)
     
     try:
         cursor.execute("INSERT INTO document_records (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain) VALUES (?, ?, ?, ?, ?)", (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain))
@@ -1304,7 +1313,6 @@ def record_doc_loaded_to_db(document_name, embedding_model, chunk_size, chunk_ov
         conn.close()
     except Exception as e:
         handle_local_error("Could not update document_records DB, encountered error: ", e)
-
 
 
 # List-splitter function for a large number of embeddings!
@@ -2838,74 +2846,81 @@ def fetch_file_list_for_vector_db():
         return handle_api_error("Server-side error, could not read embedding_model_choice or knowledge_domain from the POST request in method fetch_file_list_for_vector_db, encountered error: ", e)
 
     try:
-        read_return = read_config(['sqlite_docs_loaded_db'])
-        sqlite_docs_loaded_db = read_return['sqlite_docs_loaded_db']
+        conn, cursor = init_and_connect_to_docs_loaded_db()
     except Exception as e:
-        return handle_api_error("Missing sqlite_docs_loaded_db in config.json in method fetch_file_list_for_vector_db. Error: ", e)
+        return handle_api_error("Could not initialize and connect to docs_loaded_db to fetch_file_list_for_vector_db, encountered error: ", e)
 
     file_row_list = []
-    
-    try:
-        conn = sqlite3.connect(sqlite_docs_loaded_db)
-        c = conn.cursor()
-    except Exception as e:
-        return handle_api_error("Could not connect to sqlite_docs_loaded_db database to load file list, encountered error: ", e)
-
-    # If the database does not currently exist...
-    try:
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS document_records (
-                    id INTEGER PRIMARY KEY,
-                    document_name TEXT NOT NULL,
-                    embedding_model TEXT NOT NULL,
-                    vectordb_used TEXT,
-                    chunk_size INTEGER,
-                    chunk_overlap INTEGER,
-                    knowledge_domain TEXT
-            )
-        ''')
-
-        conn.commit()
-    except Exception as e:
-        handle_local_error("Could not create document_records DB, encountered error: ", e)
 
     try:
-        add_column_if_not_exists(c, 'document_records', 'document_name', 'TEXT')
-        add_column_if_not_exists(c, 'document_records', 'embedding_model', 'TEXT')
-        add_column_if_not_exists(c, 'document_records', 'vectordb_used', 'TEXT')
-        add_column_if_not_exists(c, 'document_records', 'chunk_size', 'INTEGER')
-        add_column_if_not_exists(c, 'document_records', 'chunk_overlap', 'INTEGER')
-        add_column_if_not_exists(c, 'document_records', 'knowledge_domain', 'TEXT')
-    except Exception as e:
-        return handle_api_error("Could not add necessary columns to chat history db, encountered error: ", e)
-
-    try:
-        c.execute("SELECT document_name, embedding_model, chunk_size, chunk_overlap FROM document_records where embedding_model LIKE ? AND knowledge_domain LIKE ?", (selected_embedding_model_choice, knowledge_domain))
+        cursor.execute("SELECT document_name, embedding_model, chunk_size, chunk_overlap FROM document_records where embedding_model LIKE ? AND knowledge_domain LIKE ?", (selected_embedding_model_choice, knowledge_domain))
     except Exception as e:
         return handle_api_error("Could not get document list from document_records db, encountered error: ", e)
     
     try:
-        result = c.fetchall()
+        result = cursor.fetchall()
 
         for list_item in result:
             file_row_list.append(list(list_item))
     except Exception as e:
         return handle_api_error("Could not parse document list from document_records db, encountered error: ", e)
 
-    #print(f'returning docs loaded list: {file_row_list}')
-
+    try:
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        handle_error_no_return("Could not close connections to document_records db, encountered error: ", e)
+    
     return jsonify({'success': True, 'file_row_list': file_row_list})
 
 
 def shell_delete_folder(folder_path):
     try:
         if os.path.exists(folder_path):
-            shutil.rmtree(folder_path)
-            print(f"Removed existing folder: {folder_path}")
+
+            if "vector_db" in folder_path:  # If deleting a vector_db, open connections will need to be closed first!
+                try:
+                    print(f"Attempting to close connection to VectorDB at path: {folder_path} before deleting it...")
+                    client = chromadb.PersistentClient(path=folder_path, settings=chromadb.Settings(allow_reset=True))
+                    client.reset()  # Specifically mentioned in the chromadb docs as the way to cleanup and remove vector_dbs
+                    del client
+                    print(f"Successfully reset vectorDB at path: {folder_path}")
+                    return True
+                except Exception as e:
+                    handle_error_no_return("Could not reset vector_db, encountered error: ", e)
+
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    shutil.rmtree(folder_path)
+                    print(f"Removed existing folder: {folder_path}")
+                    break
+                except PermissionError:
+                    if attempt < max_retries - 1:
+                        print(f"Permission denied. Retrying in 1 second... (Attempt {attempt + 1} of {max_retries})")
+                        time.sleep(1)
+                    else:
+                        print(f"Failed to remove folder after {max_retries} attempts.")
+                        break
         else:
             print(f"No existing folder found at: {folder_path}")
     except Exception as e:
         return handle_api_error("Could not remove existing folder, encountered error: ", e)
+
+
+def clean_up_docs_loaded_db(selected_embedding_model_choice, knowledge_domain):
+    try:
+        conn, cursor = init_and_connect_to_docs_loaded_db()
+    except Exception as e:
+        return handle_api_error("Could not initialize and connect to docs_loaded_db to clean up, encountered error: ", e)
+
+    try:
+        with conn:  # Handles commit/rollback automatically
+            cursor.execute("DELETE FROM document_records WHERE embedding_model LIKE ? AND knowledge_domain LIKE ?", (selected_embedding_model_choice, knowledge_domain))
+    except Exception as e:
+        return handle_api_error("Could not delete document records from docs_loaded_db, encountered error: ", e)
+    finally:
+        cursor.close()
 
 
 @app.route('/reset_vector_db_on_disk', methods=['POST'])
@@ -2915,6 +2930,7 @@ def reset_vector_db_on_disk():
 
     try:
         selected_embedding_model_choice = request.form['embedding_model_choice']
+        knowledge_domain = request.form['knowledge_domain']
     except Exception as e:
         return handle_api_error("Server-side error, could not read embedding_model_choice from the POST request in method reset_vector_db_on_disk, encountered error: ", e)
 
@@ -2923,10 +2939,8 @@ def reset_vector_db_on_disk():
     whoosh_index_path = os.path.join(path_to_knowledge_domain, "whoosh_index")
     
     shell_delete_folder(vector_db_path)
-    print(f"Removed existing VectorDB folder: {vector_db_path}")
-    
     shell_delete_folder(whoosh_index_path)
-    print(f"Removed existing Whoosh index folder: {whoosh_index_path}")
+    clean_up_docs_loaded_db(selected_embedding_model_choice, knowledge_domain)
     
     return jsonify({'success': True})
 
