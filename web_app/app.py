@@ -1435,7 +1435,7 @@ def whoosh_and_embed_doc_chunks(input_file):
 
     # Convert Chunks to Document objects:
     try:
-        numbered_splits = [Document(page_content=chunk['content'], metadata={'source': chunk['source'], 'page_number': chunk['page_number']}) for chunk in chunks]  # Generates a list of Document objects, each containing a 'page_content' string, and a 'metadata' dictionary with 'source' and 'page_number' keys
+        numbered_splits = [Document(page_content=chunk['content'], metadata={'page_number': chunk['page_number'], 'source': chunk['source']}) for chunk in chunks]  # Generates a list of Document objects, each containing a 'page_content' string, and a 'metadata' dictionary with 'source' and 'page_number' keys
     except Exception as e:
         handle_local_error("Failed to convert chunks to Document objects for storage to VectorDB, encountered error: ", e)
 
@@ -3958,6 +3958,8 @@ def handle_force_disabled_rag(local_llm_server:str, formatted_history_prompt:str
 
 
 def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results_from_vectordb: int):
+    print("Searching vectorDB")
+
     path_to_knowledge_domain = get_path_to_knowledge_domain()
     vector_db_path = create_vector_db_directory(path_to_knowledge_domain, embedding_function)
 
@@ -4004,6 +4006,7 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
 
 
 def search_knowledge_base(user_query:str, embedding_function:str, force_enable_rag:bool, force_disable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int, ) -> tuple[list[Document], bool]:
+    print("Searching knowledge base")
 
     filtered_docs = []
     try:
