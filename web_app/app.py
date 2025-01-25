@@ -553,7 +553,7 @@ def get_path_to_knowledge_domain():
         selected_knowledge_domain = read_return['selected_knowledge_domain']
         knowledge_domain_base_directory = read_return['knowledge_domain_base_directory']
     except Exception as e:
-        handle_local_error("Missing values in config.json, could not read_embeddings_config. Error: ", e)
+        handle_local_error("Missing values in config.json, could not get_path_to_knowledge_domain. Error: ", e)
 
     try:
         path_to_knowledge_domain = os.path.join(knowledge_domain_base_directory, selected_knowledge_domain)
@@ -1387,10 +1387,9 @@ def chunk_docs_with_page_numbers(input_file, chunk_size=250):
 
 
 def read_embeddings_config() -> tuple[str, str]:
-
+    print("\n\nReading embeddings config\n\n")
     try:
-        read_return = read_config(['selected_embedding_model'])
-        selected_embedding_model = read_return['selected_embedding_model']
+        selected_embedding_model = read_config(['selected_embedding_model'])['selected_embedding_model']
     except Exception as e:
         handle_local_error("Missing values in config.json, could not read_embeddings_config. Error: ", e)
 
@@ -2840,10 +2839,10 @@ def fetch_file_list_for_vector_db():
     print("Loading file list for selected VectorDB")
 
     try:
-        selected_embedding_model_choice = request.form['embedding_model_choice']
-        knowledge_domain = request.form['knowledge_domain']
+        selected_embedding_model_choice = request.form['selected_embedding_model']
+        knowledge_domain = request.form['selected_knowledge_domain']
     except Exception as e:
-        return handle_api_error("Server-side error, could not read embedding_model_choice or knowledge_domain from the POST request in method fetch_file_list_for_vector_db, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read selected_embedding_model or selected_knowledge_domain from the POST request in method fetch_file_list_for_vector_db, encountered error: ", e)
 
     try:
         conn, cursor = init_and_connect_to_docs_loaded_db()
@@ -2875,6 +2874,7 @@ def fetch_file_list_for_vector_db():
 
 
 def shell_delete_folder(folder_path):
+    print(f"Deleting folder / resetting vector_db at path: {folder_path}")
     try:
         if os.path.exists(folder_path):
 
@@ -2909,6 +2909,7 @@ def shell_delete_folder(folder_path):
 
 
 def clean_up_docs_loaded_db(selected_embedding_model_choice, knowledge_domain):
+    print(f"Cleaning up docs_loaded_db for embedding model: {selected_embedding_model_choice} and knowledge domain: {knowledge_domain}")
     try:
         conn, cursor = init_and_connect_to_docs_loaded_db()
     except Exception as e:
@@ -2929,10 +2930,10 @@ def reset_vector_db_on_disk():
     print("Resetting selected VectorDB")
 
     try:
-        selected_embedding_model_choice = request.form['embedding_model_choice']
-        knowledge_domain = request.form['knowledge_domain']
+        selected_embedding_model_choice = request.form['selected_embedding_model']
+        knowledge_domain = request.form['selected_knowledge_domain']
     except Exception as e:
-        return handle_api_error("Server-side error, could not read embedding_model_choice from the POST request in method reset_vector_db_on_disk, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read selected_embedding_model or selected_knowledge_domain from the POST request in method reset_vector_db_on_disk, encountered error: ", e)
 
     path_to_knowledge_domain = get_path_to_knowledge_domain()
     vector_db_path = os.path.join(path_to_knowledge_domain, "vector_db", selected_embedding_model_choice)
