@@ -69,13 +69,17 @@ function setUIValues(values) {
 }
 
 
-function loadAndSetCoreValues() {
+function loadCoreLarsConfig() {
     const initKeysToRead = [
         'local_llm_server',
         'model_choice',
         'use_local_llm',
         'use_gpu',
         'embedding_model_choice',
+        'embedding_models_list',
+        'selected_embedding_model',
+        'knowledge_domain_list',
+        'selected_knowledge_domain',
         'use_ocr',
         'ocr_service_choice',
         'local_llm_chat_template_format',
@@ -154,7 +158,7 @@ function initializeLocalLLMServerDropdown(local_llm_server, exl2_prompt_template
 }
 
 
-function loadCoreHfValues() {
+function loadCoreHfConfig() {
     const initKeysToRead = [
         'model_id',
         'model_list',
@@ -205,7 +209,7 @@ function loadCoreHfValues() {
         return data.values;
     })
     .catch(error => {
-        errorHandler("reading hf_config.json (likely means the HF-Waitress server is offline)", "loadCoreHfValues()", String(error.message))
+        errorHandler("reading hf_config.json (likely means the HF-Waitress server is offline)", "loadCoreHfConfig()", String(error.message))
     });
 }
 
@@ -241,6 +245,69 @@ function initializeHfWaitressCustomDropdown(model_list, model_id) {
         customDropdownList.appendChild(div);
     });
 }
+
+
+
+function initializeKnowledgeDomainCustomDropdown(model_list, model_id) {
+    const customDropdownList = document.getElementById('hf-waitress-kb-custom-dropdown-items-list');
+    customDropdownList.innerHTML = '';
+
+    const selectedValue = document.getElementById('hf-waitress-kb-custom-dropdown-selected-value');
+
+    model_list.forEach(model => {
+        if (model.toLowerCase() == model_id.toLowerCase()) {
+            selectedValue.textContent = model;
+        }
+        const div = document.createElement('div');
+        div.className = 'hf-waitress-kb-custom-dropdown-item';
+        div.innerHTML = `
+            <span>${model}</span>
+            <span class="hf-waitress-kb-custom-dropdown-delete-btn">×</span>
+        `;
+        const deleteButton = div.querySelector('.hf-waitress-kb-custom-dropdown-delete-btn');
+        deleteButton.addEventListener('click', (event) => { // instead of deleteButton.onclick = (event) => {
+            event.stopPropagation();    //This prevents the click event from bubbling up to the parent div onclick event, which would immediately close the dropdown
+            removeKnowledgeBaseFromCustomDropdown(model);
+        });
+        div.addEventListener('click', () => {   // instead of div.onclick = () => {
+            selectedValue.textContent = model;
+            document.getElementById('hf-waitress-kb-custom-dropdown-content').classList.remove('show');
+        });
+        customDropdownList.appendChild(div);
+    });
+}
+
+
+
+function initializeEmbeddingCustomDropdown(model_list, model_id) {
+    const customDropdownList = document.getElementById('hf-waitress-embed-custom-dropdown-items-list');
+    customDropdownList.innerHTML = '';
+
+    const selectedValue = document.getElementById('hf-waitress-embed-custom-dropdown-selected-value');
+
+    model_list.forEach(model => {
+        if (model.toLowerCase() == model_id.toLowerCase()) {
+            selectedValue.textContent = model;
+        }
+        const div = document.createElement('div');
+        div.className = 'hf-waitress-embed-custom-dropdown-item';
+        div.innerHTML = `
+            <span>${model}</span>
+            <span class="hf-waitress-embed-custom-dropdown-delete-btn">×</span>
+        `;
+        const deleteButton = div.querySelector('.hf-waitress-embed-custom-dropdown-delete-btn');
+        deleteButton.addEventListener('click', (event) => { // instead of deleteButton.onclick = (event) => {
+            event.stopPropagation();    //This prevents the click event from bubbling up to the parent div onclick event, which would immediately close the dropdown
+            removeEmbeddingModelFromCustomDropdown(model);
+        });
+        div.addEventListener('click', () => {   // instead of div.onclick = () => {
+            selectedValue.textContent = model;
+            document.getElementById('hf-waitress-embed-custom-dropdown-content').classList.remove('show');
+        });
+        customDropdownList.appendChild(div);
+    });
+}
+
 
 
 function initializeHfSettingsDropdowns(all_values) {
@@ -353,7 +420,7 @@ function setHfSlidersAndTextAreas(values) {
 
 
 function initializeHfwServerConfig() {
-    loadCoreHfValues()
+    loadCoreHfConfig()
         .then(hf_values => {
             setVision(hf_values.vision);
             setExl2(hf_values.exl2);
@@ -793,11 +860,87 @@ function initializeEventListenersForEmbeddingModelTab() {
         document.getElementById('azure_openai_text_ada_api_key').disabled = !this.checked;   
         document.getElementById('azure_openai_text_ada_deployment_name').disabled = !this.checked;   
     });
+
+    // Event listener to toggle custom dropdown:
+    document.getElementById('hf-waitress-kb-custom-select-header').addEventListener('click', function() {
+        document.getElementById('hf-waitress-kb-custom-dropdown-content').classList.toggle('show');
+    });
+
+    document.getElementById('hf-waitress-embed-custom-select-header').addEventListener('click', function() {
+        document.getElementById('hf-waitress-embed-custom-dropdown-content').classList.toggle('show');
+    });
+
+    // Event listener to filter custom dropdown:
+    document.getElementById('hf-waitress-kb-custom-dropdown-search-input').addEventListener('input', function() {
+        filterCustomKbDropdown(this.value); //TODO: add filter function
+    });
+
+    document.getElementById('hf-waitress-embed-custom-dropdown-search-input').addEventListener('input', function() {
+        filterCustomEmbedDropdown(this.value); //TODO: add filter function
+    });
+
+    // Event listener to populate docs table when a different embedding model is selected:
+    document.getElementById('hf-waitress-embed-custom-dropdown-items-list').addEventListener('click', function(e) {
+        if (e.target.matches('.hf-waitress-embed-custom-dropdown-item')) {
+            clearDocsLoadedTable();
+            populateDocsLoadedTable();
+        }
+    });
+
+    // Event listener to populate docs table when a different knowledge domain is selected:
+    document.getElementById('hf-waitress-kb-custom-dropdown-items-list').addEventListener('click', function(e) {
+        if (e.target.matches('.hf-waitress-kb-custom-dropdown-item')) {
+            clearDocsLoadedTable();
+            populateDocsLoadedTable();
+        }
+    });
+
+    // Event listener to add new item to custom dropdown:
+    const addKbInput = document.getElementById('hf-waitress-kb-custom-dropdown-add-input');
+    const addKbBtn = document.getElementById('hf-waitress-kb-custom-dropdown-add-btn');
+
+    addKbBtn.addEventListener('click', function() {
+        addKbBtn.style.display = 'none';
+        addKbInput.style.display = 'block';
+    });
+
+    addKbInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && this.value) {
+            addNewKnowledgeDomain(this.value); //TODO: add function
+            addKbInput.value = '';
+            addKbInput.style.display = 'none';
+            addKbBtn.style.display = 'block';
+        }
+    });
+
+    // Event listener to add new item to custom dropdown:
+    const addEmbedInput = document.getElementById('hf-waitress-embed-custom-dropdown-add-input');
+    const addEmbedBtn = document.getElementById('hf-waitress-embed-custom-dropdown-add-btn');
+
+    addEmbedBtn.addEventListener('click', function() {
+        addEmbedBtn.style.display = 'none';
+        addEmbedInput.style.display = 'block';
+    });
+
+    addEmbedInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && this.value) {
+            addNewEmbeddingModel(this.value); //TODO: add function
+            addEmbedInput.value = '';
+            addEmbedInput.style.display = 'none';
+            addEmbedBtn.style.display = 'block';
+        }
+    });
+
+
 }
 
 
 function initializeEmbeddingModelTabComponents(values) {
-    initializeEmbeddingModelDropdown(values.embedding_model_choice);
+    // initializeEmbeddingModelDropdown(values.embedding_model_choice);
+    initializeKnowledgeDomainCustomDropdown(values.knowledge_domain_list, values.selected_knowledge_domain);
+    initializeEmbeddingCustomDropdown(values.embedding_models_list, values.selected_embedding_model);
+    clearDocsLoadedTable();
+    populateDocsLoadedTable();
     initializeEventListenersForEmbeddingModelTab();
 }
 
@@ -1134,7 +1277,7 @@ document.addEventListener("DOMContentLoaded", function() {
     document.getElementById('ModelAndDBLoading').style.display = 'block';   //Start initializing the chat session
     let local_llm_server;
 
-    loadAndSetCoreValues()
+    loadCoreLarsConfig()
         .then(values => {
             initializeLLMTabComponents(values);
             initializeEmbeddingModelTabComponents(values);
