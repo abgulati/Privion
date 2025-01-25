@@ -2867,3 +2867,39 @@ def load_vectordb():
 
 
 
+
+function getVectorEmbeddingsConfig() {
+    
+    const embedding_model_choice = document.getElementById('embedding_model_dropdown').value;
+    const update_azure_ada_config = document.getElementById('update_azure_ada').checked;
+
+    let config= {
+        'embedding_model_choice': embedding_model_choice,
+        'use_openai_embeddings': false,
+        'use_bge_large_embeddings': false,
+        'use_bge_base_embeddings': false,
+        'use_sbert_embeddings': false
+    };
+    
+    switch(embedding_model_choice) {
+        case 'bge_large':
+            config.use_bge_large_embeddings = true;
+            break;
+        case 'bge_base':
+            config.use_bge_base_embeddings = true;
+            break;
+        case 'sbert_mpnet_base_v2':
+            config.use_sbert_embeddings = true;
+            break;
+        case 'openai_text_ada':
+            config.use_openai_embeddings = true;
+            if (update_azure_ada_config) {
+                config.azure_openai_text_ada_api_url = document.getElementById("azure_openai_text_ada_api_url").value;
+                config.azure_openai_text_ada_api_key = document.getElementById("azure_openai_text_ada_api_key").value;
+                config.azure_openai_text_ada_deployment_name = document.getElementById("azure_openai_text_ada_deployment_name").value;
+            }
+            break;
+    }
+
+    return config;
+}
