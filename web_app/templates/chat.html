@@ -183,7 +183,7 @@
                             <!--Options on the left-->
                             <div class="list-group w-25 me-3" id="modal-left-options-list">
                                 <a href="#" class="list-group-item list-group-item-action active" data-content="option1">LLM Selection</a>
-                                <a href="#" class="list-group-item list-group-item-action" data-content="option2">VectorDB & Embedding Models</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option2">Knowledge Bases & Embedding Models</a>
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option3">System Prompt</a>
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option4">RAG Options</a>
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option5">OCR Options</a>
@@ -747,11 +747,33 @@
 
                                 <div id="option2" class="d-none">
                                     <!--Option 2 Content-->
-                                    <h5>Switch Between Available Embedding Models</h5>
+                                    <h5>Switch Knowledge Bases</h5>
 
                                     <br>
 
-                                    <div id="embed_model_choice">
+                                    <div class="hf-waitress-kb-custom-select" id="hf-waitress-kb-custom-select">
+                                        <label style="margin-bottom: 3px;">Select a Knowledge Base:</label>
+                                        <br>
+                                        <div class="hf-waitress-kb-custom-select-header" id="hf-waitress-kb-custom-select-header">
+                                            <span class="hf-waitress-kb-custom-dropdown-selected-value" id="hf-waitress-kb-custom-dropdown-selected-value">Select an item</span>
+                                            <span class="hf-waitress-kb-custom-dropdown-arrow" id="hf-waitress-kb-custom-dropdown-arrow">▼</span>
+                                        </div>
+                                        <div class="hf-waitress-kb-custom-dropdown-content" id="hf-waitress-kb-custom-dropdown-content">
+                                            <div class="hf-waitress-kb-custom-dropdown-search-and-sort-header">
+                                                <button class="hf-waitress-kb-custom-dropdown-sort-btn" id="hf-waitress-kb-custom-dropdown-sort-btn" onclick="reverseSortCustomKbDropdown()">Sort</button>
+                                                <input type="text" class="hf-waitress-kb-custom-dropdown-search-input" id="hf-waitress-kb-custom-dropdown-search-input" placeholder="Search...">
+                                            </div>
+                                            <div class="hf-waitress-kb-custom-dropdown-add-item-container">
+                                                <button class="hf-waitress-kb-custom-dropdown-add-btn" id="hf-waitress-kb-custom-dropdown-add-btn">+ Add</button>
+                                                <input type="text" class="hf-waitress-kb-custom-dropdown-add-input" id="hf-waitress-kb-custom-dropdown-add-input" style="display: none;" placeholder="Enter a name for a new knowledge base...">
+                                            </div>
+                                            <div class="hf-waitress-kb-custom-dropdown-items-list" id="hf-waitress-kb-custom-dropdown-items-list"></div>
+                                        </div>
+                                    </div>
+
+                                    <br>
+
+                                    <div id="embed_model_choice" style="display: none;">
                                         <label style="margin-bottom: 3px;">Select an Embedding Model:</label>
                                         <br>
                                         <select class="modal-selects" name="specify_embedding_model" id="embedding_model_dropdown" style="width: 100%;">
@@ -815,6 +837,41 @@
 
                                         <button class="btn btn-primary" type="button" id="resetVectorDB">Reset VectorDB</button>    <!--TODO: confirmation dialogue: are you sure you want to reset?-->
 
+                                    </div>
+
+                                    <br>
+
+                                    <!--Advanced Settings Section Begins-->
+                                    <a href="#" class="btn btn-link btn-primary embed-adv-set-toggle" id="advancedEmbedSettingsToggle" data-bs-toggle="collapse" data-bs-target="#advancedEmbedSettings" aria-expanded="false" aria-controls="advancedEmbedSettings" style="display: inline-block;">
+                                        Advanced Settings >>>
+                                    </a>
+
+                                    <div class="collapse" id="advancedEmbedSettings">
+                                        <div class="card card-body" style="background-color: #181A1B; border: none;">
+                                            
+                                            <!-- Add options here | TODO: style "Advanced Settings" button! -->
+
+                                            <div class="hf-waitress-embed-custom-select" id="hf-waitress-embed-custom-select">
+                                                <label style="margin-bottom: 3px;">Select an Embedding Model:</label>
+                                                <br>
+                                                <div class="hf-waitress-embed-custom-select-header" id="hf-waitress-embed-custom-select-header">
+                                                    <span class="hf-waitress-embed-custom-dropdown-selected-value" id="hf-waitress-embed-custom-dropdown-selected-value">Select an item</span>
+                                                    <span class="hf-waitress-embed-custom-dropdown-arrow" id="hf-waitress-embed-custom-dropdown-arrow">▼</span>
+                                                </div>
+                                                <div class="hf-waitress-embed-custom-dropdown-content" id="hf-waitress-embed-custom-dropdown-content">
+                                                    <div class="hf-waitress-embed-custom-dropdown-search-and-sort-header">
+                                                        <button class="hf-waitress-embed-custom-dropdown-sort-btn" id="hf-waitress-embed-custom-dropdown-sort-btn" onclick="reverseSortCustomEmbedDropdown()">Sort</button>
+                                                        <input type="text" class="hf-waitress-embed-custom-dropdown-search-input" id="hf-waitress-embed-custom-dropdown-search-input" placeholder="Search...">
+                                                    </div>
+                                                    <div class="hf-waitress-embed-custom-dropdown-add-item-container">
+                                                        <button class="hf-waitress-embed-custom-dropdown-add-btn" id="hf-waitress-embed-custom-dropdown-add-btn">+ Add</button>
+                                                        <input type="text" class="hf-waitress-embed-custom-dropdown-add-input" id="hf-waitress-embed-custom-dropdown-add-input" style="display: none;" placeholder="Select an embedding model...">
+                                                    </div>
+                                                    <div class="hf-waitress-embed-custom-dropdown-items-list" id="hf-waitress-embed-custom-dropdown-items-list"></div>
+                                                </div>
+                                            </div>
+
+                                        </div>
                                     </div>
 
                                 </div>
