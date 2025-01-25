@@ -578,6 +578,34 @@ async function updateHfModelList(newModelList) {
 }
 
 
+async function updateLarsCustomModelList(list_name, new_list) {
+    console.log("Updating LARS-Enterprise custom model list: ", list_name);
+    const response = await fetch('/config_writer_api', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ config_updates: { [list_name]: new_list } }) // Use bracket notation to dynamically set the list_name
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error)});
+        }
+        return response.json()
+    })
+    .then(data => {
+        if (data.success) {
+            console.log("LARS-Enterprise custom model list updated successfully");
+        } else {
+            throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+        }
+    })
+    .catch(error => {
+        errorHandler("updating the LARS-Enterprise custom model list", "updateLarsCustomModelList()", String(error.message))
+    });
+}
+
+
 function setDefaultTemplate() {
     let defaultTemplate = `Answer the user's question in as much detail as possible. Be very helpful, witty and precise. Do not make up answers or fabricate false information!`;
 
@@ -660,13 +688,13 @@ function clearGoogleDriveTable() {
 
 
 function populateDocsLoadedTable() {
+
+    console.log("Populating docs loaded table");
     
     let formData = new FormData();
-    //formData.append('embedding_model_choice', document.getElementById('embedding_model_dropdown').value);
-    //formData.append('knowledge_domain', document.getElementById('knowledge_domain_dropdown').value);
 
-    formData.append('embedding_model_choice', 'sentence-transformers/all-mpnet-base-v2');
-    formData.append('knowledge_domain', "General");
+    formData.append('selected_knowledge_domain', document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent);
+    formData.append('selected_embedding_model', document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent);
 
     fetch('/fetch_file_list_for_vector_db', {
         method: 'POST',
@@ -724,9 +752,8 @@ function resetVectorDBtoBlank() {
     }
 
     let formData = new FormData();
-    //formData.append('embedding_model_choice', document.getElementById('embedding_model_dropdown').value);
-    formData.append('embedding_model_choice', 'sentence-transformers/all-mpnet-base-v2');
-    formData.append('knowledge_domain', "General");
+    formData.append('selected_embedding_model', document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent);
+    formData.append('selected_knowledge_domain', document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent);
 
     fetch('/reset_vector_db_on_disk', {
         method: 'POST',
@@ -952,7 +979,8 @@ function triggerSyncGoogleDrive() {
     const confirmed = confirm('Make sure to verify that the following Settings pertaining to File Uploading are correct:\n\n- Text Extraction Method: ' 
         + (document.getElementById('ocr_yes_radio_button').checked ? 'OCR' : 'Non-OCR (Plain-Text Extraction)') 
         + '\n- OCR Service Choice: ' + (document.getElementById('ocr_yes_radio_button').checked ? document.getElementById('ocrApiDropdown').value : 'Not Applicable') 
-        + '\n- VectorDB: ' + document.getElementById('embedding_model_dropdown').value 
+        + '\n- Embedding Model: ' + document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent 
+        + '\n- Knowledge Domain: ' + document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent 
         + '\n\nIf unsure, click Cancel to abort the file upload process.');
 
     if (!confirmed) {
@@ -1133,10 +1161,10 @@ function checkLocalLLMServerStatus() {
 
 
 function removeModelFromCustomDropdown(model) {
-    loadCoreHfValues()
+    loadCoreHfConfig()
     .then(hf_values => {
         let model_list = hf_values.model_list;
-        model_list = model_list.filter(m => m.toLowerCase() !== model.toLowerCase());
+        model_list = model_list.filter(m => m.toLowerCase() !== model.toLowerCase());   // The .filter() function returns a new array with all elements that pass the test implemented by the provided function.
         updateHfModelList(model_list);
         initializeHfWaitressCustomDropdown(model_list, hf_values.model_id);
     })
@@ -1146,8 +1174,62 @@ function removeModelFromCustomDropdown(model) {
 }
 
 
+function removeKnowledgeBaseFromCustomDropdown(model) {
+    loadCoreLarsConfig()
+    .then(values => {
+        let model_list = values.knowledge_domain_list;
+        model_list = model_list.filter(m => m.toLowerCase() !== model.toLowerCase());   // The .filter() function returns a new array with all elements that pass the test implemented by the provided function.
+        updateLarsCustomModelList('knowledge_domain_list', model_list);
+        initializeKnowledgeDomainCustomDropdown(model_list, values.selected_knowledge_domain);
+    })
+    .catch(error => {
+        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeModelFromCustomDropdown()", String(error.message));
+    });
+}
+
+
+function removeEmbeddingModelFromCustomDropdown(model) {
+    loadCoreLarsConfig()
+    .then(values => {
+        let model_list = values.embedding_models_list;
+        model_list = model_list.filter(m => m.toLowerCase() !== model.toLowerCase());   // The .filter() function returns a new array with all elements that pass the test implemented by the provided function.
+        updateLarsCustomModelList('embedding_models_list', model_list);
+        initializeEmbeddingCustomDropdown(model_list, values.selected_embedding_model);
+    })
+    .catch(error => {
+        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeModelFromCustomDropdown()", String(error.message));
+    });
+}
+
+
+function reverseSortCustomKbDropdown() {
+    loadCoreLarsConfig()
+    .then(values => {
+        let reversed_model_list = values.knowledge_domain_list.reverse();
+        updateLarsCustomModelList('knowledge_domain_list', reversed_model_list);
+        initializeKnowledgeDomainCustomDropdown(reversed_model_list, values.selected_knowledge_domain);
+    })
+    .catch(error => {
+        errorHandler("reversing the LLM list (likely means the HF-Waitress server is offline)", "reverseSortCustomKbDropdown()", String(error.message));
+    });
+}
+
+
+function reverseSortCustomEmbedDropdown() {
+    loadCoreLarsConfig()
+    .then(values => {
+        let reversed_model_list = values.embedding_models_list.reverse();
+        updateLarsCustomModelList('embedding_models_list', reversed_model_list);
+        initializeEmbeddingCustomDropdown(reversed_model_list, values.selected_embedding_model);
+    })
+    .catch(error => {
+        errorHandler("reversing the LLM list (likely means the HF-Waitress server is offline)", "reverseSortCustomEmbedDropdown()", String(error.message));
+    });
+}
+
+
 function reverseSortCustomDropdown() {
-    loadCoreHfValues()
+    loadCoreHfConfig()
     .then(hf_values => {
         let reversed_model_list = hf_values.model_list.reverse();
         updateHfModelList(reversed_model_list);
@@ -1209,6 +1291,20 @@ function filterCustomDropdown(search_words) {
 }
 
 
+function filterCustomKbDropdown(search_words) {
+    const customDropdownList = document.getElementById('hf-waitress-kb-custom-dropdown-items-list');
+    const items = customDropdownList.getElementsByClassName('hf-waitress-kb-custom-dropdown-item');
+    coreFilterFunction(search_words, items);
+}
+
+
+function filterCustomEmbedDropdown(search_words) {
+    const customDropdownList = document.getElementById('hf-waitress-embed-custom-dropdown-items-list');
+    const items = customDropdownList.getElementsByClassName('hf-waitress-embed-custom-dropdown-item');
+    coreFilterFunction(search_words, items);
+}
+
+
 function filterChatHistoryItems(search_words) {
     const customDropdownList = document.getElementById('sidenav-content');
     const items = customDropdownList.getElementsByClassName('nav-item');
@@ -1222,14 +1318,16 @@ function filterGoogleDriveTable(search_words) {
     coreFilterGDriveRowsFunction(search_words, gdrive_doc_name_cells);
 }
 
+
 function filterVectorListTable(search_words) {
     const fullVectorListTable = document.getElementById('vector_embeddings_details');
     const vector_doc_name_cells = fullVectorListTable.getElementsByClassName('vector_list_doc_name');
     coreFilterVectorListRowsFunction(search_words, vector_doc_name_cells);
 }
 
+
 function addNewHfwModel(model) {
-    loadCoreHfValues()
+    loadCoreHfConfig()
     .then(hf_values => {
         let model_list = hf_values.model_list;
         model_list.push(model);
@@ -1238,6 +1336,34 @@ function addNewHfwModel(model) {
     })
     .catch(error => {
         errorHandler("adding a new model_id to the list of LLMs (likely means the HF-Waitress server is offline)", "addNewHfwModel()", String(error.message));
+    });
+}
+
+
+function addNewKnowledgeDomain(model) {
+    loadCoreLarsConfig()
+    .then(values => {
+        let model_list = values.knowledge_domain_list;
+        model_list.push(model);
+        updateLarsCustomModelList('knowledge_domain_list', model_list);
+        initializeKnowledgeDomainCustomDropdown(model_list, values.selected_knowledge_domain);
+    })
+    .catch(error => {
+        errorHandler("adding a new model_id to the list of LLMs (likely means the HF-Waitress server is offline)", "addNewKnowledgeDomain()", String(error.message));
+    });
+}
+
+
+function addNewEmbeddingModel(model) {
+    loadCoreLarsConfig()
+    .then(values => {
+        let model_list = values.embedding_models_list;
+        model_list.push(model);
+        updateLarsCustomModelList('embedding_models_list', model_list);
+        initializeEmbeddingCustomDropdown(model_list, values.selected_embedding_model);
+    })
+    .catch(error => {
+        errorHandler("adding a new model_id to the list of LLMs (likely means the HF-Waitress server is offline)", "addNewEmbeddingModel()", String(error.message));
     });
 }
 
