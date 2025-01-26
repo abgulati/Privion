@@ -4,6 +4,7 @@ from flask_cors import CORS
 from flask import jsonify
 
 from sentence_transformers import SentenceTransformer, util
+import torch
 
 from werkzeug.utils import secure_filename
 
@@ -39,7 +40,7 @@ import nltk
 import os
 import io
 import re
-
+import gc
 from logging.handlers import RotatingFileHandler
 from nltk.corpus import stopwords
 
@@ -571,7 +572,12 @@ def determine_whoosh_index_folder():
     path_to_knowledge_domain = get_path_to_knowledge_domain()
 
     try:
-        whoosh_index_folder = os.path.join(path_to_knowledge_domain, "whoosh_index")
+        selected_embedding_model = read_config(['selected_embedding_model'])['selected_embedding_model']
+    except Exception as e:
+        handle_local_error("Could not determine selected embedding model, encountered error: ", e)
+
+    try:
+        whoosh_index_folder = os.path.join(path_to_knowledge_domain, "vector_db_and_whoosh_index", selected_embedding_model, "whoosh_index")
     except Exception as e:
         handle_local_error("Could not determine whoosh index folder, encountered error: ", e)
 
@@ -1400,7 +1406,7 @@ def read_embeddings_config() -> tuple[str, str]:
 
 def create_vector_db_directory(path_to_knowledge_domain, embedding_function):
     try:
-        vector_db_path = os.path.join(path_to_knowledge_domain, "vector_db", embedding_function)
+        vector_db_path = os.path.join(path_to_knowledge_domain, "vector_db_and_whoosh_index", embedding_function)
         if not os.path.exists(vector_db_path):
             os.makedirs(vector_db_path, exist_ok=True)
             print(f"\n\nCreated vector_db directory: {vector_db_path}\n\n")
@@ -1439,8 +1445,9 @@ def whoosh_and_embed_doc_chunks(input_file):
         handle_local_error("Failed to convert chunks to Document objects for storage to VectorDB, encountered error: ", e)
 
     # Load Embedding Model
+    embedding_model = None
     try:
-        embedding_model = SentenceTransformer(selected_embedding_model)
+        embedding_model = SentenceTransformer(selected_embedding_model, trust_remote_code=True) #TODO: Quantization!
     except Exception as e:
         handle_local_error("Could not load embedding model, encountered error: ", e)
 
@@ -1450,6 +1457,14 @@ def whoosh_and_embed_doc_chunks(input_file):
         embeddings = embedding_model.encode(texts_to_embed)    # By default, convert_to_tensor=False and this is what we want because ChromaDB expects numpy arrays, not PyTorch tensors!
     except Exception as e:
         handle_local_error("Could not generate embeddings, encountered error: ", e)
+    finally:
+        if embedding_model is not None:
+            del embedding_model
+            if torch.cuda.is_available():
+                print("Emptying CUDA cache")
+                torch.cuda.empty_cache()
+            print("Collecting garbage")
+            gc.collect()
 
     # Get VectorDB Directory
     vector_db_path = create_vector_db_directory(path_to_knowledge_domain, selected_embedding_model)
@@ -1458,7 +1473,7 @@ def whoosh_and_embed_doc_chunks(input_file):
     print("Storing to VectorDB: ChromaDB")
     try:
         # Initialize Chroma Client and collection
-        chroma_client = chromadb.PersistentClient(path=vector_db_path)
+        chroma_client = chromadb.PersistentClient(path=vector_db_path, settings=chromadb.Settings(allow_reset=True))
         collection = chroma_client.get_or_create_collection(name="knowledge_domain", metadata={"hnsw:space": "cosine"}) # By default, ChromaDB returns the L2 distance (lower is better), but we want cosine distance (higher is better)
 
         # Prepare the data for ChromaDB format
@@ -2873,17 +2888,16 @@ def fetch_file_list_for_vector_db():
     return jsonify({'success': True, 'file_row_list': file_row_list})
 
 
-def shell_delete_folder(folder_path):
+def shell_delete_folder(folder_path, delete_vector_db = False):
     print(f"Deleting folder / resetting vector_db at path: {folder_path}")
     try:
         if os.path.exists(folder_path):
 
-            if "vector_db" in folder_path:  # If deleting a vector_db, open connections will need to be closed first!
+            if delete_vector_db:
                 try:
                     print(f"Attempting to close connection to VectorDB at path: {folder_path} before deleting it...")
                     client = chromadb.PersistentClient(path=folder_path, settings=chromadb.Settings(allow_reset=True))
                     client.reset()  # Specifically mentioned in the chromadb docs as the way to cleanup and remove vector_dbs
-                    del client
                     print(f"Successfully reset vectorDB at path: {folder_path}")
                     return True
                 except Exception as e:
@@ -2936,11 +2950,11 @@ def reset_vector_db_on_disk():
         return handle_api_error("Server-side error, could not read selected_embedding_model or selected_knowledge_domain from the POST request in method reset_vector_db_on_disk, encountered error: ", e)
 
     path_to_knowledge_domain = get_path_to_knowledge_domain()
-    vector_db_path = os.path.join(path_to_knowledge_domain, "vector_db", selected_embedding_model_choice)
-    whoosh_index_path = os.path.join(path_to_knowledge_domain, "whoosh_index")
+    vector_db_path = os.path.join(path_to_knowledge_domain, "vector_db_and_whoosh_index", selected_embedding_model_choice)
+    whoosh_index_path = os.path.join(path_to_knowledge_domain, "vector_db_and_whoosh_index", selected_embedding_model_choice, "whoosh_index")
     
-    shell_delete_folder(vector_db_path)
-    shell_delete_folder(whoosh_index_path)
+    shell_delete_folder(vector_db_path, delete_vector_db=True)
+    shell_delete_folder(whoosh_index_path, delete_vector_db=False)
     clean_up_docs_loaded_db(selected_embedding_model_choice, knowledge_domain)
     
     return jsonify({'success': True})
@@ -3481,30 +3495,52 @@ def filter_relevant_documents(query, search_results, threshold=1):
 def rerank_results_ml(query, documents, top_n=5):
     print("\n\nReranking results with SBERT: all-MiniLM-L6-v2\n\n")
 
-    # Load pre-trained SBERT model
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    
-    # Encode the query
-    query_embedding = model.encode(query, convert_to_tensor=True)
-    
-    # Encode the documents
-    doc_embeddings = model.encode([doc.page_content for doc in documents], convert_to_tensor=True)
-    
-    # Compute cosine similarities
-    cosine_scores = util.pytorch_cos_sim(query_embedding, doc_embeddings)[0]
-    
-    # Create a list of (index, score) tuples
-    indexed_scores = list(enumerate(cosine_scores))
-    
-    # Sort by score in descending order
-    sorted_indexes = sorted(indexed_scores, key=lambda x: x[1], reverse=True)
-    
-    # Reorder the original documents based on the sorted indexes
-    ranked_documents = [documents[idx] for idx, _ in sorted_indexes[:top_n]]
+    model = None
+    try:
+        # Load pre-trained SBERT model
+        model = SentenceTransformer('all-MiniLM-L6-v2')
+        
+        # Encode the query
+        query_embedding = model.encode(query, convert_to_tensor=True)
+        
+        # Encode the documents
+        doc_embeddings = model.encode([doc.page_content for doc in documents], convert_to_tensor=True)
+    except Exception as e:
+        handle_local_error("Could not rerank results with SBERT, encountered error: ", e)
+        return [doc.page_content for doc in documents]
+    finally:
+        if model is not None:
+            del model
+            if torch.cuda.is_available():
+                print("Emptying CUDA cache")
+                torch.cuda.empty_cache()
+            print("Collecting garbage")
+            gc.collect()
 
-    print(f"\n\nReturning Top {len(ranked_documents)} Ranked Documents: {ranked_documents}\n\n")
+    try:
+        # Compute cosine similarities
+        cosine_scores = util.pytorch_cos_sim(query_embedding, doc_embeddings)[0]
+    except Exception as e:
+        handle_local_error("Could not compute cosine similarities, encountered error: ", e)
+        return [doc.page_content for doc in documents]
     
-    return ranked_documents
+    try:
+        # Create a list of (index, score) tuples
+        indexed_scores = list(enumerate(cosine_scores))
+        
+        # Sort by score in descending order
+        sorted_indexes = sorted(indexed_scores, key=lambda x: x[1], reverse=True)
+        
+        # Reorder the original documents based on the sorted indexes
+        ranked_documents = [documents[idx] for idx, _ in sorted_indexes[:top_n]]
+
+        print(f"\n\nReturning Top {len(ranked_documents)} Ranked Documents: {ranked_documents}\n\n")
+    
+        return ranked_documents
+    except Exception as e:
+        handle_local_error("Could not reorder documents, encountered error: ", e)
+        return [doc.page_content for doc in documents]
+    
 
 
 def determine_do_rag(query, docs, force_enable_rag, force_disable_rag):
@@ -3964,16 +4000,18 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
     path_to_knowledge_domain = get_path_to_knowledge_domain()
     vector_db_path = create_vector_db_directory(path_to_knowledge_domain, embedding_function)
 
+    print(f"Searching Knowledge Domain: {path_to_knowledge_domain} with embedding function: {embedding_function}")
+
      # Load Embedding Model
+    embedding_model = None
     try:
-        embedding_model = SentenceTransformer(embedding_function)
+        embedding_model = SentenceTransformer(embedding_function, trust_remote_code=True)
     except Exception as e:
         handle_local_error("Could not load embedding model, encountered error: ", e)
 
-
     try:
         # Initialize Chroma Client and collection
-        chroma_client = chromadb.PersistentClient(path=vector_db_path)
+        chroma_client = chromadb.PersistentClient(path=vector_db_path, settings=chromadb.Settings(allow_reset=True))
         collection = chroma_client.get_or_create_collection(name="knowledge_domain", metadata={"hnsw:space": "cosine"}) # By default, ChromaDB returns the L2 distance (lower is better), but we want cosine distance (higher is better)
 
         query_embedding = embedding_model.encode(user_query)
@@ -4004,7 +4042,14 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
     except Exception as e:
         handle_error_no_return("Could not perform similarity_search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
         return []
-
+    finally:
+        if embedding_model is not None:
+            del embedding_model
+            if torch.cuda.is_available():
+                print("Emptying CUDA cache")
+                torch.cuda.empty_cache()
+            print("Collecting garbage")
+            gc.collect()
 
 def search_knowledge_base(user_query:str, embedding_function:str, force_enable_rag:bool, force_disable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int, ) -> tuple[list[Document], bool]:
     print("Searching knowledge base")
