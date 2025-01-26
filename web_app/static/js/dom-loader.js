@@ -872,11 +872,11 @@ function initializeEventListenersForEmbeddingModelTab() {
 
     // Event listener to filter custom dropdown:
     document.getElementById('hf-waitress-kb-custom-dropdown-search-input').addEventListener('input', function() {
-        filterCustomKbDropdown(this.value); //TODO: add filter function
+        filterCustomKbDropdown(this.value);
     });
 
     document.getElementById('hf-waitress-embed-custom-dropdown-search-input').addEventListener('input', function() {
-        filterCustomEmbedDropdown(this.value); //TODO: add filter function
+        filterCustomEmbedDropdown(this.value);
     });
 
     // Event listener to populate docs table when a different embedding model is selected:
