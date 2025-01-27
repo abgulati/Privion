@@ -821,45 +821,10 @@ function initializeLLMTabComponents(values) {
 }
 
 
-function initializeEmbeddingModelDropdown(embedding_model_choice) {
-    var selectEmbedModelForDropdown = document.getElementById('embedding_model_dropdown');
-
-    for (var i = 0; i < selectEmbedModelForDropdown.length; i++) {
-        if (selectEmbedModelForDropdown.options[i].value === embedding_model_choice) {
-            selectEmbedModelForDropdown.options[i].selected = true;
-            clearDocsLoadedTable();
-            populateDocsLoadedTable();
-            break;
-        }
-    }
-}
-
-
 function initializeEventListenersForEmbeddingModelTab() {
-    // Show or hide API form:
-    function toggleAzureAdaApiForm() {
-        var selection = document.getElementById('embedding_model_dropdown').value;
-        document.getElementById('azure_openai_text_ada_api_form').style.display = selection === 'openai_text_ada' ? 'block' : 'none';
-        //Add more API form selectors here
-    }
-
-    // Event listener for API dropdown:
-    document.getElementById('embedding_model_dropdown').addEventListener('change', function() {
-        populateDocsLoadedTable();
-        toggleAzureAdaApiForm();
-    });
 
     // Add Event Listener for ResetDB button:
     document.getElementById('resetVectorDB').addEventListener('click', resetVectorDBtoBlank);
-
-    // Check init
-    toggleAzureAdaApiForm();
-
-    document.getElementById('update_azure_ada').addEventListener('change', function() {
-        document.getElementById('azure_openai_text_ada_api_url').disabled = !this.checked;    
-        document.getElementById('azure_openai_text_ada_api_key').disabled = !this.checked;   
-        document.getElementById('azure_openai_text_ada_deployment_name').disabled = !this.checked;   
-    });
 
     // Event listener to toggle custom dropdown:
     document.getElementById('hf-waitress-kb-custom-select-header').addEventListener('click', function() {
