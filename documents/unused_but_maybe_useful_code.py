@@ -2920,7 +2920,7 @@ function initializeEmbeddingModelDropdown(embedding_model_choice) {
     }
 }
 
-#From initializeEventListenersForEmbeddingModelTab:
+#From initializeEventListenersForEmbeddingModelTab():
 // Check init
 toggleAzureAdaApiForm();
 
@@ -2929,6 +2929,11 @@ document.getElementById('update_azure_ada').addEventListener('change', function(
     document.getElementById('azure_openai_text_ada_api_key').disabled = !this.checked;   
     document.getElementById('azure_openai_text_ada_deployment_name').disabled = !this.checked;   
 });
+
+# From initializeEmbeddingModelTabComponents(values):
+initializeEmbeddingModelDropdown(values.embedding_model_choice);
+
+# save-config.js:
 
 function getVectorEmbeddingsConfig() {
     
@@ -2965,3 +2970,7 @@ function getVectorEmbeddingsConfig() {
 
     return config;
 }
+
+##############################################################
+##############################################################
+##############################################################
