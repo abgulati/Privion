@@ -730,9 +730,9 @@ function populateDocsLoadedTable() {
                 nameCell.className = 'vector_list_doc_name';
                 nameCell.setAttribute('data-vector-list-row-id', unique_id);
 
-                row.insertCell(1).innerHTML = row_list[i][1];   // VectorDB
-                row.insertCell(2).innerHTML = row_list[i][2];   // Chunk Size
-                row.insertCell(3).innerHTML = row_list[i][3];   // Chunk Overlap
+                row.insertCell(1).innerHTML = row_list[i][1];   // Knowledge Domain
+                row.insertCell(2).innerHTML = row_list[i][2];   // Embedding Model
+                row.insertCell(3).innerHTML = row_list[i][3];   // Chunk Size
             }
         } else {
             throw new Error('Internal Server Error: Check server-log and server command-line for more details.')
