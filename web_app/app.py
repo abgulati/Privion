@@ -2867,7 +2867,7 @@ def fetch_file_list_for_vector_db():
     file_row_list = []
 
     try:
-        cursor.execute("SELECT document_name, embedding_model, chunk_size, chunk_overlap FROM document_records where embedding_model LIKE ? AND knowledge_domain LIKE ?", (selected_embedding_model_choice, knowledge_domain))
+        cursor.execute("SELECT document_name, knowledge_domain, embedding_model, chunk_size FROM document_records where embedding_model LIKE ? AND knowledge_domain LIKE ?", (selected_embedding_model_choice, knowledge_domain))
     except Exception as e:
         return handle_api_error("Could not get document list from document_records db, encountered error: ", e)
     
