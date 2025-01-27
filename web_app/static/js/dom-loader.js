@@ -901,7 +901,6 @@ function initializeEventListenersForEmbeddingModelTab() {
 
 
 function initializeEmbeddingModelTabComponents(values) {
-    // initializeEmbeddingModelDropdown(values.embedding_model_choice);
     initializeKnowledgeDomainCustomDropdown(values.knowledge_domain_list, values.selected_knowledge_domain);
     initializeEmbeddingCustomDropdown(values.embedding_models_list, values.selected_embedding_model);
     clearDocsLoadedTable();
