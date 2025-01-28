@@ -292,7 +292,7 @@ function initializeEmbeddingCustomDropdown(model_list, model_id) {
         const div = document.createElement('div');
         div.className = 'hf-waitress-embed-custom-dropdown-item';
         div.innerHTML = `
-            <span>${model}</span>
+            <span class="hf-waitress-embed-custom-dropdown-item-text">${model}</span>
             <span class="hf-waitress-embed-custom-dropdown-delete-btn">×</span>
         `;
         const deleteButton = div.querySelector('.hf-waitress-embed-custom-dropdown-delete-btn');
@@ -846,7 +846,7 @@ function initializeEventListenersForEmbeddingModelTab() {
 
     // Event listener to populate docs table when a different embedding model is selected:
     document.getElementById('hf-waitress-embed-custom-dropdown-items-list').addEventListener('click', function(e) {
-        if (e.target.matches('.hf-waitress-embed-custom-dropdown-item')) {
+        if (e.target.matches('.hf-waitress-embed-custom-dropdown-item') || e.target.matches('.hf-waitress-embed-custom-dropdown-item-text')) {
             clearDocsLoadedTable();
             populateDocsLoadedTable();
         }
