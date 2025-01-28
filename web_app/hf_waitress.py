@@ -62,6 +62,8 @@ config_writer_semaphore = threading.Semaphore(1)
 error_logging_semaphore = threading.Semaphore(1)
 reader_semaphore = threading.Semaphore(3)
 
+os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
+
 
 #########################------------Setup & Handle Logging-------------###############################
 try:
@@ -271,7 +273,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'gguf':False,
                     'awq':False,
                     'flux_diffusers':False,
-                    'flux_low_vram_optimizations':False,
+                    'flux_low_vram_optimizations':True,
                     'load_quantized_flux':False,
                     'vision':False,
                     'gguf_model_id':None,
@@ -722,6 +724,8 @@ def parse_arguments():
         exl2_bpw = float(read_return['exl2_bpw'])
         exl2_cache_type = str(read_return['exl2_cache_type'])
         exl2_max_seq_len = int(read_return['exl2_max_seq_len'])
+        flux_low_vram_optimizations = str(read_return['flux_low_vram_optimizations']).lower() == 'true'
+        load_quantized_flux = str(read_return['load_quantized_flux']).lower() == 'true'
         quantize = str(read_return['quantize'])
         quant_level = str(read_return['quant_level'])
         hqq_group_size = int(read_return['hqq_group_size'])
@@ -753,8 +757,8 @@ def parse_arguments():
         parser.add_argument("--gguf", action="store_true", default=False, help="Add this flag if you'll be loading a GGUF LLM. Defaults to False.")
         parser.add_argument("--awq", action="store_true", default=False, help="Add this flag when loading AWQ-quantized models directly off the HF-Hub.")
         parser.add_argument("--flux_diffusers", action="store_true", default=False, help="Add this flag when loading FLUX-diffusers models directly off the HF-Hub.")
-        parser.add_argument("--flux_low_vram_optimizations", action="store_true", default=False, help="Save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power")
-        parser.add_argument("--load_quantized_flux", action="store_true", default=False, help="Add this flag when loading quantized FLUX models directly off the HF-Hub.")
+        parser.add_argument("--flux_low_vram_optimizations", action="store_true", default=flux_low_vram_optimizations, help="Save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power")
+        parser.add_argument("--load_quantized_flux", action="store_true", default=load_quantized_flux, help="Add this flag when loading quantized FLUX models directly off the HF-Hub.")
         parser.add_argument("--vision", action="store_true", default=False, help="Add this flag when loading vision models directly off the HF-Hub.")
         parser.add_argument("--gguf_model_id", type=str, default=None, help="GGUF model_id of the target repo. Defaults to None")
         parser.add_argument("--gguf_filename", type=str, default=None, help="GGUF filename from the target repo. Defaults to None")
@@ -1552,7 +1556,7 @@ def initialize_model():
         print("\n\nFlux Diffusers Selected - Loading...\n\n")
         PIPE = load_flux_pipeline(PIPE)
 
-    if exl2:
+    elif exl2:
         print("\n\nExLlamaV2 Selected - Loading...\n\n")
         PIPE = load_exllama_pipeline(PIPE)
     
