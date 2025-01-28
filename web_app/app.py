@@ -2851,14 +2851,14 @@ def set_prompt_template():
 @app.route('/fetch_file_list_for_vector_db', methods=['POST'])
 def fetch_file_list_for_vector_db():
 
-    print("Loading file list for selected VectorDB")
-
     try:
         selected_embedding_model_choice = request.form['selected_embedding_model']
         knowledge_domain = request.form['selected_knowledge_domain']
     except Exception as e:
         return handle_api_error("Server-side error, could not read selected_embedding_model or selected_knowledge_domain from the POST request in method fetch_file_list_for_vector_db, encountered error: ", e)
 
+    print(f"Fetching file list for documents in knowledge domain: {knowledge_domain} embedded with: {selected_embedding_model_choice}...")
+    
     try:
         conn, cursor = init_and_connect_to_docs_loaded_db()
     except Exception as e:
