@@ -62,8 +62,6 @@ config_writer_semaphore = threading.Semaphore(1)
 error_logging_semaphore = threading.Semaphore(1)
 reader_semaphore = threading.Semaphore(3)
 
-os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
-
 
 #########################------------Setup & Handle Logging-------------###############################
 try:
@@ -1106,6 +1104,7 @@ def get_model_params():
 def load_flux_pipeline(pipeline):
 
     print("\n\nLoading Flux Pipeline\n\n")
+    os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python' # Sets Protocol Buffers to use the pure Python implementation instead of the default C++ implementation. This is significantly slower but must be done for FLUX to work. That's why this environment variable is deleted whenever other models are loaded.
 
     try:
         read_return = read_config(['model_id', 'flux_low_vram_optimizations', 'load_quantized_flux'])
@@ -1482,26 +1481,30 @@ def restart_server_stream():
             if flux_diffusers:
                 print("\nFlux Diffusers Selected - Loading...\n")
                 PIPE = load_flux_pipeline(PIPE)
-            elif exl2:
-                print("\n\nExLlamaV2 Selected - Loading...\n\n")
-                PIPE = load_exllama_pipeline(PIPE)
-            elif vision:
-                print("\nVision Model Selected - Loading...\n")
-                PIPE = load_vision_pipeline(PIPE, model_params)
             else:
-                model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
-                tokenizer = AutoTokenizer.from_pretrained(model_id)
-                print("\nInitializing inference pipeline...")
-                PIPE = pipeline(
-                    pipeline_task,
-                    model=model,
-                    tokenizer=tokenizer,
-                )
+                if 'PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION' in os.environ:
+                    del os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION']    # Better to delete as the default behavior is to try the C++ implementation first and fall back to Python if needed, which is more robust than simply setting it to 'cpp'.
+                
+                if exl2:
+                    print("\n\nExLlamaV2 Selected - Loading...\n\n")
+                    PIPE = load_exllama_pipeline(PIPE)
+                elif vision:
+                    print("\nVision Model Selected - Loading...\n")
+                    PIPE = load_vision_pipeline(PIPE, model_params)
+                else:
+                    model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
+                    tokenizer = AutoTokenizer.from_pretrained(model_id)
+                    print("\nInitializing inference pipeline...")
+                    PIPE = pipeline(
+                        pipeline_task,
+                        model=model,
+                        tokenizer=tokenizer,
+                    )
 
-                try:
-                    print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
-                except Exception as e:
-                    handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
+                    try:
+                        print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
+                    except Exception as e:
+                        handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
             
             print(f"\n{model_id} loaded successfully!\n")
         except Exception as e:
@@ -1556,31 +1559,36 @@ def initialize_model():
         print("\n\nFlux Diffusers Selected - Loading...\n\n")
         PIPE = load_flux_pipeline(PIPE)
 
-    elif exl2:
-        print("\n\nExLlamaV2 Selected - Loading...\n\n")
-        PIPE = load_exllama_pipeline(PIPE)
-    
     else:
-        model_params = get_model_params()
-        print(f"Setting model-parameters: {model_params}")
+        # Remove explicit protobuf implementation setting to use system default
+        if 'PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION' in os.environ:
+            del os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION']    # Better to delete as the default behavior is to try the C++ implementation first and fall back to Python if needed, which is more robust than simply setting it to 'cpp'.
+
+        if exl2:
+            print("\n\nExLlamaV2 Selected - Loading...\n\n")
+            PIPE = load_exllama_pipeline(PIPE)
         
-        if vision:
-            print("\n\nVision Model Selected - Loading...\n\n")
-            PIPE = load_vision_pipeline(PIPE, model_params)
         else:
-            model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
-            tokenizer = AutoTokenizer.from_pretrained(model_id)
-            print("\nInitializing inference pipeline...")
-            PIPE = pipeline(
-                pipeline_task,
-                model=model,
-                tokenizer=tokenizer,
-            )
-    
-        try:
-            print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
-        except Exception as e:
-            handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
+            model_params = get_model_params()
+            print(f"Setting model-parameters: {model_params}")
+            
+            if vision:
+                print("\n\nVision Model Selected - Loading...\n\n")
+                PIPE = load_vision_pipeline(PIPE, model_params)
+            else:
+                model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
+                tokenizer = AutoTokenizer.from_pretrained(model_id)
+                print("\nInitializing inference pipeline...")
+                PIPE = pipeline(
+                    pipeline_task,
+                    model=model,
+                    tokenizer=tokenizer,
+                )
+        
+            try:
+                print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
+            except Exception as e:
+                handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
     
     print(f"\n{model_id} loaded successfully!\n")
 
