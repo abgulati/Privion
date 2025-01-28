@@ -1447,7 +1447,7 @@ def whoosh_and_embed_doc_chunks(input_file):
     # Load Embedding Model
     embedding_model = None
     try:
-        embedding_model = SentenceTransformer(selected_embedding_model, trust_remote_code=True) #TODO: Quantization!
+        embedding_model = SentenceTransformer(selected_embedding_model, trust_remote_code=True)
     except Exception as e:
         handle_local_error("Could not load embedding model, encountered error: ", e)
 
