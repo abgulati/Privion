@@ -400,9 +400,10 @@ function handleHfWaitressChanges(hf_config) {
             reject(error);  // Reject the promise if there's an error
         })
         .finally(() => {
-            setTimeout(() => {
-                document.getElementById('SavingHfWaitressSettings').style.display = 'none';
-            }, 3000);
+            document.getElementById('SavingHfWaitressSettings').style.display = 'none';
+            // setTimeout(() => {
+            //     document.getElementById('SavingHfWaitressSettings').style.display = 'none';
+            // }, 3000);
         });
     });
 }
