@@ -261,7 +261,7 @@ function initializeKnowledgeDomainCustomDropdown(model_list, model_id) {
         const div = document.createElement('div');
         div.className = 'hf-waitress-kb-custom-dropdown-item';
         div.innerHTML = `
-            <span>${model}</span>
+            <span class="hf-waitress-kb-custom-dropdown-item-text">${model}</span>
             <span class="hf-waitress-kb-custom-dropdown-delete-btn">×</span>
         `;
         const deleteButton = div.querySelector('.hf-waitress-kb-custom-dropdown-delete-btn');
@@ -854,7 +854,7 @@ function initializeEventListenersForEmbeddingModelTab() {
 
     // Event listener to populate docs table when a different knowledge domain is selected:
     document.getElementById('hf-waitress-kb-custom-dropdown-items-list').addEventListener('click', function(e) {
-        if (e.target.matches('.hf-waitress-kb-custom-dropdown-item')) {
+        if (e.target.matches('.hf-waitress-kb-custom-dropdown-item') || e.target.matches('.hf-waitress-kb-custom-dropdown-item-text')) {
             clearDocsLoadedTable();
             populateDocsLoadedTable();
         }
