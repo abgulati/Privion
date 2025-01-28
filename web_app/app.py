@@ -597,7 +597,7 @@ def create_whoosh_index_in_folder(whoosh_index_folder):
 
     # Create a directory for persistent storage of the index to disk
     try:
-        os.mkdir(whoosh_index_folder)
+        os.makedirs(whoosh_index_folder, exist_ok=True)
     except Exception as e:
         handle_local_error("Failed to create directory for the Whoosh Index, encountered error: ", e)
     # Create the index based on the schema definted above
