@@ -729,8 +729,11 @@ def PDFtoAzureDocAiTXT(input_filepath):
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
-        print("Azure-OCR'ed doc already exists! Returning existing file.")
-        return output_text_file_path
+        if os.path.getsize(output_text_file_path) > 0:
+            print("Azure-OCR'ed doc already exists and is not empty! Returning existing file.")
+            return output_text_file_path
+        else:
+            print("Azure-OCR'ed doc already exists but is empty! Overwriting with new OCR'ed file.")
 
     # Initialize text output
     try:
@@ -844,8 +847,11 @@ def PDFtoAzureOCRTXT(input_filepath):
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
-        print("OCR'ed doc already exists! Returning existing file.")
-        return output_text_file_path
+        if os.path.getsize(output_text_file_path) > 0:
+            print("OCR'ed doc already exists and is not empty! Returning existing file.")
+            return output_text_file_path
+        else:
+            print("OCR'ed doc already exists but is empty! Overwriting with new OCR'ed file.")
 
     # Convert PDF to  a list of images
     try:
@@ -1005,8 +1011,11 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
-        print("OCR'ed doc already exists! Returning existing file.")
-        return output_text_file_path
+        if os.path.getsize(output_text_file_path) > 0:
+            print("Vision LLM OCR'ed doc already exists and is not empty! Returning existing file.")
+            return output_text_file_path
+        else:
+            print("Vision LLM OCR'ed doc already exists but is empty! Overwriting with new OCR'ed file.")
 
     # Convert PDF to  a list of images
     pil_image_object_list = []
@@ -1117,8 +1126,11 @@ def PDFtoKosmosOCRTXT(input_filepath):
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
-        print("OCR'ed doc already exists! Returning existing file.")
-        return output_text_file_path
+        if os.path.getsize(output_text_file_path) > 0:
+            print("Kosmos OCR'ed doc already exists and is not empty! Returning existing file.")
+            return output_text_file_path
+        else:
+            print("Kosmos OCR'ed doc already exists but is empty! Overwriting with new OCR'ed file.")
     
     # Initialize text output
     try:
@@ -1210,8 +1222,11 @@ def PDFtoTXT(input_file):
     output_text_file_path = os.path.join(pdfs_to_txts, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
-        print("PyPDF2-extracted .txt already exists! Returning existing file.")
-        return output_text_file_path
+        if os.path.getsize(output_text_file_path) > 0:
+            print("PyPDF2-extracted .txt already exists and is not empty! Returning existing file.")
+            return output_text_file_path
+        else:
+            print("PyPDF2-extracted .txt already exists but is empty! Overwriting with new .txt file.")
 
     # Initialize text output
     try:
@@ -2335,7 +2350,10 @@ def document_extractor_and_loader(filename, filepath):
             handle_local_error("Failed to extract text from the PDF document, even via fallback PyPDF2, encountered error: ", e)
     
     try:
-        chunk_size, chunk_overlap = whoosh_and_embed_doc_chunks(input_file)
+        if os.path.getsize(input_file) > 0:
+            chunk_size, chunk_overlap = whoosh_and_embed_doc_chunks(input_file)
+        else:
+            print("Extracted document is empty! Skipping vector embedding & whoosh indexing.")
     except Exception as e:
         handle_local_error("Failed to extract text from PDF: ", e)
 
