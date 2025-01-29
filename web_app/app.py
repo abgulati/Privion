@@ -1319,17 +1319,15 @@ def init_and_connect_to_docs_loaded_db() -> tuple[sqlite3.Connection, sqlite3.Cu
     return conn, cursor
 
 
-def record_doc_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
-
-    print("\n\nRecording document loading to records DB\n\n")
+def is_doc_already_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
+    print(f"Checking if {document_name} already exists in the appropriate records DB")
 
     try:
         conn, cursor = init_and_connect_to_docs_loaded_db()
     except Exception as e:
-        handle_local_error("Could not initialize and connect to docs_loaded_db to record_doc_loaded_to_db, encountered error: ", e)
-    
+        handle_local_error("Could not initialize and connect to docs_loaded_db to check_if_doc_already_loaded_to_db, encountered error: ", e)
+
     try:
-        print("Checking if document already exists in records DB")
         cursor.execute("""
             SELECT id FROM document_records
             WHERE document_name = ?
@@ -1340,13 +1338,32 @@ def record_doc_loaded_to_db(document_name, embedding_model, chunk_size, chunk_ov
         """, (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain))
         existing_record = cursor.fetchone()
         if existing_record is not None:
-            print(f"Document '{document_name}' already exists in records DB as loaded into {knowledge_domain} with embedding model '{embedding_model}' and chunk size {chunk_size} and chunk overlap {chunk_overlap}.\nSkipping re-insertion and returning.\n")
+            print(f"Document '{document_name}' already exists in records DB as loaded into {knowledge_domain} with embedding model '{embedding_model}' and chunk size {chunk_size} and chunk overlap {chunk_overlap}.")
+            conn.close()
             return True
         else:
-            print("Document does not exist in records DB, adding new record.")
+            print("Document does not exist in records DB.")
+            conn.close()
+            return False
     except Exception as e:
-        handle_error_no_return("Could not check if document exists in records DB, proceeding with insertion anyway. Encountered error: ", e)
+        handle_error_no_return("Could not check if document exists in records DB, returning False. Encountered error: ", e)
+        conn.close()
+        return False
 
+
+def record_doc_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
+
+    print("\n\nRecording document loading to records DB\n\n")
+
+    if is_doc_already_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
+        print("Document already exists in records DB, skipping insertion.")
+        return True
+
+    try:
+        conn, cursor = init_and_connect_to_docs_loaded_db()
+    except Exception as e:
+        handle_local_error("Could not initialize and connect to docs_loaded_db to record_doc_loaded_to_db, encountered error: ", e)
+    
     try:
         cursor.execute("INSERT INTO document_records (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain) VALUES (?, ?, ?, ?, ?)", (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain))
         conn.commit()
