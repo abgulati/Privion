@@ -1292,7 +1292,7 @@ def init_and_connect_to_docs_loaded_db() -> tuple[sqlite3.Connection, sqlite3.Cu
     try:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS document_records (
-                    id INTEGER PRIMARY KEY, # Auto-incrementing primary key
+                    id INTEGER PRIMARY KEY,
                     document_name TEXT NOT NULL,
                     embedding_model TEXT NOT NULL,
                     vectordb_used TEXT,
@@ -1302,7 +1302,7 @@ def init_and_connect_to_docs_loaded_db() -> tuple[sqlite3.Connection, sqlite3.Cu
             )
         ''')
 
-        conn.commit()
+        conn.commit()   # Auto-incrementing primary key 'id'
     except Exception as e:
         return handle_local_error("Could not create document_records DB, encountered error: ", e)
     
