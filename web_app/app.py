@@ -24,6 +24,7 @@ from rapidfuzz import fuzz
 
 import subprocess
 import traceback
+import threading
 import platform
 import argparse
 import datetime
@@ -33,6 +34,7 @@ import sqlite3
 import signal
 import PyPDF2
 import shutil   # Shell Utilities is part of Python's standard library and is used for file operations
+import queue
 import uuid
 import json
 import time
@@ -1389,6 +1391,7 @@ class Document:
 
 # Consider turning this into a generator function in the future for efficiency when dealing with large files!
 def chunk_docs_with_page_numbers(input_file, chunk_size=250):
+    print("\nGenerating Document Chunks\n")
     documents = []
     current_chunk = ""
     current_page = 1
@@ -1440,6 +1443,7 @@ def chunk_docs_with_page_numbers(input_file, chunk_size=250):
     except Exception as e:
         handle_local_error("Could not chunk document, encountered error: ", e)
 
+    print(f"\n\nGenerated {len(documents)} document chunks\n\n")
     return documents
 
 
@@ -1485,7 +1489,11 @@ def whoosh_and_embed_doc_chunks(input_file):
     print("Chunking Doc")
     try:
         chunks = chunk_docs_with_page_numbers(input_file, chunk_sz) # Generates a list of dictionaries, each containing 'content', 'source', and 'page_number' as keys
-        whoosh_indexer(chunks)
+        if len(chunks) > 0:
+            whoosh_indexer(chunks)
+        else:
+            print("No chunks generated, skipping indexing and embedding")
+            return chunk_sz, chunk_olp
     except Exception as e:
         handle_local_error("Failed to chunk document for storage to VectorDB, encountered error: ", e)
 
@@ -2106,7 +2114,7 @@ def fetch_file_list_from_google_drive():
     return jsonify({'success': True, 'gdrive_files': gdrive_files})
 
 
-def download_folder(service, folder_id, path, indent=''):
+def download_folder(service, folder_id, path, data_queue=None, indent=''):
 
     print(f"\n\nDownloading GoogleDrive Folder with id: {folder_id}\n\n")
 
@@ -2132,12 +2140,16 @@ def download_folder(service, folder_id, path, indent=''):
             sub_folder_path = os.path.join(path, filename)    # in this case, filename will be the folder name
 
             try:
-                download_folder(service, file_id, sub_folder_path)  # in this case, file_or_folder_id will be the folder id
+                data_queue.put(f"Downloading nested folder: '{filename}'")
+                download_folder(service, file_id, sub_folder_path, data_queue)  # in this case, file_or_folder_id will be the folder id
+                data_queue.put(f"Folder '{filename}' downloaded successfully")
             except Exception as e:
                 return handle_api_error("Could not download_folder in the download_folder() method, encountered error: ", e)
         else:
             try:
+                data_queue.put(f"Downloading file: '{filename}'")
                 filename_with_extension, file_content = download_gdrive_file(service, file_id, filename, mime_type)
+                data_queue.put(f"File '{filename_with_extension}' downloaded successfully")
             except Exception as e:
                 return handle_api_error("Server-side error - could not get_file_content in the download_folder() method: ", e)
 
@@ -2149,7 +2161,9 @@ def download_folder(service, folder_id, path, indent=''):
                     f.write(file_content)
 
                 try:
+                    data_queue.put(f"Vector Embedding & Indexing Document: '{filename_with_extension}'")
                     document_extractor_and_loader(filename_with_extension, filepath)
+                    data_queue.put(f"Document '{filename_with_extension}' processed & uploaded successfully!")
                 except Exception as e:
                     return handle_api_error("Could not document_extractor_and_loader() in the download_folder() method, encountered error: ", e)
 
@@ -2213,15 +2227,19 @@ def download_gdrive_file(service, file_id, filename, mime_type):
     return filename_with_extension, file_content
 
 
-def gdrive_downloader(service, file_or_folder_id, filename, mime_type, path=app.config['UPLOAD_FOLDER']):
+def gdrive_downloader(service, file_or_folder_id, filename, mime_type, data_queue=None, path=app.config['UPLOAD_FOLDER']):
     file_mime_category = categorize_mimetype(mime_type)
 
     if file_mime_category == "folder":
         download_path = os.path.join(path, secure_filename(filename))    # in this case, filename will be the folder name
-        download_folder(service, file_or_folder_id, download_path)
+        data_queue.put(f"Downloading folder: '{filename}'")
+        download_folder(service, file_or_folder_id, download_path, data_queue)
+        data_queue.put(f"Folder '{filename}' downloaded successfully")
         return filename, None    # Return None for file_content as it's a folder
     else:
+        data_queue.put(f"Downloading file: '{filename}'")
         filename_with_extension, file_content = download_gdrive_file(service, file_or_folder_id, filename, mime_type)
+        data_queue.put(f"File '{filename_with_extension}' downloaded successfully")
         return filename_with_extension, file_content
 
 
@@ -2239,35 +2257,73 @@ def google_drive_loader():
     except Exception as e:
         return handle_api_error("Could not create Google service handler in the google_drive_loader() method, check credentials and re-try: ", e)
 
-    try:
-        file_metadata = service.files().get(fileId=gdrive_file_id, fields='name, mimeType', supportsAllDrives=True).execute()   # includeItemsFromAllDrives=True not need here because it's a search and listing operation!
-        original_filename = file_metadata.get('name', 'untitled')
-        mime_type = file_metadata.get('mimeType', gdrive_file_mimeType)
-    except Exception as e:
-        return handle_api_error("Could not read GoogleDrive file metadata in the google_drive_loader() method, encountered error: ", e)
-    
-    try:
-        filename_with_extension, file_content = gdrive_downloader(service, gdrive_file_id, original_filename, mime_type)
-    except Exception as e:
-        return handle_api_error("Server-side error - could not getValue() for downloaded Google Drive file in the google_drive_loader() method: ", e)
+    data_queue = queue.Queue()
+    stop_event = threading.Event()
 
-    if file_content is not None:
+    def sync_task():
+
         try:
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(filename_with_extension))
-
-            print(f"Saving {filename_with_extension} to {filepath}")
-            with open(filepath, 'wb') as f:
-                f.write(file_content)
 
             try:
-                document_extractor_and_loader(filename_with_extension, filepath)
+                file_metadata = service.files().get(fileId=gdrive_file_id, fields='name, mimeType', supportsAllDrives=True).execute()   # includeItemsFromAllDrives=True not need here because it's a search and listing operation!
+                original_filename = file_metadata.get('name', 'untitled')
+                mime_type = file_metadata.get('mimeType', gdrive_file_mimeType)
             except Exception as e:
-                return handle_api_error("Could not document_extractor_and_loader() in the google_drive_loader() method, encountered error: ", e)
+                return handle_api_error("Could not read GoogleDrive file metadata in the google_drive_loader() method, encountered error: ", e)
+            
+            data_queue.put(f"Fetched metadata for '{original_filename}', proceeding to download...")
+            
+            try:
+                filename_with_extension, file_content = gdrive_downloader(service, gdrive_file_id, original_filename, mime_type, data_queue)
+            except Exception as e:
+                return handle_api_error("Server-side error - could not download file from Google Drive in the google_drive_loader() method: ", e)
 
-        except Exception as e:
-            return handle_api_error("Server-side error - could not save file downloaded from Google Drive in the google_drive_loader() method: ", e)
+            if file_content is not None:
+                try:
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(filename_with_extension))
+
+                    print(f"Saving {filename_with_extension} to {filepath}")
+                    with open(filepath, 'wb') as f:
+                        f.write(file_content)
+
+                    try:
+                        data_queue.put(f"Vector Embedding & Indexing Document: '{filename_with_extension}'")
+                        document_extractor_and_loader(filename_with_extension, filepath)
+                        data_queue.put(f"Document '{filename_with_extension}' processed & uploaded successfully!")
+                    except Exception as e:
+                        return handle_api_error("Could not document_extractor_and_loader() in the google_drive_loader() method, encountered error: ", e)
+
+                except Exception as e:
+                    return handle_api_error("Server-side error - could not save file downloaded from Google Drive in the google_drive_loader() method: ", e)
+        
+        finally:
+            data_queue.put(None)
+            print("\n\nGDrive-Sync stream done, breaking thread\n\n")
     
-    return jsonify({'success': True})
+    def load_gdrive():
+
+        try:
+            thread = threading.Thread(target=sync_task)
+            thread.start()
+        except Exception as e:
+            return handle_api_error("Could not start thread in the google_drive_loader() method, encountered error: ", e)
+
+        while True:
+            if stop_event.is_set(): #TODO: Add Cancel-Sync button to UI! Logic here will be simialr to STOP_GENERATION in hf_waitress.py
+                print("\n\nStopping GDrive-Sync stream as requested by stop_event\n\n")
+                thread.join()
+                break
+            output = data_queue.get()
+            if output is None:
+                print("\n\nNone read, breaking and stopping thread\n\n")
+                thread.join()
+                break
+            yield f"data: {json.dumps(output)}\n\n"
+        
+        yield f"event: END\ndata: \"null\"\n\n"
+    
+    print("\n\nGoogle Drive Sync Begins!\n\n")
+    return Response(load_gdrive(), content_type='text/event-stream')
 
 
 # Route for loading all models from model dir
@@ -2391,7 +2447,7 @@ def document_extractor_and_loader(filename, filepath):
         else:
             print("Extracted document is empty! Skipping vector embedding & whoosh indexing.")
     except Exception as e:
-        handle_local_error("Failed to extract text from PDF: ", e)
+        handle_local_error("Failed to embed & index document: ", e)
 
     try:
         if os.path.getsize(input_file) > 0:
