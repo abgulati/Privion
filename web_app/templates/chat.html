@@ -34,6 +34,13 @@
             </div>
 
             <div class="header-right">
+                <div class="info-stream-container" id="info_stream_container" style="cursor: pointer; position: relative; font-size: 30px; color: #D1CDC7; margin-right: 15px;">
+                    <i class="fa-solid fa-spinner fa-spin-pulse info-stream-spinner" id="info_stream_spinner" onclick="toggleStreamInfo()"></i>
+                    <i class="fa-solid fa-list-check info-stream-check-list" id="info_stream_check_list" onclick="toggleStreamInfo()"></i>
+                    <div class="stream-info-box glassmorphism" id="stream_info_box" style="display: none;">
+                        <!-- Status updates will go here -->
+                    </div>
+                </div>
                 <div class="info-container" style="cursor: pointer; position: relative; font-size: 30px; color: #D1CDC7;">
                     <i class="fa-solid fa-circle-info info-icon" onclick="toggleInfo()"></i>
                     <div class="info-box glassmorphism" id="info_box" style="display: none;">
@@ -798,6 +805,8 @@
                                                 </tr>
                                             </table>
                                         </div>
+
+                                        <h6 id="docs_in_kb_count_header" style="padding-top: 10px;"></h6>
 
                                         <br>
 
