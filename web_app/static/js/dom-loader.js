@@ -70,6 +70,7 @@ function setUIValues(values) {
 
 
 function loadCoreLarsConfig() {
+    appendStreamInfo("Loading core LARS config...", 'waiting');
     const initKeysToRead = [
         'local_llm_server',
         'model_choice',
@@ -159,6 +160,7 @@ function initializeLocalLLMServerDropdown(local_llm_server, exl2_prompt_template
 
 
 function loadCoreHfConfig() {
+    appendStreamInfo("Loading core HF-Waitress config...", 'waiting');
     const initKeysToRead = [
         'model_id',
         'model_list',
@@ -210,6 +212,7 @@ function loadCoreHfConfig() {
     })
     .catch(error => {
         errorHandler("reading hf_config.json (likely means the HF-Waitress server is offline)", "loadCoreHfConfig()", String(error.message))
+        appendStreamInfo(`Error: ${String(error.message)}`, 'failure');
     });
 }
 
@@ -1204,8 +1207,9 @@ function loadVectorDB(llm_model) {
 }
 
 
-function startLLMAndVectorDB() {
+function startLLMServer() {
     // Finally, trigger the LLM & vectorDB starter!
+    appendStreamInfo("Starting LLM Server...", 'waiting');
     return fetch('/local_llm_server_starter')
     .then(response => {
         if (!response.ok) {
@@ -1239,6 +1243,8 @@ function startLLMAndVectorDB() {
 document.addEventListener("DOMContentLoaded", function() {
     initializeUI();
     document.getElementById('ModelAndDBLoading').style.display = 'block';   //Start initializing the chat session
+    showStreamSpinner();
+
     let local_llm_server;
 
     loadCoreLarsConfig()
@@ -1251,7 +1257,7 @@ document.addEventListener("DOMContentLoaded", function() {
             initializeGoogleDriveTabComponents(values);
             initializeSettingsModalTabCycleListener();
             local_llm_server = values.local_llm_server;
-            return startLLMAndVectorDB();
+            return startLLMServer();
         })
         .then(() => {
             if (local_llm_server === "hf-waitress") {
@@ -1260,6 +1266,8 @@ document.addEventListener("DOMContentLoaded", function() {
             }
             loadChatHistoryMenu();  // should be done regardless of errors
             handleGoogleDrivePostAuth();
+            hideStreamSpinner();
+            appendStreamInfo("All loaded up & ready to chat!", 'success');
         })
         .catch(error => {
             errorHandler("initializing the application", "DOMContentLoaded", String(error.message));
