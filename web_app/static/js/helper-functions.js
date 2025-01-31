@@ -66,6 +66,37 @@ function getUniqueId() {
     });
 }
 
+function showStreamSpinner() {
+    document.getElementById('info_stream_spinner').style.display = 'inline-block';
+}
+
+function hideStreamSpinner() {
+    document.getElementById('info_stream_spinner').style.display = 'none';
+}
+
+function scrollStreamInfoBoxToBottom() {
+    const streamInfoBox = document.getElementById('stream_info_box');
+    streamInfoBox.scrollTop = streamInfoBox.scrollHeight;
+}
+
+function appendStreamInfo(message, status) {
+    const streamInfoBox = document.getElementById('stream_info_box');
+    //streamInfoBox.innerHTML += `<h6 class="info-stream-content">${message}</h6>`;
+
+    switch(status) {
+        case 'waiting':
+            streamInfoBox.innerHTML += `<div class="stream-info-row"><i class="fas fa-clock waiting" title="Waiting"></i><span class="info-stream-content">${message}</span></div>`;
+            break;
+        case 'success':
+            streamInfoBox.innerHTML += `<div class="stream-info-row"><i class="fas fa-check-circle success" title="Success"></i><span class="info-stream-content">${message}</span></div>`;
+            break;
+        case 'failure':
+            streamInfoBox.innerHTML += `<div class="stream-info-row"><i class="fas fa-times-circle failure" title="Failed"></i><span class="info-stream-content">${message}</span></div>`;
+            break;
+    }
+    scrollStreamInfoBoxToBottom();
+}
+
 function getUserMessageContent(element) {
     const childNodes = Array.from(element.childNodes);  //childNodes is a property that returns a live collection of all child nodes of an element, including text nodes, comment nodes, and element nodes
     const textNode = childNodes.find(node => node.nodeType === Node.TEXT_NODE);
@@ -193,6 +224,16 @@ function toggleInfo() {
 }
 
 
+function toggleStreamInfo() {
+    var streamInfoBox = document.getElementById('stream_info_box');
+    if (streamInfoBox.style.display === 'none') {
+        streamInfoBox.style.display = 'block';
+    } else {
+        streamInfoBox.style.display = 'none';
+    }
+}
+
+
 function errorHandler(attempted_action, error_generator, error_message) {
     let error_alert_message = "There was an error when "  + attempted_action + " in the method " + error_generator + ", more details can be viewed in the browser's console. "
     let full_error_message =  error_alert_message + error_message;
@@ -201,6 +242,7 @@ function errorHandler(attempted_action, error_generator, error_message) {
     document.getElementById('ModelAndDBLoading').style.display = 'none';
     document.getElementById('SavingHfWaitressSettings').style.display = 'none';
     hideLoader();
+    hideStreamSpinner();
 }
 
 const forceEnableRagCheckbox = document.getElementById('force_enable_rag_checkbox');
@@ -519,7 +561,7 @@ function loadChatHistory(chatID, chatTitle) {
 }
 
 function loadChatHistoryMenu() {
-    
+    appendStreamInfo("Loading chat history menu...", 'waiting');
     //Make a GET request to the server
     fetch('/load_chat_history_list')
     .then(response => {
@@ -716,6 +758,8 @@ function populateDocsLoadedTable() {
 
             var table = document.getElementById('docs_loaded_details_table');
 
+            document.getElementById('docs_in_kb_count_header').textContent = `Total Number of Documents: ${row_list.length}`;
+
             for (var i = 0; i < row_list.length; i++) {
                 // var rowCount = table.rows.length;   // get the number of rows in the table
                 // var row = table.insertRow(rowCount);    // since HTML tables are initialized with row 0, rowCount will specify the current position to insert the new row
@@ -769,9 +813,7 @@ function resetVectorDBtoBlank() {
     .then(data => {
         if (data.success) {
             clearDocsLoadedTable();
-            if (data.restart_required) {    // Refresh the page to reset the vectorDB
-                location.reload();
-            }
+            document.getElementById('docs_in_kb_count_header').textContent = ``;
         } else {
             throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
         }
@@ -931,27 +973,62 @@ function populateGoogleDriveTable(gdrive_files) {
     });
 }
 
-function loadGoogleDriveDoc(file_id, file_mimeType) {
-    let formData = new FormData();
-    formData.append('file_id', file_id);
-    formData.append('file_mimeType', file_mimeType);
+async function loadGoogleDriveDoc(file_id, file_mimeType) {
+    try {
+        let formData = new FormData();
+        formData.append('file_id', file_id);
+        formData.append('file_mimeType', file_mimeType);
 
-    return fetch('/google_drive_loader', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log(data)
-        if (!data.success) {
+        const gdrive_loader_response = await fetch('/google_drive_loader', {
+            method: 'POST',
+            body: formData,
+            redirect: 'follow'
+        });
+
+        if (!gdrive_loader_response.ok) {
             throw new Error('Failed to load document from Google Drive');
         }
-        return data;
-    })
-    .catch(error => {
+
+        const gdrive_loader_reader = gdrive_loader_response.body.getReader();
+        let gdrive_loader_receivedComplete = false;
+
+        async function gdrive_loader_processChunk() {
+            while (true) {
+                const { done, value } = await gdrive_loader_reader.read();
+                if (done) {
+                    console.log("Google Drive Loader stream complete");
+                    break;
+                }
+                const textChunk = new TextDecoder("utf-8").decode(value);
+                const messages = textChunk.split('\n');
+
+                messages.forEach(message => {
+                    if (message.startsWith('data: ')) {
+                        const jsonStr = message.slice(7, -1);
+
+                        try {
+                            let dataObj = String(jsonStr);
+                            if (dataObj == "null") {
+                                dataObj = "";
+                            }
+
+                            if (dataObj != "") {
+                                appendStreamInfo(dataObj, 'waiting');
+                            }
+                        } catch (error) {
+                            console.error('Error parsing message: ', error);
+                        }
+                    }
+                });
+
+            }
+        }
+
+        await gdrive_loader_processChunk();
+    } catch (error) {
         errorHandler("loading document from Google Drive", "/google_drive_loader", String(error.message));
         throw error;  // Re-throw the error for handling in the calling function
-    });
+    }
 }
 
 function updateUIForFile(row, status) {
@@ -1005,6 +1082,8 @@ function triggerSyncGoogleDrive() {
     // }
 
     syncButton.disabled = true;
+    appendStreamInfo("Google Drive Synchronization In-Progress...", 'waiting');
+    showStreamSpinner();
 
     for (let i = 1; i < table.rows.length; i++) {
         const checkbox = table.rows[i].cells[0].querySelector('input[type="checkbox"]');
@@ -1041,11 +1120,13 @@ function triggerSyncGoogleDrive() {
     }, Promise.resolve())
     .finally(() => {
         syncButton.disabled = false;
-        alert('Google Drive Synchronization completed!');
+        appendStreamInfo("Google Drive Synchronization Completed!", 'success');
+        hideStreamSpinner();
     });
 }
 
 function handleGoogleDrivePostAuth() {
+    appendStreamInfo("Checking Google Drive Auth...", 'waiting');
     fetch('/check_gdrive_auth')
     .then(response => response.json())
     .then(data => {
@@ -1064,6 +1145,7 @@ function handleGoogleDrivePostAuth() {
         })
         .then(data => {
             if (data.success) {
+                appendStreamInfo("Google Drive Logged In Successfully, proceeding to fetch file list...", 'success');
                 document.getElementById('googleDriveUserName').textContent = "Logged in as: " + data.user_name;
                 document.getElementById('googleDriveUserName').style.display = 'block';
 
@@ -1080,6 +1162,7 @@ function handleGoogleDrivePostAuth() {
         })
         .then(data => {
             if (data.success) {
+                appendStreamInfo("Google Drive Files Fetched Successfully", 'success');
                 hideLoader();
                 console.log("GDrive Files Fetched");
                 console.log(data.gdrive_files);
