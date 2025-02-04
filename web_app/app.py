@@ -1810,7 +1810,8 @@ def web_login_to_google_drive():
     # Generate the Google OAuth URL
     auth_url, state = flow.authorization_url(
         access_type='offline',
-        include_granted_scopes='true'
+        include_granted_scopes='true',
+        prompt='consent'
     )
 
     # Add redirect URL to the URL (but not state, as it's already included)
