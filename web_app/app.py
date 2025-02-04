@@ -3742,9 +3742,9 @@ def format_prompt_for_llama_cpp(formatted_prompt:str, user_query:str, current_se
     elif local_llm_chat_template_format == 'llama2':
 
         if current_sequence_id > 0:
-            formatted_prompt += f"<s>[INST] {user_query} [/INST]"
+            formatted_prompt += f"<s>[INST] {user_query} [/INST] "
         else:
-            formatted_prompt += f"<s>[INST] <<SYS>>\n {base_template} \n<</SYS>>\n\n {user_query}  [/INST]"
+            formatted_prompt += f"<s>[INST] <<SYS>>\n {base_template} \n<</SYS>>\n\n {user_query}  [/INST] "
 
     elif local_llm_chat_template_format == 'chatml':
         
@@ -3815,6 +3815,26 @@ def format_prompt_for_llama_cpp(formatted_prompt:str, user_query:str, current_se
             formatted_prompt += f"<start_of_turn>user\n{user_query}<end_of_turn>\n<start_of_turn>model\n"
         else:
             formatted_prompt += f"<start_of_turn>user\n{base_template}\n{user_query}<end_of_turn>\n<start_of_turn>model\n"
+
+    elif local_llm_chat_template_format == 'mistral-small-v7':
+
+        if current_sequence_id > 0:
+            formatted_prompt += f"<s>[INST]{user_query}[/INST]"
+        else:
+            mistral_small_system_prompt = """You are Mistral Small 3, a Large Language Model (LLM) created by Mistral AI, a French startup headquartered in Paris.
+            Your knowledge base was last updated on 2023-10-01. The current date is 2025-01-30.
+            When you're not sure about some information, you say that you don't have the information and don't make up anything.
+            If the user's question is not clear, ambiguous, or does not provide enough context for you to accurately answer the question, you do not try to answer it right away and you rather ask the user to clarify their request 
+            (e.g. \"What are some good restaurants around me?\" => \"Where are you?\" or \"When is the next flight to Tokyo\" => \"Where do you travel from?\")
+            """
+            formatted_prompt  += f"<s>[SYSTEM_PROMPT]{mistral_small_system_prompt}\n{base_template}[/SYSTEM_PROMPT][INST]{user_query}[/INST]"
+
+    elif local_llm_chat_template_format == 'mistral-large-v7':
+
+        if current_sequence_id > 0:
+            formatted_prompt += f"<s>[INST] {user_query}[/INST] "
+        else:
+            formatted_prompt  += f"<s>[SYSTEM_PROMPT] {base_template}[/SYSTEM_PROMPT][INST] {user_query}[/INST] "
 
     elif local_llm_chat_template_format == 'raw':
 
@@ -4409,7 +4429,7 @@ def get_llama_cpp_formatted_user_prompt(local_llm_chat_template_format: str, llm
     if local_llm_chat_template_format == 'llama3':
         return f"{llm_response}<|eot_id|>"
     elif local_llm_chat_template_format == 'llama2':
-        return f"{llm_response}</s>"
+        return f"{llm_response} </s>\n"
     elif local_llm_chat_template_format == 'chatml':
         return f"{llm_response}<|im_end|>\n"
     elif local_llm_chat_template_format == 'qwen-chatml':
@@ -4430,6 +4450,10 @@ def get_llama_cpp_formatted_user_prompt(local_llm_chat_template_format: str, llm
         return f"{llm_response}<|end_of_turn|>"
     elif local_llm_chat_template_format == 'gemma2':
         return f"{llm_response}<end_of_turn>\n"
+    elif local_llm_chat_template_format == 'mistral-small-v7':
+        return f"{llm_response}</s>"
+    elif local_llm_chat_template_format == 'mistral-large-v7':
+        return f"{llm_response}</s>"
     elif local_llm_chat_template_format == 'raw':
         return f"{llm_response}\n"
     else:
