@@ -376,7 +376,7 @@
                                                             </div>
             
                                                             <div id="hf_waitress_exl2_max_seq_len" class="restart-settings-group llm-settings-standard-styling">
-                                                                <label for="HfwExl2MaxSeqLen" class="hf-select-settings-labels-group">Max Sequence Length (--exl2_max_seq_len): </label>
+                                                                <label for="HfwExl2MaxSeqLen" class="hf-select-settings-labels-group">Max Sequence Length [Must be multiple of 256] (--exl2_max_seq_len): </label>
                                                                 <input type="number" id="HfwExl2MaxSeqLen" min="1024" step="1" class="settings-input-fields" value="2048">
                                                             </div>
             
@@ -397,6 +397,8 @@
                                                                 <br>
                                                                 <select class="modal-selects" id="hf_waitress_exl2_prompt_template_format_choice" style="width: 100%; max-width: 60vh;">
                                                                     <option value="raw">Model Agnostic - Raw (default)</option>
+                                                                    <option value="mistral-small-v7">Mistral Small-24B Prompt Template Format</option>
+                                                                    <option value="mistral-large-v7">Mistral Large-123B Prompt Template Format</option>
                                                                     <option value="llama2">Llama-2 Prompt Template Format (Mistral Nemo-12B Instruct, Instruct-7B & MoE - v0.1 & v0.2, etc.)</option>
                                                                     <option value="llama3">Llama-3 & 3.1 Prompt Template Format</option>
                                                                     <option value="chatml">ChatML Prompt Template Format (Open & Nous Hermes-Mistral & MoE, etc.) </option>
@@ -555,7 +557,7 @@
         
                                                     <div id="hf_waitress_temperature_value" class="llm-settings-standard-styling">
                                                         <label for="HfwTempSlider" class="hf-select-settings-labels-group">Temperature (Randomness of generated text) (X-Temperature): </label>
-                                                        <input type="range" id="HfwTempSlider" min="0" max="2" step="0.1" value="0.3">
+                                                        <input type="range" id="HfwTempSlider" min="0" max="2" step="0.01" value="0.3">
                                                         <span id="HfwTempSliderValue">0.3</span>
                                                     </div>
                 
@@ -605,6 +607,8 @@
                                                 <br>
                                                 <select class="modal-selects" name="llm_template_choice" id="llmTemplateDropdown" style="width: 100%; max-width: 60vh;">
                                                     <option value="">Please select</option>
+                                                    <option value="mistral-small-v7">Mistral Small-24B Prompt Template Format</option>
+                                                    <option value="mistral-large-v7">Mistral Large-123B Prompt Template Format</option>
                                                     <option value="llama3">Llama-3 & 3.1 Prompt Template Format</option>
                                                     <option value="llama2">Llama-2 Prompt Template Format (Mistral Nemo-12B Instruct, Instruct-7B & MoE - v0.1 & v0.2, etc.)</option>
                                                     <option value="chatml">ChatML Prompt Template Format (Open & Nous Hermes-Mistral & MoE, etc.) </option>
