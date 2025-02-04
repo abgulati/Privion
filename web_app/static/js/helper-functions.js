@@ -79,7 +79,7 @@ function scrollStreamInfoBoxToBottom() {
     streamInfoBox.scrollTop = streamInfoBox.scrollHeight;
 }
 
-function appendStreamInfo(message, status) {
+function appendStreamInfo(message, status='waiting') {
     const streamInfoBox = document.getElementById('stream_info_box');
     //streamInfoBox.innerHTML += `<h6 class="info-stream-content">${message}</h6>`;
 
@@ -1013,8 +1013,11 @@ async function loadGoogleDriveDoc(file_id, file_mimeType) {
                             }
 
                             if (dataObj != "") {
-                                appendStreamInfo(dataObj, 'waiting');
+                                string_and_status = dataObj.split('|');
+                                console.log(string_and_status);
+                                appendStreamInfo(string_and_status[0].trim(), string_and_status[1] === undefined ? 'waiting' : string_and_status[1].trim());
                             }
+
                         } catch (error) {
                             console.error('Error parsing message: ', error);
                         }
@@ -1026,10 +1029,10 @@ async function loadGoogleDriveDoc(file_id, file_mimeType) {
 
         await gdrive_loader_processChunk();
     } catch (error) {
-        errorHandler("loading document from Google Drive", "/google_drive_loader", String(error.message));
-        throw error;  // Re-throw the error for handling in the calling function
+        console.error("Error loading document from Google Drive in method loadGoogleDriveDoc(). Error details: ", String(error.message));
     }
 }
+
 
 function updateUIForFile(row, status) {
     let statusCell = row.cells[row.cells.length - 1];
@@ -1072,14 +1075,6 @@ function triggerSyncGoogleDrive() {
         console.error('Required elements not found');
         return;
     }
-    // console.log('Table element:', table);
-    // console.log('Table innerHTML:', table.innerHTML)
-    // console.log('Number of rows:', table.rows.length);
-    // if (table.rows.length > 0) {
-    //     console.log('First row:', table.rows[1].outerHTML);
-    //     console.log('First row cells:', table.rows[1].cells.length);
-    //     console.log('First row first cell:', table.rows[1].cells[0]);
-    // }
 
     syncButton.disabled = true;
     appendStreamInfo("Google Drive Synchronization In-Progress...", 'waiting');
@@ -1124,6 +1119,7 @@ function triggerSyncGoogleDrive() {
         hideStreamSpinner();
     });
 }
+
 
 function handleGoogleDrivePostAuth() {
     appendStreamInfo("Checking Google Drive Auth...", 'waiting');
