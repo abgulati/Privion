@@ -194,6 +194,7 @@ def write_config(config_updates, filename='hf_config.json'):
         triggers_for_hard_reboot = [
             'exl2',
             'exl2_bpw',
+            'exl2_max_seq_len',
             'exl2_cache_type'
         ]
         
@@ -1335,6 +1336,7 @@ def define_exllama_generator(quantized_model_path: os.PathLike) -> ExLlamaV2Dyna
         return handle_local_error("Could not define ExLlamaV2 cache, encountered error: ", e)
 
     try:
+        print(f"\nLoading model...\n")
         model.load_autosplit(EXL2_CACHE)
         print("\nModel loaded with autosplit successfully\n")
     except Exception as e:
