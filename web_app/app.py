@@ -3732,6 +3732,40 @@ def determine_do_rag(query, docs, force_enable_rag, force_disable_rag):
     return do_rag
 
 
+@app.route('/get_query_for_stream_and_sequence_id', methods=['POST'])
+def get_query_for_stream_and_sequence_id():
+    print("\n\nGetting query for stream and sequence ID\n\n")
+    try:
+        data = request.json
+        stream_session_id = data.get('stream_session_id')
+        sequence_id = data.get('sequence_id')
+    except Exception as e:
+        handle_api_error("Could not read request in get_query_for_stream_and_sequence_id(), encountered error: ", e)
+
+    try:
+        read_return = read_config(['sqlite_history_db'])
+        sqlite_history_db = read_return['sqlite_history_db']
+    except Exception as e:
+        return handle_api_error("Missing sqlite_history_db in config.json in method get_query_for_stream_and_sequence_id. Error: ", e)
+
+    # Connect to chat_history.db to determine appropriate chat_id
+    try:
+        conn = sqlite3.connect(sqlite_history_db)
+        c = conn.cursor()
+    except Exception as e:
+        return handle_api_error("Could not connect to chat history database, encountered error: ", e)
+    
+    try:
+        c.execute("SELECT user_query FROM chat_history WHERE stream_session_id = ? AND sequence_id = ?", (stream_session_id, sequence_id))
+        result = c.fetchone()
+        query = result[0]
+    except Exception as e:
+        return handle_api_error("Could not get query for stream and sequence ID, encountered error: ", e)
+    
+    return {"success": True, "query": query}
+
+
+
 def get_formatted_prompt_from_history_db(chat_id, sequence_id):
 
     print(f"\n\nFormatting prompt from history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}\n\n")
