@@ -117,35 +117,32 @@ function resetResponseAndViewerContainerWithStreamSessionId(streamSessionId) {
     scrollChatAreaToBottom();
 }
 
-async function getQueryForStreamAndSequenceId(streamSessionId, sequenceId) {
-    try{
-        const response = await fetch('/get_query_for_stream_and_sequence_id', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ stream_session_id: streamSessionId, sequence_id: sequenceId })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to fetch query for stream and sequence ID');
-        }
-        
-        const data = await response.json();
-        if (data.success) {
-            return data.query;
-        }
-        throw new Error(data.error || 'Failed to get query from response');
-    } catch (error) {
-        errorHandler("fetching the query for the specified stream and sequence ID", "/get_query_for_stream_and_sequence_id", String(error.message));
+function getUserMessageByStreamSessionId(stream_session_id) {
+    const messageElement = document.querySelector(`.user-message[data-stream-session-id="${stream_session_id}"]`);
+    if (!messageElement) return null;
+    
+    // Clone the element to work with
+    const clonedElement = messageElement.cloneNode(true);
+    
+    // Remove the regenerate menu div to get just the user text
+    const menuElement = clonedElement.querySelector('.regenerate-menu');
+    if (menuElement) {
+        clonedElement.removeChild(menuElement);
     }
+    
+    // Return the remaining innerHTML which will be the user's message
+    return clonedElement.innerHTML.trim();
 }
+// ... existing code ...
 
-async function prepareAttributeForUserMessage(userMessageDiv) {
+function prepareAttributeForUserMessage(userMessageDiv) {
     // Get the stream session id and sequence id
     const streamSessionId = userMessageDiv.getAttribute('data-stream-session-id');
     const sequenceId = userMessageDiv.getAttribute('data-sequence-id');
 
-    const userMessage = await getQueryForStreamAndSequenceId(streamSessionId, sequenceId);
+    // query selector for value of user-message class with data-stream-session-id:
+    const userMessage = getUserMessageByStreamSessionId(streamSessionId);
+
     console.log("userMessage: ", userMessage);
     document.getElementById('user-input').value = userMessage;
 
@@ -159,7 +156,6 @@ function deleteChatAreaElements(currentElement) {
 
         if (currentElement.matches('.user-message') || currentElement.matches('.response-and-viewer-container')) {
             elementsToDelete.push(currentElement);
-            console.log("currentElement: ", currentElement);
         }
     }
     elementsToDelete.forEach(element => element.remove());
