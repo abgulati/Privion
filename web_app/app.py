@@ -297,7 +297,49 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'fetch_top_k_results_from_whoosh':50,
                 'fetch_top_k_results_from_vectordb':11,
                 'filter_top_k_results_by_reranking':50,
-                'base_template':"You are a helpful assistant designed to answer user questions with accuracy and detail. Follow these instructions carefully:\n\n1. Accuracy and Truthfulness: Always provide accurate information. Do not fabricate or guess answers. If unsure, clearly state that you don't know.\n\n2. Using Additional Context:\n\na. If additional context is provided, identify and mention only the document names and page numbers that are directly relevant to the user's query.\nb. Say any relevant document names exactly as they appear in the context, including any special characters or formatting.\n\n3. Avoiding Irrelevant Information:\na. Do not mention or acknowledge irrelevant documents or context.\nb. Be mindful that the user cannot see the additional context. Ensure your response does not confuse them by referencing irrelevant or unnecessary details.\n\n4. Clarity in Responses: Structure your response so that it is clear, concise, and easy to understand.\n\nImportant: Only include references to sources when additional context is provided and when the source is directly helpful for answering the user's query. If no additional context is provided, answer based solely on your internal knowledge.\n\n",
+                'base_template': (
+                            "You are a helpful assistant deployed in a Retrieval Augmented Generation (RAG) system.\n"
+                            "Your task is to evaluate retrieved contextual data to answer users' questions accurately and in detail.\n\n"
+                            "Follow these instructions carefully:\n\n"
+                            "1. Accuracy and Truthfulness:\n"
+                            "- Provide accurate information based on the provided context or your knowledge\n"
+                            "- Do not fabricate or guess answers\n"
+                            "- If unsure, clearly state that you don't know or need more information\n\n"
+                            "2. Using Retrieved Context:\n"
+                            "- Only reference document names and page numbers that are directly relevant to the query\n"
+                            "- Quote document names exactly as they appear in the metadata array, including special characters\n"
+                            "- When citing information, use clear attribution (e.g., 'According to [document] on page [X]...')\n"
+                            "- Do not mention or acknowledge irrelevant documents or context\n\n"
+                            "3. Response Structure:\n"
+                            "- Start with a direct answer to the main question when possible\n"
+                            "- For factual questions: provide direct, concise answers\n"
+                            "- For complex or multi-part questions: break down the response into clearly labeled sections\n"
+                            "- For explanations: provide detailed, step-by-step responses\n"
+                            "- Maintain clarity and readability throughout\n\n"
+                            "4. Context Awareness:\n"
+                            "- Remember that users cannot see the retrieved context\n"
+                            "- Avoid referencing irrelevant details that might confuse users\n"
+                            "- When context is unavailable, unhelpful, or unrelated, rely on your base knowledge\n"
+                            "- Clearly distinguish between information from retrieved context and base knowledge\n\n"
+                            "5. Source Attribution (v.important!):\n"
+                            "- Only include metadata references (source, page_number) when they directly support your answer\n"
+                            "- When using base knowledge, no source citation is needed\n\n"
+                            "6. Handling Uncertainty:\n"
+                            "- If the retrieved context is ambiguous, acknowledge the ambiguity\n"
+                            "- When multiple interpretations are possible, explain the different possibilities\n"
+                            "- If more information is needed, specify what additional details would help\n"
+                            "- When partial information is available, clearly indicate what is known and what is uncertain\n\n"
+                            "Remember: Only include references to 'source' and 'page_number' metadata when the retrieved context is directly helpful for answering the user's query."
+                ),
+                'vision_ocr_prompt': (
+                            "Please OCR the attached image line-by-line as accurately as possible.\n"
+                            "If the image contains a table, output cell contents with their row and column indices. Include row and column name headers too. Follow this formatting example:\n"
+                            "[Row 0 (name:<header-name>), Column 0 (name:<header-name>): <cell-data>; Row 0 (name:<header-name>), Column 1 (name:<header-name>): <cell-data>;] etc.\n"
+                            "The extracted text will be converted into embeddings and used for semantic search, so extracting as much detail as possible, while maintaining formatting integrity and tabular context is crucially important.\n"
+                            "Please output only the text extracted from the image, without any other text, code, or markup. Please no yapping!\n"
+                            "Don't even say stuff like 'Here's the OCR'ed text from the image' or 'Here's the text extracted from the image' or anything like that. Just output the text.\n"
+                            "Thank you!"
+                ),
                 'skip_system_prompt':False,
                 'embedding_models_list':[
                     'sentence-transformers/all-mpnet-base-v2',
@@ -319,7 +361,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 ],
                 'selected_knowledge_domain':'General',
                 'knowledge_domain_base_directory': base_directory + '/knowledge_domains'
-            }.get(key, 'undefined')
+            }.get(key, 'undefined') # "implicit string concatenation" used for keys with large-string values!
 
             if default_value == 'undefined':
                 raise KeyError(f"Key \'{key}\' not found in config.json and no default value has been defined either.\n")
@@ -950,18 +992,11 @@ def PDFtoAzureOCRTXT(input_filepath):
 
 def get_vision_llm_request_params():
     try:
-        read_return = read_config(['vision_llm_local_url'])
+        read_return = read_config(['vision_llm_local_url', 'vision_ocr_prompt'])
         vision_llm_local_url = read_return['vision_llm_local_url']
+        vision_ocr_prompt = read_return['vision_ocr_prompt']
     except Exception as e:
-        handle_local_error("Missing OCR PDFs directory for PDFtoVisionLLMOCRTXT, please provide required API config. Error: ", e)
-
-    ocr_prompt = f'''Please OCR the attached image line-by-line as accurately as possible. 
-    If the image contains a table, output cell contents with their row and column indices. Include row and column name headers too. Follow this formatting example: "Row 0 (name:<header-name>), Column 0 (name:<header-name>): <cell-data>; Row 0 (name:<header-name>), Column 1 (name:<header-name>): <cell-data>;" etc.
-    The extracted text will be converted into embeddings and used for semantic search, so extracting as much detail as possible, while maintaining formatting integrity and tabular context is crucially important.
-    Please output only the text extracted from the image, without any other text, code, or markup. Please no yapping!
-    Don't even say stuff like "Here's the OCR'ed text from the image" or "Here's the text extracted from the image" or anything like that. Just output the text.
-    Thank you!
-    '''
+        handle_local_error("Missing Vision LLM URL or Vision OCR Prompt for get_vision_llm_request_params, please provide required API config. Error: ", e)
 
     vision_request_payload = {
         'messages': json.dumps([
@@ -969,7 +1004,7 @@ def get_vision_llm_request_params():
                 "role": "user", 
                 "content": [
                     {"type": "image"},
-                    {"type": "text", "text": ocr_prompt}
+                    {"type": "text", "text": vision_ocr_prompt}
                 ]
             }
         ])
@@ -1692,7 +1727,7 @@ def determine_sequence_id_for_chat(chat_id):
     return int(current_sequence_id) # returning current max sequence_id, this will be incremented by 1 when a new response is stored to the db
 
 
-def store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query_for_history_db, model_response_for_history_db, fully_formatted_prompt, local_llm_server, local_llm_chat_template_format):
+def store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query, model_response_for_history_db, fully_formatted_prompt, local_llm_server, local_llm_chat_template_format):
 
     print(f"\n\nStoring chat history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}")
 
@@ -1734,7 +1769,7 @@ def store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, 
 
     try:
         # Store conversation history into DB
-        cursor.execute("INSERT INTO chat_history (chat_id, sequence_id, stream_session_id, user_query, llm_response, llm_model, prompt_template, local_llm_server, prompt_template_format, date_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (int(chat_id), int(sequence_id), str(stream_session_id), user_query_for_history_db, model_response_for_history_db, model_choice, str(fully_formatted_prompt), str(local_llm_server), str(local_llm_chat_template_format), str(formatted_datetime)))
+        cursor.execute("INSERT INTO chat_history (chat_id, sequence_id, stream_session_id, user_query, llm_response, llm_model, prompt_template, local_llm_server, prompt_template_format, date_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (int(chat_id), int(sequence_id), str(stream_session_id), user_query, model_response_for_history_db, model_choice, str(fully_formatted_prompt), str(local_llm_server), str(local_llm_chat_template_format), str(formatted_datetime)))
         conn.commit()
         print(f"\n\nInserted chat history into DB with chat_id: {chat_id}\n\n")
     except Exception as e:
@@ -3254,8 +3289,6 @@ def load_chat_history():
             stream_session_id = str(stream_session_id[0])
 
             user_message = user_message.strip('\n')
-            regex_to_swap_multiple_spaces_with_newline = r' {2,}'
-            user_message = re.sub(regex_to_swap_multiple_spaces_with_newline, '<br>', user_message)
 
             user_message = f'''
             <div class="user-message glassmorphism" data-stream-session-id="{stream_session_id}" data-chat-id="{chat_id_for_history_search}" data-sequence-id="{sequence_id_for_history_search}">
@@ -3474,7 +3507,7 @@ def delete_messages():
         read_return = read_config(['sqlite_history_db'])
         sqlite_history_db = read_return['sqlite_history_db']
     except Exception as e:
-        return handle_local_error("Missing sqlite_history_db in config.json in method update_llm_response_in_history_db. Error: ", e)
+        return handle_local_error("Missing sqlite_history_db in config.json in method delete_messages(). Error: ", e)
 
     # Connect to chat_history.db to determine appropriate chat_id
     try:
@@ -4660,15 +4693,14 @@ def get_references():
     
     try:
         model_response_for_history_db = get_model_response_for_history_db_for_get_references(download_link_html, llm_response, reference_response)
-        user_query_for_history_db = str(user_query).strip('\n') #formatted_user_query 
     except Exception as e:
         handle_error_no_return("Could not prep data to store to chat history DB in get_references(), encountered error: ", e)
 
     try:
         if not regeneration_request:
-            stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query_for_history_db, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+            stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
         else:
-            stored_datetime, chat_id = update_llm_response_in_history_db(chat_id, stream_session_id, user_query_for_history_db, model_response_for_history_db)
+            stored_datetime, chat_id = update_llm_response_in_history_db(chat_id, stream_session_id, user_query, model_response_for_history_db)
     except Exception as e:
         handle_error_no_return("Could not store or update chat history DB in get_references(), encountered error: ", e)
 
