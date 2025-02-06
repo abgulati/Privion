@@ -322,7 +322,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                             "- When context is unavailable, unhelpful, or unrelated, rely on your base knowledge\n"
                             "- Clearly distinguish between information from retrieved context and base knowledge\n\n"
                             "5. Source Attribution (v.important!):\n"
-                            "- Only include metadata references when they directly support your answer\n"
+                            "- Only include metadata references ('source' and 'page_number') when they directly support your answer\n"
                             "- Include ONLY source and page_number, NOT page_content\n"
                             "- When using base knowledge, no source citation is needed\n\n"
                             "6. Handling Uncertainty:\n"
@@ -330,8 +330,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                             "- When multiple interpretations are possible, explain the different possibilities\n"
                             "- If more information is needed, specify what additional details would help\n"
                             "- When partial information is available, clearly indicate what is known and what is uncertain\n\n"
-                            "Remember: Only include references to 'source' and 'page_number' metadata when the retrieved context is directly helpful for answering the user's query. "
-                            "Do NOT acknowledge the existence of the retrieved context if it is not helpful for answering the user's query, no need to specify that you're not referencing it."
+                            "Remember: Only include references to 'source' and 'page_number' metadata when the retrieved context is directly helpful for answering the user's query, no need to specify that you're not referencing it otherwise."
                 ),
                 'vision_ocr_prompt': (
                             "Please OCR the attached image line-by-line as accurately as possible.\n"
