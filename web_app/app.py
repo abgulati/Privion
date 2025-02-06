@@ -330,6 +330,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                             "- If more information is needed, specify what additional details would help\n"
                             "- When partial information is available, clearly indicate what is known and what is uncertain\n\n"
                             "Remember: Only include references to 'source' and 'page_number' metadata when the retrieved context is directly helpful for answering the user's query."
+                            "Do NOT acknowledge the existence of the retrieved context if it is not helpful for answering the user's query, no need to specify that you're not referencing it."
                 ),
                 'vision_ocr_prompt': (
                             "Please OCR the attached image line-by-line as accurately as possible.\n"
@@ -3734,7 +3735,8 @@ def determine_do_rag(query, docs, force_enable_rag, force_disable_rag):
 
 @app.route('/get_query_for_stream_and_sequence_id', methods=['POST'])
 def get_query_for_stream_and_sequence_id():
-    print("\n\nGetting query for stream and sequence ID\n\n")
+    print(f"\n\nGetting query for stream and sequence ID\n\n")
+    
     try:
         data = request.json
         stream_session_id = data.get('stream_session_id')
