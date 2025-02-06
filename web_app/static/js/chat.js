@@ -643,7 +643,7 @@ async function requestFormattedPrompt(regeneration_request=false, regenerate_wit
 
     const current_chat_id = getChatId();
     const {userInput, file} = getUserInput();
-    const userInputForHtml = regeneration_request ? '' : formatTabsAndSpaces(userInput);
+    const userInputForHtml = regeneration_request ? userInput : formatTabsAndSpaces(userInput); // Old input need-not be re-formatted!
     const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);
     if (regeneration_request) { resetResponseAndViewerContainerWithStreamSessionId(regen_stream_session_id); }
 
