@@ -88,6 +88,7 @@ function loadCoreLarsConfig() {
         'force_enable_rag',
         'force_disable_rag',
         'base_template',
+        'vision_ocr_prompt',
         'local_llm_gpu_layers',
         'local_llm_context_length',
         'local_llm_max_new_tokens',
