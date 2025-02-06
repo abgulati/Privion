@@ -117,14 +117,38 @@ function resetResponseAndViewerContainerWithStreamSessionId(streamSessionId) {
     scrollChatAreaToBottom();
 }
 
-function prepareAttributeForUserMessage(userMessageDiv) {
-    // Get the user message content 
-    const userMessage = getUserMessageContent(userMessageDiv);
-    document.getElementById('user-input').value = userMessage;
-    
+async function getQueryForStreamAndSequenceId(streamSessionId, sequenceId) {
+    try{
+        const response = await fetch('/get_query_for_stream_and_sequence_id', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stream_session_id: streamSessionId, sequence_id: sequenceId })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to fetch query for stream and sequence ID');
+        }
+        
+        const data = await response.json();
+        if (data.success) {
+            return data.query;
+        }
+        throw new Error(data.error || 'Failed to get query from response');
+    } catch (error) {
+        errorHandler("fetching the query for the specified stream and sequence ID", "/get_query_for_stream_and_sequence_id", String(error.message));
+    }
+}
+
+async function prepareAttributeForUserMessage(userMessageDiv) {
     // Get the stream session id and sequence id
     const streamSessionId = userMessageDiv.getAttribute('data-stream-session-id');
     const sequenceId = userMessageDiv.getAttribute('data-sequence-id');
+
+    const userMessage = await getQueryForStreamAndSequenceId(streamSessionId, sequenceId);
+    console.log("userMessage: ", userMessage);
+    document.getElementById('user-input').value = userMessage;
+
     return { streamSessionId, sequenceId };
 }
 
