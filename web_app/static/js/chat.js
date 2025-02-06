@@ -1,7 +1,10 @@
 
 
 function formatTabsAndSpaces(text, tabSize = 4) {
-    // Replace each tab with tabSize number of &nbsp;
+    // Important to handle user-inputted ampersands so they're not confused with HTML entities such as &lt, &copy etc!
+    text = text.replace(/&/g, '&amp;');
+
+    // Replace each tab with tabSize number of &nbsp; nbsp - non-breaking space
     text = text.replace(/\t/g, '&nbsp;'.repeat(tabSize));
 
     // Replace multiple spaces (2 or more) with equivalent number of &nbsp;
@@ -10,8 +13,13 @@ function formatTabsAndSpaces(text, tabSize = 4) {
     // Replace newlines with <br>
     text = text.replace(/\n/g, '<br>');
 
+    // Handle user-inputted < and > so they're not confused for HTML elements
+    text = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // Ensure you're not loosing newline!
+    text = text.replace(/&lt;br&gt;/g, '<br>');
+
     return text;
-    //return "test";
 }
 
 
@@ -60,7 +68,7 @@ function handleAutoScroll(chatContainer) {
 function createUserMessageHTML(userInputForHtml){
     const uniqueId = getUniqueId();
     const current_chat_id = getChatId();
-    const chatArea = document.getElementById('chat-area');    
+    const chatArea = document.getElementById('chat-area');
     chatArea.innerHTML += `
         <div class="user-message glassmorphism" data-unique-id="${uniqueId}" data-chat-id="${current_chat_id}">
             ${userInputForHtml}
@@ -666,7 +674,7 @@ async function requestFormattedPrompt(regeneration_request=false, regenerate_wit
             'chat_id':current_chat_id,
             'sequence_id': getSequenceId(),
             'stream_session_id': stream_session_id,
-            'user_query': userInput,
+            'user_query': userInputForHtml,
             'llm_response': totalContent,
             'formatted_user_prompt': formatted_user_prompt,
             'regeneration_request': regeneration_request,
