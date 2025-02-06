@@ -19,23 +19,22 @@ function initializeScrollDownButton() {
 }
 
 function initializeRegenerateResponseButton() {
-    document.getElementById('chat-area').addEventListener('click', async function(e) {
+    document.getElementById('chat-area').addEventListener('click', function(e) {
         if (e.target.classList.contains('regenerate-option')) {
             const userMessageDiv = e.target.closest('.user-message');
-            const {streamSessionId, sequenceId} = await prepareAttributeForUserMessage(userMessageDiv);
+            const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
             requestFormattedPrompt(true, false, false, streamSessionId, sequenceId);    // Request the formatted prompt
             deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
         } else if (e.target.classList.contains('regenerate-with-citations-enabled-option')) {
             const userMessageDiv = e.target.closest('.user-message');
-            const {streamSessionId, sequenceId} = await prepareAttributeForUserMessage(userMessageDiv);
+            const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
             requestFormattedPrompt(true, true, false, streamSessionId, sequenceId);    // Request the formatted prompt
             deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
         } else if (e.target.classList.contains('regenerate-with-citations-disabled-option')) {
             const userMessageDiv = e.target.closest('.user-message');
-            const {streamSessionId, sequenceId} = await prepareAttributeForUserMessage(userMessageDiv);
+            const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
             requestFormattedPrompt(true, false, true, streamSessionId, sequenceId);    // Request the formatted prompt
             deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
-
         } else if (e.target.classList.contains('delete-option')) {
             const userMessageDiv = e.target.closest('.user-message');
             const chatId = userMessageDiv.getAttribute('data-chat-id');
@@ -77,7 +76,6 @@ function loadCoreLarsConfig() {
         'model_choice',
         'use_local_llm',
         'use_gpu',
-        'embedding_model_choice',
         'embedding_models_list',
         'selected_embedding_model',
         'knowledge_domain_list',
