@@ -142,8 +142,6 @@ function prepareAttributeForUserMessage(userMessageDiv) {
 
     // query selector for value of user-message class with data-stream-session-id:
     const userMessage = getUserMessageByStreamSessionId(streamSessionId);
-
-    console.log("userMessage: ", userMessage);
     document.getElementById('user-input').value = userMessage;
 
     return { streamSessionId, sequenceId };
