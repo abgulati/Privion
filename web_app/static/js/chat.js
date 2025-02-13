@@ -23,6 +23,46 @@ function formatTabsAndSpaces(text, tabSize = 4) {
 }
 
 
+function cleanStreamedContent(dataObj) {
+    // console.log("dataObj: ", dataObj);
+
+    dataObj = dataObj.replace(/\\u[\dA-F]{4}/gi, function(match) {
+        return String.fromCharCode(parseInt(match.replace(/\\u/g, ''), 16));
+    });
+    // Explanation:
+    // 0. This exists to handle the issue of unicode characters in the streamed response, which break the HTML.
+    // 1. The regular expression /\\u[\dA-F]{4}/gi matches a sequence of characters that starts with "\\u" followed by exactly four hexadecimal digits (\d for digits, A-F for uppercase letters).
+    // 2. The "gi" flags are used for global and case-insensitive matching.
+    // 3. The function(match) { ... } is an arrow function (An arrow function expression has a shorter syntax and lexically binds the 'this' value) that takes the matched string and converts it back to a character using the parseInt function.
+    // 4. parseInt(..., 16) uses replace to remove the "\\u" prefix and convert the remaining 4-digit hexadecimal string to a decimal number, using the 16 argument to specify base 16.
+    // 5. String.fromCharCode() converts the decimal number integer (now a Unicode code point) back to the corresponding character.
+
+    let streamed_content = dataObj;
+
+    // The robust parsing below is necessary as the LLM sees HTML <br> tags on subsequent questions, because it sees it's prior responses formatted as HTML!
+    // First, decode any HTML entities that might already be present - /g implies global: replace throughout string, not just the first occurance
+    streamed_content = streamed_content.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+    // Then, replace newlines with <br> tags
+    streamed_content = streamed_content.replace(/\\n\\n/g, '<br><br>')
+                                    .replace(/\\n/g, '<br>')
+                                    .replace(/\n\n/g, '<br><br>')
+                                    .replace(/\n/g, '<br>');
+
+    // Replace tabs with spaces
+    streamed_content = streamed_content.replace(/\\t/g, '    ');
+
+    // Finally, encode HTML special characters, but preserve <br> tags
+    streamed_content = streamed_content.replace(/&/g, '&amp;')
+                                    .replace(/</g, '&lt;')
+                                    .replace(/>/g, '&gt;')
+                                    .replace(/&lt;br&gt;/g, '<br>');
+
+    // console.log("streamed_content: ", streamed_content);
+    return streamed_content;
+}
+
+
 function hideWelcomeScreen() {
     const welcomeScreen = document.getElementById('welcome-screen');
     if (welcomeScreen) {
@@ -247,8 +287,10 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
                     }
                 });
 
-                document.getElementById(responseContentID).innerHTML = totalContent;    // Even though we have appendContentToResponse(), we still need to update the responseContentID div's innerHTML to reflect the latest content because the streamed content may not have any newlines in it!
-                if (receivedComplete) break;
+                if (receivedComplete) {
+                    document.getElementById(responseContentID).innerHTML = cleanStreamedContent(totalContent);  // Refresh innerHTML to ensure formatting of HTML tags is properly applied
+                    break;
+                }
             }
         }
 
@@ -413,39 +455,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
                             if (dataObj == "null") {
                                 dataObj = "";
                             }
-                            //console.log("dataObj: ", dataObj);
-
-                            dataObj = dataObj.replace(/\\u[\dA-F]{4}/gi, function(match) {
-                                return String.fromCharCode(parseInt(match.replace(/\\u/g, ''), 16));
-                            });
-                            // Explanation:
-                            // 0. This exists to handle the issue of unicode characters in the streamed response, which break the HTML.
-                            // 1. The regular expression /\\u[\dA-F]{4}/gi matches a sequence of characters that starts with "\\u" followed by exactly four hexadecimal digits (\d for digits, A-F for uppercase letters).
-                            // 2. The "gi" flags are used for global and case-insensitive matching.
-                            // 3. The function(match) { ... } is an arrow function (An arrow function expression has a shorter syntax and lexically binds the 'this' value) that takes the matched string and converts it back to a character using the parseInt function.
-                            // 4. parseInt(..., 16) uses replace to remove the "\\u" prefix and convert the remaining 4-digit hexadecimal string to a decimal number, using the 16 argument to specify base 16.
-                            // 5. String.fromCharCode() converts the decimal number integer (now a Unicode code point) back to the corresponding character.
-
-                            let streamed_content = dataObj;
-
-                            // The robust parsing below is necessary as the LLM sees HTML <br> tags on subsequent questions, because it sees it's prior responses formatted as HTML!
-                            // First, decode any HTML entities that might already be present - /g implies global: replace throughout string, not just the first occurance
-                            streamed_content = streamed_content.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-
-                            // Then, replace newlines with <br> tags
-                            streamed_content = streamed_content.replace(/\\n\\n/g, '<br><br>')
-                                                            .replace(/\\n/g, '<br>')
-                                                            .replace(/\n\n/g, '<br><br>')
-                                                            .replace(/\n/g, '<br>');
-
-                            // Replace tabs with spaces
-                            streamed_content = streamed_content.replace(/\\t/g, '    ');
-
-                            // Finally, encode HTML special characters, but preserve <br> tags
-                            streamed_content = streamed_content.replace(/&/g, '&amp;')
-                                                            .replace(/</g, '&lt;')
-                                                            .replace(/>/g, '&gt;')
-                                                            .replace(/&lt;br&gt;/g, '<br>');
+                            const streamed_content = cleanStreamedContent(dataObj);
 
                             hfwTotalContent += streamed_content;
                             appendContentToResponse(responseContentID, streamed_content);
@@ -461,8 +471,10 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
                     }
                 });
 
-                document.getElementById(responseContentID).innerHTML = hfwTotalContent;
-                if (hfwReceivedComplete) break;
+                if (hfwReceivedComplete) {
+                    document.getElementById(responseContentID).innerHTML = cleanStreamedContent(hfwTotalContent);   // Refresh innerHTML to ensure formatting of HTML tags is properly applied
+                    break;
+                }
             }
         }
 
