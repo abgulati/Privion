@@ -1730,8 +1730,8 @@ def bring_graph_db_online():    # launch FalkorDB Docker container
         subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE) if platform.system() == 'Windows' else subprocess.Popen(command, shell=True)
         # Check if the container is running
         container_name = 'falkor-db'
-        timeout = 5
-        attempts = 25
+        timeout = 2
+        attempts = 50
         for _ in range(attempts):
             if graph_db_docker_container_is_running(container_name):
                 print(f"\nFalkorDB Docker container launched successfully!\n")
@@ -1773,22 +1773,31 @@ def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-genera
         print("\nGraphing model server is already online, skipping launch...\n")
         return True
 
-    hf_waitress_kb_generator_server_path = os.path.normpath(os.path.join(os.getcwd(), "knowledge-graph-model-server", "hf_waitress.py"))    # normpath() is used to "normalize" i.e. convert to a path that is appropriate for the current OS
+    hf_waitress_kb_generator_server_path = os.path.normpath(os.path.join(os.getcwd(), "knowledge-graph-model-server"))    # normpath() is used to "normalize" i.e. convert to a path that is appropriate for the current OS
     print(f"\nLaunching HF-Waitress instance with kb-generator model at path: {hf_waitress_kb_generator_server_path}\n")
-    command = [
-        'python' if platform.system() == 'Windows' else 'python3',
-        hf_waitress_kb_generator_server_path,
-        '--port', str(graph_model_server_port),
-        '--model_id', str(graph_generator_model),
-        '--quantize', str(quantize_graph_model),
-        '--quant_level', str(quantize_graph_model_bits)
-    ]
+
+    # Need to format this way because the f"""<>""" multiline way will maintain newlines in the command, which will cause the command to fail!
+    # Also cannot format this as we have in hf_waitress.py's exllama_bpw_quantize_model() because of the command seperators (&& and ;), which would be incorrectly treated as parameters to the cd command in that list format!
+    # We cd first because the command should execute from within that directory otherwise the main hf_config.json gets incorrectly modified! 
+    command = (
+        f"cd {hf_waitress_kb_generator_server_path} "
+        f"{'&&' if platform.system() == 'Windows' else ';'} "
+        f"{'python' if platform.system() == 'Windows' else 'python3'} hf_waitress.py "
+        f"--port {str(graph_model_server_port)} "
+        f"--model_id {str(graph_generator_model)} "
+        f"--quantize {str(quantize_graph_model)} "
+        f"--quant_level {str(quantize_graph_model_bits)}"
+    )
 
     try:
         if platform.system() == 'Windows':
-            subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)   # Popen is used to launch the command in a new process in a new terminal, while subprocess.run() is used to simply run the command and wait for it to finish
+            windows_command = f'start cmd /k "{command}"'   # /k tells cmd to keep the window open even after the command has finished, versus /c which closes the window after the command has finished
+            subprocess.Popen(windows_command, shell=True)   # Popen is used to launch the command in a new process in a new terminal, while subprocess.run() is used to simply run the command and wait for it to finish
+            # Using `start` in this manner explicitly instructs Windows to start a new command window to run the command, while CREATE_NEW_CONSOLE combined with shell=True might not work correctly as the shell itself might capture the console!
         else:
-            subprocess.Popen(command, shell=True)   # shell=True is used to launch the command in a new terminal
+            subprocess.Popen(command, shell=True)
+        # The shell=True lets the system's shell interpret the command string, including special operators like && (Windows) or ; (Unix) that chain commands together.
+        # This is exactly what you need when you want to change directory before running a script!
 
         timeout = 5
         attempts = 25
@@ -3406,9 +3415,24 @@ def reset_vector_db_on_disk():
     except Exception as e:
         return handle_api_error("Server-side error, could not read selected_embedding_model or selected_knowledge_domain from the POST request in method reset_vector_db_on_disk, encountered error: ", e)
 
-    path_to_knowledge_domain = get_path_to_knowledge_domain()
-    vector_db_path = os.path.join(path_to_knowledge_domain, "vector_db_and_whoosh_index", selected_embedding_model_choice)
-    whoosh_index_path = os.path.join(path_to_knowledge_domain, "vector_db_and_whoosh_index", selected_embedding_model_choice, "whoosh_index")
+    try:
+        knowledge_domain_base_directory = read_config(['knowledge_domain_base_directory'])['knowledge_domain_base_directory']
+    except Exception as e:
+        handle_local_error("Missing values in config.json, could not determine knowledge_domain_base_directory. Error: ", e)
+
+    try:
+        path_to_knowledge_domain = os.path.join(knowledge_domain_base_directory, knowledge_domain)
+        if not os.path.exists(path_to_knowledge_domain):
+            os.makedirs(path_to_knowledge_domain, exist_ok=True)
+            print(f"\n\nCreated knowledge domain directory: {path_to_knowledge_domain}\n\n")
+    except Exception as e:
+        handle_api_error("Could not determine path to knowledge domain, encountered error: ", e)
+
+    try:
+        vector_db_path = os.path.join(path_to_knowledge_domain, "vector_db_and_whoosh_index", selected_embedding_model_choice)
+        whoosh_index_path = os.path.join(path_to_knowledge_domain, "vector_db_and_whoosh_index", selected_embedding_model_choice, "whoosh_index")
+    except Exception as e:
+        handle_api_error("Could not determine path to vector_db or whoosh_index, encountered error: ", e)
     
     shell_delete_folder(vector_db_path, delete_vector_db=True)
     shell_delete_folder(whoosh_index_path, delete_vector_db=False)
