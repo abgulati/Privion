@@ -14,6 +14,7 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
+from falkordb import FalkorDB
 import chromadb
 
 from pdf2image import convert_from_path
@@ -39,6 +40,7 @@ import uuid
 import json
 import time
 import nltk
+import ast
 import os
 import io
 import re
@@ -297,6 +299,24 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'fetch_top_k_results_from_whoosh':50,
                 'fetch_top_k_results_from_vectordb':11,
                 'filter_top_k_results_by_reranking':50,
+                'chunk_size':250,
+                'chunk_overlap':0,
+                'graph_chunk_size':500,
+                'graph_generator_model': 'Metin/Gemma-2-2B-TR-Knowledge-Graph',
+                'graph_model_server_port': 9070,
+                'graph_model_access_url': 'localhost',
+                'quantize_graph_model': 'bitsandbytes',
+                'quantize_graph_model_bits': 'int8',
+                'graph_db_server_host': 'localhost',
+                'assign_host_port_to_graph_db_server': 6379,
+                'launch_graph_db_with_ui': True,
+                'assign_host_port_to_graph_db_ui': 3000,
+                'graph_model_max_new_tokens': 8192,
+                'graph_model_temperature': 0.1,
+                'graph_model_do_sample': True,
+                'graph_model_top_k': 40,
+                'graph_model_top_p': 0.95,
+                'graph_model_min_p': 0.05,
                 'base_template': (
                             "You are a helpful assistant deployed in a Retrieval Augmented Generation (RAG) system.\n"
                             "Your task is to evaluate retrieved contextual data to answer users' questions accurately and in detail.\n\n"
@@ -749,6 +769,17 @@ def search_whoosh_index(query):
     except Exception as e:
         handle_error_no_return("Failed to search Whoosh Index, encountered error: ", e)
         return []
+
+
+@app.route('/search_whoosh_api', methods=['POST'])
+def search_whoosh_api():
+    try:
+        data = request.json
+        query = data.get('query')
+        results = search_whoosh_index(query)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 def PDFtoAzureDocAiTXT(input_filepath):
@@ -1483,18 +1514,6 @@ def chunk_docs_with_page_numbers(input_file, chunk_size=250):
     return documents
 
 
-def read_embeddings_config() -> tuple[str, str]:
-    print("\n\nReading embeddings config\n\n")
-    try:
-        selected_embedding_model = read_config(['selected_embedding_model'])['selected_embedding_model']
-    except Exception as e:
-        handle_local_error("Missing values in config.json, could not read_embeddings_config. Error: ", e)
-
-    path_to_knowledge_domain = get_path_to_knowledge_domain()
-
-    return selected_embedding_model, path_to_knowledge_domain
-
-
 def create_vector_db_directory(path_to_knowledge_domain, embedding_function):
     try:
         vector_db_path = os.path.join(path_to_knowledge_domain, "vector_db_and_whoosh_index", embedding_function)
@@ -1508,31 +1527,7 @@ def create_vector_db_directory(path_to_knowledge_domain, embedding_function):
         return handle_local_error("Could not create vector_db directory, encountered error: ", e)
 
 
-# Document vectorization and chunking
-def whoosh_and_embed_doc_chunks(input_file):
-    print("\n\nCore Document Vectorization and Chunking Function Invoked\n\n")
-
-    # Read Embeddings Config
-    try:
-        selected_embedding_model, path_to_knowledge_domain = read_embeddings_config()
-    except Exception as e:
-        handle_local_error("Could not read embeddings config, encountered error: ", e)
-
-    chunk_sz = 250
-    chunk_olp = 0
-
-    # Chunk Source Data
-    print("Chunking Doc")
-    try:
-        chunks = chunk_docs_with_page_numbers(input_file, chunk_sz) # Generates a list of dictionaries, each containing 'content', 'source', and 'page_number' as keys
-        if len(chunks) > 0:
-            whoosh_indexer(chunks)
-        else:
-            print("No chunks generated, skipping indexing and embedding")
-            return chunk_sz, chunk_olp
-    except Exception as e:
-        handle_local_error("Failed to chunk document for storage to VectorDB, encountered error: ", e)
-
+def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
     # Convert Chunks to Document objects:
     try:
         numbered_splits = [Document(page_content=chunk['content'], metadata={'page_number': chunk['page_number'], 'source': chunk['source']}) for chunk in chunks]  # Generates a list of Document objects, each containing a 'page_content' string, and a 'metadata' dictionary with 'source' and 'page_number' keys
@@ -1586,7 +1581,304 @@ def whoosh_and_embed_doc_chunks(input_file):
     except Exception as e:
         handle_local_error("Could not store to VectorDB, encountered error: ", e)
 
-    return chunk_sz, chunk_olp
+    return True
+
+
+def extract_entities_and_relationships(chunk):
+    print("\nExtracting Entities and Relationships from Chunk\n")
+
+    read_return = read_config(['graph_model_access_url', 'graph_model_server_port', 'graph_model_max_new_tokens', 'graph_model_temperature', 'graph_model_do_sample', 'graph_model_top_k', 'graph_model_top_p', 'graph_model_min_p'])
+    graph_model_access_url = read_return['graph_model_access_url']
+    graph_model_server_port = read_return['graph_model_server_port']
+    graph_model_max_new_tokens = read_return['graph_model_max_new_tokens']
+    graph_model_temperature = read_return['graph_model_temperature']
+    graph_model_do_sample = read_return['graph_model_do_sample']
+    graph_model_top_k = read_return['graph_model_top_k']
+    graph_model_top_p = read_return['graph_model_top_p']
+    graph_model_min_p = read_return['graph_model_min_p']
+
+    grapher_url = f"http://{graph_model_access_url}:{graph_model_server_port}/completions"
+    payload_content = str(chunk) + "\n<knowledge_graph>"
+
+    payload = f'''
+        {{
+            "messages": [
+                {{"role": "user", "content": {json.dumps(payload_content)}}}
+            ]
+        }}
+    '''
+
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Max-New-Tokens': str(graph_model_max_new_tokens),
+        'X-Return-Full-Text': 'False',
+        'X-Temperature': str(graph_model_temperature),
+        'X-Do-Sample': str(graph_model_do_sample),
+        'X-Top-K': str(graph_model_top_k),
+        'X-Top-P': str(graph_model_top_p),
+        'X-Min-P': str(graph_model_min_p)
+    }
+
+    try:
+        response = requests.post(grapher_url, headers=headers, data=payload)
+        print(f"\nResponse (Entities and Relationships): {response.json()}\n")
+        return ast.literal_eval(response.json()['response'])
+    except Exception as e:
+        return handle_local_error("Could not extract entities and relationships from chunk, encountered error: ", e)
+
+
+def get_graph_db_client():
+    print("\nObtaining Graph DB Client\n")
+
+    read_return = read_config(['graph_db_server_host', 'assign_host_port_to_graph_db_server'])
+    graph_db_server_host = read_return['graph_db_server_host']
+    assign_host_port_to_graph_db_server = read_return['assign_host_port_to_graph_db_server']
+
+    try:
+        client = FalkorDB(host=graph_db_server_host, port=assign_host_port_to_graph_db_server)
+        print(f"\nGraph DB Client obtained successfully!\n")
+        return client
+    except Exception as e:
+        return handle_local_error("Could not obtain Graph DB Client, encountered error: ", e)
+
+
+def store_chunk_in_graph_db(chunk):
+    selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']
+    
+    client = get_graph_db_client()
+    
+    try:
+        graph = client.select_graph(selected_knowledge_domain)  # Will create the graph if it doesn't exist
+    except Exception as e:
+        return handle_local_error("Could not select/create graph for {selected_knowledge_domain} domain in graph DB, encountered error: ", e)
+
+    entities_and_relationships = extract_entities_and_relationships(chunk)
+    if entities_and_relationships is None or entities_and_relationships == {}:
+        print(f"No entities or relationships found in chunk, skipping storage to {selected_knowledge_domain} graph DB")
+        return False
+
+    print(f"\nStoring entities and relationships to {selected_knowledge_domain} graph DB\n")
+    for node in entities_and_relationships['nodes']:
+        try:
+            name = node['name']
+            node_type = node['type']
+            node_name = name.lower().replace(" ", "_")
+            graph.query(f"""CREATE (:{node_name} {{name: {name}, type: {node_type}}})""")
+            print(f"Created node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB")
+        except Exception as e:
+            handle_error_no_return(f"Could not create node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
+
+    for relationship in entities_and_relationships['relationships']:
+        try:
+            source = relationship['source']
+            target = relationship['target']
+            relationship_type = relationship['relationship'].upper().replace(" ", "_")
+            graph.query(f"""CREATE ({source})-[:{relationship_type}]->({target})""")
+            print(f"Created relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB")
+        except Exception as e:
+            handle_error_no_return(f"Could not create relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
+
+    return True
+
+
+def graph_db_docker_container_is_running(container_name):
+    print("\nChecking if FalkorDB Docker container is running...\n")
+
+    try:
+        result = subprocess.run(
+            ['docker', 'ps', '--filter', f'name={container_name}' , '--format', '{{.ID}}'], # get container ID
+            capture_output=True,    # captures the command's output and error, while suppressing the print to the terminal
+            text=True,  # Get output as string and not bytes
+            check=True
+        )
+        container_id = result.stdout.strip()
+        print(f"\n{container_name} Docker container ID: {container_id}\n")
+        return container_id is not None and container_id != ""
+    except Exception as e:
+        handle_error_no_return(f"Could not check if {container_name} Docker container is running, encountered error: ", e)
+        return False
+
+
+def bring_graph_db_online():    # launch FalkorDB Docker container
+    print(f"\nLaunching FalkorDB Docker container...\n")
+
+    read_return = read_config(['launch_graph_db_with_ui', 'assign_host_port_to_graph_db_server', 'assign_host_port_to_graph_db_ui'])
+    launch_graph_db_with_ui = read_return['launch_graph_db_with_ui']
+    assign_host_port_to_graph_db_server = read_return['assign_host_port_to_graph_db_server']
+    assign_host_port_to_graph_db_ui = read_return['assign_host_port_to_graph_db_ui']
+
+    # Check if Docker Engine is running
+    try:
+        subprocess.run(['docker', 'info'], capture_output=True, check=True)  # check=True will raise an exception if the command returns a non-zero exit code
+    except Exception as e:
+        return handle_local_error("Docker Engine is not running, encountered error: ", e)
+
+    print("\nDocker Engine is running, proceeding with FalkorDB Docker container launch...\n")
+
+    if graph_db_docker_container_is_running('falkor-db'):
+        print("\nFalkorDB Docker container is already running, skipping launch...\n")
+        return True
+
+    command = [
+        'docker', 'run', '-p', f'{assign_host_port_to_graph_db_server}:6379',
+        *(['-p', f'{assign_host_port_to_graph_db_ui}:3000'] if launch_graph_db_with_ui else []),
+        '--name', 'falkor-db',
+        '-it', '--rm', '-v', './data:/data', 'falkordb/falkordb:edge'
+    ]   # Using conditional list-unpacking with * to handle optional arguments!
+
+    try:
+        subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE) if platform.system() == 'Windows' else subprocess.Popen(command, shell=True)
+        # Check if the container is running
+        container_name = 'falkor-db'
+        timeout = 5
+        attempts = 25
+        for _ in range(attempts):
+            if graph_db_docker_container_is_running(container_name):
+                print(f"\nFalkorDB Docker container launched successfully!\n")
+                return True
+            else:
+                print(f"FalkorDB Docker container not yet running, waiting {timeout} seconds before retrying...")
+                time.sleep(timeout)
+
+    except Exception as e:
+        return handle_local_error("Could not launch FalkorDB Docker container, encountered error: ", e)
+
+    return True
+
+
+def graphing_model_server_is_online(graph_model_access_url, graph_model_server_port):
+    print("\nChecking if graphing model server is online...\n")
+
+    try:
+        response = requests.get(f"http://{graph_model_access_url}:{graph_model_server_port}/health")
+        if response:
+            print(f"\nKB-Generator model launched successfully!\n")
+            return True
+    except Exception as e:
+        handle_error_no_return(f"KB-Generator model is not online, status: ", e)
+        return False
+
+
+def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-generator model
+    print(f"\nLaunching HF-Waitress instance with kb-generator model...\n")
+
+    read_return = read_config(['graph_model_access_url', 'graph_model_server_port', 'quantize_graph_model', 'quantize_graph_model_bits', 'graph_generator_model'])
+    graph_model_access_url = read_return['graph_model_access_url']
+    graph_model_server_port = read_return['graph_model_server_port']
+    quantize_graph_model = read_return['quantize_graph_model']
+    quantize_graph_model_bits = read_return['quantize_graph_model_bits']
+    graph_generator_model = read_return['graph_generator_model']
+
+    if graphing_model_server_is_online(graph_model_access_url, graph_model_server_port):
+        print("\nGraphing model server is already online, skipping launch...\n")
+        return True
+
+    hf_waitress_kb_generator_server_path = os.path.normpath(os.path.join(os.getcwd(), "knowledge-graph-model-server", "hf_waitress.py"))    # normpath() is used to "normalize" i.e. convert to a path that is appropriate for the current OS
+    print(f"\nLaunching HF-Waitress instance with kb-generator model at path: {hf_waitress_kb_generator_server_path}\n")
+    command = [
+        'python' if platform.system() == 'Windows' else 'python3',
+        hf_waitress_kb_generator_server_path,
+        '--port', str(graph_model_server_port),
+        '--model_id', str(graph_generator_model),
+        '--quantize', str(quantize_graph_model),
+        '--quant_level', str(quantize_graph_model_bits)
+    ]
+
+    try:
+        if platform.system() == 'Windows':
+            subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)   # Popen is used to launch the command in a new process in a new terminal, while subprocess.run() is used to simply run the command and wait for it to finish
+        else:
+            subprocess.Popen(command, shell=True)   # shell=True is used to launch the command in a new terminal
+
+        timeout = 5
+        attempts = 25
+        for _ in range(attempts):
+            if graphing_model_server_is_online(graph_model_access_url, graph_model_server_port):
+                print(f"\nKB-Generator model launched successfully!\n")
+                return True
+            else:
+                print(f"KB-Generator model not yet running, waiting {timeout} seconds before retrying...")
+                time.sleep(timeout)
+            
+    except Exception as e:
+        return handle_local_error("Could not launch HF-Waitress instance with kb-generator model, encountered error: ", e)
+    
+    return True
+
+
+def graph_generator(chunks):
+    print("\n\nGraph Generator Invoked\n\n")
+
+    try:
+        bring_graph_db_online()
+        bring_graphing_model_online()
+    except Exception as e:
+        handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
+
+    # Generate Graph
+    graph_chunk_size = read_config(['graph_chunk_size'])['graph_chunk_size']
+    graphing_chunk = ""
+    for chunk in chunks:
+        if len(graphing_chunk) > graph_chunk_size:
+            try:
+                store_chunk_in_graph_db(graphing_chunk)
+                graphing_chunk = ""
+            except Exception as e:
+                handle_error_no_return("Could not store chunk in graph DB, skipping to the next chunk. Encountered error: ", e)
+        graphing_chunk += str(chunk)
+
+    return True
+
+
+def read_embeddings_config() -> tuple[str, str]:
+    print("\n\nReading embeddings config\n\n")
+    try:
+        read_return = read_config(['selected_embedding_model', 'chunk_size', 'chunk_overlap'])
+        selected_embedding_model = read_return['selected_embedding_model']
+        chunk_sz = read_return['chunk_size']
+        chunk_olp = read_return['chunk_overlap']
+    except Exception as e:
+        handle_local_error("Missing values in config.json, could not read_embeddings_config. Error: ", e)
+
+    path_to_knowledge_domain = get_path_to_knowledge_domain()
+
+    return selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp
+
+
+# Document vectorization and chunking
+def whoosh_embed_and_graph_doc_chunks(input_file):
+    print("\n\nCore Document Vectorization and Chunking Function Invoked\n\n")
+
+    # Read Embeddings Config
+    try:
+        selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp = read_embeddings_config()
+    except Exception as e:
+        handle_local_error("Could not read embeddings config, encountered error: ", e)
+
+    # Chunk Source Data
+    print("Chunking Doc")
+    try:
+        chunks = chunk_docs_with_page_numbers(input_file, chunk_sz) # Generates a list of dictionaries, each containing 'content', 'source', and 'page_number' as keys
+        if len(chunks) > 0:
+            try:
+                whoosh_indexer(chunks)
+            except Exception as e:
+                handle_error_no_return("Could not index chunks, skipping and attempting vector embedding. Encountered error: ", e)
+            try:
+                core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain)
+            except Exception as e:
+                handle_error_no_return("Could not embed chunks, skipping and attempting graph generation. Encountered error: ", e)
+            try:
+                graph_generator(chunks)
+            except Exception as e:
+                handle_error_no_return("Could not graph chunks, skipping. Encountered error: ", e)
+            print("Document added to knowledge domain.")
+        else:
+            print("No chunks generated, skipping indexing and embedding")
+    except Exception as e:
+        handle_local_error("Failed to chunk document for storage to VectorDB, encountered error: ", e)
+    finally:
+        return chunk_sz, chunk_olp
 
 
 def highlight_text_on_page(highlight_list, stream_session_id):
@@ -2495,7 +2787,7 @@ def document_extractor_and_loader(filename, filepath):
     
     try:
         if os.path.getsize(input_file) > 0:
-            chunk_size, chunk_overlap = whoosh_and_embed_doc_chunks(input_file)
+            chunk_size, chunk_overlap = whoosh_embed_and_graph_doc_chunks(input_file)
         else:
             print("Extracted document is empty! Skipping vector embedding & whoosh indexing.")
     except Exception as e:
