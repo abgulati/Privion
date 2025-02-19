@@ -1642,6 +1642,14 @@ def get_graph_db_client():
         return handle_local_error("Could not obtain Graph DB Client, encountered error: ", e)
 
 
+def sanitize_names(name):
+    name_str = str(name).lower()
+    sanitized = re.sub(r'[^a-zA-Z0-9]', '_', name_str)
+    if sanitized[0].isdigit():
+        sanitized = 'n_' + sanitized    # OpenCypher spec disallows digits at the beginning of a node name, even if they're strings eg "2025"!
+    return sanitized
+
+
 def store_chunk_in_graph_db(chunk):
     selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']
     
@@ -1660,20 +1668,31 @@ def store_chunk_in_graph_db(chunk):
     print(f"\nStoring entities and relationships to {selected_knowledge_domain} graph DB\n")
     for node in entities_and_relationships['nodes']:
         try:
-            name = node['name']
-            node_type = node['type']
-            node_name = name.lower().replace(" ", "_")
-            graph.query(f"""CREATE (:{node_name} {{name: {name}, type: {node_type}}})""")
+            name = str(node['name'])
+            node_type = str(node['type'])
+            node_name = sanitize_names(name)
+            
+            # MERGE instead of CREATE as it will either match an existing node or create a new one if it doesn't exist:
+            graph.query(f"""MERGE (:{node_name} {{name:'%s', type:'%s'}})""" % (name, node_type)) 
+            
             print(f"Created node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB")
         except Exception as e:
             handle_error_no_return(f"Could not create node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
 
     for relationship in entities_and_relationships['relationships']:
         try:
-            source = relationship['source']
-            target = relationship['target']
-            relationship_type = relationship['relationship'].upper().replace(" ", "_")
-            graph.query(f"""CREATE ({source})-[:{relationship_type}]->({target})""")
+            source = sanitize_names(relationship['source'])
+            target = sanitize_names(relationship['target'])
+            relationship_type = sanitize_names(relationship['relationship']).upper()
+            
+            # The below will either match an existing node or create a new one if it doesn't exist. MERGE will prevent the creation of duplicate nodes and relationships:
+            graph.query(f"""
+                MERGE (s:{source} {{name:'%s'}})
+                MERGE (t:{target} {{name:'%s'}})
+                MERGE (s)-[:{relationship_type}]->(t)
+            """ % (relationship['source'], relationship['target']))
+            # We don't want to use the sanitized names as both labels and property values
+            
             print(f"Created relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB")
         except Exception as e:
             handle_error_no_return(f"Could not create relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
@@ -1825,16 +1844,33 @@ def graph_generator(chunks):
         handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
 
     # Generate Graph
-    graph_chunk_size = read_config(['graph_chunk_size'])['graph_chunk_size']
-    graphing_chunk = ""
-    for chunk in chunks:
-        if len(graphing_chunk) > graph_chunk_size:
+    try:
+        graph_chunk_size = read_config(['graph_chunk_size'])['graph_chunk_size']
+        graphing_chunk = ""
+        chunks_in_storage_queue = []
+        
+        for count, chunk in enumerate(chunks):
+            graphing_chunk += str(chunk)
+            chunks_in_storage_queue.append(count)
+
+            if len(graphing_chunk) > graph_chunk_size:
+                try:
+                    print(f"\n\nStoring chunks numbered {chunks_in_storage_queue} of {len(chunks)} in graph DB\n\n")
+                    store_chunk_in_graph_db(graphing_chunk)
+                    graphing_chunk = ""
+                    chunks_in_storage_queue = []
+                except Exception as e:
+                    handle_error_no_return("Could not store chunk in graph DB, skipping to the next chunk. Encountered error: ", e)
+
+        if graphing_chunk: # If there's any remaining chunk to store
             try:
+                print(f"\n\nStoring final chunks numbered {chunks_in_storage_queue} of {len(chunks)} in graph DB\n\n")
                 store_chunk_in_graph_db(graphing_chunk)
-                graphing_chunk = ""
             except Exception as e:
-                handle_error_no_return("Could not store chunk in graph DB, skipping to the next chunk. Encountered error: ", e)
-        graphing_chunk += str(chunk)
+                handle_error_no_return("Could not store final chunk in graph DB, encountered error: ", e)
+            
+    except Exception as e:
+        handle_error_no_return("Could not graph chunks, encountered error: ", e)
 
     return True
 
