@@ -2201,7 +2201,6 @@ def exl2_stream():
 
     try:
         data = request.json
-        print(f"\nRead request - data received: {data}\n")
         messages = str(data)
         print(f"\nRead request - message received: {messages}\n")
     except Exception as e:
@@ -2241,7 +2240,7 @@ def exl2_stream():
         PIPE.enqueue(job)
         print("\nExLlamaV2DynamicJob Defined & Enqueued Successfully\n")
     except Exception as e:
-        handle_error_no_return("Could not create ExLlamaV2DynamicJob object for /exl2_stream, proceeding without them. Encountered error: ", e)
+        return handle_api_error("Could not create ExLlamaV2DynamicJob object for /exl2_stream, encountered error: ", e)
 
     stop_thread = threading.Event()
     output_queue = queue.Queue()
