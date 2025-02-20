@@ -302,21 +302,23 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'chunk_size':250,
                 'chunk_overlap':0,
                 'graph_chunk_size':500,
-                'graph_generator_model': 'Metin/Gemma-2-2B-TR-Knowledge-Graph',
-                'graph_model_server_port': 9070,
-                'graph_model_access_url': 'localhost',
-                'quantize_graph_model': 'bitsandbytes',
-                'quantize_graph_model_bits': 'int8',
-                'graph_db_server_host': 'localhost',
-                'assign_host_port_to_graph_db_server': 6379,
-                'launch_graph_db_with_ui': True,
-                'assign_host_port_to_graph_db_ui': 3000,
-                'graph_model_max_new_tokens': 8192,
-                'graph_model_temperature': 0.1,
-                'graph_model_do_sample': True,
-                'graph_model_top_k': 40,
-                'graph_model_top_p': 0.95,
-                'graph_model_min_p': 0.05,
+                'graph_generator_model':'Metin/Gemma-2-2B-TR-Knowledge-Graph',
+                'graph_model_server_port':9070,
+                'graph_model_access_url':'localhost',
+                'quantize_graph_model':'bitsandbytes',
+                'quantize_graph_model_bits':'int8',
+                'exl2_quantize_graph_model':False,
+                'exl2_quantize_graph_model_bpw':8.0,
+                'graph_db_server_host':'localhost',
+                'assign_host_port_to_graph_db_server':6379,
+                'launch_graph_db_with_ui':True,
+                'assign_host_port_to_graph_db_ui':3000,
+                'graph_model_max_new_tokens':8192,
+                'graph_model_temperature':0.1,
+                'graph_model_do_sample':True,
+                'graph_model_top_k':40,
+                'graph_model_top_p':0.95,
+                'graph_model_min_p':0.05,
                 'base_template': (
                             "You are a helpful assistant deployed in a Retrieval Augmented Generation (RAG) system.\n"
                             "Your task is to evaluate retrieved contextual data to answer users' questions accurately and in detail.\n\n"
@@ -1584,10 +1586,13 @@ def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
     return True
 
 
-def extract_entities_and_relationships(chunk):
-    print("\nExtracting Entities and Relationships from Chunk\n")
+def get_graphing_request_params():
+    try:
+        read_return = read_config(['exl2_quantize_graph_model', 'graph_model_access_url', 'graph_model_server_port', 'graph_model_max_new_tokens', 'graph_model_temperature', 'graph_model_do_sample', 'graph_model_top_k', 'graph_model_top_p', 'graph_model_min_p'])
+    except Exception as e:
+        return handle_local_error("Could not get graphing request params, encountered error: ", e)
 
-    read_return = read_config(['graph_model_access_url', 'graph_model_server_port', 'graph_model_max_new_tokens', 'graph_model_temperature', 'graph_model_do_sample', 'graph_model_top_k', 'graph_model_top_p', 'graph_model_min_p'])
+    exl2_quantize_graph_model = str(read_return['exl2_quantize_graph_model']).lower() == 'true'
     graph_model_access_url = read_return['graph_model_access_url']
     graph_model_server_port = read_return['graph_model_server_port']
     graph_model_max_new_tokens = read_return['graph_model_max_new_tokens']
@@ -1597,32 +1602,110 @@ def extract_entities_and_relationships(chunk):
     graph_model_top_p = read_return['graph_model_top_p']
     graph_model_min_p = read_return['graph_model_min_p']
 
-    grapher_url = f"http://{graph_model_access_url}:{graph_model_server_port}/completions"
-    payload_content = str(chunk) + "\n<knowledge_graph>"
-
-    payload = f'''
-        {{
-            "messages": [
-                {{"role": "user", "content": {json.dumps(payload_content)}}}
-            ]
-        }}
-    '''
-
     headers = {
         'Content-Type': 'application/json',
         'X-Max-New-Tokens': str(graph_model_max_new_tokens),
-        'X-Return-Full-Text': 'False',
         'X-Temperature': str(graph_model_temperature),
-        'X-Do-Sample': str(graph_model_do_sample),
         'X-Top-K': str(graph_model_top_k),
         'X-Top-P': str(graph_model_top_p),
         'X-Min-P': str(graph_model_min_p)
     }
 
+    grapher_url = f"http://{graph_model_access_url}:{graph_model_server_port}"
+
+    if not exl2_quantize_graph_model:
+        headers['X-Return-Full-Text'] = 'False'
+        headers['X-Do-Sample'] = str(graph_model_do_sample)
+        grapher_url += "/completions"
+    else:
+        headers['Connection'] = 'keep-alive'
+        grapher_url += "/exl2_stream"
+
+    return grapher_url, headers, exl2_quantize_graph_model
+
+
+def get_graphing_request_payload(chunk, exl2_quantize_graph_model):
+    payload_content = str(chunk) + "\n<knowledge_graph>"
+
+    if exl2_quantize_graph_model:
+        payload = json.dumps(f"<start_of_turn>user\n{payload_content}<end_of_turn>\n<start_of_turn>model\n")
+    else:
+        payload = f'''
+            {{
+                "messages": [
+                    {{"role": "user", "content": {json.dumps(payload_content)}}}
+                ]
+            }}
+        '''
+
+    return payload
+
+
+def graphing_request_response_handler(grapher_url, headers, payload):
     try:
         response = requests.post(grapher_url, headers=headers, data=payload)
         print(f"\nResponse (Entities and Relationships): {response.json()}\n")
         return ast.literal_eval(response.json()['response'])
+    except Exception as e:
+        return handle_local_error("Failed /completions request to extract entities and relationships from chunk, encountered error: ", e)
+
+
+def exl2_graphing_request_response_handler(grapher_url, headers, payload):
+    try:
+        response = requests.post(grapher_url, headers=headers, data=payload, stream=True)
+        response.raise_for_status()  # Raise an exception for bad status codes so we can catch them in the except block
+
+        full_response = ""
+        for line in response.iter_lines(decode_unicode=True):
+            if line:
+                if line.startswith("data:"):
+                    event_data = line[6:].strip()
+                    try:
+                        token = str(json.loads(event_data))
+                        full_response += token
+                    except json.JSONDecodeError:
+                        handle_error_no_return(f"Failed to parse event data: {event_data}, encountered error: ", e)
+                elif line.startswith("event: END"):
+                    break
+                else:
+                    print(f"\nUnexpected Line Format: {line}\n")
+
+        if not full_response:
+            print("\nWarning: No response from exl2_stream request\n")
+            return None
+
+        print(f"\nExl2 Response (Entities and Relationships): {full_response}\n")
+
+        try:
+            return ast.literal_eval(full_response)
+        except (ValueError, SyntaxError):
+            # Sometimes additional text may be present so we need to strip it:
+            if '{"nodes":' in full_response and '}' in full_response:
+                dict_start = full_response.rindex('{"nodes":')  # Sometimes the model re-gurgitates multiple copies of the same dict in it's response
+                dict_end = full_response.rindex('}') + 1 # rindex() returns the index of the last occurrence of the substring
+                full_response = full_response[dict_start:dict_end]
+                print(f"\nTrimmed response to dictionary: {full_response}\n")
+                return ast.literal_eval(full_response)
+            raise # Re-raise the original exception if we can't parse the response as a dictionary
+        
+    except Exception as e:
+        return handle_local_error("Failed /exl2_stream request to extract entities and relationships from chunk, encountered error: ", e)
+
+
+def extract_entities_and_relationships(chunk):
+    print("\nExtracting Entities and Relationships from Chunk\n")
+
+    try:
+
+        grapher_url, headers, exl2_quantize_graph_model = get_graphing_request_params()
+
+        payload = get_graphing_request_payload(chunk, exl2_quantize_graph_model)
+
+        if exl2_quantize_graph_model:
+            return exl2_graphing_request_response_handler(grapher_url, headers, payload)
+        else:
+            return graphing_request_response_handler(grapher_url, headers, payload)
+    
     except Exception as e:
         return handle_local_error("Could not extract entities and relationships from chunk, encountered error: ", e)
 
@@ -1660,7 +1743,11 @@ def store_chunk_in_graph_db(chunk):
     except Exception as e:
         return handle_local_error("Could not select/create graph for {selected_knowledge_domain} domain in graph DB, encountered error: ", e)
 
-    entities_and_relationships = extract_entities_and_relationships(chunk)
+    try:
+        entities_and_relationships = extract_entities_and_relationships(chunk)
+    except Exception as e:
+        return handle_local_error("Could not extract entities and relationships from chunk, encountered error: ", e)
+
     if entities_and_relationships is None or entities_and_relationships == {}:
         print(f"No entities or relationships found in chunk, skipping storage to {selected_knowledge_domain} graph DB")
         return False
@@ -1673,7 +1760,7 @@ def store_chunk_in_graph_db(chunk):
             node_name = sanitize_names(name)
             
             # MERGE instead of CREATE as it will either match an existing node or create a new one if it doesn't exist:
-            graph.query(f"""MERGE (:{node_name} {{name:'%s', type:'%s'}})""" % (name, node_type)) 
+            graph.query(f"""MERGE (:{node_name} {{name:'%s', type:'%s'}})""" % (name.replace("'", ""), node_type.replace("'", "")))   # Select all Nodes in the GraphDB with Cypher Query: `MATCH (n) RETURN n`
             
             print(f"Created node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB")
         except Exception as e:
@@ -1690,8 +1777,9 @@ def store_chunk_in_graph_db(chunk):
                 MERGE (s:{source} {{name:'%s'}})
                 MERGE (t:{target} {{name:'%s'}})
                 MERGE (s)-[:{relationship_type}]->(t)
-            """ % (relationship['source'], relationship['target']))
+            """ % (relationship['source'].replace("'", ""), relationship['target'].replace("'", "")))
             # We don't want to use the sanitized names as both labels and property values
+            # Select all Relationships in the GraphDB with Cypher Query: `MATCH (n)-[r]->(m) RETURN n,r,m`
             
             print(f"Created relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB")
         except Exception as e:
@@ -1778,15 +1866,27 @@ def graphing_model_server_is_online(graph_model_access_url, graph_model_server_p
         return False
 
 
-def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-generator model
-    print(f"\nLaunching HF-Waitress instance with kb-generator model...\n")
-
-    read_return = read_config(['graph_model_access_url', 'graph_model_server_port', 'quantize_graph_model', 'quantize_graph_model_bits', 'graph_generator_model'])
+def read_graph_model_config():
+    try:
+        read_return = read_config(['graph_model_access_url', 'graph_model_server_port', 'quantize_graph_model', 'quantize_graph_model_bits', 'graph_generator_model', 'exl2_quantize_graph_model', 'exl2_quantize_graph_model_bpw'])
+    except Exception as e:
+        handle_error_no_return("Could not read graph model config, encountered error: ", e)
+    
     graph_model_access_url = read_return['graph_model_access_url']
     graph_model_server_port = read_return['graph_model_server_port']
     quantize_graph_model = read_return['quantize_graph_model']
     quantize_graph_model_bits = read_return['quantize_graph_model_bits']
     graph_generator_model = read_return['graph_generator_model']
+    exl2_quantize_graph_model = str(read_return['exl2_quantize_graph_model']).lower() == 'true'
+    exl2_quantize_graph_model_bpw = str(read_return['exl2_quantize_graph_model_bpw'])
+
+    return graph_model_access_url, graph_model_server_port, quantize_graph_model, quantize_graph_model_bits, graph_generator_model, exl2_quantize_graph_model, exl2_quantize_graph_model_bpw
+
+
+def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-generator model
+    print(f"\nLaunching HF-Waitress instance with kb-generator model...\n")
+
+    graph_model_access_url, graph_model_server_port, quantize_graph_model, quantize_graph_model_bits, graph_generator_model, exl2_quantize_graph_model, exl2_quantize_graph_model_bpw = read_graph_model_config()
 
     if graphing_model_server_is_online(graph_model_access_url, graph_model_server_port):
         print("\nGraphing model server is already online, skipping launch...\n")
@@ -1804,9 +1904,11 @@ def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-genera
         f"{'python' if platform.system() == 'Windows' else 'python3'} hf_waitress.py "
         f"--port {str(graph_model_server_port)} "
         f"--model_id {str(graph_generator_model)} "
-        f"--quantize {str(quantize_graph_model)} "
-        f"--quant_level {str(quantize_graph_model_bits)}"
     )
+    if exl2_quantize_graph_model:
+        command += f" --exl2 --exl2_bpw {str(exl2_quantize_graph_model_bpw)} --exl2_max_seq_len 20480"
+    else:
+        command += f" --quantize {str(quantize_graph_model)} --quant_level {str(quantize_graph_model_bits)}"
 
     try:
         if platform.system() == 'Windows':
@@ -1841,7 +1943,14 @@ def graph_generator(chunks):
         bring_graph_db_online()
         bring_graphing_model_online()
     except Exception as e:
-        handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
+        return handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
+
+    # try:
+    #     for count, chunk in enumerate(chunks):
+    #         print(f"\n\Storing chunk {count} of {len(chunks)} in graph DB\n\n")
+    #         store_chunk_in_graph_db(chunk['content'])
+    # except Exception as e:
+    #     handle_error_no_return("Could not store chunks in graph DB, encountered error: ", e)
 
     # Generate Graph
     try:
@@ -1850,7 +1959,7 @@ def graph_generator(chunks):
         chunks_in_storage_queue = []
         
         for count, chunk in enumerate(chunks):
-            graphing_chunk += str(chunk)
+            graphing_chunk += str(chunk['content'])
             chunks_in_storage_queue.append(count)
 
             if len(graphing_chunk) > graph_chunk_size:
@@ -3440,6 +3549,18 @@ def clean_up_docs_loaded_db(selected_embedding_model_choice, knowledge_domain):
         cursor.close()
 
 
+def delete_knowledge_domain_graph(knowledge_domain):
+    print(f"Deleting knowledge domain graph for: {knowledge_domain}")
+    
+    try:
+        client = get_graph_db_client()
+        graph = client.select_graph(knowledge_domain)
+        graph.delete()  # client.delete_graph() is unsupported by FalkorDB. Delete individual nodes with Cypher: `MATCH (n) DETACH DELETE n`
+        print(f"Successfully deleted graph for {knowledge_domain} domain in graph DB")
+    except Exception as e:
+        handle_error_no_return("Could not delete graph for {knowledge_domain} domain in graph DB, encountered error: ", e)
+
+
 @app.route('/reset_vector_db_on_disk', methods=['POST'])
 def reset_vector_db_on_disk():
 
@@ -3473,6 +3594,7 @@ def reset_vector_db_on_disk():
     shell_delete_folder(vector_db_path, delete_vector_db=True)
     shell_delete_folder(whoosh_index_path, delete_vector_db=False)
     clean_up_docs_loaded_db(selected_embedding_model_choice, knowledge_domain)
+    delete_knowledge_domain_graph(knowledge_domain)
     
     return jsonify({'success': True})
 
