@@ -804,17 +804,6 @@ def search_whoosh_index(query):
         return []
 
 
-@app.route('/search_whoosh_api', methods=['POST'])
-def search_whoosh_api():
-    try:
-        data = request.json
-        query = data.get('query')
-        results = search_whoosh_index(query)
-        return jsonify(results)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
 def PDFtoAzureDocAiTXT(input_filepath):
 
     print("\n\nProcessing Document - PDF to Azure DocAI TXT\n\n")
