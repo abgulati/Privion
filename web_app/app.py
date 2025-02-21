@@ -299,8 +299,11 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'fetch_top_k_results_from_whoosh':50,
                 'fetch_top_k_results_from_vectordb':11,
                 'filter_top_k_results_by_reranking':50,
+                'min_semantic_similarity_threshold':0.5,
+                'min_lexical_similarity_threshold':3.0,
                 'chunk_size':250,
                 'chunk_overlap':0,
+                'perform_graph_rag':True,
                 'graph_chunk_size':500,
                 'graph_generator_model':'Metin/Gemma-2-2B-TR-Knowledge-Graph',
                 'graph_model_server_port':9070,
@@ -730,9 +733,10 @@ def search_whoosh_index(query):
     print("Searching Whoosh Index")
     
     try:
-        read_return = read_config(['fetch_top_k_results_from_whoosh', 'whoosh_search_weighting'])
+        read_return = read_config(['fetch_top_k_results_from_whoosh', 'whoosh_search_weighting', 'min_lexical_similarity_threshold'])
         fetch_top_k_results_from_whoosh = read_return['fetch_top_k_results_from_whoosh']
         whoosh_search_weighting = read_return['whoosh_search_weighting']
+        min_lexical_similarity_threshold = read_return['min_lexical_similarity_threshold']  # Like semantic search with ChromaDB, higher scores indicate better matches but the range with Whoosh is different!
     except Exception as e:
         handle_local_error("Missing whoosh_index_folder in config.json for method search_whoosh_index. Error: ", e)
 
@@ -746,27 +750,54 @@ def search_whoosh_index(query):
     except Exception as e:
         handle_local_error("Failed to get Whoosh Index Object, encountered error: ", e)
 
-    whoosh_weighting = scoring.BM25F()
+    whoosh_weighting = scoring.BM25F()  # Rough ranges: 0.0: No Match; 1-2: Weak Match; 3-5: Moderate Match; 6+: Strong Match
     if whoosh_search_weighting == "TF-IDF":
-        whoosh_weighting = scoring.TF_IDF()
+        whoosh_weighting = scoring.TF_IDF()  # Rough ranges: 0.0: No Match; 1-4: Weak Match; 5-10: Moderate Match; 10+: Strong Match
     
     try:
         with ix.searcher(weighting=whoosh_weighting) as searcher:
             query_parser = QueryParser("content", schema=ix.schema, group=OrGroup)
             parsed_query = query_parser.parse(query)
-            #print(f"parsed_query: {parsed_query}")
 
             results = searcher.search(parsed_query, limit=fetch_top_k_results_from_whoosh)
-            print(f"number of results: {len(results)}")
+            print(f"Whoosh Results: Number of results: {len(results)}")
 
-            # if no results, let's try a more lenient search:
-            if len(results) == 0:
+            # Filter by score threshold
+            filtered_results = [
+                {
+                    'content': result['content'],
+                    'source': result['source'],
+                    'page_number': result['page_number'],
+                    'score': result.score
+                }
+                for result in results
+                if result.score >= min_lexical_similarity_threshold
+            ]
+            print(f"Whoosh Results:Number of results after filtering by score threshold {min_lexical_similarity_threshold}: {len(filtered_results)}")
+
+            # If no results, let's try a more lenient search:
+            if len(filtered_results) == 0:
+                print("No lexical results found after filtering by score threshold, trying a more lenient search...")
                 terms = [Term("content", word) for word in query.lower().split()]
                 or_query = Or(terms)
-                results = searcher.search(or_query, limit=fetch_top_k_results_from_whoosh)
-                print(f"number of results after very lenient search: {len(results)}")
+                lenient_results = searcher.search(or_query, limit=fetch_top_k_results_from_whoosh)
+                print(f"number of results after very lenient search: {len(lenient_results)}")
+
+                filtered_results = [
+                    {
+                        'content': result['content'],
+                        'source': result['source'],
+                        'page_number': result['page_number'],
+                        'score': result.score
+                    }
+                    for result in lenient_results
+                    if result.score >= min_lexical_similarity_threshold
+                ]
+                print(f"Whoosh Results: Number of results after filtering by score threshold {min_lexical_similarity_threshold} in very lenient search: {len(filtered_results)}")
+
+            return filtered_results
             
-            return [{'content': result['content'], 'source': result['source'], 'page_number': result['page_number']} for result in results]
+            # return [{'content': result['content'], 'source': result['source'], 'page_number': result['page_number']} for result in results]
 
     except Exception as e:
         handle_error_no_return("Failed to search Whoosh Index, encountered error: ", e)
@@ -1987,16 +2018,17 @@ def graph_generator(chunks):
 def read_embeddings_config() -> tuple[str, str]:
     print("\n\nReading embeddings config\n\n")
     try:
-        read_return = read_config(['selected_embedding_model', 'chunk_size', 'chunk_overlap'])
+        read_return = read_config(['selected_embedding_model', 'chunk_size', 'chunk_overlap', 'perform_graph_rag'])
         selected_embedding_model = read_return['selected_embedding_model']
         chunk_sz = read_return['chunk_size']
         chunk_olp = read_return['chunk_overlap']
+        perform_graph_rag = read_return['perform_graph_rag']
     except Exception as e:
         handle_local_error("Missing values in config.json, could not read_embeddings_config. Error: ", e)
 
     path_to_knowledge_domain = get_path_to_knowledge_domain()
 
-    return selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp
+    return selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp, perform_graph_rag
 
 
 # Document vectorization and chunking
@@ -2005,7 +2037,7 @@ def whoosh_embed_and_graph_doc_chunks(input_file):
 
     # Read Embeddings Config
     try:
-        selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp = read_embeddings_config()
+        selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp, perform_graph_rag = read_embeddings_config()
     except Exception as e:
         handle_local_error("Could not read embeddings config, encountered error: ", e)
 
@@ -2022,10 +2054,11 @@ def whoosh_embed_and_graph_doc_chunks(input_file):
                 core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain)
             except Exception as e:
                 handle_error_no_return("Could not embed chunks, skipping and attempting graph generation. Encountered error: ", e)
-            try:
-                graph_generator(chunks)
-            except Exception as e:
-                handle_error_no_return("Could not graph chunks, skipping. Encountered error: ", e)
+            if perform_graph_rag:
+                try:
+                    graph_generator(chunks)
+                except Exception as e:
+                    handle_error_no_return("Could not graph chunks, skipping. Encountered error: ", e)
             print("Document added to knowledge domain.")
         else:
             print("No chunks generated, skipping indexing and embedding")
@@ -4654,6 +4687,8 @@ def handle_force_disabled_rag(local_llm_server:str, formatted_history_prompt:str
 def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results_from_vectordb: int):
     print("Searching vectorDB")
 
+    min_semantic_similarity_threshold = read_config(['min_semantic_similarity_threshold'])['min_semantic_similarity_threshold']
+
     path_to_knowledge_domain = get_path_to_knowledge_domain()
     vector_db_path = create_vector_db_directory(path_to_knowledge_domain, embedding_function)
 
@@ -4676,7 +4711,7 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
         # Perform the semantic search - 'results' is a dictionary with keys 'documents', 'metadatas', 'distances', whose values are lists of length = fetch_top_k_results_from_vectordb
         results = collection.query(
             query_embeddings=query_embedding.tolist(),  # Convert embeddings from NumPy arrays to list of lists
-            n_results=fetch_top_k_results_from_vectordb,
+            n_results=fetch_top_k_results_from_vectordb,    # top-k here implies the top from the matched set, regardless of the actual similarity score!
             include=["documents", "metadatas", "distances"]
         )
 
@@ -4694,7 +4729,10 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
                 results['metadatas'][0],
                 results['distances'][0]
             )
+            if distance >= min_semantic_similarity_threshold    # ChromaDB's score ranges from -1 (perfect dissimilarity) to 1 (perfect similarity), with 0.0 meaning no similarity.
         ]   # The zip() function combines multiple iterables (lists, tuples, etc.) element by element and helps iterate over multiple lists simultaneously
+
+        print(f"Result of Semantic Search: Found {len(docs_list_with_cosine_distance)} documents of {len(results['documents'][0])} with a minimum semantic similarity threshold of {min_semantic_similarity_threshold}")
         return docs_list_with_cosine_distance
     except Exception as e:
         handle_error_no_return("Could not perform similarity_search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
