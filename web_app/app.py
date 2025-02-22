@@ -375,6 +375,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                     'nvidia/NV-Embed-v2'
                 ],
                 'selected_embedding_model':'sentence-transformers/all-mpnet-base-v2',
+                'use_embedding_model_for_reranking':True,
                 'knowledge_domain_list':[
                     'General',
                     'Technical',
@@ -2011,7 +2012,7 @@ def read_embeddings_config() -> tuple[str, str]:
         selected_embedding_model = read_return['selected_embedding_model']
         chunk_sz = read_return['chunk_size']
         chunk_olp = read_return['chunk_overlap']
-        perform_graph_rag = read_return['perform_graph_rag']
+        perform_graph_rag = str(read_return['perform_graph_rag']).lower() == 'true'
     except Exception as e:
         handle_local_error("Missing values in config.json, could not read_embeddings_config. Error: ", e)
 
@@ -4152,12 +4153,25 @@ def filter_relevant_documents(query, search_results, threshold=1):
 
 
 def rerank_results_ml(query, documents, top_n=5):
-    print("\n\nReranking results with SBERT: all-MiniLM-L6-v2\n\n")
+    print("\n\nReranking Invoked\n\n")
+
+    try:
+        read_return = read_config(['use_embedding_model_for_reranking', 'selected_embedding_model'])
+        use_embedding_model_for_reranking = str(read_return['use_embedding_model_for_reranking']).lower() == 'true'
+        selected_embedding_model = str(read_return['selected_embedding_model'])
+    except Exception as e:
+        use_embedding_model_for_reranking = True
+        handle_error_no_return("Could not read use_embedding_model_for_reranking or selected_embedding_model from config.json proceeding to re-use embedding model for reranking. Encountered error: ", e)
+
+    if not use_embedding_model_for_reranking:
+        selected_embedding_model = 'all-MiniLM-L6-v2'
+
+    print(f"\n\nSelected embedding model for reranking: {selected_embedding_model}\n\n")
 
     model = None
     try:
         # Load pre-trained SBERT model
-        model = SentenceTransformer('all-MiniLM-L6-v2')
+        model = SentenceTransformer(selected_embedding_model)
         
         # Encode the query
         query_embedding = model.encode(query, convert_to_tensor=True)
@@ -4193,9 +4207,9 @@ def rerank_results_ml(query, documents, top_n=5):
         # Reorder the original documents based on the sorted indexes
         ranked_documents = [documents[idx] for idx, _ in sorted_indexes[:top_n]]
 
-        print(f"\n\nReturning Top {len(ranked_documents)} Ranked Documents: {ranked_documents}\n\n")
+        # print(f"\n\nReturning Top {len(ranked_documents)} Ranked Documents: {ranked_documents}\n\n")
     
-        return ranked_documents
+        return ranked_documents[::-1]   #Slice to reverse the list, as `.reverse()` would return None because it creates an inplace change on the original list without returning anything
     except Exception as e:
         handle_local_error("Could not reorder documents, encountered error: ", e)
         return [doc.page_content for doc in documents]
@@ -4612,7 +4626,7 @@ def get_full_prompt_for_server(local_llm_server: str, formatted_history_prompt: 
         formatted_updated_prompt = format_prompt_for_hf_waitress(formatted_history_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
     elif local_llm_server == 'hfw-vision':
         formatted_updated_prompt = format_prompt_for_hf_waitress(formatted_history_prompt, user_query, current_sequence_id, "", True)  # No base_template for hfw-vision
-    print("Returning formatted_prompt: ", formatted_updated_prompt)
+    # print("Returning formatted_prompt: ", formatted_updated_prompt)
     return formatted_updated_prompt
 
 
@@ -4761,7 +4775,9 @@ def search_knowledge_base(user_query:str, embedding_function:str, force_enable_r
         do_rag = False
         return [], do_rag
 
+    print(f"\n\nContext docs prior to reranking: {combined_docs}\n\n")
     docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
+    print(f"\n\nContext docs after reranking: {docs}\n\n")
     do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
 
     return docs, do_rag
