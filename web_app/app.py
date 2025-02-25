@@ -1662,18 +1662,20 @@ def get_graphing_request_payload(chunk, exl2_quantize_graph_model):
     return payload
 
 
-def graphing_request_response_handler(grapher_url, headers, payload):
+def hf_waitress_non_streaming_request_response_handler(endpoint_url, headers, payload):
+    print(f"\nHF-Waitress Non-Streaming Request Response Handler Invoked\n")
     try:
-        response = requests.post(grapher_url, headers=headers, data=payload)
-        print(f"\nResponse (Entities and Relationships): {response.json()}\n")
-        return ast.literal_eval(response.json()['response'])
+        response = requests.post(endpoint_url, headers=headers, data=payload)
+        print("\nCompleted, returning response\n")
+        return (response.json()['response'])
     except Exception as e:
         return handle_local_error("Failed /completions request to extract entities and relationships from chunk, encountered error: ", e)
 
 
-def exl2_graphing_request_response_handler(grapher_url, headers, payload):
+def hf_waitress_streaming_request_response_handler(endpoint_url, headers, payload):
+    print(f"\nHF-Waitress Streaming Request Response Handler Invoked\n")
     try:
-        response = requests.post(grapher_url, headers=headers, data=payload, stream=True)
+        response = requests.post(endpoint_url, headers=headers, data=payload, stream=True)
         response.raise_for_status()  # Raise an exception for bad status codes so we can catch them in the except block
 
         full_response = ""
@@ -1684,7 +1686,7 @@ def exl2_graphing_request_response_handler(grapher_url, headers, payload):
                     try:
                         token = str(json.loads(event_data))
                         full_response += token
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as e:
                         handle_error_no_return(f"Failed to parse event data: {event_data}, encountered error: ", e)
                 elif line.startswith("event: END"):
                     break
@@ -1695,19 +1697,61 @@ def exl2_graphing_request_response_handler(grapher_url, headers, payload):
             print("\nWarning: No response from exl2_stream request\n")
             return None
 
-        print(f"\nExl2 Response (Entities and Relationships): {full_response}\n")
+        print("\nCompleted, returning response\n")
+        return full_response
+        
+    except Exception as e:
+        return handle_local_error("Failed /exl2_stream request to extract entities and relationships from chunk, encountered error: ", e)
+
+
+def graphing_request_response_handler(grapher_url, headers, payload):
+    print(f"\nHF-Waitress Non-Streaming Graphing-Request Response Handler Invoked\n")
+    try:
+        response = hf_waitress_non_streaming_request_response_handler(grapher_url, headers, payload)
+        print(f"\nResponse (Entities and Relationships): {response}\n")
+        return ast.literal_eval(response)
+    except Exception as e:
+        return handle_local_error("Failed /completions request to extract entities and relationships from chunk, encountered error: ", e)
+
+
+def trim_response(response, start_substring, end_substring, include_start_substring=False, include_end_substring=False):
+    try:
+        if start_substring in response and end_substring in response:
+            start_index = response.rindex(start_substring)  # Sometimes the model re-gurgitates multiple copies of the same dict in it's response
+            end_index = response.rindex(end_substring) # rindex() returns the index of the last occurrence of the substring
+            
+            if not include_start_substring:
+                start_index += len(start_substring)
+            if include_end_substring: end_index += 1
+            
+            response = response[start_index:end_index]
+           
+            print(f"\nTrimmed response: {response}\n")
+            return response
+        else:
+            print(f"\nResponse does not contain start_substring: {start_substring} or end_substring: {end_substring}, returning unchanged response: {response}\n")
+            return response
+    except Exception as e:
+        handle_error_no_return("Failed to trim response, encountered error: ", e)
+        return response
+
+
+def exl2_graphing_request_response_handler(grapher_url, headers, payload):
+    print(f"\nHF-Waitress Streaming Graphing-Request Response Handler Invoked\n")
+    try:
+        full_response = hf_waitress_streaming_request_response_handler(grapher_url, headers, payload)
+        print(f"\nExl2 Graphing Response (Entities and Relationships): {full_response}\n")
 
         try:
             return ast.literal_eval(full_response)
         except (ValueError, SyntaxError):
             # Sometimes additional text may be present so we need to strip it:
-            if '{"nodes":' in full_response and '}' in full_response:
-                dict_start = full_response.rindex('{"nodes":')  # Sometimes the model re-gurgitates multiple copies of the same dict in it's response
-                dict_end = full_response.rindex('}') + 1 # rindex() returns the index of the last occurrence of the substring
-                full_response = full_response[dict_start:dict_end]
-                print(f"\nTrimmed response to dictionary: {full_response}\n")
+            full_response = trim_response(full_response, '{"nodes":', '}', include_start_substring=True, include_end_substring=True)
+            print(f"\nTrimmed response to dictionary: {full_response}\n")
+            try:
                 return ast.literal_eval(full_response)
-            raise # Re-raise the original exception if we can't parse the response as a dictionary
+            except (ValueError, SyntaxError):
+                raise # Re-raise the original exception if the second attempt also fails
         
     except Exception as e:
         return handle_local_error("Failed /exl2_stream request to extract entities and relationships from chunk, encountered error: ", e)
@@ -1754,6 +1798,163 @@ def sanitize_names(name):
     return sanitized
 
 
+def check_node_and_get_summary(graph, name, node_type):
+    #TODO: Check if node {node_name} exists in the graph and if so, try to obtain the existing Summary. If the node or summary does not exist, set summary=""
+    print(f"\nChecking if summary for node {name} of type {node_type} exists in graph\n")
+
+    try:
+        node_name = sanitize_names(name)
+
+        query = f"""
+            MATCH (n:{node_name} {{name: '%s', type: '%s'}})
+            RETURN n.summary AS summary
+        """ % (name.replace("'", ""), node_type.replace("'", ""))
+
+        result = graph.query(query)
+        # print(f"\nSummary-Check Result: {result}\n")
+
+        # Access the result data properly based on FalkorDB's QueryResult structure
+        if hasattr(result, 'result_set') and result.result_set:
+            print("\nExtracting summary from result\n")
+            for record in result.result_set:
+                if record and 'summary' in record:
+                    summary = record['summary']
+                    if summary is not None and summary != "":
+                        return summary
+
+        # If no summary is found, return an empty string:
+        return ""
+
+    except Exception as e:
+        handle_error_no_return(f"Could not check if node {name} of type {node_type} exists in graph, returning empty string. Encountered error: ", e)
+        return ""
+
+
+def get_request_params_for_local_llm_server(formatted_prompt=""):
+    try:
+        read_return = read_config(['local_llm_server', 'hf_waitress_access_url', 'hf_waitress_server_port', 'llama_cpp_access_url', 'llama_cpp_server_port', 'local_llm_temperature', 'local_llm_top_k', 'local_llm_top_p', 'local_llm_min_p'])
+    except Exception as e:
+        return handle_local_error("Could not read request params from config.json, encountered error: ", e)
+
+    headers = {'Content-Type': 'application/json'}
+
+    if read_return['local_llm_server'] == 'hf-waitress':
+
+        try:
+            read_hf_return = read_hf_config(['exl2', 'max_new_tokens', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p'])
+        except Exception as e:
+            return handle_local_error("Could not read hf-waitress config, encountered error: ", e)
+
+        exl2 = str(read_hf_return['exl2']).lower() == 'true'
+        
+        headers['X-Max-New-Tokens'] = str(read_hf_return['max_new_tokens'])
+        headers['X-Temperature'] = str(read_hf_return['temperature'])
+        headers['X-Top-K'] = str(read_hf_return['top_k'])
+        headers['X-Top-P'] = str(read_hf_return['top_p'])
+        headers['X-Min-P'] = str(read_hf_return['min_p'])
+        
+        base_url = f"http://{read_return['hf_waitress_access_url']}:{read_return['hf_waitress_server_port']}"
+        
+        payload = formatted_prompt
+        
+        if not exl2:
+            headers['X-Return-Full-Text'] = 'False'
+            headers['X-Do-Sample'] = str(read_hf_return['do_sample'])
+            endpoint_url = f"{base_url}/completions"
+        else:
+            payload = json.dumps(formatted_prompt)
+            headers['Connection'] = 'keep-alive'
+            endpoint_url = f"{base_url}/exl2_stream"
+    
+    else:
+        payload = {
+            'prompt': formatted_prompt,
+            'temperature': read_return['local_llm_temperature'],
+            'top_k': read_return['local_llm_top_k'],
+            'top_p': read_return['local_llm_top_p'],
+            'min_p': read_return['local_llm_min_p']
+        }
+
+        endpoint_url = f"http://{read_return['llama_cpp_access_url']}:{read_return['llama_cpp_server_port']}/completion"
+
+    return endpoint_url, headers, payload, exl2
+
+
+
+def get_user_query_for_node_summary(name, node_type, summary, chunk):
+
+    if summary == "":
+        return f"""You are helping to populate a knowledge graph database by creating metadata summaries for nodes.
+        
+        Task: Generate a concise, informative summary (150-200 words) for the following graph node based on the provided text chunk. The summary should capture the core information about this node as represented in the text and be written in a factual tone.
+
+        Node: {{"type": "{node_type}", "name": "{name}"}}
+        
+        <text_chunk>
+        {chunk}
+        </text_chunk>
+
+        Output format:
+        {{
+            "summary": "Your concise summary here"
+        }}
+        """
+
+    else:
+        return f"""You are helping to maintain a knowledge graph database by updating node summaries when new information becomes available.
+        
+        Task: Review the existing summary for this node and update it based on the new text chunk provided. Incorporate any new relevant information while maintaining a concise length (250 - 300 words). Keep the factual tone of the original summary.
+
+        Node: {{"type": "{node_type}", "name": "{name}"}}
+
+        Existing Summary: {{"summary": "{summary}"}}
+
+        <text_chunk>
+        {chunk}
+        </text_chunk>
+
+        Output format:
+        {{
+            "summary": "Your updated summary here"
+        }}
+
+        """
+
+
+def generate_summary_for_node(chunk, name, node_type, summary):
+    print(f"\nGenerating summary for node {name} of type {node_type}\n")
+
+    local_llm_server = read_config(['local_llm_server'])['local_llm_server']
+    local_llm_chat_template_format = read_config(['local_llm_chat_template_format'])['local_llm_chat_template_format']
+
+    user_query = get_user_query_for_node_summary(name, node_type, summary, chunk)
+
+    if local_llm_server == 'hf-waitress':
+        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt="", user_query=user_query, current_sequence_id=0, base_template="", skip_system_prompt=True)
+    else:
+        formatted_prompt = format_prompt_for_llama_cpp(formatted_prompt="", user_query=user_query, current_sequence_id=0, base_template="", local_llm_chat_template_format=local_llm_chat_template_format, skip_system_prompt=True)
+
+    endpoint_url, headers, payload, exl2 = get_request_params_for_local_llm_server(formatted_prompt)
+
+    # print(f"\nProceeding with request to {local_llm_server} at url: {endpoint_url} with payload: {payload} and headers: {headers}\n")
+
+    try:
+        if local_llm_server == 'hf-waitress':
+            if exl2:
+                response = hf_waitress_streaming_request_response_handler(endpoint_url, headers, payload)
+            else:
+                response = hf_waitress_non_streaming_request_response_handler(endpoint_url, headers, payload)
+
+            print(f"\nGenerated summary for node {name} of type {node_type}: {response}\n")
+
+            return trim_response(response, '"summary":', '}')
+
+        else:   # TODO: response handler for local_llm_server == 'llama-cpp'
+            pass
+    except Exception as e:
+        return handle_local_error("Could not generate summary for node, encountered error: ", e)
+
+
 def store_chunk_in_graph_db(chunk):
     selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']
     
@@ -1779,9 +1980,17 @@ def store_chunk_in_graph_db(chunk):
             name = str(node['name'])
             node_type = str(node['type'])
             node_name = sanitize_names(name)
+
+            existing_summary = check_node_and_get_summary(graph, name, node_type)
+
+            print(f"\nExisting Summary: {existing_summary}\n")
+
+            updated_summary = generate_summary_for_node(chunk, name, node_type, existing_summary)
+
+            print(f"\nUpdated Summary: {updated_summary}\n")
             
             # MERGE instead of CREATE as it will either match an existing node or create a new one if it doesn't exist:
-            graph.query(f"""MERGE (:{node_name} {{name:'%s', type:'%s'}})""" % (name.replace("'", ""), node_type.replace("'", "")))   # Select all Nodes in the GraphDB with Cypher Query: `MATCH (n) RETURN n`
+            graph.query(f"""MERGE (:{node_name} {{name:'%s', type:'%s', summary:'%s'}})""" % (name.replace("'", ""), node_type.replace("'", ""), updated_summary.replace("'", "")))   # Select all Nodes in the GraphDB with Cypher Query: `MATCH (n) RETURN n`
             
             print(f"Created node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB")
         except Exception as e:
@@ -4273,27 +4482,33 @@ def get_formatted_prompt_from_history_db(chat_id, sequence_id):
     return formatted_prompt
 
 
-def format_prompt_for_llama_cpp(formatted_prompt:str, user_query:str, current_sequence_id:int, base_template:str, local_llm_chat_template_format:str) -> str:
+def format_prompt_for_llama_cpp(formatted_prompt:str, user_query:str, current_sequence_id:int, base_template:str, local_llm_chat_template_format:str, skip_system_prompt=False) -> str:
 
     print("\n\nFormatting prompt for llama-cpp\n\n")
+
+    if skip_system_prompt:
+        base_template = ""
 
     if local_llm_chat_template_format == 'llama3':
 
         if current_sequence_id > 0:
             formatted_prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{user_query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
         else:
-            formatted_prompt += f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{base_template}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{user_query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+            if skip_system_prompt:
+                formatted_prompt += f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n{user_query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+            else:
+                formatted_prompt += f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{base_template}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{user_query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
 
     elif local_llm_chat_template_format == 'llama2':
 
-        if current_sequence_id > 0:
+        if current_sequence_id > 0 or skip_system_prompt:
             formatted_prompt += f"<s>[INST] {user_query} [/INST] "
         else:
             formatted_prompt += f"<s>[INST] <<SYS>>\n {base_template} \n<</SYS>>\n\n {user_query}  [/INST] "
 
     elif local_llm_chat_template_format == 'chatml':
         
-        if current_sequence_id > 0:
+        if current_sequence_id > 0 or skip_system_prompt:
             formatted_prompt += f"<|im_start|>user\n{user_query}<|im_end|>\n<|im_start|>assistant\n"
         else:
             formatted_prompt += f"<|im_start|>system\n{base_template}<|im_end|>\n<|im_start|>user\n{user_query}<|im_end|>\n<|im_start|>assistant\n"
@@ -4307,28 +4522,28 @@ def format_prompt_for_llama_cpp(formatted_prompt:str, user_query:str, current_se
 
     elif local_llm_chat_template_format == 'phi3':
 
-        if current_sequence_id > 0:
+        if current_sequence_id > 0 or skip_system_prompt:
             formatted_prompt += f"<|user|>\n{user_query}<|end|>\n<|assistant|>\n"
         else:
             formatted_prompt += f"<|system|>\n{base_template}<|end|>\n<|user|>\n{user_query}<|end|>\n<|assistant|>\n"
 
     elif local_llm_chat_template_format == 'phi4':
         
-        if current_sequence_id > 0:
+        if current_sequence_id > 0 or skip_system_prompt:
             formatted_prompt += f"<|im_start|>user<|im_sep|>\n{user_query}<|im_end|>\n<|im_start|>assistant<|im_sep|>\n"
         else:
             formatted_prompt += f"<|im_start|>system<|im_sep|>\n{base_template}<|im_end|>\n<|im_start|>user<|im_sep|>\n{user_query}<|im_end|>\n<|im_start|>assistant<|im_sep|>\n"
 
     elif local_llm_chat_template_format == 'command-r':
 
-        if current_sequence_id > 0:
+        if current_sequence_id > 0 or skip_system_prompt:
             formatted_prompt += f"<|START_OF_TURN_TOKEN|><|USER_TOKEN|>{user_query}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
         else:
             formatted_prompt += f"<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>{base_template}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>{user_query}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
 
     elif local_llm_chat_template_format == 'deepseek':
         
-        if current_sequence_id > 0:
+        if current_sequence_id > 0 or skip_system_prompt:
             formatted_prompt += f"### Instruction:\n{user_query}\n### Response:\n"
         else:
             formatted_prompt += f"{base_template}### Instruction:\n{user_query}\n### Response:\n"
@@ -4342,21 +4557,21 @@ def format_prompt_for_llama_cpp(formatted_prompt:str, user_query:str, current_se
 
     elif local_llm_chat_template_format == 'vicuna':
 
-        if current_sequence_id > 0:
+        if current_sequence_id > 0 or skip_system_prompt:
             formatted_prompt += f"USER: {user_query}\nASSISTANT: "
         else:
             formatted_prompt += f"{base_template}\n\nUSER: {user_query}\nASSISTANT: "
 
     elif local_llm_chat_template_format == 'openchat':
 
-        if current_sequence_id > 0:
+        if current_sequence_id > 0 or skip_system_prompt:
             formatted_prompt += f"GPT4 Correct User: {user_query}<|end_of_turn|>GPT4 Correct Assistant: "
         else:
             formatted_prompt += f"<s>GPT4 Correct System: {base_template}<|end_of_turn|>GPT4 Correct User: {user_query}<|end_of_turn|>GPT4 Correct Assistant: "
 
     elif local_llm_chat_template_format == 'gemma2':
 
-        if current_sequence_id > 0:
+        if current_sequence_id > 0 or skip_system_prompt:
             formatted_prompt += f"<start_of_turn>user\n{user_query}<end_of_turn>\n<start_of_turn>model\n"
         else:
             formatted_prompt += f"<start_of_turn>user\n{base_template}\n{user_query}<end_of_turn>\n<start_of_turn>model\n"
@@ -4376,14 +4591,14 @@ def format_prompt_for_llama_cpp(formatted_prompt:str, user_query:str, current_se
 
     elif local_llm_chat_template_format == 'mistral-large-v7':
 
-        if current_sequence_id > 0:
+        if current_sequence_id > 0 or skip_system_prompt:
             formatted_prompt += f"<s>[INST] {user_query}[/INST] "
         else:
             formatted_prompt  += f"<s>[SYSTEM_PROMPT] {base_template}[/SYSTEM_PROMPT][INST] {user_query}[/INST] "
 
     elif local_llm_chat_template_format == 'raw':
 
-        if current_sequence_id > 0:
+        if current_sequence_id > 0 or skip_system_prompt:
             formatted_prompt += f"User: {user_query}\nAssistant: "
         else:
             formatted_prompt += f"{base_template}\nUser: {user_query}\nAssistant: "
@@ -4412,7 +4627,7 @@ def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_
         handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
 
     if exl2:
-        return(format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_id, base_template, exl2_prompt_template_format))
+        return(format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_id, base_template, exl2_prompt_template_format, skip_system_prompt))
 
     try:
     
@@ -4518,6 +4733,7 @@ def get_session_id_and_vector_key() -> tuple[str, str]:
     key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
     return stream_session_id, key_for_vector_results
 
+
 def read_config_for_setup_for_local_llm_response() -> dict:
     read_return = read_config([
         'local_llm_server',
@@ -4621,7 +4837,7 @@ def read_request_data_for_response_setup(request: Request) -> tuple[str, str, st
 
 def get_full_prompt_for_server(local_llm_server: str, formatted_history_prompt: str, user_query: str, current_sequence_id: int, base_template: str, local_llm_chat_template_format: str, skip_system_prompt: bool) -> str:
     if local_llm_server == 'llama-cpp':
-        formatted_updated_prompt = format_prompt_for_llama_cpp(formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format)
+        formatted_updated_prompt = format_prompt_for_llama_cpp(formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
     elif local_llm_server == 'hf-waitress':
         formatted_updated_prompt = format_prompt_for_hf_waitress(formatted_history_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
     elif local_llm_server == 'hfw-vision':
