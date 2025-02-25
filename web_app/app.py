@@ -1809,6 +1809,8 @@ def check_node_and_get_summary(graph, name, node_type):
             MATCH (n:{node_name} {{name: '%s', type: '%s'}})
             RETURN n.summary AS summary
         """ % (name.replace("'", ""), node_type.replace("'", ""))
+        # Eg: MATCH (n:intel {name: 'Intel', type: 'organization'}) RETURN n.summary AS summary
+        # MATCH (n:intel_foundry {name: 'Intel Foundry', type: 'object'}) RETURN n.summary AS summary
 
         result = graph.query(query)
         # print(f"\nSummary-Check Result: {result}\n")
