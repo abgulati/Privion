@@ -2216,7 +2216,7 @@ def graph_generator(chunks):
         chunks_in_storage_queue = []
         
         for count, chunk in enumerate(chunks):
-            graphing_chunk += str(chunk['content'])
+            graphing_chunk += re.sub(r'\[PAGE:\d+\]', '', str(chunk['content'])) #RegEx replace '[PAGE:<number>]' with ''
             chunks_in_storage_queue.append(count)
 
             if len(graphing_chunk) > graph_chunk_size:
