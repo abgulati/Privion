@@ -1724,9 +1724,7 @@ def trim_response(response, start_substring, end_substring, include_start_substr
                 start_index += len(start_substring)
             if include_end_substring: end_index += 1
             
-            response = response[start_index:end_index]
-           
-            print(f"\nTrimmed response: {response}\n")
+            response = response[start_index:end_index]           
             return response
         else:
             print(f"\nResponse does not contain start_substring: {start_substring} or end_substring: {end_substring}, returning unchanged response: {response}\n")
@@ -1947,8 +1945,6 @@ def generate_summary_for_node(chunk, name, node_type, summary):
             else:
                 response = hf_waitress_non_streaming_request_response_handler(endpoint_url, headers, payload)
 
-            print(f"\nGenerated summary for node {name} of type {node_type}: {response}\n")
-
             return trim_response(response, '"summary":', '}')
 
         else:   # TODO: response handler for local_llm_server == 'llama-cpp'
@@ -1970,19 +1966,29 @@ def store_chunk_in_graph_db(chunk):
     try:
         entities_and_relationships = extract_entities_and_relationships(chunk)
     except Exception as e:
-        return handle_local_error("Could not extract entities and relationships from chunk, encountered error: ", e)
+        handle_error_no_return("Could not extract entities and relationships from chunk, encountered error: ", e)
+        return False
 
     if entities_and_relationships is None or entities_and_relationships == {}:
         print(f"No entities or relationships found in chunk, skipping storage to {selected_knowledge_domain} graph DB")
         return False
+    
+    # Initialize tracking dicts: We only track duplicates within a chunk as we want to update the summary if a node or relationship is found in other chunks from the same document.
+    processed_nodes = {}    # Format: {(name, node_type): True}
+    processed_relationships = {}    # Format: {(source, target, relationship): True}
 
     print(f"\nStoring entities and relationships to {selected_knowledge_domain} graph DB\n")
     for node in entities_and_relationships['nodes']:
         try:
             name = str(node['name'])
             node_type = str(node['type'])
-            node_name = sanitize_names(name)
+            node_key = (name, node_type)
 
+            if node_key in processed_nodes:
+                print(f"Skipping duplicate node {name} of type {node_type} in {selected_knowledge_domain} graph DB")
+                continue
+
+            node_name = sanitize_names(name)
             existing_summary = check_node_and_get_summary(graph, name, node_type)
 
             print(f"\nExisting Summary: {existing_summary}\n")
@@ -1992,7 +1998,11 @@ def store_chunk_in_graph_db(chunk):
             print(f"\nUpdated Summary: {updated_summary}\n")
             
             # MERGE instead of CREATE as it will either match an existing node or create a new one if it doesn't exist:
-            graph.query(f"""MERGE (:{node_name} {{name:'%s', type:'%s', summary:'%s'}})""" % (name.replace("'", ""), node_type.replace("'", ""), updated_summary.replace("'", "")))   # Select all Nodes in the GraphDB with Cypher Query: `MATCH (n) RETURN n`
+            graph.query(f"""MERGE (:{node_name} {{name:'%s', type:'%s', summary:'%s'}})""" % (name.replace("'", ""), node_type.replace("'", ""), updated_summary.replace("'", "")))
+            # Select all Nodes in the GraphDB with Cypher Query: `MATCH (n) RETURN n`
+            
+            # Mark node as processed:
+            processed_nodes[node_key] = True
             
             print(f"Created node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB")
         except Exception as e:
@@ -2000,6 +2010,12 @@ def store_chunk_in_graph_db(chunk):
 
     for relationship in entities_and_relationships['relationships']:
         try:
+            relationship_key = (relationship['source'], relationship['target'], relationship['relationship'])
+
+            if relationship_key in processed_relationships:
+                print(f"Skipping duplicate relationship {relationship['source']} -> {relationship['target']} ({relationship['relationship']}) in {selected_knowledge_domain} graph DB")
+                continue
+
             source = sanitize_names(relationship['source'])
             target = sanitize_names(relationship['target'])
             relationship_type = sanitize_names(relationship['relationship']).upper()
@@ -2012,11 +2028,15 @@ def store_chunk_in_graph_db(chunk):
             """ % (relationship['source'].replace("'", ""), relationship['target'].replace("'", "")))
             # We don't want to use the sanitized names as both labels and property values
             # Select all Relationships in the GraphDB with Cypher Query: `MATCH (n)-[r]->(m) RETURN n,r,m`
+
+            # Mark relationship as processed:
+            processed_relationships[relationship_key] = True
             
             print(f"Created relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB")
         except Exception as e:
             handle_error_no_return(f"Could not create relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
 
+    print(f"\nSuccessfully processed {len(entities_and_relationships['nodes'])} nodes and {len(entities_and_relationships['relationships'])} relationships for {selected_knowledge_domain} GraphDB\n")
     return True
 
 
@@ -2174,18 +2194,23 @@ def graph_generator(chunks):
     try:
         bring_graph_db_online()
         bring_graphing_model_online()
+        # Future TODO: Launch Graphing Model and Summarizer LLM as independent threads here instead of in `store_chunk_in_graph_db()`. Requires minimum two GPUs.
+        # `graph_generator` method which would place chunks in a FIFO queue serving as input to graphing model which in turn would output to a different queue that serves as a FIFO input to our summarization LLM.
+        # Will need to use dicts for tracking:
+        # chunk_entities = {
+        #     '<chunk_number>': {
+        #         '<entities_and_relationships>': '<node_relationships_dict>',    #eg: {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"}], "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"}]},
+        #         '<chunk_text>': '<text>',
+        #         '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
+        #         '<source_doc_name>': '<name>'
+        #     }
+        # }
+        # graph_generator would create the base `chunk_entities` dict (everything above except for the `entities_and_relationships` key), graphing model will process each `chunk_number` adding the `entities_and_relationships` key, resulting dict above will be input to the summarization LLM
+        # which will iterate through each chunk_number's 'nodes' and 'relationships' keys to generate the summary for that chunk basis `chunk_text`
     except Exception as e:
         return handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
 
-    # try:
-    #     for count, chunk in enumerate(chunks):
-    #         print(f"\n\Storing chunk {count} of {len(chunks)} in graph DB\n\n")
-    #         store_chunk_in_graph_db(chunk['content'])
-    # except Exception as e:
-    #     handle_error_no_return("Could not store chunks in graph DB, encountered error: ", e)
-
-    # Generate Graph
-    try:
+    try:        # Generate Graph
         graph_chunk_size = read_config(['graph_chunk_size'])['graph_chunk_size']
         graphing_chunk = ""
         chunks_in_storage_queue = []
