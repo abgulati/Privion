@@ -324,7 +324,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'graph_model_top_k':40,
                 'graph_model_top_p':0.95,
                 'graph_model_min_p':0.05,
-                'skip_summary_generation':True,
+                'skip_summary_generation':False,
                 'base_template': (
                             "You are a helpful assistant deployed in a Retrieval Augmented Generation (RAG) system.\n"
                             "Your task is to evaluate retrieved contextual data to answer users' questions accurately and in detail.\n\n"
