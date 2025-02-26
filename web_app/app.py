@@ -56,6 +56,8 @@ from whoosh import scoring
 
 from waitress import serve
 
+from graph_clustering import apply_leiden_clustering
+
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Allow insecure traffic - Needed to bypass HTTPS requirement for Google Drive OAuth. FOR DEV USE ONLY! SWITCH TO SELF-SIGNED CERTIFICATES & HTTPS FOR PRODUCTION!
 
 app = Flask(__name__)
@@ -322,6 +324,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'graph_model_top_k':40,
                 'graph_model_top_p':0.95,
                 'graph_model_min_p':0.05,
+                'skip_summary_generation':True,
                 'base_template': (
                             "You are a helpful assistant deployed in a Retrieval Augmented Generation (RAG) system.\n"
                             "Your task is to evaluate retrieved contextual data to answer users' questions accurately and in detail.\n\n"
@@ -1955,6 +1958,7 @@ def generate_summary_for_node(chunk, name, node_type, summary):
 
 def store_chunk_in_graph_db(chunk):
     selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']
+    skip_summary_generation = read_config(['skip_summary_generation'])['skip_summary_generation']
     
     client = get_graph_db_client()
     
@@ -1989,13 +1993,18 @@ def store_chunk_in_graph_db(chunk):
                 continue
 
             node_name = sanitize_names(name)
-            existing_summary = check_node_and_get_summary(graph, name, node_type)
 
-            print(f"\nExisting Summary: {existing_summary}\n")
+            if not skip_summary_generation:
+                existing_summary = check_node_and_get_summary(graph, name, node_type)
 
-            updated_summary = generate_summary_for_node(chunk, name, node_type, existing_summary)
+                print(f"\nExisting Summary: {existing_summary}\n")
 
-            print(f"\nUpdated Summary: {updated_summary}\n")
+                updated_summary = generate_summary_for_node(chunk, name, node_type, existing_summary)
+
+                print(f"\nUpdated Summary: {updated_summary}\n")
+            else:
+                updated_summary = ""
+                print(f"Skipping summary generation for node {name} of type {node_type} in {selected_knowledge_domain} graph DB")
             
             # MERGE instead of CREATE as it will either match an existing node or create a new one if it doesn't exist:
             graph.query(f"""MERGE (:{node_name} {{name:'%s', type:'%s', summary:'%s'}})""" % (name.replace("'", ""), node_type.replace("'", ""), updated_summary.replace("'", "")))
@@ -2237,6 +2246,14 @@ def graph_generator(chunks):
             
     except Exception as e:
         handle_error_no_return("Could not graph chunks, encountered error: ", e)
+
+    try:
+        print("\n\nApplying Leiden clustering to the graph...\n\n")
+        client = get_graph_db_client()
+        selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']
+        apply_leiden_clustering(client, str(selected_knowledge_domain))
+    except Exception as e:
+        handle_error_no_return("Could not apply Leiden clustering to the graph, encountered error: ", e)
 
     return True
 
