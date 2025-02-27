@@ -263,7 +263,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'transformer_models_folder':base_directory + '/transformer_models',
                     'access_gated':False,
                     'access_token':"",
-                    'model_id':"microsoft/Phi-3-mini-4k-instruct",
+                    'model_id':"Qwen/Qwen2.5-1.5B-Instruct",
                     'exl2':False,
                     'exl2_bpw':3.0,
                     'exl2_cache_type':"ExLlamaV2Cache",
@@ -277,8 +277,8 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'vision':False,
                     'gguf_model_id':None,
                     'gguf_filename':None,
-                    'quantize':"n",
-                    'quant_level':"int4",
+                    'quantize':"quanto",
+                    'quant_level':"int8",
                     'hqq_group_size':64,
                     'push_to_hub':False,
                     'torch_device_map':"auto", 
@@ -286,7 +286,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'trust_remote_code':True, 
                     'use_flash_attention_2':False, 
                     'pipeline_task':"text-generation", 
-                    'max_new_tokens':500, 
+                    'max_new_tokens':700, 
                     'return_full_text':False, 
                     'temperature':0.0,
                     'do_sample':False, 
@@ -1284,7 +1284,7 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
     return quantized_model_path
 
 
-def get_exl2_cache_type(exl2_cache_type: str) -> ExLlamaV2Cache:
+def get_exl2_cache_type(exl2_cache_type: str):  #  -> ExLlamaV2Cache; commenting out as it will cause the server to error out if ExLlamaV2 is not installed!
     print(f"\nDetermining ExLlamaV2 cache type for {exl2_cache_type}...\n")
     try:
         if exl2_cache_type == "c8":
@@ -1301,7 +1301,7 @@ def get_exl2_cache_type(exl2_cache_type: str) -> ExLlamaV2Cache:
         return handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
 
 
-def define_exllama_generator(quantized_model_path: os.PathLike) -> ExLlamaV2DynamicGenerator:
+def define_exllama_generator(quantized_model_path: os.PathLike):    # -> ExLlamaV2DynamicGenerator: commenting out as it will cause the server to error out if ExLlamaV2 is not installed!
     print(f"\n\nAttempting to define ExLlamaV2 generator for model {quantized_model_path}...\n\n")
 
     try:
