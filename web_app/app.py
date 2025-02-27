@@ -1800,7 +1800,6 @@ def sanitize_names(name):
 
 
 def check_node_and_get_summary(graph, name, node_type):
-    #TODO: Check if node {node_name} exists in the graph and if so, try to obtain the existing Summary. If the node or summary does not exist, set summary=""
     print(f"\nChecking if summary for node {name} of type {node_type} exists in graph\n")
 
     try:
@@ -1810,26 +1809,40 @@ def check_node_and_get_summary(graph, name, node_type):
             MATCH (n:{node_name} {{name: '%s', type: '%s'}})
             RETURN n.summary AS summary
         """ % (name.replace("'", ""), node_type.replace("'", ""))
-        # Eg: MATCH (n:intel {name: 'Intel', type: 'organization'}) RETURN n.summary AS summary
-        # MATCH (n:intel_foundry {name: 'Intel Foundry', type: 'object'}) RETURN n.summary AS summary
 
         result = graph.query(query)
-        # print(f"\nSummary-Check Result: {result}\n")
-
-        # Access the result data properly based on FalkorDB's QueryResult structure
+        
         if hasattr(result, 'result_set') and result.result_set:
-            print("\nExtracting summary from result\n")
-            for record in result.result_set:
-                if record and 'summary' in record:
-                    summary = record['summary']
-                    if summary is not None and summary != "":
-                        return summary
-
-        # If no summary is found, return an empty string:
-        return ""
+            return result.result_set[0][0]
+        else:
+            return ""   # If no summary is found, return an empty string:
 
     except Exception as e:
         handle_error_no_return(f"Could not check if node {name} of type {node_type} exists in graph, returning empty string. Encountered error: ", e)
+        return ""
+
+
+def check_relationship_and_get_summary(graph, source, target, relationship_type):
+    print(f"\nChecking if summary for relationship {source} -> {target} ({relationship_type}) exists in graph\n")
+
+    source_label = sanitize_names(source)
+    target_label = sanitize_names(target)
+
+    try:
+        query = f"""
+            MATCH (s:{source_label} {{name: '{source}'}})-[r:{relationship_type}]->(t:{target_label} {{name: '{target}'}})
+            RETURN r.summary AS summary
+        """
+
+        result = graph.query(query)
+
+        if hasattr(result, 'result_set') and result.result_set:
+            return result.result_set[0][0]
+        else:
+            return ""   # If no summary is found, return an empty string:
+
+    except Exception as e:
+        handle_error_no_return(f"Could not check if summary for relationship {source} -> {target} ({relationship_type}) exists in graph, returning empty string. Encountered error: ", e)
         return ""
 
 
@@ -1883,11 +1896,49 @@ def get_request_params_for_local_llm_server(formatted_prompt=""):
     return endpoint_url, headers, payload, exl2
 
 
+def get_user_query_for_relationship_summary(source, target, relationship, summary, chunk):
+    if summary == "":
+        return f"""You are helping to populate a knowledge graph database by creating metadata summaries for relationships.
+        
+        Task: Generate a concise, informative summary (150-200 words) for the following relationship based on the provided text chunk. The summary should capture the core information about this relationship as represented in the text and be written in a factual tone.
+        
+        Relationship: {{"source": "{source}", "target": "{target}", "relationship": "{relationship}"}}
+        
+        <text_chunk>
+        {chunk}
+        </text_chunk>
+
+        Output format:
+        {{
+            "summary": "Your concise summary here"
+        }}
+        """
+    
+    else:
+        return f"""You are helping to maintain a knowledge graph database by updating relationship summaries when new information becomes available.
+        
+        Task: Review the existing summary for this relationship and update it based on the new text chunk provided. Incorporate any new relevant information while maintaining a concise length (250 - 300 words). Keep the factual tone of the original summary.
+
+        Relationship: {{"source": "{source}", "target": "{target}", "relationship": "{relationship}"}}
+
+        Existing Summary: {{"summary": "{summary}"}}
+
+        <text_chunk>
+        {chunk}
+        </text_chunk>
+
+        Output format:
+        {{
+            "summary": "Your updated summary here"
+        }}
+
+        """
+
 
 def get_user_query_for_node_summary(name, node_type, summary, chunk):
 
     if summary == "":
-        return f"""You are helping to populate a knowledge graph database by creating metadata summaries for nodes.
+        return f"""You are helping to populate a knowledge graph database by creating metadata summaries for entities(nodes).
         
         Task: Generate a concise, informative summary (150-200 words) for the following graph node based on the provided text chunk. The summary should capture the core information about this node as represented in the text and be written in a factual tone.
 
@@ -1904,7 +1955,7 @@ def get_user_query_for_node_summary(name, node_type, summary, chunk):
         """
 
     else:
-        return f"""You are helping to maintain a knowledge graph database by updating node summaries when new information becomes available.
+        return f"""You are helping to maintain a knowledge graph database by updating entity(node) summaries when new information becomes available.
         
         Task: Review the existing summary for this node and update it based on the new text chunk provided. Incorporate any new relevant information while maintaining a concise length (250 - 300 words). Keep the factual tone of the original summary.
 
@@ -1924,13 +1975,16 @@ def get_user_query_for_node_summary(name, node_type, summary, chunk):
         """
 
 
-def generate_summary_for_node(chunk, name, node_type, summary):
+def generate_summary_for_node_or_relationship(chunk=None, name=None, node_type=None, summary=None, source=None, target=None, relationship=None, is_node=False, is_relationship=False):
     print(f"\nGenerating summary for node {name} of type {node_type}\n")
 
     local_llm_server = read_config(['local_llm_server'])['local_llm_server']
     local_llm_chat_template_format = read_config(['local_llm_chat_template_format'])['local_llm_chat_template_format']
 
-    user_query = get_user_query_for_node_summary(name, node_type, summary, chunk)
+    if is_node:
+        user_query = get_user_query_for_node_summary(name, node_type, summary, chunk)
+    else:
+        user_query = get_user_query_for_relationship_summary(source, target, relationship, summary, chunk)
 
     if local_llm_server == 'hf-waitress':
         formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt="", user_query=user_query, current_sequence_id=0, base_template="", skip_system_prompt=True)
@@ -1956,32 +2010,78 @@ def generate_summary_for_node(chunk, name, node_type, summary):
         return handle_local_error("Could not generate summary for node, encountered error: ", e)
 
 
-def store_chunk_in_graph_db(chunk):
-    selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']
-    skip_summary_generation = read_config(['skip_summary_generation'])['skip_summary_generation']
-    
-    client = get_graph_db_client()
-    
-    try:
-        graph = client.select_graph(selected_knowledge_domain)  # Will create the graph if it doesn't exist
-    except Exception as e:
-        return handle_local_error("Could not select/create graph for {selected_knowledge_domain} domain in graph DB, encountered error: ", e)
+def add_relationships_to_graph(selected_knowledge_domain: str, entities_and_relationships: dict, graph: FalkorDB, chunk: str, source_document: str = None, skip_summary_generation: bool = False):
+    print(f"\nStoring relationships to {selected_knowledge_domain} graph DB\n")
 
-    try:
-        entities_and_relationships = extract_entities_and_relationships(chunk)
-    except Exception as e:
-        handle_error_no_return("Could not extract entities and relationships from chunk, encountered error: ", e)
-        return False
-
-    if entities_and_relationships is None or entities_and_relationships == {}:
-        print(f"No entities or relationships found in chunk, skipping storage to {selected_knowledge_domain} graph DB")
-        return False
-    
     # Initialize tracking dicts: We only track duplicates within a chunk as we want to update the summary if a node or relationship is found in other chunks from the same document.
-    processed_nodes = {}    # Format: {(name, node_type): True}
     processed_relationships = {}    # Format: {(source, target, relationship): True}
 
-    print(f"\nStoring entities and relationships to {selected_knowledge_domain} graph DB\n")
+    for relationship in entities_and_relationships['relationships']:
+        try:
+            source = str(relationship['source'])
+            target = str(relationship['target'])
+            relationship_type = str(relationship['relationship']).upper()
+            relationship_key = (source, target, relationship_type)
+
+            if relationship_key in processed_relationships:
+                print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) in {selected_knowledge_domain} graph DB")
+                continue
+
+            source = sanitize_names(source)
+            target = sanitize_names(target)
+            relationship_type = sanitize_names(relationship_type).upper()
+
+            if not skip_summary_generation:
+                existing_summary = check_relationship_and_get_summary(graph, relationship['source'].replace("'", ""), relationship['target'].replace("'", ""), relationship_type)
+                print(f"\nExisting Relationship Summary, proceeding with update operation: {existing_summary}\n")
+                updated_summary = generate_summary_for_node_or_relationship(chunk=chunk, source=source, target=target, relationship=relationship_type, summary=existing_summary, is_relationship=True)
+                print(f"\nNew Relationship Summary: {updated_summary}\n")
+            else:
+                updated_summary = ""
+                print("Skipping Summary Generation as per Settings")
+
+            # MERGE on stable properties to prevent duplicates, then SET the summary and add source_document as per the case:
+            if source_document:
+                graph.query(f"""
+                    MERGE (s:{source} {{name:'%s'}})
+                    MERGE (t:{target} {{name:'%s'}})
+                    MERGE (s)-[r:{relationship_type}]->(t)
+                    SET r.summary = '%s'
+                    SET r.source_documents = CASE
+                        WHEN r.source_documents IS NULL THEN ['%s']
+                        WHEN NOT '%s' IN r.source_documents THEN r.source_documents + ['%s']
+                        ELSE r.source_documents
+                    END
+                """ % (
+                    relationship['source'].replace("'", ""),
+                    relationship['target'].replace("'", ""),
+                    updated_summary.replace("'", ""),
+                    source_document.replace("'", ""),
+                    source_document.replace("'", ""),
+                    source_document.replace("'", "")
+                ))
+            else:
+                graph.query(f"""
+                    MERGE (s:{source} {{name:'%s'}})
+                    MERGE (t:{target} {{name:'%s'}})
+                    MERGE (s)-[r:{relationship_type}]->(t)
+                """ % (relationship['source'].replace("'", ""), relationship['target'].replace("'", "")))
+                # We don't want to use the sanitized names as both labels and property values
+
+            # Mark relationship as processed:
+            processed_relationships[relationship_key] = True
+            
+            print(f"Created relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB")
+        except Exception as e:
+            handle_error_no_return(f"Could not create relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
+
+
+def add_nodes_to_graph(selected_knowledge_domain: str, entities_and_relationships: dict, graph: FalkorDB, chunk: str, source_document: str = None, skip_summary_generation: bool = False):
+    print(f"\nStoring entities(nodes) to {selected_knowledge_domain} graph DB\n")
+
+    # Initialize tracking dicts: We only track duplicates within a chunk as we want to update the summary if a node or relationship is found in other chunks from the same document.
+    processed_nodes = {}    # Format: {(name, node_type): True}
+
     for node in entities_and_relationships['nodes']:
         try:
             name = str(node['name'])
@@ -1996,19 +2096,42 @@ def store_chunk_in_graph_db(chunk):
 
             if not skip_summary_generation:
                 existing_summary = check_node_and_get_summary(graph, name, node_type)
-
-                print(f"\nExisting Summary: {existing_summary}\n")
-
-                updated_summary = generate_summary_for_node(chunk, name, node_type, existing_summary)
-
-                print(f"\nUpdated Summary: {updated_summary}\n")
+                print(f"\nExisting Node Summary, proceeding with update operation: {existing_summary}\n")
+                updated_summary = generate_summary_for_node_or_relationship(chunk=chunk, name=name, node_type=node_type, summary=existing_summary, is_node=True)
+                print(f"\nNew Node Summary: {updated_summary}\n")
             else:
                 updated_summary = ""
-                print(f"Skipping summary generation for node {name} of type {node_type} in {selected_knowledge_domain} graph DB")
-            
-            # MERGE instead of CREATE as it will either match an existing node or create a new one if it doesn't exist:
-            graph.query(f"""MERGE (:{node_name} {{name:'%s', type:'%s', summary:'%s'}})""" % (name.replace("'", ""), node_type.replace("'", ""), updated_summary.replace("'", "")))
-            # Select all Nodes in the GraphDB with Cypher Query: `MATCH (n) RETURN n`
+                print("Skipping Summary Generation as per Settings")
+
+            # MERGE on stable properties to prevent duplicates, then SET the summary and add source_document as per the case:
+            if source_document:
+                graph.query(f"""
+                    MERGE (n:{node_name} {{name:'%s', type:'%s'}})
+                    SET n.summary = '%s'
+                    SET n.source_documents = CASE
+                        WHEN n.source_documents IS NULL THEN ['%s']
+                        WHEN NOT '%s' IN n.source_documents THEN n.source_documents + ['%s']
+                        ELSE n.source_documents
+                    END
+                """ % (
+                    name.replace("'", ""),
+                    node_type.replace("'", ""),
+                    updated_summary.replace("'", ""),
+                    source_document.replace("'", ""),
+                    source_document.replace("'", ""),
+                    source_document.replace("'", "")
+                ))
+            else:
+                graph.query(f"""
+                    MERGE (n:{node_name} {{name:'%s', type:'%s'}})
+                    SET n.summary = '%s'
+                """ % (name.replace("'", ""), node_type.replace("'", ""), updated_summary.replace("'", "")))
+
+            '''
+            CASE 1: If the `source_documents` list property doesn't exist yet: create a new list with just this document.
+            CASE 2: If the `source_documents` list property exists but doesn't contain this document: add this document to the list.
+            CASE 3: If the `source_documents` list property already contains this document: leave the list unchanged!
+            '''
             
             # Mark node as processed:
             processed_nodes[node_key] = True
@@ -2017,33 +2140,29 @@ def store_chunk_in_graph_db(chunk):
         except Exception as e:
             handle_error_no_return(f"Could not create node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
 
-    for relationship in entities_and_relationships['relationships']:
-        try:
-            relationship_key = (relationship['source'], relationship['target'], relationship['relationship'])
 
-            if relationship_key in processed_relationships:
-                print(f"Skipping duplicate relationship {relationship['source']} -> {relationship['target']} ({relationship['relationship']}) in {selected_knowledge_domain} graph DB")
-                continue
+def store_chunk_in_graph_db(chunk, source_document=None):
+    selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']
+    skip_summary_generation = read_config(['skip_summary_generation'])['skip_summary_generation']
+    
+    client = get_graph_db_client()
+    
+    try:
+        graph = client.select_graph(selected_knowledge_domain)  # Will create the graph if it doesn't exist
+    except Exception as e:
+        return handle_local_error("Could not select/create graph for {selected_knowledge_domain} domain in graph DB, encountered error: ", e)
 
-            source = sanitize_names(relationship['source'])
-            target = sanitize_names(relationship['target'])
-            relationship_type = sanitize_names(relationship['relationship']).upper()
-            
-            # The below will either match an existing node or create a new one if it doesn't exist. MERGE will prevent the creation of duplicate nodes and relationships:
-            graph.query(f"""
-                MERGE (s:{source} {{name:'%s'}})
-                MERGE (t:{target} {{name:'%s'}})
-                MERGE (s)-[:{relationship_type}]->(t)
-            """ % (relationship['source'].replace("'", ""), relationship['target'].replace("'", "")))
-            # We don't want to use the sanitized names as both labels and property values
-            # Select all Relationships in the GraphDB with Cypher Query: `MATCH (n)-[r]->(m) RETURN n,r,m`
+    try:
+        entities_and_relationships = extract_entities_and_relationships(chunk)
+    except Exception as e:
+        return handle_local_error("Could not extract entities and relationships from chunk, encountered error: ", e)
 
-            # Mark relationship as processed:
-            processed_relationships[relationship_key] = True
-            
-            print(f"Created relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB")
-        except Exception as e:
-            handle_error_no_return(f"Could not create relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
+    if entities_and_relationships is None or entities_and_relationships == {}:
+        print(f"No entities or relationships found in chunk, skipping storage to {selected_knowledge_domain} graph DB")
+        return False
+
+    add_nodes_to_graph(selected_knowledge_domain, entities_and_relationships, graph, chunk, source_document, skip_summary_generation)
+    add_relationships_to_graph(selected_knowledge_domain, entities_and_relationships, graph, chunk, source_document, skip_summary_generation)
 
     print(f"\nSuccessfully processed {len(entities_and_relationships['nodes'])} nodes and {len(entities_and_relationships['relationships'])} relationships for {selected_knowledge_domain} GraphDB\n")
     return True
@@ -2197,8 +2316,37 @@ def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-genera
     return True
 
 
+def apply_leiden_clustering_to_graph(selected_knowledge_domain):
+    print(f"\n\nApplying Leiden clustering to the graph for {selected_knowledge_domain}...\n\n")
+
+    try:
+        client = get_graph_db_client()
+        apply_leiden_clustering(client, str(selected_knowledge_domain))
+    except Exception as e:
+        handle_local_error(f"Could not apply Leiden clustering to the graph for {selected_knowledge_domain}, encountered error: ", e)
+
+
+@app.route('/generate_graph_communities', methods=['POST'])
+def generate_graph_communities():
+    print("\n\nGenerating graph communities...\n\n")
+
+    try:
+        knowledge_domain = request.json.get('knowledge_domain')
+    except Exception as e:
+        handle_local_error("Could not get selected knowledge domain from request, encountered error: ", e)
+
+    try:
+        apply_leiden_clustering_to_graph(knowledge_domain)
+    except Exception as e:
+        handle_error_no_return("Could not generate graph communities, encountered error: ", e)
+
+    return jsonify({"message": "Graph communities generated successfully"}), 200
+
+
 def graph_generator(chunks):
     print("\n\nGraph Generator Invoked\n\n")
+
+    print(f"Began Graph Generator at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     try:
         bring_graph_db_online()
@@ -2226,12 +2374,14 @@ def graph_generator(chunks):
         
         for count, chunk in enumerate(chunks):
             graphing_chunk += re.sub(r'\[PAGE:\d+\]', '', str(chunk['content'])) #RegEx replace '[PAGE:<number>]' with ''
+            chunk_source_filepath = chunk['source']
+            source_filename = os.path.basename(chunk_source_filepath)
             chunks_in_storage_queue.append(count)
 
             if len(graphing_chunk) > graph_chunk_size:
                 try:
                     print(f"\n\nStoring chunks numbered {chunks_in_storage_queue} of {len(chunks)} in graph DB\n\n")
-                    store_chunk_in_graph_db(graphing_chunk)
+                    store_chunk_in_graph_db(graphing_chunk, source_filename)
                     graphing_chunk = ""
                     chunks_in_storage_queue = []
                 except Exception as e:
@@ -2240,7 +2390,7 @@ def graph_generator(chunks):
         if graphing_chunk: # If there's any remaining chunk to store
             try:
                 print(f"\n\nStoring final chunks numbered {chunks_in_storage_queue} of {len(chunks)} in graph DB\n\n")
-                store_chunk_in_graph_db(graphing_chunk)
+                store_chunk_in_graph_db(graphing_chunk, source_filename)
             except Exception as e:
                 handle_error_no_return("Could not store final chunk in graph DB, encountered error: ", e)
             
@@ -2248,12 +2398,12 @@ def graph_generator(chunks):
         handle_error_no_return("Could not graph chunks, encountered error: ", e)
 
     try:
-        print("\n\nApplying Leiden clustering to the graph...\n\n")
-        client = get_graph_db_client()
         selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']
-        apply_leiden_clustering(client, str(selected_knowledge_domain))
+        apply_leiden_clustering_to_graph(selected_knowledge_domain)
     except Exception as e:
         handle_error_no_return("Could not apply Leiden clustering to the graph, encountered error: ", e)
+
+    print(f"Completed Graph Generator at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     return True
 
