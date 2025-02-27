@@ -2987,3 +2987,44 @@ def search_whoosh_api():
         return jsonify(results)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+
+
+
+
+
+if source_document:
+    print(f"Checking if relationship {source} -> {target} relationship of type ({relationship_type}) from {source_document} exists in {selected_knowledge_domain} graph DB")
+    check_query = f"""
+        MATCH (s:{source} {{name:'%s'}})-[r:{relationship_type}]->(t:{target} {{name:'%s'}})
+        WHERE '%s' IN r.source_documents
+        RETURN count(r) as count
+    """ % (relationship['source'].replace("'", ""), relationship['target'].replace("'", ""), source_document.replace("'", ""))
+
+    result = graph.query(check_query)
+    relationship_exists = False
+    if hasattr(result, 'result_set') and result.result_set:
+        relationship_exists = result.result_set[0][0] > 0
+
+    if relationship_exists:
+        print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) from {source_document} in {selected_knowledge_domain} graph DB")
+        continue
+
+
+if source_document: # Check if this node & type from this source document already exists
+    print(f"Checking if node {name} of type {node_type} from {source_document} exists in {selected_knowledge_domain} graph DB")
+    check_query = f"""
+        MATCH (n:{node_name} {{name:'%s', type:'%s'}})
+        WHERE '%s' IN n.source_documents
+        RETURN count(n) as count
+    """ % (name.replace("'", ""), node_type.replace("'", ""), source_document.replace("'", ""))
+
+    result = graph.query(check_query)
+    node_exists = False
+    if hasattr(result, 'result_set') and result.result_set:
+        node_exists = result.result_set[0][0] > 0
+
+    if node_exists:
+        print(f"Skipping duplicate node {name} of type {node_type} from {source_document} in {selected_knowledge_domain} graph DB")
+        continue
