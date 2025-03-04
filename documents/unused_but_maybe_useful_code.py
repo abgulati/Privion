@@ -3028,3 +3028,50 @@ if source_document: # Check if this node & type from this source document alread
     if node_exists:
         print(f"Skipping duplicate node {name} of type {node_type} from {source_document} in {selected_knowledge_domain} graph DB")
         continue
+
+
+
+
+def store_chunk_in_graph_db(chunk, source_document=None):
+    selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']
+    skip_summary_generation = read_config(['skip_summary_generation'])['skip_summary_generation']
+    
+    client = get_graph_db_client()
+    
+    try:
+        graph = client.select_graph(selected_knowledge_domain)  # Will create the graph if it doesn't exist
+    except Exception as e:
+        return handle_local_error("Could not select/create graph for {selected_knowledge_domain} domain in graph DB, encountered error: ", e)
+
+    try:
+        entities_and_relationships = extract_entities_and_relationships(chunk)
+    except Exception as e:
+        return handle_local_error("Could not extract entities and relationships from chunk, encountered error: ", e)
+
+    if entities_and_relationships is None or entities_and_relationships == {}:
+        print(f"No entities or relationships found in chunk, skipping storage to {selected_knowledge_domain} graph DB")
+        return False
+
+    add_nodes_to_graph(selected_knowledge_domain, entities_and_relationships, graph, chunk, source_document, skip_summary_generation)
+    add_relationships_to_graph(selected_knowledge_domain, entities_and_relationships, graph, chunk, source_document, skip_summary_generation)
+
+    print(f"\nSuccessfully processed {len(entities_and_relationships['nodes'])} nodes and {len(entities_and_relationships['relationships'])} relationships for {selected_knowledge_domain} GraphDB\n")
+    return True
+
+
+    def extract_entities_and_relationships(chunk):
+    print("\nExtracting Entities and Relationships from Chunk\n")
+
+    try:
+
+        grapher_url, headers, exl2_quantize_graph_model = get_graphing_request_params()
+
+        payload = get_graphing_request_payload(chunk, exl2_quantize_graph_model)
+
+        if exl2_quantize_graph_model:
+            return exl2_graphing_request_response_handler(grapher_url, headers, payload)
+        else:
+            return graphing_request_response_handler(grapher_url, headers, payload)
+    
+    except Exception as e:
+        return handle_local_error("Could not extract entities and relationships from chunk, encountered error: ", e)
