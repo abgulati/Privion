@@ -2337,8 +2337,6 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
                 except Exception as e:
                     handle_error_no_return(f"Error checking for existing summaries for relationships, skipping chunk {chunk_number}. Encountered error: ", e)
 
-            print(f"\n\nUpdated Chunk Entities Dictionary with existing summaries: {chunk_entities}\n\n")
-
             # b. Generate summaries for all nodes and relationships:
             for chunk_number, chunk_data in chunk_entities.items():
                 print_string = f" in chunk {chunk_number} of total {len(chunk_entities)} chunks"
@@ -2354,8 +2352,6 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
                     chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = summarized_relationships
                 except Exception as e:
                     handle_error_no_return(f"Error generating summaries for relationships, skipping chunk {chunk_number}. Encountered error: ", e)
-
-            print(f"\n\nUpdated Chunk Entities Dictionary with newly generated summaries: {chunk_entities}\n\n")
 
         # Store the nodes and relationships in the graph DB
         for chunk_number, chunk_data in chunk_entities.items():
@@ -2624,7 +2620,6 @@ def graph_generator(chunks):
 
     try:
         complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities)
-        print(f"\n\nExtracted Entities and Relationships from Chunk Entities: {complete_chunk_entities}\n\n")
     except Exception as e:
         return handle_local_error("Failed to extract entities and relationships from chunk entities, encountered error: ", e)
 
