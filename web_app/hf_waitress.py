@@ -22,6 +22,11 @@ try:
 except ImportError:
     print("transformers version is below 4.45.0 required from Llama3.2-Vision. Skipping MllamaForConditionalGeneration import.")
 
+try:
+    from prompt_formatting import manually_format_prompt_with_prompt_template, get_user_query_for_node_summary, get_user_query_for_relationship_summary
+except ImportError:
+    print("Prompt Formatter module `prompt_formatting.py` is not present. Skipping import. Must be present for exl2 bulk-summary generation.")
+
 from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
 from PIL import Image, ImageDraw, ImageFont
@@ -38,6 +43,7 @@ import time
 import json
 import uuid
 import sys
+import ast
 import os
 import io
 
@@ -2190,6 +2196,31 @@ def completions_stream():
     return Response(generate(), content_type='text/event-stream')
 
 
+def get_exl2_gen_settings(request):
+    try:
+        read_return = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'min_p', 'n_keep'])
+        temperature = float(read_return['temperature'])
+        top_k = int(read_return['top_k'])
+        top_p = float(read_return['top_p'])
+        max_new_tokens = int(read_return['max_new_tokens'])
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when attempting /exl2_grapher, encountered error: ", e)
+
+    try:
+        print("\nExLlamaV2Sampler.Settings In-Progress...\n")
+        gen_settings = ExLlamaV2Sampler.Settings(
+            temperature = float(request.headers.get('X-Temperature', str(temperature))),
+            top_k = int(request.headers.get('X-Top-K', str(top_k))),
+            top_p = float(request.headers.get('X-Top-P', str(top_p)))
+        )
+        requested_max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens)))
+        print("\nExLlamaV2Sampler.Settings Defined Successfully\n")
+    except Exception as e:
+        handle_error_no_return("Could not set generation-arguments for /exl2_grapher, proceeding without them. Encountered error: ", e)
+
+    return gen_settings, requested_max_new_tokens
+
+
 @app.route('/exl2_stream', methods=['POST'])
 def exl2_stream():
 
@@ -2202,32 +2233,10 @@ def exl2_stream():
     try:
         data = request.json
         messages = str(data)
+        gen_settings, max_new_tokens = get_exl2_gen_settings(request)
         print(f"\nRead request - message received: {messages}\n")
     except Exception as e:
         handle_api_error("Could not read POST-request messages for /exl2_stream, encountered error: ", e)
-
-    try:
-        read_return = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'min_p', 'n_keep'])
-        temperature = float(read_return['temperature'])
-        top_k = int(read_return['top_k'])
-        top_p = float(read_return['top_p'])
-        max_new_tokens = int(read_return['max_new_tokens'])
-        min_p = float(read_return['min_p'])
-        n_keep = int(read_return['n_keep'])
-    except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting /exl2_stream, encountered error: ", e)
-
-    try:
-        print("\nExLlamaV2Sampler.Settings In-Progress...\n")
-        gen_settings = ExLlamaV2Sampler.Settings(
-            temperature = float(request.headers.get('X-Temperature', str(temperature))),
-            top_k = int(request.headers.get('X-Top-K', str(top_k))),
-            top_p = float(request.headers.get('X-Top-P', str(top_p)))
-            # min_p = float(request.headers.get('X-Min-P', str(min_p)))
-        )
-        print("\nExLlamaV2Sampler.Settings Defined Successfully\n")
-    except Exception as e:
-        handle_error_no_return("Could not set generation-arguments for /exl2_stream, proceeding without them. Encountered error: ", e)
 
     try:
         print("\nCreating ExLlamaV2DynamicJob Object...\n")
@@ -2291,6 +2300,287 @@ def exl2_stream():
 
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
+
+
+
+### Exl2 Graph Helper Functions ###
+
+def trim_response(response, start_substring, end_substring, include_start_substring=False, include_end_substring=False, clean_leading_and_trailing_quotes=False):
+    try:
+        if start_substring in response and end_substring in response:
+            start_index = response.rindex(start_substring)  # Sometimes the model re-gurgitates multiple copies of the same dict in it's response
+            end_index = response.rindex(end_substring) # rindex() returns the index of the last occurrence of the substring
+            
+            if not include_start_substring:
+                start_index += len(start_substring)
+            if include_end_substring: end_index += 1
+            
+            response = response[start_index:end_index]
+            if clean_leading_and_trailing_quotes:
+                response = response.strip()
+                if response.startswith('"'): response = response[1:]
+                if response.endswith('"'): response = response[:-1]
+            return response
+        else:
+            print(f"\nResponse does not contain start_substring: {start_substring} or end_substring: {end_substring}, returning unchanged response: {response}\n")
+            return response
+    except Exception as e:
+        handle_error_no_return("Failed to trim response, encountered error: ", e)
+        return response
+
+
+def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
+    job = ExLlamaV2DynamicJob(
+        input_ids= EXL2_TOKENIZER.encode(payload, add_bos=True),
+        max_new_tokens = max_new_tokens,
+        stop_conditions = [EXL2_TOKENIZER.eos_token_id],
+        gen_settings = gen_settings
+    )
+    PIPE.enqueue(job)
+
+    full_response = ""
+    while PIPE.num_remaining_jobs():
+        current_token = PIPE.iterate()
+        
+        if len(current_token) == 1 and 'text' in current_token[0]:
+            full_response += current_token[0]['text']
+        
+        elif len(current_token) > 1:
+            for job in current_token:
+                if 'stage' in job and job['stage'] == 'streaming':
+                    if 'text' in job: 
+                        full_response += job['text']
+
+    return full_response
+
+
+def process_nodes(nodes: list, chunk_text: str, print_string: str = "", exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
+    processed_nodes = {}
+    summarized_nodes = []
+
+    for count, node in enumerate(nodes):
+        print(f"Generating summary for entity(node) {count+1} of {len(nodes)} {print_string}...")
+        try:
+            name = str(node['name'])
+            node_type = str(node['type'])
+            existing_summary = str(node['summary'])
+            
+            node_key = (name, node_type)
+            if node_key in processed_nodes:
+                print(f"Skipping duplicate node {name} of type {node_type}")
+                continue
+
+            node_summary_request_prompt = get_user_query_for_node_summary(name, node_type, existing_summary, chunk_text)
+            formatted_prompt = manually_format_prompt_with_prompt_template(
+                formatted_prompt="",
+                user_query=node_summary_request_prompt,
+                current_sequence_id=0,
+                base_template="",
+                local_llm_chat_template_format=exl2_prompt_template_format,
+                skip_system_prompt=True
+            )
+            full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+            full_response = trim_response(full_response, '"summary":', '}', clean_leading_and_trailing_quotes=True)
+            full_response = full_response.replace("'", "")
+            full_response = f'{full_response}' # For consistent single-quote wrapping, just to be super-sure!
+            summarized_nodes.append({
+                'name': name,
+                'type': node_type,
+                'summary':full_response
+            })
+
+            processed_nodes[node_key] = True
+
+        except Exception as e:
+            handle_error_no_return(f"Could not generate summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
+
+    return summarized_nodes
+
+
+def process_relationships(relationships: list, chunk_text: str, print_string: str = "", exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
+    processed_relationships = {}
+    summarized_relationships = []
+
+    for count, relationship in enumerate(relationships):
+        print(f"Generating summary for relationship {count+1} of {len(relationships)} {print_string}...")
+
+        try:
+            source = str(relationship['source'])
+            target = str(relationship['target'])
+            relationship_type = str(relationship['relationship'])
+            existing_summary = str(relationship['summary'])
+
+            relationship_key = (source, target, relationship_type)
+            if relationship_key in processed_relationships:
+                print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type})")
+                continue
+
+            relationship_summary_request_prompt = get_user_query_for_relationship_summary(source, target, relationship_type, existing_summary, chunk_text)
+            formatted_prompt = manually_format_prompt_with_prompt_template(
+                formatted_prompt="",
+                user_query=relationship_summary_request_prompt,
+                current_sequence_id=0,
+                base_template="",
+                local_llm_chat_template_format=exl2_prompt_template_format,
+                skip_system_prompt=True
+            )
+            full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+            full_response = trim_response(full_response, '"summary":', '}', clean_leading_and_trailing_quotes=True)
+            full_response = full_response.replace("'", "")
+            full_response = f'{full_response}'
+            summarized_relationships.append({
+                'source': source,
+                'target': target,
+                'relationship': relationship_type,
+                'summary':full_response
+            })
+
+            processed_relationships[relationship_key] = True
+
+        except Exception as e:
+            handle_error_no_return(f"Could not generate summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
+
+    return summarized_relationships
+    
+### End of Helper Functions ###
+
+
+@app.route('/exl2_grapher', methods=['POST'])
+def exl2_grapher():
+    '''
+    Appends the `entities_and_relationships` key to each chunk_entities dict, returning the following structure:
+
+    chunk_entities = {
+        '<graph_chunk_number>': {
+            '<entities_and_relationships>': '<node_relationships_dict>',
+            '<chunk_text>': '<text>',
+            '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
+            '<source_doc_name>': '<name>'
+        }
+    }
+    '''
+
+    print("\n\nexl2_grapher route triggered - attempting to acquire LLM semaphore\n\n")
+
+    llm_semaphore.acquire()
+
+    print("\nLLM semaphore acquired by /exl2_grapher\n")
+
+    try:
+        chunk_entities = request.json.get('chunk_entities')
+        extraction_mode = request.json.get('extraction_mode', False)
+        summary_generation_mode = request.json.get('summary_generation_mode', False)
+        exl2_prompt_template_format = request.json.get('exl2_prompt_template_format', None)
+        gen_settings, requested_max_new_tokens = get_exl2_gen_settings(request)
+        print(f"\nchunk_entities received: {chunk_entities}\n")
+    except Exception as e:
+        handle_api_error("Could not read POST-request messages for /exl2_grapher, encountered error: ", e)
+
+    stop_thread = threading.Event()
+    output_queue = queue.Queue()
+
+    def extraction_task():
+
+        global PIPE
+
+        try:
+            for chunk_number, chunk_data in chunk_entities.items():
+                print(f"\nExtracting entities and relationships for chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
+                
+                try:
+                    chunk_payload = chunk_data['chunk_text'] + "\n<knowledge_graph>"
+                    full_payload = f"<start_of_turn>user\n{chunk_payload}<end_of_turn>\n<start_of_turn>model\n"
+                
+                    full_response = create_and_execute_exl2_job(payload=full_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+                    try:
+                        ast.literal_eval(full_response) # Sometimes additional text may be present and need to be stripped, which we can test for by trying to evaluate the response as a dict
+                    except Exception as e:
+                        full_response = trim_response(full_response, '{"nodes":', '}', include_start_substring=True, include_end_substring=True)
+                    chunk_entities[chunk_number]['entities_and_relationships'] = full_response
+                    
+                    output_queue.put(chunk_entities[chunk_number])
+                except Exception as e:
+                    handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number}, skipping. Encountered error: ", e)
+
+        except Exception as e:
+            handle_error_no_return(f"Could not extract entities and relationships, encountered error: ", e)
+        finally:
+            output_queue.put(None)
+            print("\n\nLLM stream done, releasing semaphore\n\n")
+            llm_semaphore.release()
+            stop_thread.set()
+
+    def summary_generation_task():
+
+        global PIPE
+
+        try:
+            for chunk_number, chunk_data in chunk_entities.items():
+                print_string = f" in chunk {chunk_number} of total {len(chunk_entities)} chunks"
+                print(f"\nGenerating summaries for all nodes and relationships {print_string}...\n")
+
+                try:
+                    summarized_nodes = process_nodes(
+                        nodes=chunk_data['entities_and_relationships']['nodes'],
+                        chunk_text=chunk_data['chunk_text'],
+                        print_string=print_string,
+                        exl2_prompt_template_format=exl2_prompt_template_format,
+                        requested_max_new_tokens=requested_max_new_tokens,
+                        gen_settings=gen_settings
+                    )
+                    summarized_relationships = process_relationships(
+                        relationships=chunk_data['entities_and_relationships']['relationships'],
+                        chunk_text=chunk_data['chunk_text'],
+                        print_string=print_string,
+                        exl2_prompt_template_format=exl2_prompt_template_format,
+                        requested_max_new_tokens=requested_max_new_tokens,
+                        gen_settings=gen_settings
+                    )
+                    
+                    chunk_entities[chunk_number]['entities_and_relationships']['nodes'] = summarized_nodes
+                    chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = summarized_relationships
+
+                    output_queue.put(chunk_entities[chunk_number])
+                except Exception as e:
+                    handle_error_no_return(f"Could not generate summaries for chunk {chunk_number}, skipping. Encountered error: ", e)
+                
+        except Exception as e:
+            return handle_error_no_return("Summary generation failed, encountered error: ", e)
+        finally:
+            output_queue.put(None)
+            print("\n\nLLM stream done, releasing semaphore\n\n")
+            llm_semaphore.release()
+            stop_thread.set()
+
+    def generate():
+        while True:
+            line = output_queue.get()
+            if line is None:
+                print("\nNone read, breaking and stopping thread\n")
+                break
+            yield f"data: {json.dumps(line)}\n\n"
+        
+        yield f"event: END\ndata: \"null\"\n\n"
+
+        try:
+            empty_cuda_cache()
+        except Exception as e:
+            handle_error_no_return("Could not empty CUDA cache after ExLlamaV2 cleanup, encountered error: ", e)
+
+        print("\n/exl2_grapher done\n")
+
+    if extraction_mode:
+        thread = threading.Thread(target=extraction_task)
+    elif summary_generation_mode:
+        thread = threading.Thread(target=summary_generation_task)
+    else:
+        handle_api_error("Invalid request mode for /exl2_grapher. Must specify either 'extraction_mode' or 'summary_generation_mode'.")
+
+    thread.start()
+
+    print("\n\nInferencing Begins!\n\n")
+    return Response(generate(), content_type='text/event-stream')
+
 
 
 @app.route('/health')
