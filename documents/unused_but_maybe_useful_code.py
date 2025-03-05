@@ -3075,3 +3075,211 @@ def store_chunk_in_graph_db(chunk, source_document=None):
     
     except Exception as e:
         return handle_local_error("Could not extract entities and relationships from chunk, encountered error: ", e)
+
+
+
+
+
+
+def generate_summary_for_node_or_relationship(chunk=None, name=None, node_type=None, summary=None, source=None, target=None, relationship=None, is_node=False, is_relationship=False):
+    print("\nGenerating summary...\n")
+
+    local_llm_server = read_config(['local_llm_server'])['local_llm_server']
+    local_llm_chat_template_format = read_config(['local_llm_chat_template_format'])['local_llm_chat_template_format']
+
+    if is_node:
+        user_query = get_user_query_for_node_summary(name, node_type, summary, chunk)
+    else:
+        user_query = get_user_query_for_relationship_summary(source, target, relationship, summary, chunk)
+
+    if local_llm_server == 'hf-waitress':
+        formatted_prompt = format_prompt_for_hf_waitress(formatted_prompt="", user_query=user_query, current_sequence_id=0, base_template="", skip_system_prompt=True)
+    else:
+        formatted_prompt = format_prompt_for_llama_cpp(formatted_prompt="", user_query=user_query, current_sequence_id=0, base_template="", local_llm_chat_template_format=local_llm_chat_template_format, skip_system_prompt=True)
+
+    endpoint_url, headers, payload, exl2 = get_request_params_for_local_llm_server(formatted_prompt)
+
+    # print(f"\nProceeding with request to {local_llm_server} at url: {endpoint_url} with payload: {payload} and headers: {headers}\n")
+
+    try:
+        if local_llm_server == 'hf-waitress':
+            if exl2:
+                response = hf_waitress_streaming_request_response_handler(endpoint_url, headers, payload)
+            else:
+                response = hf_waitress_non_streaming_request_response_handler(endpoint_url, headers, payload)
+
+            return trim_response(response, '"summary":', '}')
+
+        else:   # TODO: response handler for local_llm_server == 'llama-cpp'
+            pass
+    except Exception as e:
+        return handle_local_error("Could not generate summary for node, encountered error: ", e)
+
+
+def generate_summaries_for_all_nodes(nodes: list, chunk_text: str, print_string: str = ""):
+    processed_nodes = {}
+    summarized_nodes = []
+
+    for count, node in enumerate(nodes):
+        print(f"Generating summary for entity(node) {count+1} of {len(nodes)} {print_string}...")
+        try:
+            name = str(node['name'])
+            node_type = str(node['type'])
+            existing_summary = str(node['summary'])
+            
+            node_key = (name, node_type)
+            if node_key in processed_nodes:
+                print(f"Skipping duplicate node {name} of type {node_type}")
+                continue
+
+            try:
+                updated_summary = generate_summary_for_node_or_relationship(chunk=chunk_text, name=name, node_type=node_type, summary=existing_summary, is_node=True)
+            except Exception as e:
+                updated_summary = ""
+                handle_error_no_return(f"Could not generate summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
+
+            # update node in chunk_entities dict:
+            summarized_nodes.append({
+                'name': name,
+                'type': node_type,
+                'summary': updated_summary
+            })
+
+            processed_nodes[node_key] = True
+
+        except Exception as e:
+            handle_error_no_return(f"Could not generate summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
+                    
+    return summarized_nodes
+
+
+def generate_summaries_for_all_relationships(relationships: list, chunk_text: str, print_string: str = ""):
+    processed_relationships = {}
+    summarized_relationships = []
+
+    for count, relationship in enumerate(relationships):
+        print(f"Generating summary for relationship {count+1} of {len(relationships)} {print_string}...")
+        try:
+            source = str(relationship['source'])
+            target = str(relationship['target'])
+            relationship_type = str(relationship['relationship'])
+            existing_summary = str(relationship['summary'])
+            
+            relationship_key = (source, target, relationship_type)
+            if relationship_key in processed_relationships:
+                print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type})")
+                continue
+
+            try:
+                updated_summary = generate_summary_for_node_or_relationship(chunk=chunk_text, source=source, target=target, relationship=relationship_type, summary=existing_summary, is_relationship=True)
+            except Exception as e:
+                updated_summary = ""
+                handle_error_no_return(f"Could not generate summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
+
+            summarized_relationships.append({
+                'source': source,
+                'target': target,
+                'relationship': relationship_type,
+                'summary': updated_summary
+            })
+
+            processed_relationships[relationship_key] = True
+
+        except Exception as e:
+            handle_error_no_return(f"Could not generate summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
+
+    return summarized_relationships
+
+
+
+    # From store_entities_and_relationships_in_graph_db() if skip_summary_generation is False:
+
+        # b. Generate summaries for all nodes and relationships:
+        for chunk_number, chunk_data in chunk_entities.items():
+            print_string = f" in chunk {chunk_number} of total {len(chunk_entities)} chunks"
+            print(f"\nGenerating summaries for all nodes and relationships {print_string}...\n")
+            try:
+                summarized_nodes = generate_summaries_for_all_nodes(nodes=chunk_data['entities_and_relationships']['nodes'], chunk_text=chunk_data['chunk_text'], print_string=print_string)
+                chunk_entities[chunk_number]['entities_and_relationships']['nodes'] = summarized_nodes
+            except Exception as e:
+                handle_error_no_return(f"Error generating summaries for nodes, skipping chunk {chunk_number}. Encountered error: ", e)
+
+            try:
+                summarized_relationships = generate_summaries_for_all_relationships(relationships=chunk_data['entities_and_relationships']['relationships'], chunk_text=chunk_data['chunk_text'], print_string=print_string)
+                chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = summarized_relationships
+            except Exception as e:
+                handle_error_no_return(f"Error generating summaries for relationships, skipping chunk {chunk_number}. Encountered error: ", e)
+
+
+
+def trim_response(response, start_substring, end_substring, include_start_substring=False, include_end_substring=False):    ### MOVED TO hf_waitress.py
+    try:
+        if start_substring in response and end_substring in response:
+            start_index = response.rindex(start_substring)  # Sometimes the model re-gurgitates multiple copies of the same dict in it's response
+            end_index = response.rindex(end_substring) # rindex() returns the index of the last occurrence of the substring
+            
+            if not include_start_substring:
+                start_index += len(start_substring)
+            if include_end_substring: end_index += 1
+            
+            response = response[start_index:end_index]           
+            return response
+        else:
+            print(f"\nResponse does not contain start_substring: {start_substring} or end_substring: {end_substring}, returning unchanged response: {response}\n")
+            return response
+    except Exception as e:
+        handle_error_no_return("Failed to trim response, encountered error: ", e)
+        return response
+
+
+def exl2_graphing_request_response_handler(grapher_url, headers, payload):
+    print(f"\nHF-Waitress Streaming Graphing-Request Response Handler Invoked\n")
+    try:
+        full_response = hf_waitress_streaming_request_response_handler(grapher_url, headers, payload)
+        print(f"\nExl2 Graphing Response (Entities and Relationships): {full_response}\n")
+
+        try:
+            return ast.literal_eval(full_response)
+        except (ValueError, SyntaxError):
+            # Sometimes additional text may be present so we need to strip it:
+            full_response = trim_response(full_response, '{"nodes":', '}', include_start_substring=True, include_end_substring=True)
+            print(f"\nTrimmed response to dictionary: {full_response}\n")
+            try:
+                return ast.literal_eval(full_response)
+            except (ValueError, SyntaxError):
+                raise # Re-raise the original exception if the second attempt also fails
+        
+    except Exception as e:
+        return handle_local_error("Failed /exl2_stream request to extract entities and relationships from chunk, encountered error: ", e)
+
+
+def hf_waitress_streaming_request_response_handler(endpoint_url, headers, payload):
+    print(f"\nHF-Waitress Streaming Request Response Handler Invoked\n")
+    try:
+        response = requests.post(endpoint_url, headers=headers, data=payload, stream=True)
+        response.raise_for_status()  # Raise an exception for bad status codes so we can catch them in the except block
+
+        full_response = ""
+        for line in response.iter_lines(decode_unicode=True):
+            if line:
+                if line.startswith("data:"):
+                    event_data = line[6:].strip()
+                    try:
+                        token = str(json.loads(event_data))
+                        full_response += token
+                    except json.JSONDecodeError as e:
+                        handle_error_no_return(f"Failed to parse event data: {event_data}, encountered error: ", e)
+                elif line.startswith("event: END"):
+                    break
+                else:
+                    print(f"\nUnexpected Line Format: {line}\n")
+
+        if not full_response:
+            print("\nWarning: No response from exl2_stream / exl2_grapher request\n")
+            return None
+
+        print("\nCompleted, returning response\n")
+        return full_response
+        
+    except Exception as e:
+        return handle_local_error("Failed request to /exl2_stream or /exl2_grapher APIs, encountered error: ", e)
