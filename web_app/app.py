@@ -1770,7 +1770,7 @@ def extract_all_entities_and_relationships(chunk_entities: dict) -> dict:
         try:
             payload = json.dumps({"chunk_entities": chunk_entities, "extraction_mode": True})
             full_response = hf_waitress_bulk_stream_request_response_handler(grapher_url, headers, payload)
-            print(f"\nExl2 Bulk-Graphing Response (Entities and Relationships): {full_response}\n")
+            # print(f"\nExl2 Bulk-Graphing Response (Entities and Relationships):\n\n{full_response}\n")
             return full_response
         except Exception as e:
             return handle_local_error("Error with request to /exl2_grapher, encountered error: ", e)
@@ -1946,7 +1946,7 @@ def summary_generator(chunk_entities=None):
         try:
             payload = json.dumps({"chunk_entities": chunk_entities, "exl2_prompt_template_format": exl2_prompt_template_format, "summary_generation_mode": True})
             full_response = hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payload)
-            # print(f"\nExl2 Bulk-Summary Generation Response: {full_response}\n")
+            # print(f"\nExl2 Bulk-Summary Generation Response:\n\n{full_response}\n")
             return full_response
         except Exception as e:
             return handle_local_error("Error with request to /exl2_grapher, encountered error: ", e)
