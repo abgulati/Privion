@@ -61,6 +61,11 @@ try:
 except Exception as e:
     print(f"Could not import graph_clustering (likely not installed), skipping. Encountered error: {e}")
 
+try:
+    from prompt_formatting import manually_format_prompt_with_prompt_template
+except ImportError:
+    print("WARNING: Prompt Formatter module `prompt_formatting.py` is not present. Skipping import. Exl2 and llama.cpp will not work!")
+
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Allow insecure traffic - Needed to bypass HTTPS requirement for Google Drive OAuth. FOR DEV USE ONLY! SWITCH TO SELF-SIGNED CERTIFICATES & HTTPS FOR PRODUCTION!
 
 app = Flask(__name__)
@@ -4734,129 +4739,6 @@ def get_formatted_prompt_from_history_db(chat_id, sequence_id):
     return formatted_prompt
 
 
-def format_prompt_for_llama_cpp(formatted_prompt:str, user_query:str, current_sequence_id:int, base_template:str, local_llm_chat_template_format:str, skip_system_prompt=False) -> str:
-
-    print("\n\nFormatting prompt for llama-cpp\n\n")
-
-    if skip_system_prompt:
-        base_template = ""
-
-    if local_llm_chat_template_format == 'llama3':
-
-        if current_sequence_id > 0:
-            formatted_prompt += f"<|start_header_id|>user<|end_header_id|>\n\n{user_query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-        else:
-            if skip_system_prompt:
-                formatted_prompt += f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n{user_query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-            else:
-                formatted_prompt += f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{base_template}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{user_query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-
-    elif local_llm_chat_template_format == 'llama2':
-
-        if current_sequence_id > 0 or skip_system_prompt:
-            formatted_prompt += f"<s>[INST] {user_query} [/INST] "
-        else:
-            formatted_prompt += f"<s>[INST] <<SYS>>\n {base_template} \n<</SYS>>\n\n {user_query}  [/INST] "
-
-    elif local_llm_chat_template_format == 'chatml':
-        
-        if current_sequence_id > 0 or skip_system_prompt:
-            formatted_prompt += f"<|im_start|>user\n{user_query}<|im_end|>\n<|im_start|>assistant\n"
-        else:
-            formatted_prompt += f"<|im_start|>system\n{base_template}<|im_end|>\n<|im_start|>user\n{user_query}<|im_end|>\n<|im_start|>assistant\n"
-    
-    elif local_llm_chat_template_format == 'qwen-chatml':
-        
-        if current_sequence_id > 0:
-            formatted_prompt += f"<|im_start|>user\n{user_query}<|im_end|>\n<|im_start|>assistant\n"
-        else:
-            formatted_prompt += f"<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.\n{base_template}<|im_end|>\n<|im_start|>user\n{user_query}<|im_end|>\n<|im_start|>assistant\n"
-
-    elif local_llm_chat_template_format == 'phi3':
-
-        if current_sequence_id > 0 or skip_system_prompt:
-            formatted_prompt += f"<|user|>\n{user_query}<|end|>\n<|assistant|>\n"
-        else:
-            formatted_prompt += f"<|system|>\n{base_template}<|end|>\n<|user|>\n{user_query}<|end|>\n<|assistant|>\n"
-
-    elif local_llm_chat_template_format == 'phi4':
-        
-        if current_sequence_id > 0 or skip_system_prompt:
-            formatted_prompt += f"<|im_start|>user<|im_sep|>\n{user_query}<|im_end|>\n<|im_start|>assistant<|im_sep|>\n"
-        else:
-            formatted_prompt += f"<|im_start|>system<|im_sep|>\n{base_template}<|im_end|>\n<|im_start|>user<|im_sep|>\n{user_query}<|im_end|>\n<|im_start|>assistant<|im_sep|>\n"
-
-    elif local_llm_chat_template_format == 'command-r':
-
-        if current_sequence_id > 0 or skip_system_prompt:
-            formatted_prompt += f"<|START_OF_TURN_TOKEN|><|USER_TOKEN|>{user_query}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
-        else:
-            formatted_prompt += f"<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>{base_template}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>{user_query}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
-
-    elif local_llm_chat_template_format == 'deepseek':
-        
-        if current_sequence_id > 0 or skip_system_prompt:
-            formatted_prompt += f"### Instruction:\n{user_query}\n### Response:\n"
-        else:
-            formatted_prompt += f"{base_template}### Instruction:\n{user_query}\n### Response:\n"
-
-    elif local_llm_chat_template_format == 'deepseek-coder-v2':
-        
-        if current_sequence_id > 0:
-            formatted_prompt += f"User: {user_query}\nAssistant: "
-        else:
-            formatted_prompt += f"<|begin_of_sentence|>{base_template}\nUser: {user_query}\nAssistant: "
-
-    elif local_llm_chat_template_format == 'vicuna':
-
-        if current_sequence_id > 0 or skip_system_prompt:
-            formatted_prompt += f"USER: {user_query}\nASSISTANT: "
-        else:
-            formatted_prompt += f"{base_template}\n\nUSER: {user_query}\nASSISTANT: "
-
-    elif local_llm_chat_template_format == 'openchat':
-
-        if current_sequence_id > 0 or skip_system_prompt:
-            formatted_prompt += f"GPT4 Correct User: {user_query}<|end_of_turn|>GPT4 Correct Assistant: "
-        else:
-            formatted_prompt += f"<s>GPT4 Correct System: {base_template}<|end_of_turn|>GPT4 Correct User: {user_query}<|end_of_turn|>GPT4 Correct Assistant: "
-
-    elif local_llm_chat_template_format == 'gemma2':
-
-        if current_sequence_id > 0 or skip_system_prompt:
-            formatted_prompt += f"<start_of_turn>user\n{user_query}<end_of_turn>\n<start_of_turn>model\n"
-        else:
-            formatted_prompt += f"<start_of_turn>user\n{base_template}\n{user_query}<end_of_turn>\n<start_of_turn>model\n"
-
-    elif local_llm_chat_template_format == 'mistral-small-v7':
-
-        if current_sequence_id > 0:
-            formatted_prompt += f"<s>[INST]{user_query}[/INST]"
-        else:
-            mistral_small_system_prompt = """You are Mistral Small 3, a Large Language Model (LLM) created by Mistral AI, a French startup headquartered in Paris.
-            Your knowledge base was last updated on 2023-10-01. The current date is 2025-01-30.
-            When you're not sure about some information, you say that you don't have the information and don't make up anything.
-            If the user's question is not clear, ambiguous, or does not provide enough context for you to accurately answer the question, you do not try to answer it right away and you rather ask the user to clarify their request 
-            (e.g. \"What are some good restaurants around me?\" => \"Where are you?\" or \"When is the next flight to Tokyo\" => \"Where do you travel from?\")
-            """
-            formatted_prompt  += f"<s>[SYSTEM_PROMPT]{mistral_small_system_prompt}\n{base_template}[/SYSTEM_PROMPT][INST]{user_query}[/INST]"
-
-    elif local_llm_chat_template_format == 'mistral-large-v7':
-
-        if current_sequence_id > 0 or skip_system_prompt:
-            formatted_prompt += f"<s>[INST] {user_query}[/INST] "
-        else:
-            formatted_prompt  += f"<s>[SYSTEM_PROMPT] {base_template}[/SYSTEM_PROMPT][INST] {user_query}[/INST] "
-
-    elif local_llm_chat_template_format == 'raw':
-
-        if current_sequence_id > 0 or skip_system_prompt:
-            formatted_prompt += f"User: {user_query}\nAssistant: "
-        else:
-            formatted_prompt += f"{base_template}\nUser: {user_query}\nAssistant: "
-
-    return formatted_prompt
-
 
 def read_config_for_hf_waitress_prompt_formatting() -> tuple[bool, str, bool, bool]:
     try:
@@ -4879,7 +4761,7 @@ def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_
         handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
 
     if exl2:
-        return(format_prompt_for_llama_cpp(formatted_prompt, user_query, current_sequence_id, base_template, exl2_prompt_template_format, skip_system_prompt))
+        return(manually_format_prompt_with_prompt_template(formatted_prompt, user_query, current_sequence_id, base_template, exl2_prompt_template_format, skip_system_prompt))
 
     try:
     
@@ -5089,7 +4971,7 @@ def read_request_data_for_response_setup(request: Request) -> tuple[str, str, st
 
 def get_full_prompt_for_server(local_llm_server: str, formatted_history_prompt: str, user_query: str, current_sequence_id: int, base_template: str, local_llm_chat_template_format: str, skip_system_prompt: bool) -> str:
     if local_llm_server == 'llama-cpp':
-        formatted_updated_prompt = format_prompt_for_llama_cpp(formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
+        formatted_updated_prompt = manually_format_prompt_with_prompt_template(formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
     elif local_llm_server == 'hf-waitress':
         formatted_updated_prompt = format_prompt_for_hf_waitress(formatted_history_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
     elif local_llm_server == 'hfw-vision':
