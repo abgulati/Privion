@@ -81,7 +81,7 @@ def get_user_query_for_node_summary(name, node_type, summary, chunk):
 
 def manually_format_prompt_with_prompt_template(formatted_prompt:str, user_query:str, current_sequence_id:int, base_template:str, local_llm_chat_template_format:str, skip_system_prompt=False) -> str:
 
-    print("\n\nFormatting prompt for llama-cpp\n\n")
+    print(f"\n\nFormatting prompt for LMM with template format: {local_llm_chat_template_format}\n\n")
 
     if skip_system_prompt:
         base_template = ""
