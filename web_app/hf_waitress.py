@@ -2305,7 +2305,7 @@ def exl2_stream():
 
 ### Exl2 Graph Helper Functions ###
 
-def trim_response(response, start_substring, end_substring, include_start_substring=False, include_end_substring=False, clean_leading_and_trailing_quotes=False):
+def trim_response(response, start_substring, end_substring, include_start_substring=False, include_end_substring=False):
     try:
         if start_substring in response and end_substring in response:
             start_index = response.rindex(start_substring)  # Sometimes the model re-gurgitates multiple copies of the same dict in it's response
@@ -2313,14 +2313,10 @@ def trim_response(response, start_substring, end_substring, include_start_substr
             
             if not include_start_substring:
                 start_index += len(start_substring)
-            if include_end_substring: end_index += 1
+            if include_end_substring:
+                end_index += len(end_substring)
             
-            response = response[start_index:end_index]
-            if clean_leading_and_trailing_quotes:
-                response = response.strip()
-                if response.startswith('"'): response = response[1:]
-                if response.endswith('"'): response = response[:-1]
-            return response
+            return response[start_index:end_index]
         else:
             print(f"\nResponse does not contain start_substring: {start_substring} or end_substring: {end_substring}, returning unchanged response: {response}\n")
             return response
@@ -2380,9 +2376,7 @@ def process_nodes(nodes: list, chunk_text: str, print_string: str = "", exl2_pro
                 skip_system_prompt=True
             )
             full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-            full_response = trim_response(full_response, '"summary":', '}', clean_leading_and_trailing_quotes=True)
-            full_response = full_response.replace("'", "")
-            full_response = f'{full_response}' # For consistent single-quote wrapping, just to be super-sure!
+            full_response = trim_response(full_response, '"summary":', '}')
             summarized_nodes.append({
                 'name': name,
                 'type': node_type,
@@ -2425,9 +2419,7 @@ def process_relationships(relationships: list, chunk_text: str, print_string: st
                 skip_system_prompt=True
             )
             full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-            full_response = trim_response(full_response, '"summary":', '}', clean_leading_and_trailing_quotes=True)
-            full_response = full_response.replace("'", "")
-            full_response = f'{full_response}'
+            full_response = trim_response(full_response, '"summary":', '}')
             summarized_relationships.append({
                 'source': source,
                 'target': target,
@@ -2472,7 +2464,7 @@ def exl2_grapher():
         summary_generation_mode = request.json.get('summary_generation_mode', False)
         exl2_prompt_template_format = request.json.get('exl2_prompt_template_format', None)
         gen_settings, requested_max_new_tokens = get_exl2_gen_settings(request)
-        print(f"\nchunk_entities received: {chunk_entities}\n")
+        # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
         handle_api_error("Could not read POST-request messages for /exl2_grapher, encountered error: ", e)
 
@@ -2496,6 +2488,7 @@ def exl2_grapher():
                         ast.literal_eval(full_response) # Sometimes additional text may be present and need to be stripped, which we can test for by trying to evaluate the response as a dict
                     except Exception as e:
                         full_response = trim_response(full_response, '{"nodes":', '}', include_start_substring=True, include_end_substring=True)
+                        print(f"Trimmed response for chunk {chunk_number}...\n")
                     chunk_entities[chunk_number]['entities_and_relationships'] = full_response
                     
                     output_queue.put(chunk_entities[chunk_number])
