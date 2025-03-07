@@ -314,7 +314,8 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'chunk_size':250,
                 'chunk_overlap':0,
                 'perform_graph_rag':True,
-                'graph_chunk_size':500,
+                'graph_chunk_size':1500,    # Larger chunks are better because they provide more context for the model to identify meaningful entities and relationships
+                'graph_chunk_overlap':300,  # 20% overlap for a 1500 char chunk: provides very reasonable overlap while not being too redundant.
                 'graph_generator_model':'Metin/Gemma-2-2B-TR-Knowledge-Graph',
                 'graph_model_server_port':9070,
                 'graph_model_access_url':'localhost',
@@ -1965,63 +1966,6 @@ def summary_generator(chunk_entities=None):
         pass
 
 
-def add_relationships_to_graph(selected_knowledge_domain: str, relationships: list, graph: FalkorDB, source_document: str = None):
-    print(f"\nStoring relationships to {selected_knowledge_domain} graph DB\n")
-
-    processed_relationships = {}    # Format: {(source, target, relationship): True}
-
-    for relationship in relationships:
-        try:
-            source = str(relationship['source'])
-            target = str(relationship['target'])
-            relationship_type = str(relationship['relationship'])
-            relationship_key = (source, target, relationship_type)
-            updated_summary = str(relationship['summary'])
-            
-            if relationship_key in processed_relationships:
-                print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) in {selected_knowledge_domain} graph DB")
-                continue
-
-            source = sanitize_names(source)
-            target = sanitize_names(target)
-            relationship_type = sanitize_names(relationship_type).upper()
-
-            # MERGE on stable properties to prevent duplicates, then SET the summary and add source_document as per the case:
-            if source_document:
-                graph.query(f"""
-                    MERGE (s:{source} {{name:'%s'}})
-                    MERGE (t:{target} {{name:'%s'}})
-                    MERGE (s)-[r:{relationship_type}]->(t)
-                    SET r.summary = '%s'
-                    SET r.source_documents = CASE
-                        WHEN r.source_documents IS NULL THEN ['%s']
-                        WHEN NOT '%s' IN r.source_documents THEN r.source_documents + ['%s']
-                        ELSE r.source_documents
-                    END
-                """ % (
-                    relationship['source'].replace("'", ""),
-                    relationship['target'].replace("'", ""),
-                    updated_summary.replace("'", ""),
-                    source_document.replace("'", ""),
-                    source_document.replace("'", ""),
-                    source_document.replace("'", "")
-                ))
-            else:
-                graph.query(f"""
-                    MERGE (s:{source} {{name:'%s'}})
-                    MERGE (t:{target} {{name:'%s'}})
-                    MERGE (s)-[r:{relationship_type}]->(t)
-                """ % (relationship['source'].replace("'", ""), relationship['target'].replace("'", "")))
-                # We don't want to use the sanitized names as both labels and property values
-
-            # Mark relationship as processed:
-            processed_relationships[relationship_key] = True
-            
-            print(f"\nCreated relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB\n")
-        except Exception as e:
-            handle_error_no_return(f"Could not create relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
-
-
 def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: FalkorDB, source_document: str = None):
     print(f"\nStoring entities(nodes) to {selected_knowledge_domain} graph DB\n")
 
@@ -2077,6 +2021,76 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
             print(f"\nCreated node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB\n")
         except Exception as e:
             handle_error_no_return(f"Could not create node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
+
+
+def add_relationships_to_graph(selected_knowledge_domain: str, relationships: list, graph: FalkorDB, source_document: str = None):
+    print(f"\nStoring relationships to {selected_knowledge_domain} graph DB\n")
+
+    processed_relationships = {}    # Format: {(source, target, relationship): True}
+
+    for relationship in relationships:
+        try:
+            source = str(relationship['source'])
+            target = str(relationship['target'])
+            relationship_type = str(relationship['relationship'])
+            relationship_key = (source, target, relationship_type)
+            updated_summary = str(relationship['summary'])
+            
+            if relationship_key in processed_relationships:
+                print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) in {selected_knowledge_domain} graph DB")
+                continue
+
+            source = sanitize_names(source)
+            target = sanitize_names(target)
+            relationship_type = sanitize_names(relationship_type).upper()
+
+            '''
+            MERGE on stable properties to prevent duplicates, then SET the summary and add source_document as per the case.
+            Track weights for relationships to improve clustering by tracking how many times each relationship is detected:
+            Microsoft GraphRAG paper's emphasis on "normalized counts of detected relationship instances" is quite deliberate - 
+            it's a way to let the data itself tell you which relationships are more significant in your knowledge graph!
+            '''
+            if source_document:
+                graph.query(f"""
+                    MERGE (s:{source} {{name:'%s'}})
+                    MERGE (t:{target} {{name:'%s'}})
+                    MERGE (s)-[r:{relationship_type}]->(t)
+                    SET r.weight = CASE
+                        WHEN r.weight IS NULL THEN 1
+                        ELSE r.weight + 1
+                    END
+                    SET r.summary = '%s'
+                    SET r.source_documents = CASE
+                        WHEN r.source_documents IS NULL THEN ['%s']
+                        WHEN NOT '%s' IN r.source_documents THEN r.source_documents + ['%s']
+                        ELSE r.source_documents
+                    END
+                """ % (
+                    relationship['source'].replace("'", ""),
+                    relationship['target'].replace("'", ""),
+                    updated_summary.replace("'", ""),
+                    source_document.replace("'", ""),
+                    source_document.replace("'", ""),
+                    source_document.replace("'", "")
+                ))
+            else:
+                graph.query(f"""
+                    MERGE (s:{source} {{name:'%s'}})
+                    MERGE (t:{target} {{name:'%s'}})
+                    MERGE (s)-[r:{relationship_type}]->(t)
+                    SET r.weight = CASE
+                        WHEN r.weight IS NULL THEN 1
+                        ELSE r.weight + 1
+                    END
+                """ % (relationship['source'].replace("'", ""), relationship['target'].replace("'", "")))
+                # We don't want to use the sanitized names as both labels and property values
+
+            # Mark relationship as processed:
+            processed_relationships[relationship_key] = True
+            
+            print(f"\nCreated relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB\n")
+        except Exception as e:
+            handle_error_no_return(f"Could not create relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
 
 
 def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str = ""):
@@ -2376,9 +2390,69 @@ def generate_graph_communities():
     return jsonify({"message": "Graph communities generated successfully"}), 200
 
 
-def graph_generator(chunks):
+def assemble_chunks_for_graph_db(chunks):
     '''
     Assembles document chunks into a dictionary of entities for storage to the GraphDB:
+    '''
+    try:
+        read_return = read_config(['graph_chunk_size', 'graph_chunk_overlap'])
+        graph_chunk_size = read_return['graph_chunk_size']
+        graph_chunk_overlap = read_return.get('graph_chunk_overlap', 300)
+        
+        graphing_chunk = ""
+        chunks_in_storage_queue = []    # chunks will eb combined upto `graph_chunk_size` and stored here
+        source_filename = ""
+        chunk_entities = {}
+        graph_chunk_count = 1
+        overlap_text = ""
+
+        print("\nGenerating Graphing Chunks Dictionary...\n")
+        
+        for count, chunk in enumerate(chunks):
+
+            try:
+                if count == 0:  # Only set the source filename once
+                    chunk_source_filepath = chunk['source']
+                    source_filename = os.path.basename(chunk_source_filepath)
+
+                current_chunk_text = re.sub(r'\[PAGE:\d+\]', '', str(chunk['content'])) #RegEx replace '[PAGE:<number>]' with ''
+                graphing_chunk += current_chunk_text
+                chunks_in_storage_queue.append(count)
+
+                if len(graphing_chunk) >= graph_chunk_size:
+                    chunk_entities[graph_chunk_count] = {
+                        'chunk_text': graphing_chunk,
+                        'source_chunks': chunks_in_storage_queue,
+                        'source_doc_name': source_filename
+                    }
+
+                    # Add overlap text to the next chunk
+                    overlap_text = graphing_chunk[-graph_chunk_overlap:] if len(graphing_chunk) > graph_chunk_size else graphing_chunk  # The [-<number>:] syntax is used to get the last <number> of characters from the string
+
+                    graph_chunk_count += 1
+                    graphing_chunk = overlap_text # Start the next chunk with the overlap text
+                    chunks_in_storage_queue = []    # Reset the storage queue for the next chunk
+            except Exception as e:
+                handle_error_no_return(f"Error processing chunk {count} of {len(chunks)} in assemble_chunks_for_grapd_db(), encountered error: ", e)
+
+        if graphing_chunk: # Add final batch to chunk_entities dict
+            try:
+                chunk_entities[graph_chunk_count] = {
+                    'chunk_text': graphing_chunk,
+                    'source_chunks': chunks_in_storage_queue,
+                    'source_doc_name': source_filename
+                }   # Clean-up left to the garbage collector as we're at the end of the loop!
+            except Exception as e:
+                handle_error_no_return(f"Error processing final batch of chunks in assemble_chunks_for_graph_db(), encountered error: ", e)
+    except Exception as e:
+        return handle_local_error(f"Error assembling chunks for graph DB, encountered error: ", e)
+
+    return chunk_entities
+
+
+def graph_generator(chunks):
+    '''
+    Assembles document chunks (via assemble_chunks_for_graph_db()) into a dictionary of entities for storage to the GraphDB:
 
     chunk_entities = {
         '<graph_chunk_number>': {
@@ -2406,42 +2480,10 @@ def graph_generator(chunks):
     except Exception as e:
         return handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
 
-    graph_chunk_size = read_config(['graph_chunk_size'])['graph_chunk_size']
-    graphing_chunk = ""
-    chunks_in_storage_queue = []    # chunks will eb combined upto `graph_chunk_size` and stored here
-    source_filename = ""
-    
-    chunk_entities = {}
-    graph_chunk_count = 1
-
-    print("\nGenerating Graphing Chunks Dictionary...\n")
-    
-    for count, chunk in enumerate(chunks):
-
-        if count == 0:  # Only set the source filename once
-            chunk_source_filepath = chunk['source']
-            source_filename = os.path.basename(chunk_source_filepath)
-
-        graphing_chunk += re.sub(r'\[PAGE:\d+\]', '', str(chunk['content'])) #RegEx replace '[PAGE:<number>]' with ''
-        chunks_in_storage_queue.append(count)
-
-        if len(graphing_chunk) >= graph_chunk_size:
-            chunk_entities[graph_chunk_count] = {
-                'chunk_text': graphing_chunk,
-                'source_chunks': chunks_in_storage_queue,
-                'source_doc_name': source_filename
-            }
-
-            graph_chunk_count += 1
-            graphing_chunk = ""
-            chunks_in_storage_queue = []
-
-    if graphing_chunk: # Add final batch to chunk_entities dict
-        chunk_entities[graph_chunk_count] = {
-            'chunk_text': graphing_chunk,
-            'source_chunks': chunks_in_storage_queue,
-            'source_doc_name': source_filename
-        }   # No need for clean-up here as we're at the end of the loop!
+    try:
+        chunk_entities = assemble_chunks_for_graph_db(chunks)
+    except Exception as e:
+        return handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
     
     try:
         selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']    
