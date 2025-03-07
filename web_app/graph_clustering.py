@@ -132,24 +132,37 @@ def apply_leiden_clustering(client, knowledge_domain: str, resolution: float = 1
             print(f"Number of edges(relationships) in the GraphDB: {edge_count}")
 
             edges = []
+            weights = []
             offset = 0
             batch_size = min(10000, max(1000, edge_count // 5)) # Pick the smaller of 10000 or 5% of the edges, or 1000 if less than 1000 edges
 
             while True:
-                edges_query = f"MATCH (s)-[r]->(t) RETURN ID(s) AS source, ID(t) AS target, TYPE(r) AS relationship SKIP {offset} LIMIT {batch_size}"
+                edges_query = f"MATCH (s)-[r]->(t) RETURN ID(s) AS source, ID(t) AS target, r.weight AS weight SKIP {offset} LIMIT {batch_size}"
+                '''
+                The clustering algorithm primarily cares about:
+                    - Which nodes are connected (the source and target IDs)
+                    - How strongly they're connected (the weights)
+                    - The actual type of relationship (like "WORKS_AT", "BELONGS_TO", etc.) isn't used in the community detection process, hence the query above.
+                '''
                 result = graph.query(edges_query)
 
                 if not result.result_set:
                     break
 
                 batch_edges = []    # relationships to the processed in this batch
+                batch_weights = []
                 for record in result.result_set:
                     source_id = int(record[0])
                     target_id = int(record[1])
+                    weight = float(record[2]) if record[2] is not None else 1.0 # Default weight of 1
+                    
                     if source_id in node_map and target_id in node_map:
                         batch_edges.append((node_map[source_id], node_map[target_id]))
+                        batch_weights.append(weight)
 
                 edges.extend(batch_edges)
+                weights.extend(batch_weights)
+
                 offset += len(result.result_set)
                 print(f"Processed {offset}/{edge_count} edges(relationships)")
 
@@ -157,18 +170,47 @@ def apply_leiden_clustering(client, knowledge_domain: str, resolution: float = 1
                     break
             
             print(f"Total edges collected: {len(edges)}")
+            
+            # Add edges & weights to the igraph object:
             G.add_edges(edges)
+            G.es['weight'] = weights
+            
             print(f"Created igraph with {len(G.vs)} nodes and {len(G.get_edgelist())} edges(relationships)")
 
-            # Run Leiden clustering algorithm with configurable parameters:
+            # Normalize the weights (as per GraphRAG paper):
+            max_weight = max(weights)
+            if max_weight > 0:
+                G.es['weight'] = [w / max_weight for w in weights]  # Normalize relative to the maximum weight in the graph - results in values between 0 and 1
+
+            # Create an index on the cluster property to speed up lookups:
+            graph.query("CREATE INDEX ON :Node(cluster)")
+            '''
+            Adding an Index on the cluster property will significantly speedup lookup queries when retrieving nodes by their cluster assignment: `MATCH (n) WHERE n.cluster = <cluster_id> RETURN n`
+            Without this, FalkorDB will need to scan all nodes to find those belonging to a specific cluster, which is highly inefficient for large graphs.
+            With an index, it can quickly locate nodes with a particular cluster value.
+            Additionally, when performing cluster assignments and updates below (line 231: `MATCH (n) WHERE ID(n) = {node_id} SET n.cluster = {cluster_id}`),
+            the index will allow the database to quickly find the nodes to update, rather than scanning the entire graph.
+
+            Also future-proof and useful if and when:
+                - We want to retrieve nodes by their cluster assignment.
+                - We want to perform aggregate queries or analytics based on cluster membership.
+                - We want to join nodes by their cluster assignments in Cypher queries.
+                - Analyze or report on the distribution of nodes across clusters.
+                - Perform graph analytics or traversals based on cluster membership.
+                - We want to perform graph clustering operations on the graph.
+                - We want to find all nodes belonging to a specific cluster or perform an operation on a specific cluster.
+
+            Perfect Placement - right after loading the graph but before running the clustering algorithm, ensuring the index is ready for the upcoming cluster assignments!
+            '''
+
+            # Run Leiden clustering algorithm with configurable parameters (Converting to undirected as explained above!):
             print("Running Leiden clustering...")
-            G_undirected = G.as_undirected()    # Converting to undirected as explained above!
+            G_undirected = G.as_undirected(combine_edges="sum")    # Combine weights of parallel edges
 
             partition = find_partition(
                 G_undirected,
                 ModularityVertexPartition,  # `partition_type` parameter (optional); using this because it's the default and most commonly used partition type for community detection.
-                #resolution_parameter = resolution,
-                # beta = beta,
+                weights=G_undirected.es['weight'],
                 n_iterations = n_iterations,
                 seed = 42   # 42 because it's the answer to the ultimate question of life, the universe, and everything!
             )
