@@ -182,7 +182,15 @@ def apply_leiden_clustering(client, knowledge_domain: str, resolution: float = 1
             if max_weight > 0:
                 G.es['weight'] = [w / max_weight for w in weights]  # Normalize relative to the maximum weight in the graph - results in values between 0 and 1
 
-            # Create an index on the cluster property to speed up lookups:
+            # Create an index on the cluster property to speed up lookups (if one doesn't already exist):
+            try:
+                # First try to drop the index if it exists (this will fail if it doesn't exist, which is fine)
+                print("Dropping existing index on cluster property...")
+                graph.query("DROP INDEX ON :Node(cluster)")
+            except:
+                pass  # Index didn't exist, which is what we want
+
+            # Create the index:
             graph.query("CREATE INDEX ON :Node(cluster)")
             '''
             Adding an Index on the cluster property will significantly speedup lookup queries when retrieving nodes by their cluster assignment: `MATCH (n) WHERE n.cluster = <cluster_id> RETURN n`
