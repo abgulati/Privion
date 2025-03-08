@@ -2485,10 +2485,14 @@ def exl2_grapher():
                 
                     full_response = create_and_execute_exl2_job(payload=full_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
                     try:
-                        ast.literal_eval(full_response) # Sometimes additional text may be present and need to be stripped, which we can test for by trying to evaluate the response as a dict
+                        full_response = ast.literal_eval(full_response) # Sometimes additional text may be present and need to be stripped, which we can test for by trying to evaluate the response as a dict
                     except Exception as e:
                         full_response = trim_response(full_response, '{"nodes":', '}', include_start_substring=True, include_end_substring=True)
                         print(f"Trimmed response for chunk {chunk_number}...\n")
+                        try:
+                            full_response = ast.literal_eval(full_response)
+                        except Exception as e:
+                            raise # Re-raise the original exception if the second attempt also fails
                     chunk_entities[chunk_number]['entities_and_relationships'] = full_response
                     
                     output_queue.put(chunk_entities[chunk_number])
