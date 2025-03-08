@@ -327,7 +327,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'assign_host_port_to_graph_db_server':6379,
                 'launch_graph_db_with_ui':True,
                 'assign_host_port_to_graph_db_ui':3000,
-                'graph_model_max_new_tokens':8192,
+                'graph_model_max_new_tokens':4096,
                 'graph_model_temperature':0.1,
                 'graph_model_do_sample':True,
                 'graph_model_top_k':40,
