@@ -2451,6 +2451,7 @@ def assemble_chunks_for_graph_db(chunks):
 
 
 def graph_generator(chunks):
+
     '''
     Assembles document chunks (via assemble_chunks_for_graph_db()) into a dictionary of entities for storage to the GraphDB:
 
@@ -5141,7 +5142,130 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
             print("Collecting garbage")
             gc.collect()
 
-def search_knowledge_base(user_query:str, embedding_function:str, force_enable_rag:bool, force_disable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int, ) -> tuple[list[Document], bool]:
+
+def get_summaries_from_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB):
+    '''
+    Receives a complete chunk_entities dict:
+
+    chunk_entities = {
+        '<graph_chunk_number>': {
+            '<entities_and_relationships>': '<node_relationships_dict>',
+            '<chunk_text>': '<text>',
+            '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
+            '<source_doc_name>': '<name>'
+        }
+    }
+
+    And basis the 'chunk_text' and 'entities_and_relationships' for each `graph_chunk_number`:
+        1. Handles Summaries if applicable:
+            - Retrieves existing summaries for each node and relationship
+            - Generates a summary for each node and relationship. This sequence ensures highest throughput of summary-generation requests to the LLM as both the lookup for existing summaries and the storage to the GraphDB are handled completely seperately!
+        2. Stores the nodes and relationships in the graph DB
+    '''
+
+    print(f"\nStoring entities and relationships in {selected_knowledge_domain} graph DB\n")
+
+    try:
+        # a. Get summaries for all nodes and relationships:
+        for chunk_number, chunk_data in chunk_entities.items():
+            print_string = f" in chunk {chunk_number} of total {len(chunk_entities)} chunks"
+            print(f"\nChecking for existing summaries for all nodes and relationships {print_string}...\n")
+
+            try:
+                nodes_with_existing_summaries = get_summaries_for_all_nodes(nodes=chunk_data['entities_and_relationships']['nodes'], graph=graph, print_string=print_string)
+                chunk_entities[chunk_number]['entities_and_relationships']['nodes'] = nodes_with_existing_summaries
+            except Exception as e:
+                handle_error_no_return(f"Error checking for existing summaries for nodes, skipping chunk {chunk_number}. Encountered error: ", e)
+
+            try:
+                relationships_with_existing_summaries = get_summaries_for_all_relationships(relationships=chunk_data['entities_and_relationships']['relationships'], graph=graph, print_string=print_string)
+                chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = relationships_with_existing_summaries
+            except Exception as e:
+                handle_error_no_return(f"Error checking for existing summaries for relationships, skipping chunk {chunk_number}. Encountered error: ", e)
+    
+    except Exception as e:
+        handle_error_no_return("Could not get summaries from graph DB, encountered error: ", e)
+
+    return chunk_entities
+
+
+def get_summary_report(summarized_chunk_entities: dict) -> str:
+    print(f"\n\nGetting summary report\n\n")
+    summary_report = ""
+    try:
+        for count, chunk_data in summarized_chunk_entities.items():
+            if count == 0:
+                continue    # Skip the user query chunk
+            summary_report += chunk_data['entities_and_relationships']['summary'] + '\n\n'
+    except Exception as e:
+        handle_error_no_return("Could not add to summary report, skipping chunk {count}. Encountered error: ", e)
+    return summary_report
+
+
+def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
+    '''
+    Assembles document chunks (via assemble_chunks_for_graph_db()) into a dictionary of entities for storage to the GraphDB:
+
+    chunk_entities = {
+        '<graph_chunk_number>': {
+            '<chunk_text>': '<text>',
+            '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
+            '<source_doc_name>': '<name>'
+        }
+    }
+
+    This is then passed to the graphing model which will process each graph_chunk and append the `entities_and_relationships` key to each chunk_entities dict:
+        
+        '<entities_and_relationships>': '<node_relationships_dict>'
+        # eg: {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"}], "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"}]},
+
+    The final `chunk_entities` dict is then passed to the `get_summaries_from_graph_db()` function which will store the entities and relationships in the GraphDB.
+    '''
+    
+    print(f"\n\nExecuting GraphRAG. Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+
+    try:
+        bring_graph_db_online()
+        bring_graphing_model_online()
+    except Exception as e:
+        return handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
+
+    try:
+        chunk_entities = assemble_chunks_for_graph_db(docs)
+        chunk_entities[0] = {
+            'chunk_text': user_query,
+            'source_chunks': [],
+            'source_doc_name': 'user_query'
+        }   # assemble_chunks_for_graph_db() starts graph chunk numbering from 1, so we can add the user query as the first chunk!
+    except Exception as e:
+        return handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
+    
+    try:
+        selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']    
+        client = get_graph_db_client()
+        graph = client.select_graph(selected_knowledge_domain)  # Will create the graph if it doesn't exist
+    except Exception as e:
+        return handle_local_error(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB, encountered error: ", e)
+
+    try:
+        complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities)
+    except Exception as e:
+        return handle_local_error("Failed to extract entities and relationships from chunk entities, encountered error: ", e)
+
+    try:
+        summarized_chunk_entities = get_summaries_from_graph_db(complete_chunk_entities, selected_knowledge_domain, graph)
+    except Exception as e:
+        return handle_local_error("Could not store entities and relationships in graph DB, encountered error: ", e)
+
+    try:
+        summary_report = get_summary_report(summarized_chunk_entities)
+    except Exception as e:
+        return handle_local_error("Could not get summary report, encountered error: ", e)
+
+    return summary_report
+
+
+def search_knowledge_base(user_query:str, embedding_function:str, perform_graph_rag:bool, force_enable_rag:bool, force_disable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int, ) -> tuple[list[Document], bool]:
     print("Searching knowledge base")
 
     filtered_docs = []
@@ -5172,7 +5296,11 @@ def search_knowledge_base(user_query:str, embedding_function:str, force_enable_r
     print(f"\n\nContext docs after reranking: {docs}\n\n")
     do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
 
-    return docs, do_rag
+    graph_rag_context = None
+    if perform_graph_rag:
+        graph_rag_context = execute_graph_rag(user_query, docs)
+
+    return docs, do_rag, graph_rag_context
 
 
 @app.route('/setup_for_local_llm_response', methods=['POST'])
@@ -5207,7 +5335,8 @@ def setup_for_local_llm_response():
     try:    # RAG Routine Begins: Perform semantic search on the vector DB, lexical search on the whoosh index, combine and rerank results and determine if RAG is necessary
         print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n") 
         selected_embedding_function = read_config(['selected_embedding_model'])['selected_embedding_model']
-        docs, do_rag = search_knowledge_base(user_query, selected_embedding_function, 
+        perform_graph_rag = read_config(['perform_graph_rag'])['perform_graph_rag']
+        docs, do_rag, graph_rag_context = search_knowledge_base(user_query, selected_embedding_function, perform_graph_rag,
         (config['force_enable_rag'] or regenerate_with_citations_force_enabled), 
         (config['force_disable_rag'] or regenerate_with_citations_force_disabled), 
         config['filter_top_k_results_by_reranking'], config['fetch_top_k_results_from_vectordb'])
@@ -5219,7 +5348,10 @@ def setup_for_local_llm_response():
         write_config({'do_rag':do_rag})
         if do_rag:    # Add similarity search results for RAG if necessary!
             QUERIES[key_for_vector_results] = docs
-            user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference it in your response by name and page number:\n{docs}"
+            if graph_rag_context is not None:
+                user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference useful documents by name in your response:\n{graph_rag_context}"
+            else:
+                user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference it in your response by name and page number:\n{docs}"
     except Exception as e:
         reject_rag()
         handle_error_no_return("Could not write do_rag or prepare RAG context during setup_for_streaming_response, encountered error: ", e)
