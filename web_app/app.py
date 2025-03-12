@@ -2411,9 +2411,8 @@ def assemble_chunks_for_graph_db(chunks):
         for count, chunk in enumerate(chunks):
 
             try:
-                if count == 0:  # Only set the source filename once
-                    chunk_source_filepath = chunk['source']
-                    source_filename = os.path.basename(chunk_source_filepath)
+                chunk_source_filepath = chunk['source']
+                source_filename = os.path.basename(chunk_source_filepath)
 
                 current_chunk_text = re.sub(r'\[PAGE:\d+\]', '', str(chunk['content'])) #RegEx replace '[PAGE:<number>]' with ''
                 graphing_chunk += current_chunk_text
@@ -2451,7 +2450,6 @@ def assemble_chunks_for_graph_db(chunks):
 
 
 def graph_generator(chunks):
-
     '''
     Assembles document chunks (via assemble_chunks_for_graph_db()) into a dictionary of entities for storage to the GraphDB:
 
@@ -5191,18 +5189,52 @@ def get_summaries_from_graph_db(chunk_entities: dict, selected_knowledge_domain:
 
 def get_summary_report(summarized_chunk_entities: dict) -> str:
     print(f"\n\nGetting summary report\n\n")
+    
     summary_report = ""
     try:
-        for count, chunk_data in summarized_chunk_entities.items():
-            if count == 0:
-                continue    # Skip the user query chunk
-            summary_report += chunk_data['entities_and_relationships']['summary'] + '\n\n'
+        for count, chunk_data in summarized_chunk_entities.items(): 
+            source_doc_name = chunk_data['source_doc_name']
+            if source_doc_name == 'user_query':
+                print("\nSkipping user query chunk\n")
+                continue
+            for node in chunk_data['entities_and_relationships']['nodes']:
+                if node['summary'] is not None and node['summary'] != '':
+                    summary_report += f"{source_doc_name} - {node['summary']}\n\n"
+            for relationship in chunk_data['entities_and_relationships']['relationships']:
+                if relationship['summary'] is not None and relationship['summary'] != '':
+                    summary_report += f"{source_doc_name} - {relationship['summary']}\n\n"
     except Exception as e:
         handle_error_no_return("Could not add to summary report, skipping chunk {count}. Encountered error: ", e)
     return summary_report
 
 
+def get_doc_object_dict(docs: list[Document]) -> dict:
+    parsed_documents = []
+    
+    for doc in docs:
+        
+        try:
+            relevant_page_text = str(doc.page_content)
+            relevant_page_number = str(doc.metadata.get('page_number'))
+            source_filepath_full = str(doc.metadata.get('source'))
+            source_filepath = os.path.basename(source_filepath_full)
+        
+            relevant_page_text = relevant_page_text.replace('\n', ' ')
+            parsed_documents.append({
+                'content': relevant_page_text.strip().replace("'", ""),
+                'source': source_filepath,
+                'page_number': relevant_page_number
+            })
+            
+        except Exception as e:
+            handle_error_no_return("Could not access doc.page_content and/or doc.metadata, encountered error: ", e)
+            continue
+
+    return parsed_documents
+
+
 def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
+    
     '''
     Assembles document chunks (via assemble_chunks_for_graph_db()) into a dictionary of entities for storage to the GraphDB:
 
@@ -5231,9 +5263,17 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
         return handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
 
     try:
-        chunk_entities = assemble_chunks_for_graph_db(docs)
+        doc_object_dict = get_doc_object_dict(docs)
+    except Exception as e:
+        return handle_local_error("Could not get doc object dict, encountered error: ", e)
+
+    try:
+        print(f"\n\nAssembling chunks for graph DB for doc: {doc_object_dict}\n\n")
+        chunk_entities = assemble_chunks_for_graph_db(doc_object_dict)
+        user_query = user_query.replace("'", "").replace("<br>", "").replace("?", "")
+        user_query_chunk_text = f"Do not attempt to answer any query that follows, simply proceed to extract nodes and relationships from the following text:\n{user_query}"
         chunk_entities[0] = {
-            'chunk_text': user_query,
+            'chunk_text': user_query_chunk_text,
             'source_chunks': [],
             'source_doc_name': 'user_query'
         }   # assemble_chunks_for_graph_db() starts graph chunk numbering from 1, so we can add the user query as the first chunk!
@@ -5300,6 +5340,7 @@ def search_knowledge_base(user_query:str, embedding_function:str, perform_graph_
     if perform_graph_rag:
         graph_rag_context = execute_graph_rag(user_query, docs)
 
+
     return docs, do_rag, graph_rag_context
 
 
@@ -5349,6 +5390,7 @@ def setup_for_local_llm_response():
         if do_rag:    # Add similarity search results for RAG if necessary!
             QUERIES[key_for_vector_results] = docs
             if graph_rag_context is not None:
+                print(f"\n\nUsing GraphRAG context: {graph_rag_context}\n\n")
                 user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference useful documents by name in your response:\n{graph_rag_context}"
             else:
                 user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference it in your response by name and page number:\n{docs}"
