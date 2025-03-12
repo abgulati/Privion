@@ -2487,7 +2487,7 @@ def exl2_grapher():
                     try:
                         full_response = ast.literal_eval(full_response) # Sometimes additional text may be present and need to be stripped, which we can test for by trying to evaluate the response as a dict
                     except Exception as e:
-                        full_response = trim_response(full_response, '{"nodes":', '}', include_start_substring=True, include_end_substring=True)
+                        full_response = trim_response(full_response, '{"nodes":', '"}]}', include_start_substring=True, include_end_substring=True)
                         print(f"Trimmed response for chunk {chunk_number}...\n")
                         try:
                             full_response = ast.literal_eval(full_response)
