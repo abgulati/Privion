@@ -1830,7 +1830,7 @@ def sanitize_names(name):
     return sanitized
 
 
-def check_node_and_get_summary(graph, name, node_type):
+def get_summary_and_source_documents_for_node(graph, name, node_type):
     print(f"\nChecking if summary for node {name} of type {node_type} exists in graph\n")
 
     try:
@@ -1838,24 +1838,24 @@ def check_node_and_get_summary(graph, name, node_type):
 
         query = f"""
             MATCH (n:{node_name} {{name: '%s', type: '%s'}})
-            RETURN n.summary AS summary
+            RETURN n.summary AS summary, n.source_documents AS source_documents
         """ % (name.replace("'", ""), node_type.replace("'", ""))
 
         result = graph.query(query)
         
         if hasattr(result, 'result_set') and result.result_set:
-            print(f"\nExisting summary for node found and will be updated: {result.result_set[0][0]}\n")
-            return result.result_set[0][0]
+            print(f"\nExisting summary for node found: {result.result_set[0][0]}\n")
+            return result.result_set[0][0], result.result_set[0][1] if len(result.result_set[0]) > 1 else ""
         else:
-            print(f"\nNo existing summary for node found, will be created afresh...\n")
-            return ""   # If no summary is found, return an empty string:
+            print(f"\nNo existing summary for node found...\n")
+            return "", ""   # If no summary is found, return an empty string:
 
     except Exception as e:
         handle_error_no_return(f"Could not check if node {name} of type {node_type} exists in graph, returning empty string. Encountered error: ", e)
         return ""
 
 
-def check_relationship_and_get_summary(graph, source, target, relationship_type):
+def get_summary_and_source_documents_for_relationship(graph, source, target, relationship_type):
     print(f"\nChecking if summary for relationship {source} -> {target} ({relationship_type}) exists in graph\n")
 
     source_label = sanitize_names(source)
@@ -1864,17 +1864,17 @@ def check_relationship_and_get_summary(graph, source, target, relationship_type)
     try:
         query = f"""
             MATCH (s:{source_label} {{name: '{source}'}})-[r:{relationship_type}]->(t:{target_label} {{name: '{target}'}})
-            RETURN r.summary AS summary
+            RETURN r.summary AS summary, r.source_documents AS source_documents
         """
 
         result = graph.query(query)
 
         if hasattr(result, 'result_set') and result.result_set:
-            print(f"\nExisting summary for relationship found and will be updated: {result.result_set[0][0]}\n")
-            return result.result_set[0][0]
+            print(f"\nExisting summary for relationship found: {result.result_set[0][0]}\n")
+            return result.result_set[0][0], result.result_set[0][1] if len(result.result_set[0]) > 1 else ""
         else:
-            print(f"\nNo existing summary for relationship found, will be created afresh...\n")
-            return ""   # If no summary is found, return an empty string:
+            print(f"\nNo existing summary for relationship found...\n")
+            return "", ""   # If no summary is found, return an empty string:
 
     except Exception as e:
         handle_error_no_return(f"Could not check if summary for relationship {source} -> {target} ({relationship_type}) exists in graph, returning empty string. Encountered error: ", e)
@@ -2093,8 +2093,9 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
             handle_error_no_return(f"Could not create relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
 
 
-def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str = ""):
+def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str = "", get_source_documents: bool = False):
     nodes_with_existing_summaries = []
+    processed_nodes = {}    # Will de-duplicate nodes!
 
     for count, node in enumerate(nodes):
         print(f"Checking for existing summary for node {count+1} of {len(nodes)} {print_string}...")
@@ -2102,18 +2103,35 @@ def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str 
             name = str(node['name'])
             node_type = str(node['type'])
 
+            node_key = (name, node_type)
+
+            if node_key in processed_nodes:
+                print(f"Skipping duplicate node {name} of type {node_type} when checking for existing summaries in graph DB")
+                continue
+
             try:
-                existing_summary = check_node_and_get_summary(graph, name, node_type)
+                existing_summary, existing_source_documents = get_summary_and_source_documents_for_node(graph, name, node_type)
             except Exception as e:
                 existing_summary = ""
+                existing_source_documents = ""
                 handle_error_no_return(f"Could not check existing summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
 
             # update node in chunk_entities dict:
-            nodes_with_existing_summaries.append({
-                'name': name,
-                'type': node_type,
-                'summary': existing_summary
-            })
+            if get_source_documents:
+                nodes_with_existing_summaries.append({
+                    'name': name,
+                    'type': node_type,
+                    'summary': existing_summary,
+                    'source_documents': existing_source_documents
+                })
+            else:
+                nodes_with_existing_summaries.append({
+                    'name': name,
+                    'type': node_type,
+                    'summary': existing_summary
+                })
+
+            processed_nodes[node_key] = True
 
         except Exception as e:
             handle_error_no_return(f"Could not get summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
@@ -2121,28 +2139,47 @@ def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str 
     return nodes_with_existing_summaries
 
 
-def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, print_string: str = ""):
+def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, print_string: str = "", get_source_documents: bool = False):
     relationships_with_existing_summaries = []
+    processed_relationships = {}    # Will de-duplicate relationships!
 
     for count, relationship in enumerate(relationships):
         print(f"Checking for existing summary for relationship {count+1} of {len(relationships)} {print_string}...")
         try:
             source = str(relationship['source'])
             target = str(relationship['target'])
-            relationship_type = sanitize_names(str(relationship['relationship']).upper())
+            relationship_type = sanitize_names(str(relationship['relationship']).upper())   # Added as sanitize_names().upper() hence formatting here too!
+
+            relationship_key = (source, target, relationship_type)
+
+            if relationship_key in processed_relationships:
+                print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) when checking for existing summaries in graph DB")
+                continue
 
             try:
-                existing_summary = check_relationship_and_get_summary(graph, source.replace("'", ""), target.replace("'", ""), relationship_type)
+                existing_summary, existing_source_documents = get_summary_and_source_documents_for_relationship(graph, source.replace("'", ""), target.replace("'", ""), relationship_type)
             except Exception as e:
                 existing_summary = ""
+                existing_source_documents = ""
                 handle_error_no_return(f"Could not check existing summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
 
-            relationships_with_existing_summaries.append({
-                'source': source,
-                'target': target,
-                'relationship': str(relationship['relationship']),
-                'summary': existing_summary
-            })
+            if get_source_documents:
+                relationships_with_existing_summaries.append({
+                    'source': source,
+                    'target': target,
+                    'relationship': str(relationship['relationship']),
+                    'summary': existing_summary,
+                    'source_documents': existing_source_documents
+                })
+            else:
+                relationships_with_existing_summaries.append({
+                    'source': source,
+                    'target': target,
+                    'relationship': str(relationship['relationship']),
+                    'summary': existing_summary
+                })
+
+            processed_relationships[relationship_key] = True
 
         except Exception as e:
             handle_error_no_return(f"Could not get summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
@@ -2390,7 +2427,7 @@ def generate_graph_communities():
     return jsonify({"message": "Graph communities generated successfully"}), 200
 
 
-def assemble_chunks_for_graph_db(chunks):
+def assemble_chunks_for_graph_db(chunks, user_query=None):
     '''
     Assembles document chunks into a dictionary of entities for storage to the GraphDB:
     '''
@@ -2405,6 +2442,15 @@ def assemble_chunks_for_graph_db(chunks):
         chunk_entities = {}
         graph_chunk_count = 1
         overlap_text = ""
+
+        if user_query is not None:  # For GraphRAG response query-pipeline, we need to add the user query as a chunk
+            user_query = user_query.replace("'", "").replace("<br>", "").replace("?", "")
+            user_query_chunk_text = f"Do not attempt to answer any query that follows, simply proceed to extract nodes and relationships from the following text:\n{user_query}"
+            chunk_entities[0] = {
+                'chunk_text': user_query_chunk_text,
+                'source_chunks': [],
+                'source_doc_name': 'user_query'
+            }   # Graph chunk numbering starts from 1, so we can add the user query as chunk 0!
 
         print("\nGenerating Graphing Chunks Dictionary...\n")
         
@@ -5141,6 +5187,45 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
             gc.collect()
 
 
+def get_summary_report(summarized_chunk_entities: dict) -> str:
+    print(f"\n\nGetting summary report\n\n")
+    
+    summary_report = ""
+    try:
+        for _, chunk_data in summarized_chunk_entities.items():
+            source_doc_name = chunk_data['source_doc_name']
+            
+            if source_doc_name == 'user_query':
+                print("\nSkipping user query chunk\n")
+                continue
+            
+            for node in chunk_data['entities_and_relationships']['nodes']:
+                if node['summary'] is not None and node['summary'] != '':
+                    
+                    try:
+                        node_source_doc_name = set(node['source_documents'] if node['source_documents'] else source_doc_name.split(' '))
+                    except Exception as e:
+                        handle_error_no_return("Could not split source_doc_name, encountered error: ", e)
+                        node_source_doc_name = set(source_doc_name.split(' '))
+                    
+                    summary_report += f"Summary for node '{node['name']}' of type '{node['type']}' - {node['summary']} \nSource Document(s): {node_source_doc_name}\n\n"
+            
+            for relationship in chunk_data['entities_and_relationships']['relationships']:
+                if relationship['summary'] is not None and relationship['summary'] != '':
+                    
+                    try:
+                        relationship_source_doc_name = set(relationship['source_documents'] if relationship['source_documents'] else source_doc_name.split(' '))
+                    except Exception as e:
+                        handle_error_no_return("Could not split source_doc_name, encountered error: ", e)
+                        relationship_source_doc_name = set(source_doc_name.split(' '))
+                    
+                    summary_report += f"Summary for relationship '{relationship['relationship']}' between '{relationship['source']}' and '{relationship['target']}' - {relationship['summary']} \nSource Document(s): {relationship_source_doc_name}\n\n"
+    
+    except Exception as e:
+        handle_error_no_return("Could not add to summary report, skipping chunk {count}. Encountered error: ", e)
+    return summary_report
+
+
 def get_summaries_from_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB):
     '''
     Receives a complete chunk_entities dict:
@@ -5170,13 +5255,13 @@ def get_summaries_from_graph_db(chunk_entities: dict, selected_knowledge_domain:
             print(f"\nChecking for existing summaries for all nodes and relationships {print_string}...\n")
 
             try:
-                nodes_with_existing_summaries = get_summaries_for_all_nodes(nodes=chunk_data['entities_and_relationships']['nodes'], graph=graph, print_string=print_string)
+                nodes_with_existing_summaries = get_summaries_for_all_nodes(nodes=chunk_data['entities_and_relationships']['nodes'], graph=graph, print_string=print_string, get_source_documents=True)
                 chunk_entities[chunk_number]['entities_and_relationships']['nodes'] = nodes_with_existing_summaries
             except Exception as e:
                 handle_error_no_return(f"Error checking for existing summaries for nodes, skipping chunk {chunk_number}. Encountered error: ", e)
 
             try:
-                relationships_with_existing_summaries = get_summaries_for_all_relationships(relationships=chunk_data['entities_and_relationships']['relationships'], graph=graph, print_string=print_string)
+                relationships_with_existing_summaries = get_summaries_for_all_relationships(relationships=chunk_data['entities_and_relationships']['relationships'], graph=graph, print_string=print_string, get_source_documents=True)
                 chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = relationships_with_existing_summaries
             except Exception as e:
                 handle_error_no_return(f"Error checking for existing summaries for relationships, skipping chunk {chunk_number}. Encountered error: ", e)
@@ -5187,25 +5272,53 @@ def get_summaries_from_graph_db(chunk_entities: dict, selected_knowledge_domain:
     return chunk_entities
 
 
-def get_summary_report(summarized_chunk_entities: dict) -> str:
-    print(f"\n\nGetting summary report\n\n")
-    
-    summary_report = ""
+def merge_chunk_entities_for_graph_rag(chunk_entities: dict) -> dict:
+    '''
+    Receives a complete chunk_entities dict:
+
+    chunk_entities = {
+        '<graph_chunk_number_1>': {
+            '<entities_and_relationships>': '<node_relationships_dict>',
+            '<chunk_text>': '<text>',
+            '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
+            '<source_doc_name>': '<name>'
+        },
+        '<graph_chunk_number_2>': {
+            '<entities_and_relationships>': '<node_relationships_dict>',
+            '<chunk_text>': '<text>',
+            '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
+            '<source_doc_name>': '<name>'
+        },
+        ...
+    }
+
+    And returns a merged chunk_entities dict, because all entities and relationships are extracted from RAG context, and 
+    merging will allow for de-duplication of nodes and relationships in the get_summary step.
+    '''
+
+    print(f"\n\nMerging chunk entities for graph RAG. Received chunk_entities: \n {chunk_entities}\n\n")
+
     try:
-        for count, chunk_data in summarized_chunk_entities.items(): 
-            source_doc_name = chunk_data['source_doc_name']
-            if source_doc_name == 'user_query':
-                print("\nSkipping user query chunk\n")
-                continue
-            for node in chunk_data['entities_and_relationships']['nodes']:
-                if node['summary'] is not None and node['summary'] != '':
-                    summary_report += f"{source_doc_name} - {node['summary']}\n\n"
-            for relationship in chunk_data['entities_and_relationships']['relationships']:
-                if relationship['summary'] is not None and relationship['summary'] != '':
-                    summary_report += f"{source_doc_name} - {relationship['summary']}\n\n"
+        chunk_entities_merged = {0: {
+            'chunk_text': '',
+            'entities_and_relationships': {
+                'nodes': [],
+                'relationships': []
+            },
+            'source_chunks': [],
+            'source_doc_name': ''
+        }}
+        for _, chunk_data in chunk_entities.items():
+            chunk_entities_merged[0]['chunk_text'] += chunk_data['chunk_text'] if chunk_entities_merged[0]['chunk_text'] == '' else f" {chunk_data['chunk_text']}"
+            chunk_entities_merged[0]['entities_and_relationships']['nodes'].extend(chunk_data['entities_and_relationships']['nodes'])
+            chunk_entities_merged[0]['entities_and_relationships']['relationships'].extend(chunk_data['entities_and_relationships']['relationships'])
+            chunk_entities_merged[0]['source_chunks'].extend(chunk_data['source_chunks'])
+            chunk_entities_merged[0]['source_doc_name'] += chunk_data['source_doc_name'] if chunk_entities_merged[0]['source_doc_name'] == '' else f" {chunk_data['source_doc_name']}"
+        
+        print(f"\n\nMerged chunk entities for graph RAG. Resulting chunk_entities_merged: \n {chunk_entities_merged}\n\n")
+        return chunk_entities_merged
     except Exception as e:
-        handle_error_no_return("Could not add to summary report, skipping chunk {count}. Encountered error: ", e)
-    return summary_report
+        return handle_local_error("Could not merge chunk entities for graph RAG, encountered error: ", e)
 
 
 def get_doc_object_dict(docs: list[Document]) -> dict:
@@ -5234,7 +5347,6 @@ def get_doc_object_dict(docs: list[Document]) -> dict:
 
 
 def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
-    
     '''
     Assembles document chunks (via assemble_chunks_for_graph_db()) into a dictionary of entities for storage to the GraphDB:
 
@@ -5268,15 +5380,7 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
         return handle_local_error("Could not get doc object dict, encountered error: ", e)
 
     try:
-        print(f"\n\nAssembling chunks for graph DB for doc: {doc_object_dict}\n\n")
-        chunk_entities = assemble_chunks_for_graph_db(doc_object_dict)
-        user_query = user_query.replace("'", "").replace("<br>", "").replace("?", "")
-        user_query_chunk_text = f"Do not attempt to answer any query that follows, simply proceed to extract nodes and relationships from the following text:\n{user_query}"
-        chunk_entities[0] = {
-            'chunk_text': user_query_chunk_text,
-            'source_chunks': [],
-            'source_doc_name': 'user_query'
-        }   # assemble_chunks_for_graph_db() starts graph chunk numbering from 1, so we can add the user query as the first chunk!
+        chunk_entities = assemble_chunks_for_graph_db(doc_object_dict, user_query)
     except Exception as e:
         return handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
     
@@ -5293,7 +5397,13 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
         return handle_local_error("Failed to extract entities and relationships from chunk entities, encountered error: ", e)
 
     try:
-        summarized_chunk_entities = get_summaries_from_graph_db(complete_chunk_entities, selected_knowledge_domain, graph)
+        merged_graph_rag_entities_and_relationships_dict = merge_chunk_entities_for_graph_rag(complete_chunk_entities)
+    except Exception as e:
+        handle_error_no_return("Could not merge chunk entities for graph RAG, proceeding with original chunk_entities dict. Encountered error: ", e)
+        merged_graph_rag_entities_and_relationships_dict = complete_chunk_entities
+
+    try:
+        summarized_chunk_entities = get_summaries_from_graph_db(merged_graph_rag_entities_and_relationships_dict, selected_knowledge_domain, graph)
     except Exception as e:
         return handle_local_error("Could not store entities and relationships in graph DB, encountered error: ", e)
 
@@ -5338,7 +5448,10 @@ def search_knowledge_base(user_query:str, embedding_function:str, perform_graph_
 
     graph_rag_context = None
     if perform_graph_rag:
-        graph_rag_context = execute_graph_rag(user_query, docs)
+        try:
+            graph_rag_context = execute_graph_rag(user_query, docs)
+        except Exception as e:
+            handle_error_no_return("Could not execute graph RAG, encountered error: ", e)
 
 
     return docs, do_rag, graph_rag_context
@@ -5390,7 +5503,6 @@ def setup_for_local_llm_response():
         if do_rag:    # Add similarity search results for RAG if necessary!
             QUERIES[key_for_vector_results] = docs
             if graph_rag_context is not None:
-                print(f"\n\nUsing GraphRAG context: {graph_rag_context}\n\n")
                 user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference useful documents by name in your response:\n{graph_rag_context}"
             else:
                 user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference it in your response by name and page number:\n{docs}"
