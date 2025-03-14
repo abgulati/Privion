@@ -2480,7 +2480,7 @@ def exl2_grapher():
                 print(f"\nExtracting entities and relationships for chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
                 
                 try:
-                    chunk_payload = chunk_data['chunk_text'] + "\n<knowledge_graph>"
+                    chunk_payload = "Extract nodes and relationships from the following text:\n" + chunk_data['chunk_text'] + "\n<knowledge_graph>"
                     full_payload = f"<start_of_turn>user\n{chunk_payload}<end_of_turn>\n<start_of_turn>model\n"
                 
                     full_response = create_and_execute_exl2_job(payload=full_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
@@ -2492,7 +2492,12 @@ def exl2_grapher():
                         try:
                             full_response = ast.literal_eval(full_response)
                         except Exception as e:
-                            raise # Re-raise the original exception if the second attempt also fails
+                            full_response = trim_response(full_response, '{"nodes":', '}', include_start_substring=True, include_end_substring=True)    # last-ditch effort!
+                            print(f"Trimmed response again for chunk {chunk_number}...\n")
+                            try:
+                                full_response = ast.literal_eval(full_response)
+                            except Exception as e:
+                                raise # Re-raise the original exception if the second attempt also fails
                     chunk_entities[chunk_number]['entities_and_relationships'] = full_response
                     
                     output_queue.put(chunk_entities[chunk_number])
