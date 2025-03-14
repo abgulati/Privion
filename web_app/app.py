@@ -262,6 +262,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'highlighted_docs':base_directory + '/highlighted_pdfs',
                 'ocr_pdfs':base_directory + '/ocr_pdfs',
                 'pdfs_to_txts':base_directory + '/pdfs_to_txts',
+                'docs_to_knowledge_graph_dir': base_directory + '/docs_to_knowledge_graph',
                 'local_llm_server':'hf-waitress',
                 'model_choice':'Meta-Llama-3-8B-Instruct.f16.gguf',
                 'vision_llm_local_url':"http://localhost:9069/completions",
@@ -314,6 +315,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'chunk_size':250,
                 'chunk_overlap':0,
                 'perform_graph_rag':True,
+                'perform_only_graph_rag':False,
                 'graph_chunk_size':1500,    # Larger chunks are better because they provide more context for the model to identify meaningful entities and relationships
                 'graph_chunk_overlap':300,  # 20% overlap for a 1500 char chunk: provides very reasonable overlap while not being too redundant.
                 'graph_generator_model':'Metin/Gemma-2-2B-TR-Knowledge-Graph',
@@ -334,6 +336,8 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'graph_model_top_p':0.95,
                 'graph_model_min_p':0.05,
                 'skip_summary_generation':False,
+                'reuse_previously_extracted_graph_entities_and_relationships':False,
+                'reuse_previously_generated_graph_summaries':False,
                 'base_template': (
                             "You are a helpful assistant deployed in a Retrieval Augmented Generation (RAG) system.\n"
                             "Your task is to evaluate retrieved contextual data to answer users' questions accurately and in detail.\n\n"
@@ -549,12 +553,13 @@ if not os.path.exists(BASE_DIRECTORY):
         handle_local_error("Failed to create Base App Directory, encountered error: ", e)
         
 try:
-    read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts'])
+    read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 'docs_to_knowledge_graph_dir'])
     model_dir = read_return['model_dir']
     highlighted_docs = read_return['highlighted_docs']
     upload_folder = read_return['upload_folder']
     ocr_pdfs = read_return['ocr_pdfs']
     pdfs_to_txts = read_return['pdfs_to_txts']
+    docs_to_knowledge_graph_dir = read_return['docs_to_knowledge_graph_dir']
 except Exception as e:
     handle_local_error("Could not read paths for app directories (model_dir, highlighted_docs, upload_folder, etc.) from config.json on boot, encountered error: ", e)
 
@@ -609,6 +614,16 @@ if not os.path.exists(pdfs_to_txts):
         handle_local_error("Failed to create txt-docs Directory (pdfs_to_txts), encountered error: ", e)
 
 
+# If the docs_to_knowledge_graph_dir directory does not currently exist...
+if not os.path.exists(docs_to_knowledge_graph_dir):
+
+    # Create a directory for app storage
+    try:
+        os.mkdir(docs_to_knowledge_graph_dir)
+    except Exception as e:
+        handle_local_error("Failed to create docs_to_knowledge_graph_dir, encountered error: ", e)
+
+
 app.config['UPLOAD_FOLDER'] = upload_folder
 app.config['DOWNLOAD_FOLDER'] = highlighted_docs
 
@@ -628,6 +643,24 @@ def clean_text_string(text_to_be_cleaned):
     clean_text = re.sub(r'\s+', ' ', clean_text).strip()
 
     return clean_text
+
+
+def load_json_file(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            return json.load(file)
+    except Exception as e:
+        return handle_local_error("Could not load JSON file, encountered error: ", e)
+
+
+def save_json_file(data, file_path):
+    try:
+        with open(file_path, 'w') as file:
+            json.dump(data, file, indent=4)
+    except Exception as e:
+        return handle_local_error("Could not save JSON file, encountered error: ", e)
+
+    return True
 
 
 def get_path_to_knowledge_domain():
@@ -836,7 +869,7 @@ def PDFtoAzureDocAiTXT(input_filepath):
         handle_local_error("Could not extract filename, encountered error: ", e)
 
     # Set output path
-    output_text_file_name = source_filename.replace(".pdf",".txt")
+    output_text_file_name = os.path.splitext(source_filename)[0] + ".txt"   # os.path.splitext() returns a tuple containing the path's name and extension separately
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
@@ -954,7 +987,7 @@ def PDFtoAzureOCRTXT(input_filepath):
         handle_local_error("Could not extract filename, encountered error: ", e)
 
     # Set output path
-    output_text_file_name = source_filename.replace(".pdf",".txt")
+    output_text_file_name = os.path.splitext(source_filename)[0] + ".txt"   # os.path.splitext() returns a tuple containing the path's name and extension separately
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
@@ -1111,7 +1144,7 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
         handle_local_error("Could not extract filename, encountered error: ", e)
 
     # Set output path
-    output_text_file_name = source_filename.replace(".pdf",".txt")
+    output_text_file_name = os.path.splitext(source_filename)[0] + ".txt"   # os.path.splitext() returns a tuple containing the path's name and extension separately
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
@@ -1226,7 +1259,7 @@ def PDFtoKosmosOCRTXT(input_filepath):
         handle_local_error("Could not extract filename, encountered error: ", e)
 
     # Set output path
-    output_text_file_name = source_filename.replace(".pdf",".txt")
+    output_text_file_name = os.path.splitext(source_filename)[0] + ".txt"   # os.path.splitext() returns a tuple containing the path's name and extension separately
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
@@ -1322,7 +1355,7 @@ def PDFtoTXT(input_file):
         handle_local_error("Could not initialize PDF reader, encountered error: ", e)
 
     # Set output path
-    output_text_file_name = source_filename.replace(".pdf",".txt")
+    output_text_file_name = os.path.splitext(source_filename)[0] + ".txt"   # os.path.splitext() returns a tuple containing the path's name and extension separately
     output_text_file_path = os.path.join(pdfs_to_txts, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
@@ -1482,7 +1515,14 @@ def record_doc_loaded_to_db(document_name, embedding_model, chunk_size, chunk_ov
 # List-splitter function for a large number of embeddings!
 def split_embeddings_list(all_splits, max_emmbeddings_list_size):
     for i in range(0, len(all_splits), max_emmbeddings_list_size):  # Step through the large list in steps of max size
-        yield all_splits[i:i + max_emmbeddings_list_size]   # Yield a slice of all_splits from index i upto but NOT including i+max_size 
+        yield all_splits[i:i + max_emmbeddings_list_size]   # Yield a slice of all_splits from index i upto but NOT including i+max_size. 
+        '''
+        While memory efficient, there is a key limitation: cannot use len() on the yielded object as if it were a list! This is because the yielded object is a generator object created via iteration, not a list!
+        Also, issues may arise if attmepting to enumerate() as there's an implicit split_docs[i] indexing, especially if anywhere in the loop you then try a len() on the yielded object!
+        This is because you would be using the generator multiple times (once for length, then again for iteration): Generators are "single-use" iterators - once you iterate through them, 
+        they're exhausted and can't be used again without recreating them. Plus, they don't support random access or length checking because they generate values on-the-fly!
+        Hence this method is not used by core_embedder(), but the code retained here for future reference and debugging/documentation purposes!
+        '''
 
 
 class Document:
@@ -1582,6 +1622,7 @@ def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
     # Generate Embeddings for just the page_content
     try:
         texts_to_embed = [doc.page_content for doc in numbered_splits]
+        print("\n\nGenerating embeddings...\n\n")
         embeddings = embedding_model.encode(texts_to_embed)    # By default, convert_to_tensor=False and this is what we want because ChromaDB expects numpy arrays, not PyTorch tensors!
     except Exception as e:
         handle_local_error("Could not generate embeddings, encountered error: ", e)
@@ -1604,18 +1645,32 @@ def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
         chroma_client = chromadb.PersistentClient(path=vector_db_path, settings=chromadb.Settings(allow_reset=True))
         collection = chroma_client.get_or_create_collection(name="knowledge_domain", metadata={"hnsw:space": "cosine"}) # By default, ChromaDB returns the L2 distance (lower is better), but we want cosine distance (higher is better)
 
-        # Prepare the data for ChromaDB format
-        documents = [chunk.page_content for chunk in numbered_splits]
-        metadatas = [chunk.metadata for chunk in numbered_splits]
-        ids = [str(uuid.uuid4()) for _ in numbered_splits]
+        batch_size = 5000
+        total_batches = (len(numbered_splits) + batch_size - 1) // batch_size # Eg: batch_size = (10000 + 5000 - 1) // 5000 = 3 batches. Floor division will result in an integer, but always rounds down, so adding (batch_size - 1) ensures we round up instead of down.
+        
+        if total_batches > 1:
+            print(f"\n\nLarge number of document embeddings detected, splitting into {total_batches} batches of {batch_size} each for storage to VectorDB...\n\n")
 
-        # Add the data to the collection
-        collection.add(
-            documents=documents,
-            metadatas=metadatas,
-            ids=ids,
-            embeddings=embeddings.tolist()  # Convert embeddings from NumPy arrays to list of lists
-        )
+        for i in range(0, len(numbered_splits), batch_size):
+            print(f"\n\Storing embeddings batch {(i // batch_size) + 1} of total {total_batches} batches into ChromaDB...\n\n")
+            # Get the current batch of docs
+            batch_docs = numbered_splits[i:i+batch_size]
+
+            # Get the corresponding embeddings for the current batch
+            batch_embeddings = embeddings[i:i+batch_size]
+
+            # Prepare the data for ChromaDB format
+            documents = [chunk.page_content for chunk in batch_docs]
+            metadatas = [chunk.metadata for chunk in batch_docs]
+            ids = [str(uuid.uuid4()) for _ in batch_docs]
+
+            # Add the data to the collection
+            collection.add(
+                documents=documents,
+                metadatas=metadatas,
+                ids=ids,
+                embeddings=batch_embeddings.tolist()  # Convert embeddings from NumPy arrays to list of lists
+            )
     except Exception as e:
         handle_local_error("Could not store to VectorDB, encountered error: ", e)
 
@@ -2187,7 +2242,7 @@ def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, pr
     return relationships_with_existing_summaries
 
 
-def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB, skip_summary_generation: bool = False):
+def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB, skip_summary_generation: bool = False, summaries_filepath: str = None):
     '''
     Receives a complete chunk_entities dict:
 
@@ -2232,10 +2287,16 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
 
             try:
                 chunks = summary_generator(chunk_entities=chunk_entities)
+                try:
+                    save_json_file(chunks, summaries_filepath)
+                except Exception as e:
+                    handle_error_no_return(f"Error saving summaries to file, they will have to be re-generated in the future if this document is re-processed. Encountered error: ", e)
             except Exception as e:
                 handle_error_no_return(f"Error generating summaries for nodes and relationships, proceeding without new summaries. Encountered error: ", e)
+                chunks = chunk_entities
         
         else:
+            print(f"\nSkipping summary generation for all nodes and relationships in {selected_knowledge_domain} graph DB\n")
             chunks = chunk_entities
 
         # Store the nodes and relationships in the graph DB
@@ -2495,7 +2556,80 @@ def assemble_chunks_for_graph_db(chunks, user_query=None):
     return chunk_entities
 
 
-def graph_generator(chunks):
+def determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_filepath):
+    try:
+        read_return = read_config(['reuse_previously_extracted_graph_entities_and_relationships', 'reuse_previously_generated_graph_summaries', 'skip_summary_generation'])
+        reuse_previously_extracted_graph_entities_and_relationships = str(read_return['reuse_previously_extracted_graph_entities_and_relationships']).lower() == 'true'
+        reuse_previously_generated_graph_summaries = str(read_return['reuse_previously_generated_graph_summaries']).lower() == 'true'
+        skip_summary_generation = str(read_return['skip_summary_generation']).lower() == 'true'
+        complete_chunk_entities = None
+        reuse_previous_extract = False
+        loaded_entities_and_relationships = False
+    except Exception as e:
+        return handle_local_error("Could not determine graph cache config, encountered error: ", e)
+    
+    if reuse_previously_extracted_graph_entities_and_relationships and os.path.exists(entities_and_relationships_filepath):
+        try:
+            candidate = load_json_file(entities_and_relationships_filepath)
+            if isinstance(candidate, dict): # TODO: validation of the JSON file format
+                complete_chunk_entities = candidate
+                loaded_entities_and_relationships = True
+            else:
+                raise ValueError("Invalid JSON file format for previously extracted graph entities and relationships")
+        except Exception as e:
+            complete_chunk_entities = None
+            loaded_entities_and_relationships = False
+            handle_error_no_return("Could not load previously extracted graph entities and relationships, encountered error: ", e)
+    
+    if reuse_previously_generated_graph_summaries and os.path.exists(summaries_filepath):
+        try:
+            candidate = load_json_file(summaries_filepath)
+            if isinstance(candidate, dict): # TODO: validation of the JSON file format
+                complete_chunk_entities = candidate
+                if complete_chunk_entities is not None:
+                    skip_summary_generation = True  # Else return the value from config.json
+            else:
+                raise ValueError("Invalid JSON file format for previously generated graph summaries")
+        except Exception as e:
+            if not loaded_entities_and_relationships:
+                complete_chunk_entities = None
+            handle_error_no_return("Could not load previously generated graph summaries, encountered error: ", e)
+    
+    if complete_chunk_entities is not None:
+        reuse_previous_extract = True
+
+    return reuse_previous_extract, skip_summary_generation, complete_chunk_entities # skip_summary_generation flag is used to determine if we should skip summary generation
+
+
+def get_graph_cache_filepaths(input_file, docs_to_knowledge_graph_dir):
+    try:
+        input_filename = os.path.basename(input_file)
+        input_filename_no_ext = str(os.path.splitext(input_filename)[0]) # os.path.splitext() returns a tuple containing the path's name and extension separately
+        
+        entities_and_relationships_filename = input_filename_no_ext + '_entities_and_relationships.json'
+        entities_and_relationships_filepath = os.path.join(docs_to_knowledge_graph_dir, entities_and_relationships_filename)
+
+        summaries_filename = input_filename_no_ext + '_summaries.json'
+        summaries_filepath = os.path.join(docs_to_knowledge_graph_dir, summaries_filename)
+
+        return entities_and_relationships_filepath, summaries_filepath
+    
+    except Exception as e:
+        return handle_local_error("Could not set graph generator file names and paths, encountered error: ", e)
+
+
+def read_graph_generator_config():
+    try:
+        read_return = read_config(['docs_to_knowledge_graph_dir', 'selected_knowledge_domain'])
+        docs_to_knowledge_graph_dir = read_return['docs_to_knowledge_graph_dir']
+        selected_knowledge_domain = read_return['selected_knowledge_domain']
+    except Exception as e:
+        handle_error_no_return("Could not read graph generator config, encountered error: ", e)
+    
+    return docs_to_knowledge_graph_dir, selected_knowledge_domain
+
+
+def graph_generator(chunks, input_file):
     '''
     Assembles document chunks (via assemble_chunks_for_graph_db()) into a dictionary of entities for storage to the GraphDB:
 
@@ -2526,25 +2660,44 @@ def graph_generator(chunks):
         return handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
 
     try:
-        chunk_entities = assemble_chunks_for_graph_db(chunks)
+        docs_to_knowledge_graph_dir, selected_knowledge_domain = read_graph_generator_config()
+        complete_chunk_entities = None
     except Exception as e:
-        return handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
+        return handle_local_error("Could not read graph generator config, encountered error: ", e)
+
+    try:
+        entities_and_relationships_filepath, summaries_filepath = get_graph_cache_filepaths(input_file, docs_to_knowledge_graph_dir)
+    except Exception as e:
+        return handle_local_error("Could not set graph generator file names and paths, encountered error: ", e)
+
+    try:
+        reuse_previous_extract, skip_summary_generation, complete_chunk_entities = determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_filepath)
+    except Exception as e:
+        return handle_local_error("Could not determine graph cache reuse, encountered error: ", e)
+    
+    if not reuse_previous_extract:
+        try:
+            chunk_entities = assemble_chunks_for_graph_db(chunks)
+        except Exception as e:
+            return handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
+
+        try:
+            complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities)
+            try:
+                save_json_file(complete_chunk_entities, entities_and_relationships_filepath)
+            except Exception as e:
+                handle_error_no_return("Could not save entities and relationships to file, encountered error: ", e)
+        except Exception as e:
+            return handle_local_error("Failed to extract entities and relationships from chunk entities, encountered error: ", e)
     
     try:
-        selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']    
         client = get_graph_db_client()
         graph = client.select_graph(selected_knowledge_domain)  # Will create the graph if it doesn't exist
     except Exception as e:
         return handle_local_error(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB, encountered error: ", e)
 
     try:
-        complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities)
-    except Exception as e:
-        return handle_local_error("Failed to extract entities and relationships from chunk entities, encountered error: ", e)
-
-    try:
-        skip_summary_generation = read_config(['skip_summary_generation'])['skip_summary_generation']
-        store_entities_and_relationships_in_graph_db(complete_chunk_entities, selected_knowledge_domain, graph, skip_summary_generation)
+        store_entities_and_relationships_in_graph_db(complete_chunk_entities, selected_knowledge_domain, graph, skip_summary_generation, summaries_filepath)
     except Exception as e:
         return handle_local_error("Could not store entities and relationships in graph DB, encountered error: ", e)
 
@@ -2560,17 +2713,18 @@ def graph_generator(chunks):
 def read_embeddings_config() -> tuple[str, str]:
     print("\n\nReading embeddings config\n\n")
     try:
-        read_return = read_config(['selected_embedding_model', 'chunk_size', 'chunk_overlap', 'perform_graph_rag'])
+        read_return = read_config(['selected_embedding_model', 'chunk_size', 'chunk_overlap', 'perform_graph_rag', 'perform_only_graph_rag'])
         selected_embedding_model = read_return['selected_embedding_model']
         chunk_sz = read_return['chunk_size']
         chunk_olp = read_return['chunk_overlap']
         perform_graph_rag = str(read_return['perform_graph_rag']).lower() == 'true'
+        perform_only_graph_rag = str(read_return['perform_only_graph_rag']).lower() == 'true'
     except Exception as e:
         handle_local_error("Missing values in config.json, could not read_embeddings_config. Error: ", e)
 
     path_to_knowledge_domain = get_path_to_knowledge_domain()
 
-    return selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp, perform_graph_rag
+    return selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp, perform_graph_rag, perform_only_graph_rag
 
 
 # Document vectorization and chunking
@@ -2579,7 +2733,7 @@ def whoosh_embed_and_graph_doc_chunks(input_file):
 
     # Read Embeddings Config
     try:
-        selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp, perform_graph_rag = read_embeddings_config()
+        selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp, perform_graph_rag, perform_only_graph_rag = read_embeddings_config()
     except Exception as e:
         handle_local_error("Could not read embeddings config, encountered error: ", e)
 
@@ -2588,17 +2742,24 @@ def whoosh_embed_and_graph_doc_chunks(input_file):
     try:
         chunks = chunk_docs_with_page_numbers(input_file, chunk_sz) # Generates a list of dictionaries, each containing 'content', 'source', and 'page_number' as keys
         if len(chunks) > 0:
-            try:
-                whoosh_indexer(chunks)
-            except Exception as e:
-                handle_error_no_return("Could not index chunks, skipping and attempting vector embedding. Encountered error: ", e)
-            try:
-                core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain)
-            except Exception as e:
-                handle_error_no_return("Could not embed chunks, skipping and attempting graph generation. Encountered error: ", e)
+            if not perform_only_graph_rag:
+                
+                try:
+                    whoosh_indexer(chunks)
+                except Exception as e:
+                    handle_error_no_return("Could not index chunks, skipping and attempting vector embedding. Encountered error: ", e)
+                
+                try:
+                    core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain)
+                except Exception as e:
+                    handle_error_no_return("Could not embed chunks, skipping and attempting graph generation. Encountered error: ", e)
+            
+            else:
+                print("Performing only graph RAG")
+            
             if perform_graph_rag:
                 try:
-                    graph_generator(chunks)
+                    graph_generator(chunks, input_file)
                 except Exception as e:
                     handle_error_no_return("Could not graph chunks, skipping. Encountered error: ", e)
             print("Document added to knowledge domain.")
@@ -3475,11 +3636,25 @@ def convert_non_pdf_to_pdf_with_unoconv(filename, filepath):
         return handle_api_error("Unexpected error when converting file to PDF, encountered error: ", e)
 
 
+def check_if_converted_file_exists(filepath):
+    try:
+        source_filename = os.path.basename(filepath)
+        check_file_name = os.path.splitext(source_filename)[0] + ".pdf"   # os.path.splitext() returns a tuple containing the path's name and extension separately
+        check_file_path = os.path.join(app.config['UPLOAD_FOLDER'], check_file_name).replace("\\","/")
+        return os.path.exists(check_file_path), check_file_path
+    except Exception as e:
+        handle_error_no_return("Could not determine if converted file already exists, proceeding to convert file regardless. Encountered error: ", e)
+        return False, None
+
 def document_extractor_and_loader(filename, filepath):
     print("Vector Embedding Document")
 
     if not filename.lower().endswith('.pdf'):
-        _, filepath = convert_non_pdf_to_pdf_with_unoconv(filename, filepath)
+        converted_file_exists, converted_pdf_file_path = check_if_converted_file_exists(filepath)
+        if not converted_file_exists:
+            _, filepath = convert_non_pdf_to_pdf_with_unoconv(filename, filepath)
+        else:
+            filepath = converted_pdf_file_path
 
     use_ocr = False
     try:
