@@ -869,7 +869,7 @@ def PDFtoAzureDocAiTXT(input_filepath):
         handle_local_error("Could not extract filename, encountered error: ", e)
 
     # Set output path
-    output_text_file_name = os.path.splitext(source_filename)[0] + ".txt"   # os.path.splitext() returns a tuple containing the path's name and extension separately
+    output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
@@ -987,7 +987,7 @@ def PDFtoAzureOCRTXT(input_filepath):
         handle_local_error("Could not extract filename, encountered error: ", e)
 
     # Set output path
-    output_text_file_name = os.path.splitext(source_filename)[0] + ".txt"   # os.path.splitext() returns a tuple containing the path's name and extension separately
+    output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
@@ -1144,7 +1144,7 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
         handle_local_error("Could not extract filename, encountered error: ", e)
 
     # Set output path
-    output_text_file_name = os.path.splitext(source_filename)[0] + ".txt"   # os.path.splitext() returns a tuple containing the path's name and extension separately
+    output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
@@ -1259,7 +1259,7 @@ def PDFtoKosmosOCRTXT(input_filepath):
         handle_local_error("Could not extract filename, encountered error: ", e)
 
     # Set output path
-    output_text_file_name = os.path.splitext(source_filename)[0] + ".txt"   # os.path.splitext() returns a tuple containing the path's name and extension separately
+    output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
     output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
@@ -1355,7 +1355,7 @@ def PDFtoTXT(input_file):
         handle_local_error("Could not initialize PDF reader, encountered error: ", e)
 
     # Set output path
-    output_text_file_name = os.path.splitext(source_filename)[0] + ".txt"   # os.path.splitext() returns a tuple containing the path's name and extension separately
+    output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
     output_text_file_path = os.path.join(pdfs_to_txts, output_text_file_name).replace("\\","/")
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
