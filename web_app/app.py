@@ -2030,7 +2030,7 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
         try:
             name = str(node['name'])
             node_type = str(node['type'])
-            updated_summary = str(node['summary'])
+            updated_summary = str(node.get('summary', '')) if node.get('summary') else ""   # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
             
             node_key = (name, node_type)
 
@@ -2089,7 +2089,7 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
             target = str(relationship['target'])
             relationship_type = str(relationship['relationship'])
             relationship_key = (source, target, relationship_type)
-            updated_summary = str(relationship['summary'])
+            updated_summary = str(relationship.get('summary', '')) if relationship.get('summary') else ""   # dict .get() method is safer than `if relationship['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
             
             if relationship_key in processed_relationships:
                 print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) in {selected_knowledge_domain} graph DB")
