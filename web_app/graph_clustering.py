@@ -30,14 +30,15 @@ def apply_leiden_clustering(client, knowledge_domain: str, resolution: float = 1
         from leidenalg import ModularityVertexPartition
     except ImportError as e:
         print("Could not import required dependencies for Leiden clustering, encountered error: ", e)
-        return False
+        return False, str(e)
     
     try:
         # Add a lock file to prevent concurrent clustering
         lock_file = f"clustering_{knowledge_domain}.lock"
         if os.path.exists(lock_file):
-            print(f"Leiden clustering for {knowledge_domain} is already in progress. Please wait for it to complete.")
-            return False
+            status_message = f"Leiden clustering for {knowledge_domain} is already in progress. Please wait for it to complete."
+            print(f"\n{status_message}\n")
+            return False, status_message
 
         with open(lock_file, 'w') as f:
             f.write(f"Leiden clustering for {knowledge_domain} is in progress. Operation started at {datetime.datetime.now().isoformat()}\n")
@@ -53,8 +54,9 @@ def apply_leiden_clustering(client, knowledge_domain: str, resolution: float = 1
             if hasattr(node_count_operation, 'result_set') and node_count_operation.result_set:
                 node_count = node_count_operation.result_set[0][0]
             else:
-                print("No nodes found in the graph")
-                return False
+                status_message = "No nodes found in the graph"
+                print(f"\n{status_message}\n")
+                return False, status_message
             print(f"Number of nodes in the GraphDB: {node_count}")
 
             if node_count > 100000:
@@ -259,7 +261,7 @@ def apply_leiden_clustering(client, knowledge_domain: str, resolution: float = 1
             """)
 
             print("\n\nLeiden clustering completed successfully!\n\n")
-            return True
+            return True, "success"
             
         finally:
             if os.path.exists(lock_file):
@@ -272,4 +274,4 @@ def apply_leiden_clustering(client, knowledge_domain: str, resolution: float = 1
                 os.remove(lock_file)
         except:
             print(f"Could not remove lock file for knowledge domain: {knowledge_domain}, please remove manually.")
-        return False
+        return False, str(e)

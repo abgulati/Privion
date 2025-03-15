@@ -2466,9 +2466,12 @@ def apply_leiden_clustering_to_graph(selected_knowledge_domain):
 
     try:
         client = get_graph_db_client()
-        apply_leiden_clustering(client, str(selected_knowledge_domain))
+        clustering_success, status_message = apply_leiden_clustering(client, str(selected_knowledge_domain))
+        if not clustering_success:
+            raise Exception(status_message)
+        return True
     except Exception as e:
-        handle_local_error(f"Could not apply Leiden clustering to the graph for {selected_knowledge_domain}, encountered error: ", e)
+        return handle_local_error(f"Could not apply Leiden clustering to the graph for {selected_knowledge_domain}, encountered error: ", e)
 
 
 @app.route('/generate_graph_communities', methods=['POST'])
@@ -2478,12 +2481,12 @@ def generate_graph_communities():
     try:
         knowledge_domain = request.json.get('knowledge_domain')
     except Exception as e:
-        handle_local_error("Could not get selected knowledge domain from request, encountered error: ", e)
+        return handle_api_error("Could not get selected knowledge domain from request, encountered error: ", e)
 
     try:
         apply_leiden_clustering_to_graph(knowledge_domain)
     except Exception as e:
-        handle_error_no_return("Could not generate graph communities, encountered error: ", e)
+        return handle_api_error("Could not generate graph communities, encountered error: ", e)
 
     return jsonify({"message": "Graph communities generated successfully"}), 200
 
