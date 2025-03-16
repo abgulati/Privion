@@ -5433,24 +5433,28 @@ def get_summary_report(summarized_chunk_entities: dict) -> str:
             for node in chunk_data['entities_and_relationships']['nodes']:
                 if node['summary'] is not None and node['summary'] != '':
                     
+                    compiled_node_summary = ""
                     try:
                         node_source_doc_name = set(node['source_documents'] if node['source_documents'] else source_doc_name.split(' '))
+                        compiled_node_summary += ''.join(node['summary'])
                     except Exception as e:
                         handle_error_no_return("Could not split source_doc_name, encountered error: ", e)
                         node_source_doc_name = set(source_doc_name.split(' '))
                     
-                    summary_report += f"Summary for node '{node['name']}' of type '{node['type']}' - {node['summary']} \nSource Document(s): {node_source_doc_name}\n\n"
+                    summary_report += f"Summary for node '{node['name']}' of type '{node['type']}' - {compiled_node_summary} \nSource Document(s): {node_source_doc_name}\n\n"
             
             for relationship in chunk_data['entities_and_relationships']['relationships']:
                 if relationship['summary'] is not None and relationship['summary'] != '':
                     
+                    compiled_relationship_summary = ""
                     try:
                         relationship_source_doc_name = set(relationship['source_documents'] if relationship['source_documents'] else source_doc_name.split(' '))
+                        compiled_relationship_summary += ''.join(relationship['summary'])
                     except Exception as e:
                         handle_error_no_return("Could not split source_doc_name, encountered error: ", e)
                         relationship_source_doc_name = set(source_doc_name.split(' '))
                     
-                    summary_report += f"Summary for relationship '{relationship['relationship']}' between '{relationship['source']}' and '{relationship['target']}' - {relationship['summary']} \nSource Document(s): {relationship_source_doc_name}\n\n"
+                    summary_report += f"Summary for relationship '{relationship['relationship']}' between '{relationship['source']}' and '{relationship['target']}' - {compiled_relationship_summary} \nSource Document(s): {relationship_source_doc_name}\n\n"
     
     except Exception as e:
         handle_error_no_return("Could not add to summary report, skipping chunk {count}. Encountered error: ", e)
