@@ -36,6 +36,7 @@ import threading
 import traceback
 import argparse
 import platform
+import datetime
 import logging
 import base64
 import queue
@@ -2347,6 +2348,12 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
                     if 'text' in job: 
                         full_response += job['text']
 
+    try:
+        empty_cuda_cache()
+    except Exception as e:
+        handle_error_no_return("Could not empty CUDA cache after ExLlamaV2 cleanup, encountered error: ", e)
+
+
     return full_response
 
 
@@ -2454,7 +2461,8 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
                 skip_system_prompt=True
             )
             full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-            full_response = trim_response(full_response, '"summary":', '}').replace("'", "") + "\n\n{Source Document Name: " + source_doc_name + "}"
+            full_response = trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n\n"
+            print(f"\n\nfull_response:\n\n{full_response}\n\n")
         except Exception as e:
             return handle_local_error(f"Could not get comprehensive summary from LLM, encountered error: ", e)
 
@@ -2605,8 +2613,9 @@ def exl2_grapher():
 
         try:
             for chunk_number, chunk_data in chunk_entities.items():
-                print_string = f" in chunk {chunk_number} of total {len(chunk_entities)} chunks"
+                print_string = f"in chunk {chunk_number} of total {len(chunk_entities)} chunks"
                 print(f"\nGenerating comprehensive summaries for all nodes and relationships {print_string}...\n")
+                print(f"Timestamp: {datetime.datetime.now()}")
 
                 # try:
                 #     summarized_nodes = process_nodes(
