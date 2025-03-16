@@ -268,6 +268,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'upload_folder':base_directory + '/uploaded_files_for_vision_inferencing',
                     'generated_images_folder':base_directory + '/generated_images',
                     'transformer_models_folder':base_directory + '/transformer_models',
+                    'knowledge_graph_cache_dir': base_directory + '/knowledge_graph_cache_dir',
                     'access_gated':False,
                     'access_token':"",
                     'model_id':"Qwen/Qwen2.5-1.5B-Instruct",
@@ -443,10 +444,11 @@ except Exception as e:
     handle_local_error("Failed to create Base App Directory, encountered error: ", e)
 
 try:
-    read_return = read_config(['upload_folder', 'generated_images_folder', 'transformer_models_folder'])
+    read_return = read_config(['upload_folder', 'generated_images_folder', 'transformer_models_folder', 'knowledge_graph_cache_dir'])
     upload_folder = read_return['upload_folder']
     generated_images_folder = read_return['generated_images_folder']
     transformer_models_folder = read_return['transformer_models_folder']
+    knowledge_graph_cache_dir = read_return['knowledge_graph_cache_dir']
 except Exception as e:
     handle_local_error("Could not read paths for app directories (upload_folder, generated_images_folder) from config.json on boot, encountered error: ", e)
 
@@ -465,12 +467,33 @@ try:
 except Exception as e:
     handle_local_error("Failed to create Transformer Models Directory (transformer_models_folder), encountered error: ", e)
 
+try:
+    os.makedirs(knowledge_graph_cache_dir, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create Knowledge Graph Cache Directory (knowledge_graph_cache_dir), encountered error: ", e)
 
 app.config['UPLOAD_FOLDER'] = upload_folder
 
 # os.environ['HUGGINGFACE_HUB_CACHE'] = transformer_models_folder
 # os.environ['TRANSFORMERS_CACHE'] = transformer_models_folder
 # os.environ['HF_HOME'] = transformer_models_folder
+
+def load_json_file(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            return json.load(file)
+    except Exception as e:
+        return handle_local_error("Could not load JSON file, encountered error: ", e)
+
+
+def save_json_file(data, file_path):
+    try:
+        with open(file_path, 'w') as file:
+            json.dump(data, file, indent=4)
+    except Exception as e:
+        return handle_local_error("Could not save JSON file, encountered error: ", e)
+
+    return True
 
 ############################----------------------------------------------###############################
 
@@ -2199,11 +2222,12 @@ def completions_stream():
 
 def get_exl2_gen_settings(request):
     try:
-        read_return = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'min_p', 'n_keep'])
+        read_return = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'min_p', 'n_keep', 'knowledge_graph_cache_dir'])
         temperature = float(read_return['temperature'])
         top_k = int(read_return['top_k'])
         top_p = float(read_return['top_p'])
         max_new_tokens = int(read_return['max_new_tokens'])
+        knowledge_graph_cache_dir = read_return['knowledge_graph_cache_dir']
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting /exl2_grapher, encountered error: ", e)
 
@@ -2219,7 +2243,7 @@ def get_exl2_gen_settings(request):
     except Exception as e:
         handle_error_no_return("Could not set generation-arguments for /exl2_grapher, proceeding without them. Encountered error: ", e)
 
-    return gen_settings, requested_max_new_tokens
+    return gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir
 
 
 @app.route('/exl2_stream', methods=['POST'])
@@ -2234,7 +2258,7 @@ def exl2_stream():
     try:
         data = request.json
         messages = str(data)
-        gen_settings, max_new_tokens = get_exl2_gen_settings(request)
+        gen_settings, max_new_tokens, _  = get_exl2_gen_settings(request)
         print(f"\nRead request - message received: {messages}\n")
     except Exception as e:
         handle_api_error("Could not read POST-request messages for /exl2_stream, encountered error: ", e)
@@ -2449,6 +2473,10 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
     It returns an updated dictionary comprising all nodes and relationships with their comprehensive summaries.
     '''
     try:
+        cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_summary_cache.json")
+
+        if os.path.exists(cache_file_path):
+            nodes_and_relationships_summary = load_json_file(cache_file_path)
 
         try:
             comprehensive_summary_request_prompt = get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
@@ -2558,7 +2586,7 @@ def exl2_grapher():
         extraction_mode = request.json.get('extraction_mode', False)
         summary_generation_mode = request.json.get('summary_generation_mode', False)
         exl2_prompt_template_format = request.json.get('exl2_prompt_template_format', None)
-        gen_settings, requested_max_new_tokens = get_exl2_gen_settings(request)
+        gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
         handle_api_error("Could not read POST-request messages for /exl2_grapher, encountered error: ", e)
