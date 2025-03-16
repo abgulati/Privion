@@ -23,6 +23,11 @@ MATCH (n)-[r]->(m)
 WHERE n.cluster = 1
 RETURN n.name, n.type, TYPE(r), m.name, m.type
 
+// Above but with summaries
+MATCH (n)-[r]->(m)
+WHERE n.cluster = 43
+RETURN n.name, n.summary, TYPE(r), r.summary, m.name, m.summary
+
 // Specific Query Syntax:
 MATCH (n {name: 'Tremblant', type: 'location'})
 RETURN n.summary AS summary, n.source_documents AS source_documents
