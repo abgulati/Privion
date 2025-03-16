@@ -1885,57 +1885,6 @@ def sanitize_names(name):
     return sanitized
 
 
-def get_summary_and_source_documents_for_node(graph, name, node_type):
-    print(f"\nChecking if summary for node {name} of type {node_type} exists in graph\n")
-
-    try:
-        node_name = sanitize_names(name)
-
-        query = f"""
-            MATCH (n:{node_name} {{name: '%s', type: '%s'}})
-            RETURN n.summary AS summary, n.source_documents AS source_documents
-        """ % (name.replace("'", ""), node_type.replace("'", ""))
-
-        result = graph.query(query)
-        
-        if hasattr(result, 'result_set') and result.result_set:
-            print(f"\nExisting summary for node found: {result.result_set[0][0]}\n")
-            return result.result_set[0][0], result.result_set[0][1] if len(result.result_set[0]) > 1 else ""
-        else:
-            print(f"\nNo existing summary for node found...\n")
-            return "", ""   # If no summary is found, return an empty string:
-
-    except Exception as e:
-        handle_error_no_return(f"Could not check if node {name} of type {node_type} exists in graph, returning empty string. Encountered error: ", e)
-        return ""
-
-
-def get_summary_and_source_documents_for_relationship(graph, source, target, relationship_type):
-    print(f"\nChecking if summary for relationship {source} -> {target} ({relationship_type}) exists in graph\n")
-
-    source_label = sanitize_names(source)
-    target_label = sanitize_names(target)
-
-    try:
-        query = f"""
-            MATCH (s:{source_label} {{name: '{source}'}})-[r:{relationship_type}]->(t:{target_label} {{name: '{target}'}})
-            RETURN r.summary AS summary, r.source_documents AS source_documents
-        """
-
-        result = graph.query(query)
-
-        if hasattr(result, 'result_set') and result.result_set:
-            print(f"\nExisting summary for relationship found: {result.result_set[0][0]}\n")
-            return result.result_set[0][0], result.result_set[0][1] if len(result.result_set[0]) > 1 else ""
-        else:
-            print(f"\nNo existing summary for relationship found...\n")
-            return "", ""   # If no summary is found, return an empty string:
-
-    except Exception as e:
-        handle_error_no_return(f"Could not check if summary for relationship {source} -> {target} ({relationship_type}) exists in graph, returning empty string. Encountered error: ", e)
-        return ""
-
-
 def get_request_params_for_local_llm_server(formatted_prompt=""):
     try:
         read_return = read_config(['local_llm_server', 'hf_waitress_access_url', 'hf_waitress_server_port', 'llama_cpp_access_url', 'llama_cpp_server_port', 'local_llm_temperature', 'local_llm_top_k', 'local_llm_top_p', 'local_llm_min_p'])
@@ -2030,7 +1979,7 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
         try:
             name = str(node['name'])
             node_type = str(node['type'])
-            updated_summary = str(node.get('summary', '')) if node.get('summary') else ""   # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
+            updated_summary = list(node.get('summary', [])) if node.get('summary') else []   # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
             
             node_key = (name, node_type)
 
@@ -2043,31 +1992,50 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
             # MERGE on stable properties to prevent duplicates, then SET the summary and add source_document as per the case:
             if source_document:
                 graph.query(f"""
-                    MERGE (n:{node_name} {{name:'%s', type:'%s'}})
-                    SET n.summary = '%s'
+                    MERGE (n:{node_name} {{name:$name, type:$type}})
+                    SET n.summary = CASE
+                        WHEN n.summary IS NULL THEN $summary
+                        WHEN $summary = [] THEN n.summary
+                        ELSE $summary
+                    END
                     SET n.source_documents = CASE
-                        WHEN n.source_documents IS NULL THEN ['%s']
-                        WHEN NOT '%s' IN n.source_documents THEN n.source_documents + ['%s']
+                        WHEN n.source_documents IS NULL THEN [$source_document]
+                        WHEN NOT $source_document IN n.source_documents THEN n.source_documents + [$source_document]
                         ELSE n.source_documents
                     END
-                """ % (
-                    name.replace("'", ""),
-                    node_type.replace("'", ""),
-                    updated_summary.replace("'", ""),
-                    source_document.replace("'", ""),
-                    source_document.replace("'", ""),
-                    source_document.replace("'", "")
-                ))
+                """, {
+                    'name': name.replace("'", ""),
+                    'type': node_type.replace("'", ""),
+                    'summary': updated_summary,
+                    'source_document': source_document.replace("'", "")
+                })
             else:
                 graph.query(f"""
-                    MERGE (n:{node_name} {{name:'%s', type:'%s'}})
-                    SET n.summary = '%s'
-                """ % (name.replace("'", ""), node_type.replace("'", ""), updated_summary.replace("'", "")))
+                    MERGE (n:{node_name} {{name:$name, type:$type}})
+                    SET n.summary = CASE
+                        WHEN n.summary IS NULL THEN $summary
+                        WHEN $summary = [] THEN n.summary
+                        ELSE $summary
+                    END
+                """, {
+                    'name': name.replace("'", ""),
+                    'type': node_type.replace("'", ""),
+                    'summary': updated_summary
+                })
 
             '''
+            For source_docs:
             CASE 1: If the `source_documents` list property doesn't exist yet: create a new list with just this document.
             CASE 2: If the `source_documents` list property exists but doesn't contain this document: add this document to the list.
             CASE 3: If the `source_documents` list property already contains this document: leave the list unchanged!
+
+            For summary:
+            CASE 1: If the `summary` list property doesn't exist yet: create a new list with new summary list.
+            CASE 2: If the new summary list is empty: leave the list unchanged!
+            CASE 3: If the new summary list is not empty: replace the existing list with the new summary list as the flow from get_summaries_for_all_nodes() to
+            summary_generator() to process_nodes_and_relationships() in HF-Waitress ensures that new summaries are appended to the existing list, while de-duplicating the list.
+
+            Also, summary is already a list so we don't need the [] in the query!
             '''
             
             # Mark node as processed:
@@ -2089,7 +2057,8 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
             target = str(relationship['target'])
             relationship_type = str(relationship['relationship'])
             relationship_key = (source, target, relationship_type)
-            updated_summary = str(relationship.get('summary', '')) if relationship.get('summary') else ""   # dict .get() method is safer than `if relationship['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
+            
+            updated_summary = list(relationship.get('summary', [])) if relationship.get('summary') else []   # dict .get() method is safer than `if relationship['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
             
             if relationship_key in processed_relationships:
                 print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) in {selected_knowledge_domain} graph DB")
@@ -2107,37 +2076,48 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
             '''
             if source_document:
                 graph.query(f"""
-                    MERGE (s:{source} {{name:'%s'}})
-                    MERGE (t:{target} {{name:'%s'}})
+                    MERGE (s:{source} {{name:$source_name}})
+                    MERGE (t:{target} {{name:$target_name}})
                     MERGE (s)-[r:{relationship_type}]->(t)
                     SET r.weight = CASE
                         WHEN r.weight IS NULL THEN 1
                         ELSE r.weight + 1
                     END
-                    SET r.summary = '%s'
+                    SET r.summary = CASE
+                        WHEN r.summary IS NULL THEN $summary
+                        WHEN $summary = [] THEN r.summary
+                        ELSE $summary
+                    END
                     SET r.source_documents = CASE
-                        WHEN r.source_documents IS NULL THEN ['%s']
-                        WHEN NOT '%s' IN r.source_documents THEN r.source_documents + ['%s']
+                        WHEN r.source_documents IS NULL THEN [$source_document]
+                        WHEN NOT $source_document IN r.source_documents THEN r.source_documents + [$source_document]
                         ELSE r.source_documents
                     END
-                """ % (
-                    relationship['source'].replace("'", ""),
-                    relationship['target'].replace("'", ""),
-                    updated_summary.replace("'", ""),
-                    source_document.replace("'", ""),
-                    source_document.replace("'", ""),
-                    source_document.replace("'", "")
-                ))
+                """, {
+                    'source_name': relationship['source'].replace("'", ""),
+                    'target_name': relationship['target'].replace("'", ""),
+                    'summary': updated_summary,
+                    'source_document': source_document.replace("'", "")
+                })
             else:
                 graph.query(f"""
-                    MERGE (s:{source} {{name:'%s'}})
-                    MERGE (t:{target} {{name:'%s'}})
+                    MERGE (s:{source} {{name:$source_name}})
+                    MERGE (t:{target} {{name:$target_name}})
                     MERGE (s)-[r:{relationship_type}]->(t)
                     SET r.weight = CASE
                         WHEN r.weight IS NULL THEN 1
                         ELSE r.weight + 1
                     END
-                """ % (relationship['source'].replace("'", ""), relationship['target'].replace("'", "")))
+                    SET r.summary = CASE
+                        WHEN r.summary IS NULL THEN $summary
+                        WHEN $summary = [] THEN r.summary
+                        ELSE $summary
+                    END
+                """, {
+                    'source_name': relationship['source'].replace("'", ""),
+                    'target_name': relationship['target'].replace("'", ""),
+                    'summary': updated_summary
+                })
                 # We don't want to use the sanitized names as both labels and property values
 
             # Mark relationship as processed:
@@ -2145,7 +2125,62 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
             
             print(f"\nCreated relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB\n")
         except Exception as e:
-            handle_error_no_return(f"Could not create relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
+            handle_error_no_return(f"Could not create relationship from data: {relationship} in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
+
+
+def get_summary_and_source_documents_for_node(graph, name, node_type):
+    print(f"\nChecking if summary for node {name} of type {node_type} exists in graph\n")
+
+    try:
+        node_name = sanitize_names(name)
+
+        query = f"""
+            MATCH (n:{node_name} {{name: '%s', type: '%s'}})
+            RETURN n.summary AS summary, n.source_documents AS source_documents
+        """ % (name.replace("'", ""), node_type.replace("'", ""))
+
+        result = graph.query(query)
+        
+        if hasattr(result, 'result_set') and result.result_set:
+            print(f"\nExisting summary for node found: {result.result_set[0][0]}\n")
+            summary_list = list(result.result_set[0][0]) if result.result_set[0][0] else []
+            source_documents_list = list(result.result_set[0][1]) if result.result_set[0][1] else []
+            return summary_list, source_documents_list
+        else:
+            print(f"\nNo existing summary for node found...\n")
+            return [], []   # If no summary is found, return an empty list:
+
+    except Exception as e:
+        handle_error_no_return(f"Could not check if node {name} of type {node_type} exists in graph, returning empty list. Encountered error: ", e)
+        return [], []
+
+
+def get_summary_and_source_documents_for_relationship(graph, source, target, relationship_type):
+    print(f"\nChecking if summary for relationship {source} -> {target} ({relationship_type}) exists in graph\n")
+
+    source_label = sanitize_names(source)
+    target_label = sanitize_names(target)
+
+    try:
+        query = f"""
+            MATCH (s:{source_label} {{name: '{source}'}})-[r:{relationship_type}]->(t:{target_label} {{name: '{target}'}})
+            RETURN r.summary AS summary, r.source_documents AS source_documents
+        """
+
+        result = graph.query(query)
+
+        if hasattr(result, 'result_set') and result.result_set:
+            print(f"\nExisting summary for relationship found: {result.result_set[0][0]}\n")
+            summary_list = list(result.result_set[0][0]) if result.result_set[0][0] else []
+            source_documents_list = list(result.result_set[0][1]) if result.result_set[0][1] else []
+            return summary_list, source_documents_list
+        else:
+            print(f"\nNo existing summary for relationship found...\n")
+            return [], []   # If no summary is found, return an empty list:
+
+    except Exception as e:
+        handle_error_no_return(f"Could not check if summary for relationship {source} -> {target} ({relationship_type}) exists in graph, returning empty list. Encountered error: ", e)
+        return [], []
 
 
 def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str = "", get_source_documents: bool = False):
@@ -2167,8 +2202,8 @@ def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str 
             try:
                 existing_summary, existing_source_documents = get_summary_and_source_documents_for_node(graph, name, node_type)
             except Exception as e:
-                existing_summary = ""
-                existing_source_documents = ""
+                existing_summary = []
+                existing_source_documents = []
                 handle_error_no_return(f"Could not check existing summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
 
             # update node in chunk_entities dict:
@@ -2214,8 +2249,8 @@ def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, pr
             try:
                 existing_summary, existing_source_documents = get_summary_and_source_documents_for_relationship(graph, source.replace("'", ""), target.replace("'", ""), relationship_type)
             except Exception as e:
-                existing_summary = ""
-                existing_source_documents = ""
+                existing_summary = []
+                existing_source_documents = []
                 handle_error_no_return(f"Could not check existing summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
 
             if get_source_documents:
@@ -2242,7 +2277,7 @@ def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, pr
     return relationships_with_existing_summaries
 
 
-def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB, skip_summary_generation: bool = False, summaries_filepath: str = None):
+def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB, skip_summary_generation: bool = False, summaries_filepath: str = None, skip_check_for_exisiting_summaries: bool = False):
     '''
     Receives a complete chunk_entities dict:
 
@@ -2267,23 +2302,27 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
     try:
         # First, Get/Generate summaries for each node and relationship if applicable:
         if not skip_summary_generation:
+            
+            if not skip_check_for_exisiting_summaries:
+                # a. Get summaries for all nodes and relationships:
+                for chunk_number, chunk_data in chunk_entities.items():
+                    print_string = f" in chunk {chunk_number} of total {len(chunk_entities)} chunks"
+                    print(f"\nChecking for existing summaries for all nodes and relationships {print_string}...\n")
 
-            # a. Get summaries for all nodes and relationships:
-            for chunk_number, chunk_data in chunk_entities.items():
-                print_string = f" in chunk {chunk_number} of total {len(chunk_entities)} chunks"
-                print(f"\nChecking for existing summaries for all nodes and relationships {print_string}...\n")
+                    try:
+                        nodes_with_existing_summaries = get_summaries_for_all_nodes(nodes=chunk_data['entities_and_relationships']['nodes'], graph=graph, print_string=print_string)
+                        chunk_entities[chunk_number]['entities_and_relationships']['nodes'] = nodes_with_existing_summaries
+                    except Exception as e:
+                        handle_error_no_return(f"Error checking for existing summaries for nodes, skipping chunk {chunk_number}. Encountered error: ", e)
 
-                try:
-                    nodes_with_existing_summaries = get_summaries_for_all_nodes(nodes=chunk_data['entities_and_relationships']['nodes'], graph=graph, print_string=print_string)
-                    chunk_entities[chunk_number]['entities_and_relationships']['nodes'] = nodes_with_existing_summaries
-                except Exception as e:
-                    handle_error_no_return(f"Error checking for existing summaries for nodes, skipping chunk {chunk_number}. Encountered error: ", e)
+                    try:
+                        relationships_with_existing_summaries = get_summaries_for_all_relationships(relationships=chunk_data['entities_and_relationships']['relationships'], graph=graph, print_string=print_string)
+                        chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = relationships_with_existing_summaries
+                    except Exception as e:
+                        handle_error_no_return(f"Error checking for existing summaries for relationships, skipping chunk {chunk_number}. Encountered error: ", e)
 
-                try:
-                    relationships_with_existing_summaries = get_summaries_for_all_relationships(relationships=chunk_data['entities_and_relationships']['relationships'], graph=graph, print_string=print_string)
-                    chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = relationships_with_existing_summaries
-                except Exception as e:
-                    handle_error_no_return(f"Error checking for existing summaries for relationships, skipping chunk {chunk_number}. Encountered error: ", e)
+            else:
+                print(f"\nNewly created or blank graph DB, skipping check for existing summaries for all nodes and relationships in {selected_knowledge_domain} graph DB\n")
 
             try:
                 chunks = summary_generator(chunk_entities=chunk_entities)
@@ -2459,6 +2498,15 @@ def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-genera
         return handle_local_error("Could not launch HF-Waitress instance with kb-generator model, encountered error: ", e)
     
     return True
+
+
+def is_graph_blank_or_newly_created(graph):
+    try:
+        result = graph.query("MATCH (n) RETURN count(n)").result_set[0][0]
+        return result == 0
+    except Exception as e:
+        handle_error_no_return("Could not check if graph is blank or newly created, encountered error: ", e)
+        return False    # Default to False means the check will occur just to be safe!
 
 
 def apply_leiden_clustering_to_graph(selected_knowledge_domain):
@@ -2658,9 +2706,8 @@ def graph_generator(chunks, input_file):
 
     try:
         bring_graph_db_online()
-        bring_graphing_model_online()
     except Exception as e:
-        return handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
+        return handle_local_error("Could not bring graph DB online, encountered error: ", e)
 
     try:
         docs_to_knowledge_graph_dir, selected_knowledge_domain = read_graph_generator_config()
@@ -2680,6 +2727,11 @@ def graph_generator(chunks, input_file):
     
     if not reuse_previous_extract:
         try:
+            bring_graphing_model_online()
+        except Exception as e:
+            return handle_local_error("Could not bring graphing model online, encountered error: ", e)
+
+        try:
             chunk_entities = assemble_chunks_for_graph_db(chunks)
         except Exception as e:
             return handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
@@ -2696,11 +2748,12 @@ def graph_generator(chunks, input_file):
     try:
         client = get_graph_db_client()
         graph = client.select_graph(selected_knowledge_domain)  # Will create the graph if it doesn't exist
+        skip_check_for_exisiting_summaries = is_graph_blank_or_newly_created(graph)
     except Exception as e:
         return handle_local_error(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB, encountered error: ", e)
-
+    
     try:
-        store_entities_and_relationships_in_graph_db(complete_chunk_entities, selected_knowledge_domain, graph, skip_summary_generation, summaries_filepath)
+        store_entities_and_relationships_in_graph_db(complete_chunk_entities, selected_knowledge_domain, graph, skip_summary_generation, summaries_filepath, skip_check_for_exisiting_summaries)
     except Exception as e:
         return handle_local_error("Could not store entities and relationships in graph DB, encountered error: ", e)
 
