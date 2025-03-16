@@ -3283,3 +3283,73 @@ def hf_waitress_streaming_request_response_handler(endpoint_url, headers, payloa
         
     except Exception as e:
         return handle_local_error("Failed request to /exl2_stream or /exl2_grapher APIs, encountered error: ", e)
+
+
+
+
+
+
+
+
+
+
+
+def get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk):
+    return f"""You are a precise knowledge graph analyst. Your task is to create a structured, comprehensive and sharp summary report (under 2000 words) based on the provided text and node/relationship information.
+
+    Input:
+    1. A text chunk containing detailed information
+    2. A predefined list of nodes and relationships to focus on
+
+    Instructions:
+    1. First, analyze each node in the provided nodes list
+    2. For each node, extract ONLY factual information from the text chunk
+    3. Focus on these specific aspects for each node:
+    - Definition/Description
+    - Quantitative metrics (if any)
+    - Important relationships with other nodes
+    - Temporal information (dates, timelines)
+
+    Required Structure:
+    1. Primary Entities
+    - List main entities from nodes list
+    - Core attributes
+    - Key relationships between entities
+
+    2. Entity Details
+    - For each major entity:
+        * Key characteristics
+        * Associated metrics
+        * Relationships to other entities
+
+    3. Quantitative Information
+    - Any numerical data
+    - Statistical information
+    - Measurable outcomes
+
+    4. Notable Events and Updates
+    - Chronological developments
+    - Significant changes
+    - Important announcements
+
+    Remember:
+    - Include ONLY information present in the text
+    - Use precise numbers and dates when available
+    - Maintain a factual tone
+    - Focus on relationships defined in the nodes list
+    - Avoid assumptions or inferences not supported by the text
+
+    <text_chunk>
+    {chunk}
+    </text_chunk>
+
+    <nodes_and_relationships>
+    {json.dumps(nodes_and_relationships)}
+    </nodes_and_relationships>
+
+
+    Output format:
+    {{
+        "summary": "Your structured, comprehensive and sharp summary report (under 2000 words) here"
+    }}
+    """
