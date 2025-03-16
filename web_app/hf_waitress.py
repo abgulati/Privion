@@ -23,7 +23,7 @@ except ImportError:
     print("transformers version is below 4.45.0 required from Llama3.2-Vision. Skipping MllamaForConditionalGeneration import.")
 
 try:
-    from prompt_formatting import manually_format_prompt_with_prompt_template, get_user_query_for_node_summary, get_user_query_for_relationship_summary
+    from prompt_formatting import manually_format_prompt_with_prompt_template, get_user_query_for_node_summary, get_user_query_for_relationship_summary, get_user_query_for_comprehensive_summary
 except ImportError:
     print("Prompt Formatter module `prompt_formatting.py` is not present. Skipping import. Must be present for exl2 bulk-summary generation.")
 
@@ -2359,7 +2359,7 @@ def process_nodes(nodes: list, chunk_text: str, print_string: str = "", exl2_pro
         try:
             name = str(node['name'])
             node_type = str(node['type'])
-            existing_summary = str(node['summary'])
+            existing_summary = str(node.get('summary', '')) if node.get('summary') else ""   # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
             
             node_key = (name, node_type)
             if node_key in processed_nodes:
@@ -2402,7 +2402,7 @@ def process_relationships(relationships: list, chunk_text: str, print_string: st
             source = str(relationship['source'])
             target = str(relationship['target'])
             relationship_type = str(relationship['relationship'])
-            existing_summary = str(relationship['summary'])
+            existing_summary = str(relationship.get('summary', '')) if relationship.get('summary') else ""   # dict .get() method is safer than `if relationship['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
 
             relationship_key = (source, target, relationship_type)
             if relationship_key in processed_relationships:
@@ -2433,6 +2433,93 @@ def process_relationships(relationships: list, chunk_text: str, print_string: st
             handle_error_no_return(f"Could not generate summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
 
     return summarized_relationships
+
+
+def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: str, source_doc_name: str, exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
+    '''
+    This function takes a dictionary containing nodes and relationships, and a chunk of text.
+    It generates a comprehensive summary for the chunk covering all nodes and relationships, and saves the summary to every node and relationship.
+    It returns an updated dictionary comprising all nodes and relationships with their comprehensive summaries.
+    '''
+    try:
+
+        try:
+            comprehensive_summary_request_prompt = get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
+            formatted_prompt = manually_format_prompt_with_prompt_template(
+                formatted_prompt="",
+                user_query=comprehensive_summary_request_prompt,
+                current_sequence_id=0,
+                base_template="",
+                local_llm_chat_template_format=exl2_prompt_template_format,
+                skip_system_prompt=True
+            )
+            full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+            full_response = trim_response(full_response, '"summary":', '}').replace("'", "") + "\n\n{Source Document Name: " + source_doc_name + "}"
+        except Exception as e:
+            return handle_local_error(f"Could not get comprehensive summary from LLM, encountered error: ", e)
+
+        summarized_nodes_and_relationships = {}
+
+        processed_nodes = {}
+        summarized_nodes = []
+        
+        for node in nodes_and_relationships['nodes']:
+            try:
+                name = str(node['name'])
+                node_type = str(node['type'])
+                summary_list = list(node.get('summary', [])) if node.get('summary') else []   # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
+                
+                node_key = (name, node_type)
+                if node_key in processed_nodes:
+                    print(f"Skipping duplicate node {name} of type {node_type}")
+                    continue
+
+                summary_list.append(full_response)
+                summary_list = list(set(summary_list)) # de-duplicate summary_list
+                summarized_nodes.append({
+                    'name': name,
+                    'type': node_type,
+                    'summary':summary_list
+                })
+                processed_nodes[node_key] = True
+            except Exception as e:
+                handle_error_no_return(f"Could not update node {name} of type {node_type} with comprehensive summary, encountered error: ", e)
+
+        summarized_nodes_and_relationships['nodes'] = summarized_nodes
+        
+        processed_relationships = {}
+        summarized_relationships = []
+        
+        for relationship in nodes_and_relationships['relationships']:
+            try:
+                source = str(relationship['source'])
+                target = str(relationship['target'])
+                relationship_type = str(relationship['relationship'])
+                summary_list = list(relationship.get('summary', [])) if relationship.get('summary') else []   # dict .get() method is safer than `if relationship['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
+
+                relationship_key = (source, target, relationship_type)
+                if relationship_key in processed_relationships:
+                    print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type})")
+                    continue
+
+                summary_list.append(full_response)
+                summary_list = list(set(summary_list)) # de-duplicate summary_list
+                summarized_relationships.append({
+                    'source': source,
+                    'target': target,
+                    'relationship': relationship_type,
+                    'summary':summary_list
+                })
+                processed_relationships[relationship_key] = True
+            except Exception as e:
+                handle_error_no_return(f"Could not update relationship {source} -> {target} ({relationship_type}) with comprehensive summary, encountered error: ", e)
+
+        summarized_nodes_and_relationships['relationships'] = summarized_relationships
+
+        return summarized_nodes_and_relationships
+
+    except Exception as e:
+        return handle_local_error(f"Could not generate comprehensive summary, encountered error: ", e)
     
 ### End of Helper Functions ###
 
@@ -2519,33 +2606,47 @@ def exl2_grapher():
         try:
             for chunk_number, chunk_data in chunk_entities.items():
                 print_string = f" in chunk {chunk_number} of total {len(chunk_entities)} chunks"
-                print(f"\nGenerating summaries for all nodes and relationships {print_string}...\n")
+                print(f"\nGenerating comprehensive summaries for all nodes and relationships {print_string}...\n")
+
+                # try:
+                #     summarized_nodes = process_nodes(
+                #         nodes=chunk_data['entities_and_relationships']['nodes'],
+                #         chunk_text=chunk_data['chunk_text'],
+                #         print_string=print_string,
+                #         exl2_prompt_template_format=exl2_prompt_template_format,
+                #         requested_max_new_tokens=requested_max_new_tokens,
+                #         gen_settings=gen_settings
+                #     )
+                #     summarized_relationships = process_relationships(
+                #         relationships=chunk_data['entities_and_relationships']['relationships'],
+                #         chunk_text=chunk_data['chunk_text'],
+                #         print_string=print_string,
+                #         exl2_prompt_template_format=exl2_prompt_template_format,
+                #         requested_max_new_tokens=requested_max_new_tokens,
+                #         gen_settings=gen_settings
+                #     )
+                    
+                #     chunk_entities[chunk_number]['entities_and_relationships']['nodes'] = summarized_nodes
+                #     chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = summarized_relationships
+
+                #     output_queue.put(chunk_entities[chunk_number])
+                # except Exception as e:
+                #     handle_error_no_return(f"Could not generate summaries for chunk {chunk_number}, skipping. Encountered error: ", e)
 
                 try:
-                    summarized_nodes = process_nodes(
-                        nodes=chunk_data['entities_and_relationships']['nodes'],
+                    summarized_nodes_and_relationships = process_nodes_and_relationships(
+                        nodes_and_relationships=chunk_data['entities_and_relationships'],
                         chunk_text=chunk_data['chunk_text'],
-                        print_string=print_string,
+                        source_doc_name=chunk_data['source_doc_name'],
                         exl2_prompt_template_format=exl2_prompt_template_format,
                         requested_max_new_tokens=requested_max_new_tokens,
                         gen_settings=gen_settings
                     )
-                    summarized_relationships = process_relationships(
-                        relationships=chunk_data['entities_and_relationships']['relationships'],
-                        chunk_text=chunk_data['chunk_text'],
-                        print_string=print_string,
-                        exl2_prompt_template_format=exl2_prompt_template_format,
-                        requested_max_new_tokens=requested_max_new_tokens,
-                        gen_settings=gen_settings
-                    )
-                    
-                    chunk_entities[chunk_number]['entities_and_relationships']['nodes'] = summarized_nodes
-                    chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = summarized_relationships
-
+                    chunk_entities[chunk_number]['entities_and_relationships'] = summarized_nodes_and_relationships
                     output_queue.put(chunk_entities[chunk_number])
                 except Exception as e:
-                    handle_error_no_return(f"Could not generate summaries for chunk {chunk_number}, skipping. Encountered error: ", e)
-                
+                    handle_error_no_return(f"Could not process nodes and relationships for chunk {chunk_number}, skipping. Encountered error: ", e)
+
         except Exception as e:
             return handle_error_no_return("Summary generation failed, encountered error: ", e)
         finally:
