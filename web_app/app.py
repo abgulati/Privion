@@ -1994,9 +1994,9 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
                 graph.query(f"""
                     MERGE (n:{node_name} {{name:$name, type:$type}})
                     SET n.summary = CASE
-                        WHEN n.summary IS NULL THEN $summary
                         WHEN $summary = [] THEN n.summary
-                        ELSE $summary
+                        WHEN n.summary IS NULL THEN $summary
+                        ELSE n.summary + $summary
                     END
                     SET n.source_documents = CASE
                         WHEN n.source_documents IS NULL THEN [$source_document]
@@ -2013,9 +2013,9 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
                 graph.query(f"""
                     MERGE (n:{node_name} {{name:$name, type:$type}})
                     SET n.summary = CASE
-                        WHEN n.summary IS NULL THEN $summary
                         WHEN $summary = [] THEN n.summary
-                        ELSE $summary
+                        WHEN n.summary IS NULL THEN $summary
+                        ELSE n.summary + $summary
                     END
                 """, {
                     'name': name.replace("'", ""),
@@ -2030,12 +2030,11 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
             CASE 3: If the `source_documents` list property already contains this document: leave the list unchanged!
 
             For summary:
-            CASE 1: If the `summary` list property doesn't exist yet: create a new list with new summary list.
-            CASE 2: If the new summary list is empty: leave the list unchanged!
-            CASE 3: If the new summary list is not empty: replace the existing list with the new summary list as the flow from get_summaries_for_all_nodes() to
-            summary_generator() to process_nodes_and_relationships() in HF-Waitress ensures that new summaries are appended to the existing list, while de-duplicating the list.
+            CASE 1: If the new summary list is empty: leave the list unchanged!
+            CASE 2: If the existing list in the graph is NULL, might as well set to the new summary list even if it's empty!
+            CASE 3: If neither are blank.null, append the new summary to the existing list.
 
-            Also, summary is already a list so we don't need the [] in the query!
+            Not passing exisiting summaries to the summary generator as it overwhlems the LLMs context window, so must append to the existing list here!
             '''
             
             # Mark node as processed:
@@ -2084,9 +2083,9 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
                         ELSE r.weight + 1
                     END
                     SET r.summary = CASE
-                        WHEN r.summary IS NULL THEN $summary
                         WHEN $summary = [] THEN r.summary
-                        ELSE $summary
+                        WHEN r.summary IS NULL THEN $summary
+                        ELSE r.summary + $summary
                     END
                     SET r.source_documents = CASE
                         WHEN r.source_documents IS NULL THEN [$source_document]
@@ -2109,9 +2108,9 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
                         ELSE r.weight + 1
                     END
                     SET r.summary = CASE
-                        WHEN r.summary IS NULL THEN $summary
                         WHEN $summary = [] THEN r.summary
-                        ELSE $summary
+                        WHEN r.summary IS NULL THEN $summary
+                        ELSE r.summary + $summary
                     END
                 """, {
                     'source_name': relationship['source'].replace("'", ""),
@@ -2277,7 +2276,7 @@ def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, pr
     return relationships_with_existing_summaries
 
 
-def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB, skip_summary_generation: bool = False, summaries_filepath: str = None, skip_check_for_exisiting_summaries: bool = False):
+def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB, skip_summary_generation: bool = False, summaries_filepath: str = None,):
     '''
     Receives a complete chunk_entities dict:
 
@@ -2302,27 +2301,6 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
     try:
         # First, Get/Generate summaries for each node and relationship if applicable:
         if not skip_summary_generation:
-            
-            if not skip_check_for_exisiting_summaries:
-                # a. Get summaries for all nodes and relationships:
-                for chunk_number, chunk_data in chunk_entities.items():
-                    print_string = f" in chunk {chunk_number} of total {len(chunk_entities)} chunks"
-                    print(f"\nChecking for existing summaries for all nodes and relationships {print_string}...\n")
-
-                    try:
-                        nodes_with_existing_summaries = get_summaries_for_all_nodes(nodes=chunk_data['entities_and_relationships']['nodes'], graph=graph, print_string=print_string)
-                        chunk_entities[chunk_number]['entities_and_relationships']['nodes'] = nodes_with_existing_summaries
-                    except Exception as e:
-                        handle_error_no_return(f"Error checking for existing summaries for nodes, skipping chunk {chunk_number}. Encountered error: ", e)
-
-                    try:
-                        relationships_with_existing_summaries = get_summaries_for_all_relationships(relationships=chunk_data['entities_and_relationships']['relationships'], graph=graph, print_string=print_string)
-                        chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = relationships_with_existing_summaries
-                    except Exception as e:
-                        handle_error_no_return(f"Error checking for existing summaries for relationships, skipping chunk {chunk_number}. Encountered error: ", e)
-
-            else:
-                print(f"\nNewly created or blank graph DB, skipping check for existing summaries for all nodes and relationships in {selected_knowledge_domain} graph DB\n")
 
             try:
                 chunks = summary_generator(chunk_entities=chunk_entities)
@@ -2750,12 +2728,11 @@ def graph_generator(chunks, input_file):
     try:
         client = get_graph_db_client()
         graph = client.select_graph(selected_knowledge_domain)  # Will create the graph if it doesn't exist
-        skip_check_for_exisiting_summaries = is_graph_blank_or_newly_created(graph)
     except Exception as e:
         return handle_local_error(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB, encountered error: ", e)
     
     try:
-        store_entities_and_relationships_in_graph_db(complete_chunk_entities, selected_knowledge_domain, graph, skip_summary_generation, summaries_filepath, skip_check_for_exisiting_summaries)
+        store_entities_and_relationships_in_graph_db(complete_chunk_entities, selected_knowledge_domain, graph, skip_summary_generation, summaries_filepath)
     except Exception as e:
         return handle_local_error("Could not store entities and relationships in graph DB, encountered error: ", e)
 
@@ -5682,7 +5659,7 @@ def search_knowledge_base(user_query:str, embedding_function:str, perform_graph_
     if not combined_docs:   # i.e. if blank
         print("No documents for citations, setting do_rag to False")
         do_rag = False
-        return [], do_rag
+        return [], do_rag, None
 
     print(f"\n\nContext docs prior to reranking: {combined_docs}\n\n")
     docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
