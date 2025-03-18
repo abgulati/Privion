@@ -3353,3 +3353,39 @@ def get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk):
         "summary": "Your structured, comprehensive and sharp summary report (under 2000 words) here"
     }}
     """
+
+
+
+
+
+
+
+
+
+    try:
+        # First, Get/Generate summaries for each node and relationship if applicable:
+        if not skip_summary_generation:
+            
+            if not skip_check_for_exisiting_summaries:
+                # a. Get summaries for all nodes and relationships:
+                for chunk_number, chunk_data in chunk_entities.items():
+                    print_string = f" in chunk {chunk_number} of total {len(chunk_entities)} chunks"
+                    print(f"\nChecking for existing summaries for all nodes and relationships {print_string}...\n")
+
+                    try:
+                        nodes_with_existing_summaries = get_summaries_for_all_nodes(nodes=chunk_data['entities_and_relationships']['nodes'], graph=graph, print_string=print_string)
+                        chunk_entities[chunk_number]['entities_and_relationships']['nodes'] = nodes_with_existing_summaries
+                    except Exception as e:
+                        handle_error_no_return(f"Error checking for existing summaries for nodes, skipping chunk {chunk_number}. Encountered error: ", e)
+
+                    try:
+                        relationships_with_existing_summaries = get_summaries_for_all_relationships(relationships=chunk_data['entities_and_relationships']['relationships'], graph=graph, print_string=print_string)
+                        chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = relationships_with_existing_summaries
+                    except Exception as e:
+                        handle_error_no_return(f"Error checking for existing summaries for relationships, skipping chunk {chunk_number}. Encountered error: ", e)
+
+            else:
+                print(f"\nNewly created or blank graph DB, skipping check for existing summaries for all nodes and relationships in {selected_knowledge_domain} graph DB\n")
+
+
+skip_check_for_exisiting_summaries = is_graph_blank_or_newly_created(graph)
