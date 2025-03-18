@@ -2503,7 +2503,7 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
             try:
                 name = str(node['name'])
                 node_type = str(node['type'])
-                summary_list = list(node.get('summary', [])) if node.get('summary') else []   # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
+                summary_list = list(node.get('summary', []))    # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
                 
                 node_key = (name, node_type)
                 if node_key in processed_nodes:
@@ -2531,7 +2531,7 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
                 source = str(relationship['source'])
                 target = str(relationship['target'])
                 relationship_type = str(relationship['relationship'])
-                summary_list = list(relationship.get('summary', [])) if relationship.get('summary') else []   # dict .get() method is safer than `if relationship['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
+                summary_list = list(relationship.get('summary', []))
 
                 relationship_key = (source, target, relationship_type)
                 if relationship_key in processed_relationships:
