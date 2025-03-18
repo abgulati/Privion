@@ -40,7 +40,7 @@ def get_user_query_for_relationship_summary(source, target, relationship, summar
 
 
 def get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk):
-    return f"""For the purpose of creating a Graph Database, nodes and relations were extracted from a chunk of text. Both are provided below, can you provide a concise (under 1300 tokens) summary, in the style of a report detailing crucial information and insights, for the text_chunk expounding on the nodes and relationships? Thank you!
+    return f"""For the purpose of creating a Graph Database, nodes and relations were extracted from a chunk of text. Both are provided below, can you provide a concise (under 3000 words) summary, in the style of a report detailing crucial information and insights, for the text_chunk expounding on the nodes and relationships? Thank you!
 
     <text_chunk>
     {chunk}
@@ -53,7 +53,7 @@ def get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk):
 
     Output format:
     {{
-        "summary": "Your concise summary report (under 1300 words) here"
+        "summary": "Your concise summary report (under 3000 words) here"
     }}
     """
 
