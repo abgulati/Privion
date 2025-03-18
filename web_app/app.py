@@ -2470,7 +2470,7 @@ def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-genera
         f"--model_id {str(graph_generator_model)} "
     )
     if exl2_quantize_graph_model:
-        command += f" --exl2 --exl2_bpw {str(exl2_quantize_graph_model_bpw)} --exl2_max_seq_len 20480"
+        command += f" --exl2 --exl2_bpw {str(exl2_quantize_graph_model_bpw)} --exl2_max_seq_len 8192"
     else:
         command += f" --quantize {str(quantize_graph_model)} --quant_level {str(quantize_graph_model_bits)}"
 
@@ -2623,6 +2623,7 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_f
         try:
             candidate = load_json_file(entities_and_relationships_filepath)
             if isinstance(candidate, dict): # TODO: validation of the JSON file format
+                print(f"Previously extracted graph entities and relationships found, reusing from: {entities_and_relationships_filepath}")
                 complete_chunk_entities = candidate
                 loaded_entities_and_relationships = True
             else:
@@ -2639,6 +2640,7 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_f
                 complete_chunk_entities = candidate
                 if complete_chunk_entities is not None:
                     skip_summary_generation = True  # Else return the value from config.json
+                    print(f"Previously generated graph summaries found, reusing from: {summaries_filepath}")
             else:
                 raise ValueError("Invalid JSON file format for previously generated graph summaries")
         except Exception as e:
@@ -5421,8 +5423,9 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
 def get_summary_report(summarized_chunk_entities: dict) -> str:
     print(f"\n\nGetting summary report\n\n")
     
-    summary_report = ""
+    summary_report = set()
     try:
+        
         for _, chunk_data in summarized_chunk_entities.items():
             source_doc_name = chunk_data['source_doc_name']
             
@@ -5431,34 +5434,39 @@ def get_summary_report(summarized_chunk_entities: dict) -> str:
                 continue
             
             for node in chunk_data['entities_and_relationships']['nodes']:
-                if node['summary'] is not None and node['summary'] != '':
-                    
-                    compiled_node_summary = ""
-                    try:
-                        node_source_doc_name = set(node['source_documents'] if node['source_documents'] else source_doc_name.split(' '))
-                        compiled_node_summary += ''.join(node['summary'])
-                    except Exception as e:
-                        handle_error_no_return("Could not split source_doc_name, encountered error: ", e)
-                        node_source_doc_name = set(source_doc_name.split(' '))
-                    
-                    summary_report += f"Summary for node '{node['name']}' of type '{node['type']}' - {compiled_node_summary} \nSource Document(s): {node_source_doc_name}\n\n"
+
+                if not node.get('summary'):
+                    continue    # Skip nodes with no summaries
+                
+                source_docs = node.get('source_documents')
+                node_source_doc_name = set(source_docs) if source_docs else set(source_doc_name.split(' '))
+
+                for summary in node.get('summary', []):
+                    if summary is not None and summary != '':
+                        entry = (
+                            f"Summary for node '{node['name']}' of type '{node['type']}' - {summary} \n"
+                            f"Source Document(s): {node_source_doc_name}\n\n"
+                        )
+                        summary_report.add(entry)
             
             for relationship in chunk_data['entities_and_relationships']['relationships']:
-                if relationship['summary'] is not None and relationship['summary'] != '':
-                    
-                    compiled_relationship_summary = ""
-                    try:
-                        relationship_source_doc_name = set(relationship['source_documents'] if relationship['source_documents'] else source_doc_name.split(' '))
-                        compiled_relationship_summary += ''.join(relationship['summary'])
-                    except Exception as e:
-                        handle_error_no_return("Could not split source_doc_name, encountered error: ", e)
-                        relationship_source_doc_name = set(source_doc_name.split(' '))
-                    
-                    summary_report += f"Summary for relationship '{relationship['relationship']}' between '{relationship['source']}' and '{relationship['target']}' - {compiled_relationship_summary} \nSource Document(s): {relationship_source_doc_name}\n\n"
+                if not relationship.get('summary'):
+                    continue    # Skip relationships with no summaries
+                
+                source_docs = relationship.get('source_documents')
+                relationship_source_doc_name = set(source_docs) if source_docs else set(source_doc_name.split(' '))
+
+                for summary in relationship.get('summary', []):
+                    if summary is not None and summary != '':
+                        entry = (
+                            f"Summary for relationship '{relationship['relationship']}' between '{relationship['source']}' and '{relationship['target']}' - {summary} \n"
+                            f"Source Document(s): {relationship_source_doc_name}\n\n"
+                        )
+                        summary_report.add(entry)
     
     except Exception as e:
         handle_error_no_return("Could not add to summary report, skipping chunk {count}. Encountered error: ", e)
-    return summary_report
+    return ''.join(summary_report)
 
 
 def get_summaries_from_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB):
