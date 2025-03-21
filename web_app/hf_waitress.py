@@ -435,7 +435,6 @@ except Exception as e:
 #   a. directories are set correctly at each run
 #   b. The user can set their preferred directory by easily editing config.json!
 
-
 # Having set the values for the directories above, proceed to actually create them on disk IF they don't alread exist!
 
 try:
@@ -479,17 +478,29 @@ app.config['UPLOAD_FOLDER'] = upload_folder
 # os.environ['HF_HOME'] = transformer_models_folder
 
 def load_json_file(file_path):
-    try:
-        with open(file_path, 'r') as file:
-            return json.load(file)
-    except Exception as e:
-        return handle_local_error("Could not load JSON file, encountered error: ", e)
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r') as file:
+                return json.load(file)
+        except Exception as e:
+            return handle_local_error("Could not load JSON file, encountered error: ", e)
+    else:
+        return {}
 
 
 def save_json_file(data, file_path):
+    current_cache = {}
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r') as file:
+                current_cache = json.load(file)
+        except Exception as e:
+            return handle_local_error("Could not save JSON file, encountered error: ", e)
+    
     try:
+        current_cache.update(data)
         with open(file_path, 'w') as file:
-            json.dump(data, file, indent=4)
+            json.dump(current_cache, file, indent=4)
     except Exception as e:
         return handle_local_error("Could not save JSON file, encountered error: ", e)
 
@@ -2473,10 +2484,6 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
     It returns an updated dictionary comprising all nodes and relationships with their comprehensive summaries.
     '''
     try:
-        cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_summary_cache.json")
-
-        if os.path.exists(cache_file_path):
-            nodes_and_relationships_summary = load_json_file(cache_file_path)
 
         try:
             comprehensive_summary_request_prompt = get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
@@ -2585,6 +2592,7 @@ def exl2_grapher():
         chunk_entities = request.json.get('chunk_entities')
         extraction_mode = request.json.get('extraction_mode', False)
         summary_generation_mode = request.json.get('summary_generation_mode', False)
+        rag_response_mode = request.json.get('rag_response_mode', False)
         exl2_prompt_template_format = request.json.get('exl2_prompt_template_format', None)
         gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
@@ -2599,9 +2607,33 @@ def exl2_grapher():
         global PIPE
 
         try:
+
+            cache_data_map = {}
             for chunk_number, chunk_data in chunk_entities.items():
                 print(f"\nExtracting entities and relationships for chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
-                
+
+                if not rag_response_mode:
+                    print(f"\nNon-response mode: Checking for existing nodes and relationships extraction cache for chunk {chunk_number}...\n")
+                    source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
+                    extraction_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_extraction_cache.json")
+                    if source_doc_name not in cache_data_map:
+                        try:
+                            cache_data_map[source_doc_name] = {
+                                'data': load_json_file(extraction_cache_file_path),
+                                'file_path': extraction_cache_file_path
+                            }
+                        except Exception as e:
+                            handle_error_no_return(f"Could not load nodes and relationships extraction from cache file {extraction_cache_file_path}, encountered error: ", e)
+                    
+                    cache_entry = cache_data_map.get(source_doc_name)
+                    if (cache_entry and cache_entry['data'] and chunk_number in cache_entry['data'] and
+                        cache_entry['data'][chunk_number]['entities_and_relationships'] is not None):
+
+                        chunk_entities[chunk_number]['entities_and_relationships'] = cache_entry['data'][chunk_number]['entities_and_relationships']
+                        output_queue.put(chunk_entities[chunk_number])
+                        print(f"\nFound existing nodes and relationships extraction cache for chunk {chunk_number}, returning cached data...\n")
+                        continue
+                    
                 try:
                     chunk_payload = "Extract nodes and relationships from the following text:\n" + chunk_data['chunk_text'] + "\n<knowledge_graph>"
                     full_payload = f"<start_of_turn>user\n{chunk_payload}<end_of_turn>\n<start_of_turn>model\n"
@@ -2621,9 +2653,18 @@ def exl2_grapher():
                                 full_response = ast.literal_eval(full_response)
                             except Exception as e:
                                 raise # Re-raise the original exception if the second attempt also fails
-                    chunk_entities[chunk_number]['entities_and_relationships'] = full_response
                     
+                    chunk_entities[chunk_number]['entities_and_relationships'] = full_response
                     output_queue.put(chunk_entities[chunk_number])
+
+                    if not rag_response_mode:
+                        try:
+                            save_json_file({chunk_number: chunk_entities[chunk_number]}, extraction_cache_file_path)
+                            cache_data_map[source_doc_name]['data'][chunk_number] = chunk_entities[chunk_number]    # update in-memory cache as well to help with de-duplication
+                            print(f"\nSaved nodes and relationships extraction to cache file {extraction_cache_file_path} for chunk {chunk_number}\n")
+                        except Exception as e:
+                            handle_error_no_return(f"Could not save extracted nodes and relationships to cache file in {knowledge_graph_cache_dir}, skipping. Encountered error: ", e)
+                
                 except Exception as e:
                     handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number}, skipping. Encountered error: ", e)
 
@@ -2640,47 +2681,53 @@ def exl2_grapher():
         global PIPE
 
         try:
+            
+            cache_data_map = {}
             for chunk_number, chunk_data in chunk_entities.items():
                 print_string = f"in chunk {chunk_number} of total {len(chunk_entities)} chunks"
                 print(f"\nGenerating comprehensive summaries for all nodes and relationships {print_string}...\n")
                 print(f"Timestamp: {datetime.datetime.now()}")
 
-                # try:
-                #     summarized_nodes = process_nodes(
-                #         nodes=chunk_data['entities_and_relationships']['nodes'],
-                #         chunk_text=chunk_data['chunk_text'],
-                #         print_string=print_string,
-                #         exl2_prompt_template_format=exl2_prompt_template_format,
-                #         requested_max_new_tokens=requested_max_new_tokens,
-                #         gen_settings=gen_settings
-                #     )
-                #     summarized_relationships = process_relationships(
-                #         relationships=chunk_data['entities_and_relationships']['relationships'],
-                #         chunk_text=chunk_data['chunk_text'],
-                #         print_string=print_string,
-                #         exl2_prompt_template_format=exl2_prompt_template_format,
-                #         requested_max_new_tokens=requested_max_new_tokens,
-                #         gen_settings=gen_settings
-                #     )
+                print(f"\nChecking for existing summary cache for chunk {chunk_number}...\n")
+                source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
+                summary_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_summary_cache.json")
+                if source_doc_name not in cache_data_map:
+                    try:
+                        cache_data_map[source_doc_name] = {
+                            'data': load_json_file(summary_cache_file_path),
+                            'file_path': summary_cache_file_path
+                        }
+                    except Exception as e:
+                        handle_error_no_return(f"Could not load nodes and relationships summary from cache file {summary_cache_file_path}, encountered error: ", e)
+                
+                # Check if cache available for this chunk
+                cache_entry = cache_data_map.get(source_doc_name)
+                if (cache_entry and cache_entry['data'] and chunk_number in cache_entry['data'] and
+                    cache_entry['data'][chunk_number]['entities_and_relationships'] is not None):
                     
-                #     chunk_entities[chunk_number]['entities_and_relationships']['nodes'] = summarized_nodes
-                #     chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = summarized_relationships
-
-                #     output_queue.put(chunk_entities[chunk_number])
-                # except Exception as e:
-                #     handle_error_no_return(f"Could not generate summaries for chunk {chunk_number}, skipping. Encountered error: ", e)
-
+                    chunk_entities[chunk_number]['entities_and_relationships'] = cache_entry['data'][chunk_number]['entities_and_relationships']
+                    output_queue.put(chunk_entities[chunk_number])
+                    print(f"\nFound existing summary cache for chunk {chunk_number}, returning cached data...\n")
+                    continue
+                
                 try:
                     summarized_nodes_and_relationships = process_nodes_and_relationships(
                         nodes_and_relationships=chunk_data['entities_and_relationships'],
                         chunk_text=chunk_data['chunk_text'],
-                        source_doc_name=chunk_data['source_doc_name'],
+                        source_doc_name=source_doc_name,
                         exl2_prompt_template_format=exl2_prompt_template_format,
                         requested_max_new_tokens=requested_max_new_tokens,
                         gen_settings=gen_settings
                     )
                     chunk_entities[chunk_number]['entities_and_relationships'] = summarized_nodes_and_relationships
                     output_queue.put(chunk_entities[chunk_number])
+
+                    try:
+                        save_json_file({chunk_number: chunk_entities[chunk_number]}, summary_cache_file_path)
+                        cache_data_map[source_doc_name]['data'][chunk_number] = chunk_entities[chunk_number]    # update in-memory cache as well to help with de-duplication
+                        print(f"\nSaved nodes and relationships summary to cache file {summary_cache_file_path} for chunk {chunk_number}\n")
+                    except Exception as e:
+                        handle_error_no_return(f"Could not save nodes and relationships summary to cache file in {knowledge_graph_cache_dir}, skipping. Encountered error: ", e)
                 except Exception as e:
                     handle_error_no_return(f"Could not process nodes and relationships for chunk {chunk_number}, skipping. Encountered error: ", e)
 
