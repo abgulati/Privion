@@ -542,15 +542,12 @@ except Exception as e:
 #   a. directories are set correctly at each run
 #   b. The user can set their preferred directory by easily editing config.json!
 
-
 # Having set the values for the directories above, proceed to actually create them on disk IF they don't alread exist!
-if not os.path.exists(BASE_DIRECTORY):
 
-    # Create a directory for app storage 
-    try:
-        os.mkdir(BASE_DIRECTORY)
-    except Exception as e:
-        handle_local_error("Failed to create Base App Directory, encountered error: ", e)
+try:
+    os.makedirs(BASE_DIRECTORY, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create Base App Directory, encountered error: ", e)
         
 try:
     read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 'docs_to_knowledge_graph_dir'])
@@ -563,65 +560,35 @@ try:
 except Exception as e:
     handle_local_error("Could not read paths for app directories (model_dir, highlighted_docs, upload_folder, etc.) from config.json on boot, encountered error: ", e)
 
+try:
+    os.makedirs(model_dir, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create Model Directory (model_dir), encountered error: ", e)
 
-# If the base directory does not currently exist...
-if not os.path.exists(model_dir):
+try:
+    os.makedirs(highlighted_docs, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create Highlighted Docs Directory (highlighted_docs), encountered error: ", e)
 
-    # Create a directory for app storage
-    try:
-        os.mkdir(model_dir)
-    except Exception as e:
-        handle_local_error("Failed to create Model Directory (model_dir), encountered error: ", e)
+try:
+    os.makedirs(upload_folder, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create Uploaded Docs Directory (upload_folder), encountered error: ", e)
+    
+try:
+    os.makedirs(ocr_pdfs, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create OCR'ed Docs Directory (ocr_pdfs), encountered error: ", e)
 
+try:
+    os.makedirs(pdfs_to_txts, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create txt-docs Directory (pdfs_to_txts), encountered error: ", e)
 
-# If the highlighted_docs directory does not currently exist...
-if not os.path.exists(highlighted_docs):
-
-    # Create a directory for app storage
-    try:
-        os.mkdir(highlighted_docs)
-    except Exception as e:
-        handle_local_error("Failed to create Highlighted Docs Directory (highlighted_docs), encountered error: ", e)
-
-
-# If the upload_folder directory does not currently exist...
-if not os.path.exists(upload_folder):
-
-    # Create a directory for app storage
-    try:
-        os.mkdir(upload_folder)
-    except Exception as e:
-        handle_local_error("Failed to create Uploaded Docs Directory (upload_folder), encountered error: ", e)
-        
-
-# If the ocr_pdfs directory does not currently exist...
-if not os.path.exists(ocr_pdfs):
-
-    # Create a directory for app storage
-    try:
-        os.mkdir(ocr_pdfs)
-    except Exception as e:
-        handle_local_error("Failed to create OCR'ed Docs Directory (ocr_pdfs), encountered error: ", e)
-
-
-# If the pdfs_to_txts directory does not currently exist...
-if not os.path.exists(pdfs_to_txts):
-
-    # Create a directory for app storage
-    try:
-        os.mkdir(pdfs_to_txts)
-    except Exception as e:
-        handle_local_error("Failed to create txt-docs Directory (pdfs_to_txts), encountered error: ", e)
-
-
-# If the docs_to_knowledge_graph_dir directory does not currently exist...
-if not os.path.exists(docs_to_knowledge_graph_dir):
-
-    # Create a directory for app storage
-    try:
-        os.mkdir(docs_to_knowledge_graph_dir)
-    except Exception as e:
-        handle_local_error("Failed to create docs_to_knowledge_graph_dir, encountered error: ", e)
+try:
+    os.makedirs(docs_to_knowledge_graph_dir, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create docs_to_knowledge_graph_dir, encountered error: ", e)
 
 
 app.config['UPLOAD_FOLDER'] = upload_folder
@@ -646,11 +613,14 @@ def clean_text_string(text_to_be_cleaned):
 
 
 def load_json_file(file_path):
-    try:
-        with open(file_path, 'r') as file:
-            return json.load(file)
-    except Exception as e:
-        return handle_local_error("Could not load JSON file, encountered error: ", e)
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r') as file:
+                return json.load(file)
+        except Exception as e:
+            return handle_local_error("Could not load JSON file, encountered error: ", e)
+    else:
+        return {}
 
 
 def save_json_file(data, file_path):
@@ -1755,16 +1725,19 @@ def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payl
                 if line.startswith("data:"):
                     event_data = line[6:].strip()
                     try:
-                        token = str(json.loads(event_data))
-                        
-                        try:
-                            full_response[chunk_number] = ast.literal_eval(token)
-                        except Exception as e:
-                            handle_error_no_return("Failed to literal_eval event data, skipping. Encountered error: ", e)
+                        received_data = json.loads(event_data)  # json.loads() converts the JSON string into a Python object (dict, list, etc.)
+                        if not isinstance(received_data, dict):
+                            handle_error_no_return("Received data is not a dict, and is of type: ", type(received_data), ". Skipping. For Debug - Received data: ", received_data)
+                            continue
+                        full_response[chunk_number] = received_data
                         
                         try:
                             if 'entities_and_relationships' in full_response[chunk_number] and isinstance(full_response[chunk_number]['entities_and_relationships'], str):
                                 '''
+                                While the received data is a dict, the value of the entities_and_relationships key itself may be returned as a string by exl2_grapher's extraction_task(), 
+                                so we need to convert it to a dict via ast.literal_eval().
+                                The summary_generation_task() on the other hand always returns a dict so we don't need to do anything.
+
                                 NOTE: ast.literal_eval() works only on string inputs! If we were to print:
 
                                 print(f"Type of entities_and_relationships: {type(full_response[chunk_number]['entities_and_relationships'])}")
@@ -1806,7 +1779,7 @@ def graphing_request_response_handler(grapher_url, headers, payload):
         return handle_local_error("Failed /completions request to extract entities and relationships from chunk, encountered error: ", e)
 
 
-def extract_all_entities_and_relationships(chunk_entities: dict) -> dict:
+def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mode: bool = False) -> dict:
     '''
     Appends the `entities_and_relationships` key to each chunk_entities dict, returning the following structure:
 
@@ -1829,7 +1802,7 @@ def extract_all_entities_and_relationships(chunk_entities: dict) -> dict:
 
     if exl2_quantize_graph_model:   # invoke /exl2_grapher
         try:
-            payload = json.dumps({"chunk_entities": chunk_entities, "extraction_mode": True})
+            payload = json.dumps({"chunk_entities": chunk_entities, "extraction_mode": True, "rag_response_mode": rag_response_mode})
             full_response = hf_waitress_bulk_stream_request_response_handler(grapher_url, headers, payload)
             # print(f"\nExl2 Bulk-Graphing Response (Entities and Relationships):\n\n{full_response}\n")
             return full_response
@@ -5612,7 +5585,7 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
         return handle_local_error(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB, encountered error: ", e)
 
     try:
-        complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities)
+        complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities, True)  # RAG response mode = True
     except Exception as e:
         return handle_local_error("Failed to extract entities and relationships from chunk entities, encountered error: ", e)
 
