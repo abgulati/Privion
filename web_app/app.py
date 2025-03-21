@@ -330,6 +330,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'launch_graph_db_with_ui':True,
                 'assign_host_port_to_graph_db_ui':3000,
                 'graph_model_max_new_tokens':4096,
+                'graph_model_max_seq_len':20480,
                 'graph_model_temperature':0.1,
                 'graph_model_do_sample':True,
                 'graph_model_top_k':40,
@@ -2004,7 +2005,8 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
                 SET n.page_number = CASE
                     WHEN $page_number = [] THEN n.page_number
                     WHEN n.page_number IS NULL THEN $page_number
-                    ELSE n.page_number + $page_number
+                    WHEN NOT $page_number IN n.page_number THEN n.page_number + $page_number
+                    ELSE n.page_number
                 END
             """, {
                 'name': name.replace("'", ""),
@@ -2088,7 +2090,8 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
                 SET r.page_number = CASE
                     WHEN $page_number = [] THEN r.page_number
                     WHEN r.page_number IS NULL THEN $page_number
-                    ELSE r.page_number + $page_number
+                    WHEN NOT $page_number IN r.page_number THEN r.page_number + $page_number
+                    ELSE r.page_number
                 END
             """, {
                 'source_name': relationship['source'].replace("'", ""),
@@ -2391,7 +2394,7 @@ def graphing_model_server_is_online(graph_model_access_url, graph_model_server_p
 
 def read_graph_model_config():
     try:
-        read_return = read_config(['graph_model_access_url', 'graph_model_server_port', 'quantize_graph_model', 'quantize_graph_model_bits', 'graph_generator_model', 'exl2_quantize_graph_model', 'exl2_quantize_graph_model_bpw'])
+        read_return = read_config(['graph_model_access_url', 'graph_model_server_port', 'quantize_graph_model', 'quantize_graph_model_bits', 'graph_generator_model', 'exl2_quantize_graph_model', 'exl2_quantize_graph_model_bpw', 'graph_model_max_new_tokens', 'graph_model_max_seq_len'])
     except Exception as e:
         handle_error_no_return("Could not read graph model config, encountered error: ", e)
     
@@ -2402,14 +2405,16 @@ def read_graph_model_config():
     graph_generator_model = read_return['graph_generator_model']
     exl2_quantize_graph_model = str(read_return['exl2_quantize_graph_model']).lower() == 'true'
     exl2_quantize_graph_model_bpw = str(read_return['exl2_quantize_graph_model_bpw'])
+    graph_model_max_new_tokens = read_return['graph_model_max_new_tokens']
+    graph_model_max_seq_len = read_return['graph_model_max_seq_len']
 
-    return graph_model_access_url, graph_model_server_port, quantize_graph_model, quantize_graph_model_bits, graph_generator_model, exl2_quantize_graph_model, exl2_quantize_graph_model_bpw
+    return graph_model_access_url, graph_model_server_port, quantize_graph_model, quantize_graph_model_bits, graph_generator_model, exl2_quantize_graph_model, exl2_quantize_graph_model_bpw, graph_model_max_new_tokens, graph_model_max_seq_len
 
 
 def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-generator model
     print(f"\nLaunching HF-Waitress instance with kb-generator model...\n")
 
-    graph_model_access_url, graph_model_server_port, quantize_graph_model, quantize_graph_model_bits, graph_generator_model, exl2_quantize_graph_model, exl2_quantize_graph_model_bpw = read_graph_model_config()
+    graph_model_access_url, graph_model_server_port, quantize_graph_model, quantize_graph_model_bits, graph_generator_model, exl2_quantize_graph_model, exl2_quantize_graph_model_bpw, graph_model_max_new_tokens, graph_model_max_seq_len = read_graph_model_config()
 
     if graphing_model_server_is_online(graph_model_access_url, graph_model_server_port):
         print("\nGraphing model server is already online, skipping launch...\n")
@@ -2427,10 +2432,10 @@ def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-genera
         f"{'python' if platform.system() == 'Windows' else 'python3'} hf_waitress.py "
         f"--port {str(graph_model_server_port)} "
         f"--model_id {str(graph_generator_model)} "
-        f"--max_new_tokens 8192 "
+        f"--max_new_tokens {str(graph_model_max_new_tokens)} "
     )
     if exl2_quantize_graph_model:
-        command += f" --exl2 --exl2_bpw {str(exl2_quantize_graph_model_bpw)} --exl2_max_seq_len 20480"
+        command += f" --exl2 --exl2_bpw {str(exl2_quantize_graph_model_bpw)} --exl2_max_seq_len {str(graph_model_max_seq_len)}"
     else:
         command += f" --quantize {str(quantize_graph_model)} --quant_level {str(quantize_graph_model_bits)}"
 
