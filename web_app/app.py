@@ -1943,10 +1943,35 @@ def summary_generator(chunk_entities=None):
         pass
 
 
-def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: FalkorDB, source_document: str = None):
+def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: FalkorDB, source_document: str = '', page_number: list = None):
+    '''
+    We can define a default blank string as strings are immutable in Python, but cannot define a default blank list as lists are mutable!
+
+    # BAD: Using mutable default argument
+    def add_to_list(item, my_list=[]):
+        my_list.append(item)
+        return my_list
+
+    print(add_to_list(1))  # Output: [1]
+    print(add_to_list(2))  # Output: [1, 2] -- Surprise! Not [2]
+    print(add_to_list(3))  # Output: [1, 2, 3] -- The list keeps growing!
+
+    # GOOD: Using None as default and creating new list in function body
+    def add_to_list_safe(item, my_list=None):
+        if my_list is None:
+            my_list = []  # Creates a new list each time when None is passed
+        my_list.append(item)
+        return my_list
+
+    print(add_to_list_safe(1))  # Output: [1]
+    print(add_to_list_safe(2))  # Output: [2]
+    print(add_to_list_safe(3))  # Output: [3]
+    '''
+
     print(f"\nStoring entities(nodes) to {selected_knowledge_domain} graph DB\n")
 
     processed_nodes = {}    # Format: {(name, node_type): True}
+    page_number = [] if page_number is None else page_number   
 
     for node in nodes:
         try:
@@ -1963,38 +1988,32 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
             node_name = sanitize_names(name)
 
             # MERGE on stable properties to prevent duplicates, then SET the summary and add source_document as per the case:
-            if source_document:
-                graph.query(f"""
-                    MERGE (n:{node_name} {{name:$name, type:$type}})
-                    SET n.summary = CASE
-                        WHEN $summary = [] THEN n.summary
-                        WHEN n.summary IS NULL THEN $summary
-                        ELSE n.summary + $summary
-                    END
-                    SET n.source_documents = CASE
-                        WHEN n.source_documents IS NULL THEN [$source_document]
-                        WHEN NOT $source_document IN n.source_documents THEN n.source_documents + [$source_document]
-                        ELSE n.source_documents
-                    END
-                """, {
-                    'name': name.replace("'", ""),
-                    'type': node_type.replace("'", ""),
-                    'summary': updated_summary,
-                    'source_document': source_document.replace("'", "")
-                })
-            else:
-                graph.query(f"""
-                    MERGE (n:{node_name} {{name:$name, type:$type}})
-                    SET n.summary = CASE
-                        WHEN $summary = [] THEN n.summary
-                        WHEN n.summary IS NULL THEN $summary
-                        ELSE n.summary + $summary
-                    END
-                """, {
-                    'name': name.replace("'", ""),
-                    'type': node_type.replace("'", ""),
-                    'summary': updated_summary
-                })
+            graph.query(f"""
+                MERGE (n:{node_name} {{name:$name, type:$type}})
+                SET n.summary = CASE
+                    WHEN $summary = [] THEN n.summary
+                    WHEN n.summary IS NULL THEN $summary
+                    ELSE n.summary + $summary
+                END
+                SET n.source_documents = CASE
+                    WHEN $source_document = '' THEN n.source_documents
+                    WHEN n.source_documents IS NULL THEN [$source_document]
+                    WHEN NOT $source_document IN n.source_documents THEN n.source_documents + [$source_document]
+                    ELSE n.source_documents
+                END
+                SET n.page_number = CASE
+                    WHEN $page_number = [] THEN n.page_number
+                    WHEN n.page_number IS NULL THEN $page_number
+                    ELSE n.page_number + $page_number
+                END
+            """, {
+                'name': name.replace("'", ""),
+                'type': node_type.replace("'", ""),
+                'summary': updated_summary,
+                'source_document': source_document.replace("'", ""),
+                'page_number': page_number
+            })
+            
 
             '''
             For source_docs:
@@ -2018,10 +2037,11 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
             handle_error_no_return(f"Could not create node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
 
 
-def add_relationships_to_graph(selected_knowledge_domain: str, relationships: list, graph: FalkorDB, source_document: str = None):
+def add_relationships_to_graph(selected_knowledge_domain: str, relationships: list, graph: FalkorDB, source_document: str = '', page_number: list = None):
     print(f"\nStoring relationships to {selected_knowledge_domain} graph DB\n")
 
     processed_relationships = {}    # Format: {(source, target, relationship): True}
+    page_number = [] if page_number is None else page_number
 
     for relationship in relationships:
         try:
@@ -2046,50 +2066,38 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
             Microsoft GraphRAG paper's emphasis on "normalized counts of detected relationship instances" is quite deliberate - 
             it's a way to let the data itself tell you which relationships are more significant in your knowledge graph!
             '''
-            if source_document:
-                graph.query(f"""
-                    MERGE (s:{source} {{name:$source_name}})
-                    MERGE (t:{target} {{name:$target_name}})
-                    MERGE (s)-[r:{relationship_type}]->(t)
-                    SET r.weight = CASE
-                        WHEN r.weight IS NULL THEN 1
-                        ELSE r.weight + 1
-                    END
-                    SET r.summary = CASE
-                        WHEN $summary = [] THEN r.summary
-                        WHEN r.summary IS NULL THEN $summary
-                        ELSE r.summary + $summary
-                    END
-                    SET r.source_documents = CASE
-                        WHEN r.source_documents IS NULL THEN [$source_document]
-                        WHEN NOT $source_document IN r.source_documents THEN r.source_documents + [$source_document]
-                        ELSE r.source_documents
-                    END
-                """, {
-                    'source_name': relationship['source'].replace("'", ""),
-                    'target_name': relationship['target'].replace("'", ""),
-                    'summary': updated_summary,
-                    'source_document': source_document.replace("'", "")
-                })
-            else:
-                graph.query(f"""
-                    MERGE (s:{source} {{name:$source_name}})
-                    MERGE (t:{target} {{name:$target_name}})
-                    MERGE (s)-[r:{relationship_type}]->(t)
-                    SET r.weight = CASE
-                        WHEN r.weight IS NULL THEN 1
-                        ELSE r.weight + 1
-                    END
-                    SET r.summary = CASE
-                        WHEN $summary = [] THEN r.summary
-                        WHEN r.summary IS NULL THEN $summary
-                        ELSE r.summary + $summary
-                    END
-                """, {
-                    'source_name': relationship['source'].replace("'", ""),
-                    'target_name': relationship['target'].replace("'", ""),
-                    'summary': updated_summary
-                })
+            graph.query(f"""
+                MERGE (s:{source} {{name:$source_name}})
+                MERGE (t:{target} {{name:$target_name}})
+                MERGE (s)-[r:{relationship_type}]->(t)
+                SET r.weight = CASE
+                    WHEN r.weight IS NULL THEN 1
+                    ELSE r.weight + 1
+                END
+                SET r.summary = CASE
+                    WHEN $summary = [] THEN r.summary
+                    WHEN r.summary IS NULL THEN $summary
+                    ELSE r.summary + $summary
+                END
+                SET r.source_documents = CASE
+                    WHEN $source_document = '' THEN r.source_documents
+                    WHEN r.source_documents IS NULL THEN [$source_document]
+                    WHEN NOT $source_document IN r.source_documents THEN r.source_documents + [$source_document]
+                    ELSE r.source_documents
+                END
+                SET r.page_number = CASE
+                    WHEN $page_number = [] THEN r.page_number
+                    WHEN r.page_number IS NULL THEN $page_number
+                    ELSE r.page_number + $page_number
+                END
+            """, {
+                'source_name': relationship['source'].replace("'", ""),
+                'target_name': relationship['target'].replace("'", ""),
+                'summary': updated_summary,
+                'source_document': source_document.replace("'", ""),
+                'page_number': page_number
+            })
+
                 # We don't want to use the sanitized names as both labels and property values
 
             # Mark relationship as processed:
@@ -2292,8 +2300,8 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
         # Store the nodes and relationships in the graph DB
         for chunk_number, chunk_data in chunks.items():
             try:
-                add_nodes_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['nodes'], graph, chunk_data['source_doc_name'])
-                add_relationships_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['relationships'], graph, chunk_data['source_doc_name'])
+                add_nodes_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['nodes'], graph, chunk_data['source_doc_name'], chunk_data['page_number'])
+                add_relationships_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['relationships'], graph, chunk_data['source_doc_name'], chunk_data['page_number'])
             except Exception as e:
                 handle_error_no_return(f"Could not store entities and relationships for chunk {chunk_number} in {selected_knowledge_domain} graph DB, encountered error: ", e)
     except Exception as e:
@@ -2419,9 +2427,10 @@ def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-genera
         f"{'python' if platform.system() == 'Windows' else 'python3'} hf_waitress.py "
         f"--port {str(graph_model_server_port)} "
         f"--model_id {str(graph_generator_model)} "
+        f"--max_new_tokens 8192 "
     )
     if exl2_quantize_graph_model:
-        command += f" --exl2 --exl2_bpw {str(exl2_quantize_graph_model_bpw)} --exl2_max_seq_len 8192"
+        command += f" --exl2 --exl2_bpw {str(exl2_quantize_graph_model_bpw)} --exl2_max_seq_len 20480"
     else:
         command += f" --quantize {str(quantize_graph_model)} --quant_level {str(quantize_graph_model_bits)}"
 
@@ -2502,6 +2511,7 @@ def assemble_chunks_for_graph_db(chunks, user_query=None):
         graphing_chunk = ""
         chunks_in_storage_queue = []    # chunks will eb combined upto `graph_chunk_size` and stored here
         source_filename = ""
+        page_number_list = []
         chunk_entities = {}
         graph_chunk_count = 1
         overlap_text = ""
@@ -2523,15 +2533,21 @@ def assemble_chunks_for_graph_db(chunks, user_query=None):
                 chunk_source_filepath = chunk['source']
                 source_filename = os.path.basename(chunk_source_filepath)
 
-                current_chunk_text = re.sub(r'\[PAGE:\d+\]', '', str(chunk['content'])) #RegEx replace '[PAGE:<number>]' with ''
-                graphing_chunk += current_chunk_text
+                try:
+                    page_number_list.append(int(chunk['page_number']))
+                    page_number_list = list(set(page_number_list))
+                except Exception as e:
+                    handle_error_no_return(f"Could not obtain page number from chunk {count} of {len(chunks)}, encountered error: ", e)
+
+                graphing_chunk += str(chunk['content'])
                 chunks_in_storage_queue.append(count)
 
                 if len(graphing_chunk) >= graph_chunk_size:
                     chunk_entities[graph_chunk_count] = {
                         'chunk_text': graphing_chunk,
                         'source_chunks': chunks_in_storage_queue,
-                        'source_doc_name': source_filename
+                        'source_doc_name': source_filename,
+                        'page_number': page_number_list
                     }
 
                     # Add overlap text to the next chunk
@@ -2540,6 +2556,7 @@ def assemble_chunks_for_graph_db(chunks, user_query=None):
                     graph_chunk_count += 1
                     graphing_chunk = overlap_text # Start the next chunk with the overlap text
                     chunks_in_storage_queue = []    # Reset the storage queue for the next chunk
+                    page_number_list = []
             except Exception as e:
                 handle_error_no_return(f"Error processing chunk {count} of {len(chunks)} in assemble_chunks_for_grapd_db(), encountered error: ", e)
 
@@ -2548,7 +2565,8 @@ def assemble_chunks_for_graph_db(chunks, user_query=None):
                 chunk_entities[graph_chunk_count] = {
                     'chunk_text': graphing_chunk,
                     'source_chunks': chunks_in_storage_queue,
-                    'source_doc_name': source_filename
+                    'source_doc_name': source_filename,
+                    'page_number': page_number_list
                 }   # Clean-up left to the garbage collector as we're at the end of the loop!
             except Exception as e:
                 handle_error_no_return(f"Error processing final batch of chunks in assemble_chunks_for_graph_db(), encountered error: ", e)
