@@ -296,8 +296,8 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'pipeline_task':"text-generation", 
                     'max_new_tokens':700, 
                     'return_full_text':False, 
-                    'temperature':0.0,
-                    'do_sample':False, 
+                    'temperature':0.1,
+                    'do_sample':True, 
                     'top_k':40, 
                     'top_p':0.95, 
                     'min_p':0.05, 
@@ -813,8 +813,8 @@ def parse_arguments():
         parser.add_argument("--pipeline_task", type=str, default=pipeline_task, help="Defaults to text-generation. For more details, open a Python shell, `import transformers`, and Run `help(transfomers.pipeline)`.")
         parser.add_argument("--max_new_tokens", type=int, default=max_new_tokens, help="Set a hard limit on the maximum number of tokens an LLM can generate when responding. Remembers previously set value and falls-back to 500 as a default.")
         parser.add_argument("--return_full_text", action="store_true", default=return_full_text, help="When set to True, the LLM response contains the entire messages list with the latest response appended at the end.")
-        parser.add_argument("--temperature", type=float, default=temperature, help="Set LLM temperature on a scale of 0.0 to 2.0. Remembers previously set value and falls-back to 0.0 as a default.")
-        parser.add_argument("--do_sample", action="store_true", default=do_sample, help="Perform sampling when selecting response tokens. Remembers previously set value and falls-back to Flase as a default. Must be set to True when temperature is above 0.0. For greedy decoding, leave this as False and set temp to 0.0")
+        parser.add_argument("--temperature", type=float, default=temperature, help="Set LLM temperature on a scale of 0.0 to 2.0. Remembers previously set value and falls-back to 0.1 as a default.")
+        parser.add_argument("--do_sample", action="store_true", default=do_sample, help="Perform sampling when selecting response tokens. Remembers previously set value and falls-back to True as a default. Must be set to True when temperature is above 0.0. For greedy decoding, leave this as False and set temp to 0.0")
         parser.add_argument("--top_k", type=int, default=top_k, help="Limit the next token selection to the K most probable tokens. Remembers previously set value and falls-back to 40 as a default.")
         parser.add_argument("--top_p", type=float, default=top_p, help="Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P. Remembers previously set value and falls-back to 0.95 as a default.")
         parser.add_argument("--min_p", type=float, default=min_p, help="The minimum probability for a token to be considered, relative to the probability of the most likely token. Remembers previously set value and falls-back to 0.05 as a default.")
@@ -2233,7 +2233,7 @@ def completions_stream():
 
 def get_exl2_gen_settings(request):
     try:
-        read_return = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'min_p', 'n_keep', 'knowledge_graph_cache_dir'])
+        read_return = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'knowledge_graph_cache_dir'])
         temperature = float(read_return['temperature'])
         top_k = int(read_return['top_k'])
         top_p = float(read_return['top_p'])
