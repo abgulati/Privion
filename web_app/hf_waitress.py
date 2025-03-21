@@ -2477,7 +2477,7 @@ def process_relationships(relationships: list, chunk_text: str, print_string: st
     return summarized_relationships
 
 
-def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: str, source_doc_name: str, exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
+def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: str, source_doc_name: str, page_number_list: list, exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
     '''
     This function takes a dictionary containing nodes and relationships, and a chunk of text.
     It generates a comprehensive summary for the chunk covering all nodes and relationships, and saves the summary to every node and relationship.
@@ -2496,7 +2496,7 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
                 skip_system_prompt=True
             )
             full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-            full_response = trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n\n"
+            full_response = trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n{Page Number(s): " + str(page_number_list) + "}\n\n"
             print(f"\n\nfull_response:\n\n{full_response}\n\n")
         except Exception as e:
             return handle_local_error(f"Could not get comprehensive summary from LLM, encountered error: ", e)
@@ -2715,6 +2715,7 @@ def exl2_grapher():
                         nodes_and_relationships=chunk_data['entities_and_relationships'],
                         chunk_text=chunk_data['chunk_text'],
                         source_doc_name=source_doc_name,
+                        page_number_list=chunk_data['page_number'],
                         exl2_prompt_template_format=exl2_prompt_template_format,
                         requested_max_new_tokens=requested_max_new_tokens,
                         gen_settings=gen_settings
