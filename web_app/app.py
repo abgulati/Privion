@@ -2203,6 +2203,16 @@ def bring_graph_db_online():    # launch FalkorDB Docker container
     return True
 
 
+@app.route('/start_falkordb')
+def start_falkordb():
+    print("\nStarting FalkorDB Docker container...\n")
+    try:
+        bring_graph_db_online()
+        return jsonify({"message": "FalkorDB Docker container started successfully"}), 200
+    except Exception as e:
+        return handle_api_error("Could not start FalkorDB Docker container, encountered error: ", e)
+
+
 def graphing_model_server_is_online(graph_model_access_url, graph_model_server_port):
     print("\nChecking if graphing model server is online...\n")
 
@@ -4809,7 +4819,6 @@ def determine_do_rag(query, docs, force_enable_rag, force_disable_rag):
     return do_rag
 
 
-
 def get_formatted_prompt_from_history_db(chat_id, sequence_id):
 
     print(f"\n\nFormatting prompt from history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}\n\n")
@@ -4838,7 +4847,6 @@ def get_formatted_prompt_from_history_db(chat_id, sequence_id):
         handle_error_no_return("Could not determine sequence ID for storage to chat history DB, encountered error: ", e)
 
     return formatted_prompt
-
 
 
 def read_config_for_hf_waitress_prompt_formatting() -> tuple[bool, str, bool, bool]:
