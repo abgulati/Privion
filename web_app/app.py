@@ -321,14 +321,15 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'graph_generator_model':'Metin/Gemma-2-2B-TR-Knowledge-Graph',
                 'graph_model_server_port':9070,
                 'graph_model_access_url':'localhost',
-                'quantize_graph_model':'bitsandbytes',
+                'quantize_graph_model':'quanto',
                 'quantize_graph_model_bits':'int8',
-                'exl2_quantize_graph_model':False,
+                'exl2_quantize_graph_model':True,
                 'exl2_quantize_graph_model_bpw':8.0,
                 'graph_db_server_host':'localhost',
                 'assign_host_port_to_graph_db_server':6379,
-                'launch_graph_db_with_ui':True,
                 'assign_host_port_to_graph_db_ui':3000,
+                'launch_graph_db_with_ui':True,
+                'apply_clustering_to_graph_db_on_doc_load': False,
                 'graph_model_max_new_tokens':4096,
                 'graph_model_max_seq_len':20480,
                 'graph_model_temperature':0.1,
@@ -337,8 +338,8 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'graph_model_top_p':0.95,
                 'graph_model_min_p':0.05,
                 'skip_summary_generation':False,
-                'reuse_previously_extracted_graph_entities_and_relationships':False,
-                'reuse_previously_generated_graph_summaries':False,
+                'reuse_previously_extracted_graph_entities_and_relationships':True,
+                'reuse_previously_generated_graph_summaries':True,
                 'base_template': (
                             "You are a helpful assistant deployed in a Retrieval Augmented Generation (RAG) system.\n"
                             "Your task is to evaluate retrieved contextual data to answer users' questions accurately and in detail.\n\n"
@@ -621,7 +622,7 @@ def load_json_file(file_path):
         except Exception as e:
             return handle_local_error("Could not load JSON file, encountered error: ", e)
     else:
-        return {}
+        return None   # NOTE: isinstance({}, dict) will return True so better to return None!
 
 
 def save_json_file(data, file_path):
@@ -1650,34 +1651,25 @@ def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
 
 def get_graphing_request_params():
     try:
-        read_return = read_config(['exl2_quantize_graph_model', 'graph_model_access_url', 'graph_model_server_port', 'graph_model_max_new_tokens', 'graph_model_temperature', 'graph_model_do_sample', 'graph_model_top_k', 'graph_model_top_p', 'graph_model_min_p'])
+        config_data = read_config(['exl2_quantize_graph_model', 'graph_model_access_url', 'graph_model_server_port', 'graph_model_max_new_tokens', 'graph_model_temperature', 'graph_model_do_sample', 'graph_model_top_k', 'graph_model_top_p', 'graph_model_min_p'])
+        exl2_quantize_graph_model = str(config_data['exl2_quantize_graph_model']).lower() == 'true'
     except Exception as e:
         return handle_local_error("Could not get graphing request params, encountered error: ", e)
 
-    exl2_quantize_graph_model = str(read_return['exl2_quantize_graph_model']).lower() == 'true'
-    graph_model_access_url = read_return['graph_model_access_url']
-    graph_model_server_port = read_return['graph_model_server_port']
-    graph_model_max_new_tokens = read_return['graph_model_max_new_tokens']
-    graph_model_temperature = read_return['graph_model_temperature']
-    graph_model_do_sample = read_return['graph_model_do_sample']
-    graph_model_top_k = read_return['graph_model_top_k']
-    graph_model_top_p = read_return['graph_model_top_p']
-    graph_model_min_p = read_return['graph_model_min_p']
-
     headers = {
         'Content-Type': 'application/json',
-        'X-Max-New-Tokens': str(graph_model_max_new_tokens),
-        'X-Temperature': str(graph_model_temperature),
-        'X-Top-K': str(graph_model_top_k),
-        'X-Top-P': str(graph_model_top_p),
-        'X-Min-P': str(graph_model_min_p)
+        'X-Max-New-Tokens': str(config_data['graph_model_max_new_tokens']),
+        'X-Temperature': str(config_data['graph_model_temperature']),
+        'X-Top-K': str(config_data['graph_model_top_k']),
+        'X-Top-P': str(config_data['graph_model_top_p']),
+        'X-Min-P': str(config_data['graph_model_min_p'])
     }
 
-    grapher_url = f"http://{graph_model_access_url}:{graph_model_server_port}"
+    grapher_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
 
     if not exl2_quantize_graph_model:
         headers['X-Return-Full-Text'] = 'False'
-        headers['X-Do-Sample'] = str(graph_model_do_sample)
+        headers['X-Do-Sample'] = str(config_data['graph_model_do_sample'])
         grapher_url += "/completions"
     else:
         headers['Connection'] = 'keep-alive'
@@ -1724,7 +1716,7 @@ def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payl
         for line in response.iter_lines(decode_unicode=True):
             if line:
                 if line.startswith("data:"):
-                    event_data = line[6:].strip()
+                    event_data = line[6:].strip()   # 6 because there's a space after the colon in 'data: '
                     try:
                         received_data = json.loads(event_data)  # json.loads() converts the JSON string into a Python object (dict, list, etc.)
                         if not isinstance(received_data, dict):
@@ -1735,7 +1727,7 @@ def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payl
                         try:
                             if 'entities_and_relationships' in full_response[chunk_number] and isinstance(full_response[chunk_number]['entities_and_relationships'], str):
                                 '''
-                                While the received data is a dict, the value of the entities_and_relationships key itself may be returned as a string by exl2_grapher's extraction_task(), 
+                                While the received data is a dict, the value of the `entities_and_relationships` key itself may be returned as a string by exl2_grapher's extraction_task(), 
                                 so we need to convert it to a dict via ast.literal_eval().
                                 The summary_generation_task() on the other hand always returns a dict so we don't need to do anything.
 
@@ -1744,7 +1736,7 @@ def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payl
                                 print(f"Type of entities_and_relationships: {type(full_response[chunk_number]['entities_and_relationships'])}")
 
                                 We'd get str for extraction mode, dict for summary generation mode, thus failing in the latter as ast.literal_eval() works only on string inputs!
-                                We only want to literal_eval() if the entities_and_relationships is a string, otherwise it's already a dict and we can skip the literal_eval.
+                                We only want to literal_eval() if the value of the `entities_and_relationships` key is a string, otherwise it's already a dict and we can skip the literal_eval.
                                 '''
                                 full_response[chunk_number]['entities_and_relationships'] = ast.literal_eval(full_response[chunk_number]['entities_and_relationships'])
                         except Exception as e:
@@ -1839,11 +1831,11 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
 def get_graph_db_client():
     print("\nObtaining Graph DB Client\n")
 
-    read_return = read_config(['graph_db_server_host', 'assign_host_port_to_graph_db_server'])
-    graph_db_server_host = read_return['graph_db_server_host']
-    assign_host_port_to_graph_db_server = read_return['assign_host_port_to_graph_db_server']
-
     try:
+        read_return = read_config(['graph_db_server_host', 'assign_host_port_to_graph_db_server'])
+        graph_db_server_host = read_return['graph_db_server_host']
+        assign_host_port_to_graph_db_server = read_return['assign_host_port_to_graph_db_server']
+
         client = FalkorDB(host=graph_db_server_host, port=assign_host_port_to_graph_db_server)
         print(f"\nGraph DB Client obtained successfully!\n")
         return client
@@ -1978,17 +1970,16 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
         try:
             name = str(node['name'])
             node_type = str(node['type'])
-            updated_summary = list(node.get('summary', [])) if node.get('summary') else []   # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
+            updated_summary = list(node.get('summary', []))   # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
             
             node_key = (name, node_type)
-
             if node_key in processed_nodes:
                 print(f"Skipping duplicate node {name} of type {node_type} in {selected_knowledge_domain} graph DB")
                 continue
 
             node_name = sanitize_names(name)
 
-            # MERGE on stable properties to prevent duplicates, then SET the summary and add source_document as per the case:
+            # MERGE on stable properties to prevent duplicates, then SET the summary and add source_documents and page_numbers as per the case:
             graph.query(f"""
                 MERGE (n:{node_name} {{name:$name, type:$type}})
                 SET n.summary = CASE
@@ -2016,27 +2007,12 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
                 'page_number': page_number
             })
             
-
-            '''
-            For source_docs:
-            CASE 1: If the `source_documents` list property doesn't exist yet: create a new list with just this document.
-            CASE 2: If the `source_documents` list property exists but doesn't contain this document: add this document to the list.
-            CASE 3: If the `source_documents` list property already contains this document: leave the list unchanged!
-
-            For summary:
-            CASE 1: If the new summary list is empty: leave the list unchanged!
-            CASE 2: If the existing list in the graph is NULL, might as well set to the new summary list even if it's empty!
-            CASE 3: If neither are blank.null, append the new summary to the existing list.
-
-            Not passing exisiting summaries to the summary generator as it overwhlems the LLMs context window, so must append to the existing list here!
-            '''
-            
             # Mark node as processed:
             processed_nodes[node_key] = True
             
             print(f"\nCreated node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB\n")
         except Exception as e:
-            handle_error_no_return(f"Could not create node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
+            handle_error_no_return(f"Could NOT create node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
 
 
 def add_relationships_to_graph(selected_knowledge_domain: str, relationships: list, graph: FalkorDB, source_document: str = '', page_number: list = None):
@@ -2049,11 +2025,10 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
         try:
             source = str(relationship['source'])
             target = str(relationship['target'])
-            relationship_type = str(relationship['relationship'])
+            relationship_type = str(relationship['relationship'])            
+            updated_summary = list(relationship.get('summary', []))   # dict .get() method is safer than `if relationship['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
+            
             relationship_key = (source, target, relationship_type)
-            
-            updated_summary = list(relationship.get('summary', [])) if relationship.get('summary') else []   # dict .get() method is safer than `if relationship['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
-            
             if relationship_key in processed_relationships:
                 print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) in {selected_knowledge_domain} graph DB")
                 continue
@@ -2063,9 +2038,9 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
             relationship_type = sanitize_names(relationship_type).upper()
 
             '''
-            MERGE on stable properties to prevent duplicates, then SET the summary and add source_document as per the case.
+            MERGE on stable properties to prevent duplicates, then SET the summary and add source_documents and page_numbers as per the case.
             Track weights for relationships to improve clustering by tracking how many times each relationship is detected:
-            Microsoft GraphRAG paper's emphasis on "normalized counts of detected relationship instances" is quite deliberate - 
+            Microsoft's GraphRAG papers emphasis on "normalized counts of detected relationship instances" is quite deliberate - 
             it's a way to let the data itself tell you which relationships are more significant in your knowledge graph!
             '''
             graph.query(f"""
@@ -2101,163 +2076,12 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
                 'page_number': page_number
             })
 
-                # We don't want to use the sanitized names as both labels and property values
-
             # Mark relationship as processed:
             processed_relationships[relationship_key] = True
             
             print(f"\nCreated relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB\n")
         except Exception as e:
-            handle_error_no_return(f"Could not create relationship from data: {relationship} in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
-
-
-def get_summary_and_source_documents_for_node(graph, name, node_type):
-    print(f"\nChecking if summary for node {name} of type {node_type} exists in graph\n")
-
-    try:
-        node_name = sanitize_names(name)
-
-        query = f"""
-            MATCH (n:{node_name} {{name: '%s', type: '%s'}})
-            RETURN n.summary AS summary, n.source_documents AS source_documents
-        """ % (name.replace("'", ""), node_type.replace("'", ""))
-
-        result = graph.query(query)
-        
-        if hasattr(result, 'result_set') and result.result_set:
-            print(f"\nExisting summary for node found: {result.result_set[0][0]}\n")
-            summary_list = list(result.result_set[0][0]) if result.result_set[0][0] else []
-            source_documents_list = list(result.result_set[0][1]) if result.result_set[0][1] else []
-            return summary_list, source_documents_list
-        else:
-            print(f"\nNo existing summary for node found...\n")
-            return [], []   # If no summary is found, return an empty list:
-
-    except Exception as e:
-        handle_error_no_return(f"Could not check if node {name} of type {node_type} exists in graph, returning empty list. Encountered error: ", e)
-        return [], []
-
-
-def get_summary_and_source_documents_for_relationship(graph, source, target, relationship_type):
-    print(f"\nChecking if summary for relationship {source} -> {target} ({relationship_type}) exists in graph\n")
-
-    source_label = sanitize_names(source)
-    target_label = sanitize_names(target)
-
-    try:
-        query = f"""
-            MATCH (s:{source_label} {{name: '{source}'}})-[r:{relationship_type}]->(t:{target_label} {{name: '{target}'}})
-            RETURN r.summary AS summary, r.source_documents AS source_documents
-        """
-
-        result = graph.query(query)
-
-        if hasattr(result, 'result_set') and result.result_set:
-            print(f"\nExisting summary for relationship found: {result.result_set[0][0]}\n")
-            summary_list = list(result.result_set[0][0]) if result.result_set[0][0] else []
-            source_documents_list = list(result.result_set[0][1]) if result.result_set[0][1] else []
-            return summary_list, source_documents_list
-        else:
-            print(f"\nNo existing summary for relationship found...\n")
-            return [], []   # If no summary is found, return an empty list:
-
-    except Exception as e:
-        handle_error_no_return(f"Could not check if summary for relationship {source} -> {target} ({relationship_type}) exists in graph, returning empty list. Encountered error: ", e)
-        return [], []
-
-
-def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str = "", get_source_documents: bool = False):
-    nodes_with_existing_summaries = []
-    processed_nodes = {}    # Will de-duplicate nodes!
-
-    for count, node in enumerate(nodes):
-        print(f"Checking for existing summary for node {count+1} of {len(nodes)} {print_string}...")
-        try:
-            name = str(node['name'])
-            node_type = str(node['type'])
-
-            node_key = (name, node_type)
-
-            if node_key in processed_nodes:
-                print(f"Skipping duplicate node {name} of type {node_type} when checking for existing summaries in graph DB")
-                continue
-
-            try:
-                existing_summary, existing_source_documents = get_summary_and_source_documents_for_node(graph, name, node_type)
-            except Exception as e:
-                existing_summary = []
-                existing_source_documents = []
-                handle_error_no_return(f"Could not check existing summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
-
-            # update node in chunk_entities dict:
-            if get_source_documents:
-                nodes_with_existing_summaries.append({
-                    'name': name,
-                    'type': node_type,
-                    'summary': existing_summary,
-                    'source_documents': existing_source_documents
-                })
-            else:
-                nodes_with_existing_summaries.append({
-                    'name': name,
-                    'type': node_type,
-                    'summary': existing_summary
-                })
-
-            processed_nodes[node_key] = True
-
-        except Exception as e:
-            handle_error_no_return(f"Could not get summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
-                    
-    return nodes_with_existing_summaries
-
-
-def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, print_string: str = "", get_source_documents: bool = False):
-    relationships_with_existing_summaries = []
-    processed_relationships = {}    # Will de-duplicate relationships!
-
-    for count, relationship in enumerate(relationships):
-        print(f"Checking for existing summary for relationship {count+1} of {len(relationships)} {print_string}...")
-        try:
-            source = str(relationship['source'])
-            target = str(relationship['target'])
-            relationship_type = sanitize_names(str(relationship['relationship']).upper())   # Added as sanitize_names().upper() hence formatting here too!
-
-            relationship_key = (source, target, relationship_type)
-
-            if relationship_key in processed_relationships:
-                print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) when checking for existing summaries in graph DB")
-                continue
-
-            try:
-                existing_summary, existing_source_documents = get_summary_and_source_documents_for_relationship(graph, source.replace("'", ""), target.replace("'", ""), relationship_type)
-            except Exception as e:
-                existing_summary = []
-                existing_source_documents = []
-                handle_error_no_return(f"Could not check existing summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
-
-            if get_source_documents:
-                relationships_with_existing_summaries.append({
-                    'source': source,
-                    'target': target,
-                    'relationship': str(relationship['relationship']),
-                    'summary': existing_summary,
-                    'source_documents': existing_source_documents
-                })
-            else:
-                relationships_with_existing_summaries.append({
-                    'source': source,
-                    'target': target,
-                    'relationship': str(relationship['relationship']),
-                    'summary': existing_summary
-                })
-
-            processed_relationships[relationship_key] = True
-
-        except Exception as e:
-            handle_error_no_return(f"Could not get summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
-
-    return relationships_with_existing_summaries
+            handle_error_no_return(f"Could NOT create relationship from data: {relationship} in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
 
 
 def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB, skip_summary_generation: bool = False, summaries_filepath: str = None,):
@@ -2274,10 +2098,10 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
     }
 
     And basis the 'chunk_text' and 'entities_and_relationships' for each `graph_chunk_number`:
-        1. Handles Summaries if applicable:
-            - Retrieves existing summaries for each node and relationship
-            - Generates a summary for each node and relationship. This sequence ensures highest throughput of summary-generation requests to the LLM as both the lookup for existing summaries and the storage to the GraphDB are handled completely seperately!
-        2. Stores the nodes and relationships in the graph DB
+        1. Handles summary generation if applicable: 
+            - Summaries are generated for a given chunk basis the entities and relationships identified within it. 
+            - The updated chunk_entities dict is then stored to the `summaries_filepath` for persistence and re-use before being stored in the graph DB.
+        2. Stores the nodes and relationships in the graph DB.
     '''
 
     print(f"\nStoring entities and relationships in {selected_knowledge_domain} graph DB\n")
@@ -2392,36 +2216,18 @@ def graphing_model_server_is_online(graph_model_access_url, graph_model_server_p
         return False
 
 
-def read_graph_model_config():
-    try:
-        read_return = read_config(['graph_model_access_url', 'graph_model_server_port', 'quantize_graph_model', 'quantize_graph_model_bits', 'graph_generator_model', 'exl2_quantize_graph_model', 'exl2_quantize_graph_model_bpw', 'graph_model_max_new_tokens', 'graph_model_max_seq_len'])
-    except Exception as e:
-        handle_error_no_return("Could not read graph model config, encountered error: ", e)
-    
-    graph_model_access_url = read_return['graph_model_access_url']
-    graph_model_server_port = read_return['graph_model_server_port']
-    quantize_graph_model = read_return['quantize_graph_model']
-    quantize_graph_model_bits = read_return['quantize_graph_model_bits']
-    graph_generator_model = read_return['graph_generator_model']
-    exl2_quantize_graph_model = str(read_return['exl2_quantize_graph_model']).lower() == 'true'
-    exl2_quantize_graph_model_bpw = str(read_return['exl2_quantize_graph_model_bpw'])
-    graph_model_max_new_tokens = read_return['graph_model_max_new_tokens']
-    graph_model_max_seq_len = read_return['graph_model_max_seq_len']
-
-    return graph_model_access_url, graph_model_server_port, quantize_graph_model, quantize_graph_model_bits, graph_generator_model, exl2_quantize_graph_model, exl2_quantize_graph_model_bpw, graph_model_max_new_tokens, graph_model_max_seq_len
-
-
 def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-generator model
-    print(f"\nLaunching HF-Waitress instance with kb-generator model...\n")
 
-    graph_model_access_url, graph_model_server_port, quantize_graph_model, quantize_graph_model_bits, graph_generator_model, exl2_quantize_graph_model, exl2_quantize_graph_model_bpw, graph_model_max_new_tokens, graph_model_max_seq_len = read_graph_model_config()
+    try:
+        config_data = read_config(['graph_model_access_url', 'graph_model_server_port', 'quantize_graph_model', 'quantize_graph_model_bits', 'graph_generator_model', 'exl2_quantize_graph_model', 'exl2_quantize_graph_model_bpw', 'graph_model_max_new_tokens', 'graph_model_max_seq_len'])
+        hf_waitress_kb_generator_server_path = os.path.normpath(os.path.join(os.getcwd(), "knowledge-graph-model-server"))    # normpath() is used to "normalize" i.e. convert to a path that is appropriate for the current OS
+        print(f"\nLaunching HF-Waitress instance with kb-generator model at path: {hf_waitress_kb_generator_server_path}\n")
+    except Exception as e:
+        return handle_local_error("Could not read graph model config, encountered error: ", e)
 
-    if graphing_model_server_is_online(graph_model_access_url, graph_model_server_port):
+    if graphing_model_server_is_online(config_data['graph_model_access_url'], config_data['graph_model_server_port']):
         print("\nGraphing model server is already online, skipping launch...\n")
         return True
-
-    hf_waitress_kb_generator_server_path = os.path.normpath(os.path.join(os.getcwd(), "knowledge-graph-model-server"))    # normpath() is used to "normalize" i.e. convert to a path that is appropriate for the current OS
-    print(f"\nLaunching HF-Waitress instance with kb-generator model at path: {hf_waitress_kb_generator_server_path}\n")
 
     # Need to format this way because the f"""<>""" multiline way will maintain newlines in the command, which will cause the command to fail!
     # Also cannot format this as we have in hf_waitress.py's exllama_bpw_quantize_model() because of the command seperators (&& and ;), which would be incorrectly treated as parameters to the cd command in that list format!
@@ -2430,19 +2236,19 @@ def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-genera
         f"cd {hf_waitress_kb_generator_server_path} "
         f"{'&&' if platform.system() == 'Windows' else ';'} "
         f"{'python' if platform.system() == 'Windows' else 'python3'} hf_waitress.py "
-        f"--port {str(graph_model_server_port)} "
-        f"--model_id {str(graph_generator_model)} "
-        f"--max_new_tokens {str(graph_model_max_new_tokens)} "
+        f"--port {str(config_data['graph_model_server_port'])} "
+        f"--model_id {str(config_data['graph_generator_model'])} "
+        f"--max_new_tokens {str(config_data['graph_model_max_new_tokens'])} "
     )
-    if exl2_quantize_graph_model:
-        command += f" --exl2 --exl2_bpw {str(exl2_quantize_graph_model_bpw)} --exl2_max_seq_len {str(graph_model_max_seq_len)}"
+    if config_data['exl2_quantize_graph_model']:
+        command += f" --exl2 --exl2_bpw {str(config_data['exl2_quantize_graph_model_bpw'])} --exl2_max_seq_len {str(config_data['graph_model_max_seq_len'])}"
     else:
-        command += f" --quantize {str(quantize_graph_model)} --quant_level {str(quantize_graph_model_bits)}"
+        command += f" --quantize {str(config_data['quantize_graph_model'])} --quant_level {str(config_data['quantize_graph_model_bits'])}"
 
     try:
         if platform.system() == 'Windows':
-            windows_command = f'start cmd /k "{command}"'   # /k tells cmd to keep the window open even after the command has finished, versus /c which closes the window after the command has finished
-            subprocess.Popen(windows_command, shell=True)   # Popen is used to launch the command in a new process in a new terminal, while subprocess.run() is used to simply run the command and wait for it to finish
+            windows_command = f'start cmd /k "{command}"'   # /k tells cmd to keep the window open even after the command has finished, which is useful for debugging, versus /c which closes the window after the command has finished.
+            subprocess.Popen(windows_command, shell=True)   # Popen is used to launch the command in a new process in a new terminal, while subprocess.run() is used to simply run the command and wait for it to finish.
             # Using `start` in this manner explicitly instructs Windows to start a new command window to run the command, while CREATE_NEW_CONSOLE combined with shell=True might not work correctly as the shell itself might capture the console!
         else:
             subprocess.Popen(command, shell=True)
@@ -2452,7 +2258,7 @@ def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-genera
         timeout = 5
         attempts = 25
         for _ in range(attempts):
-            if graphing_model_server_is_online(graph_model_access_url, graph_model_server_port):
+            if graphing_model_server_is_online(config_data['graph_model_access_url'], config_data['graph_model_server_port']):
                 print(f"\nKB-Generator model launched successfully!\n")
                 return True
             else:
@@ -2514,7 +2320,7 @@ def assemble_chunks_for_graph_db(chunks, user_query=None):
         graph_chunk_overlap = read_return.get('graph_chunk_overlap', 300)
         
         graphing_chunk = ""
-        chunks_in_storage_queue = []    # chunks will eb combined upto `graph_chunk_size` and stored here
+        chunks_in_storage_queue = []    # chunks will be combined upto `graph_chunk_size` and stored here
         source_filename = ""
         page_number_list = []
         chunk_entities = {}
@@ -2538,9 +2344,9 @@ def assemble_chunks_for_graph_db(chunks, user_query=None):
                 chunk_source_filepath = chunk['source']
                 source_filename = os.path.basename(chunk_source_filepath)
 
-                try:
+                try:    # page numbers while useful are non-essential which is why I'm wrapping in a dedicated try-except block that does not raise an error!
                     page_number_list.append(int(chunk['page_number']))
-                    page_number_list = list(set(page_number_list))
+                    page_number_list = list(set(page_number_list))   # Remove duplicates
                 except Exception as e:
                     handle_error_no_return(f"Could not obtain page number from chunk {count} of {len(chunks)}, encountered error: ", e)
 
@@ -2596,7 +2402,7 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_f
     if reuse_previously_extracted_graph_entities_and_relationships and os.path.exists(entities_and_relationships_filepath):
         try:
             candidate = load_json_file(entities_and_relationships_filepath)
-            if isinstance(candidate, dict): # TODO: validation of the JSON file format
+            if isinstance(candidate, dict) and candidate != {}: # TODO: validation of the JSON file format
                 print(f"Previously extracted graph entities and relationships found, reusing from: {entities_and_relationships_filepath}")
                 complete_chunk_entities = candidate
                 loaded_entities_and_relationships = True
@@ -2610,7 +2416,7 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_f
     if reuse_previously_generated_graph_summaries and os.path.exists(summaries_filepath):
         try:
             candidate = load_json_file(summaries_filepath)
-            if isinstance(candidate, dict): # TODO: validation of the JSON file format
+            if isinstance(candidate, dict) and candidate != {}: # TODO: validation of the JSON file format
                 complete_chunk_entities = candidate
                 if complete_chunk_entities is not None:
                     skip_summary_generation = True  # Else return the value from config.json
@@ -2647,13 +2453,14 @@ def get_graph_cache_filepaths(input_file, docs_to_knowledge_graph_dir):
 
 def read_graph_generator_config():
     try:
-        read_return = read_config(['docs_to_knowledge_graph_dir', 'selected_knowledge_domain'])
+        read_return = read_config(['docs_to_knowledge_graph_dir', 'selected_knowledge_domain', 'apply_clustering_to_graph_db_on_doc_load'])
         docs_to_knowledge_graph_dir = read_return['docs_to_knowledge_graph_dir']
         selected_knowledge_domain = read_return['selected_knowledge_domain']
+        apply_clustering_to_graph_db_on_doc_load = str(read_return['apply_clustering_to_graph_db_on_doc_load']).lower() == 'true'
     except Exception as e:
         handle_error_no_return("Could not read graph generator config, encountered error: ", e)
     
-    return docs_to_knowledge_graph_dir, selected_knowledge_domain
+    return docs_to_knowledge_graph_dir, selected_knowledge_domain, apply_clustering_to_graph_db_on_doc_load
 
 
 def graph_generator(chunks, input_file):
@@ -2673,9 +2480,9 @@ def graph_generator(chunks, input_file):
         '<entities_and_relationships>': '<node_relationships_dict>'
         # eg: {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"}], "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"}]},
 
-    The final `chunk_entities` dict is then passed to the `store_entities_and_relationships_in_graph_db()` function which will store the entities and relationships in the GraphDB.
+    The final `chunk_entities` dict is then passed to the `store_entities_and_relationships_in_graph_db()` function which will invoke the summary generator if applicable, and then store the entities and relationships in the GraphDB.
 
-    Future TODO: Launch Graphing Model and Summarizer LLM as independent threads. Requires minimum two GPUs.
+    Future TODO: Split work across multiple instances of the Graphing Model and Summarizer LLM. Requires minimum two GPUs.
     '''
     
     print(f"\n\nGraph Generator Invoked. Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
@@ -2686,7 +2493,7 @@ def graph_generator(chunks, input_file):
         return handle_local_error("Could not bring graph DB online, encountered error: ", e)
 
     try:
-        docs_to_knowledge_graph_dir, selected_knowledge_domain = read_graph_generator_config()
+        docs_to_knowledge_graph_dir, selected_knowledge_domain, apply_clustering_to_graph_db_on_doc_load = read_graph_generator_config()
         complete_chunk_entities = None
     except Exception as e:
         return handle_local_error("Could not read graph generator config, encountered error: ", e)
@@ -2732,10 +2539,11 @@ def graph_generator(chunks, input_file):
     except Exception as e:
         return handle_local_error("Could not store entities and relationships in graph DB, encountered error: ", e)
 
-    try:
-        apply_leiden_clustering_to_graph(selected_knowledge_domain)
-    except Exception as e:
-        handle_error_no_return("Could not apply Leiden clustering to the graph, encountered error: ", e)
+    if apply_clustering_to_graph_db_on_doc_load:
+        try:
+            apply_leiden_clustering_to_graph(selected_knowledge_domain)
+        except Exception as e:
+            handle_error_no_return("Could not apply Leiden clustering to the graph, encountered error: ", e)
 
     print(f"\n\nCompleted Graph Generator at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
     return True
@@ -5440,6 +5248,155 @@ def get_summary_report(summarized_chunk_entities: dict) -> str:
     except Exception as e:
         handle_error_no_return("Could not add to summary report, skipping chunk {count}. Encountered error: ", e)
     return ''.join(summary_report)
+
+
+def get_summary_and_source_documents_for_node(graph, name, node_type):
+    print(f"\nChecking if summary for node {name} of type {node_type} exists in graph\n")
+
+    try:
+        node_name = sanitize_names(name)
+
+        query = f"""
+            MATCH (n:{node_name} {{name: '%s', type: '%s'}})
+            RETURN n.summary AS summary, n.source_documents AS source_documents
+        """ % (name.replace("'", ""), node_type.replace("'", ""))
+
+        result = graph.query(query)
+        
+        if hasattr(result, 'result_set') and result.result_set:
+            print(f"\nExisting summary for node found: {result.result_set[0][0]}\n")
+            summary_list = list(result.result_set[0][0]) if result.result_set[0][0] else []
+            source_documents_list = list(result.result_set[0][1]) if result.result_set[0][1] else []
+            return summary_list, source_documents_list
+        else:
+            print(f"\nNo existing summary for node found...\n")
+            return [], []   # If no summary is found, return an empty list:
+
+    except Exception as e:
+        handle_error_no_return(f"Could not check if node {name} of type {node_type} exists in graph, returning empty list. Encountered error: ", e)
+        return [], []
+
+
+def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str = "", get_source_documents: bool = False):
+    nodes_with_existing_summaries = []
+    processed_nodes = {}    # Will de-duplicate nodes!
+
+    for count, node in enumerate(nodes):
+        print(f"Checking for existing summary for node {count+1} of {len(nodes)} {print_string}...")
+        try:
+            name = str(node['name'])
+            node_type = str(node['type'])
+
+            node_key = (name, node_type)
+
+            if node_key in processed_nodes:
+                print(f"Skipping duplicate node {name} of type {node_type} when checking for existing summaries in graph DB")
+                continue
+
+            try:
+                existing_summary, existing_source_documents = get_summary_and_source_documents_for_node(graph, name, node_type)
+            except Exception as e:
+                existing_summary = []
+                existing_source_documents = []
+                handle_error_no_return(f"Could not check existing summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
+
+            # update node in chunk_entities dict:
+            if get_source_documents:
+                nodes_with_existing_summaries.append({
+                    'name': name,
+                    'type': node_type,
+                    'summary': existing_summary,
+                    'source_documents': existing_source_documents
+                })
+            else:
+                nodes_with_existing_summaries.append({
+                    'name': name,
+                    'type': node_type,
+                    'summary': existing_summary
+                })
+
+            processed_nodes[node_key] = True
+
+        except Exception as e:
+            handle_error_no_return(f"Could not get summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
+                    
+    return nodes_with_existing_summaries
+
+
+def get_summary_and_source_documents_for_relationship(graph, source, target, relationship_type):
+    print(f"\nChecking if summary for relationship {source} -> {target} ({relationship_type}) exists in graph\n")
+
+    source_label = sanitize_names(source)
+    target_label = sanitize_names(target)
+
+    try:
+        query = f"""
+            MATCH (s:{source_label} {{name: '{source}'}})-[r:{relationship_type}]->(t:{target_label} {{name: '{target}'}})
+            RETURN r.summary AS summary, r.source_documents AS source_documents
+        """
+
+        result = graph.query(query)
+
+        if hasattr(result, 'result_set') and result.result_set:
+            print(f"\nExisting summary for relationship found: {result.result_set[0][0]}\n")
+            summary_list = list(result.result_set[0][0]) if result.result_set[0][0] else []
+            source_documents_list = list(result.result_set[0][1]) if result.result_set[0][1] else []
+            return summary_list, source_documents_list
+        else:
+            print(f"\nNo existing summary for relationship found...\n")
+            return [], []   # If no summary is found, return an empty list:
+
+    except Exception as e:
+        handle_error_no_return(f"Could not check if summary for relationship {source} -> {target} ({relationship_type}) exists in graph, returning empty list. Encountered error: ", e)
+        return [], []
+
+
+def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, print_string: str = "", get_source_documents: bool = False):
+    relationships_with_existing_summaries = []
+    processed_relationships = {}    # Will de-duplicate relationships!
+
+    for count, relationship in enumerate(relationships):
+        print(f"Checking for existing summary for relationship {count+1} of {len(relationships)} {print_string}...")
+        try:
+            source = str(relationship['source'])
+            target = str(relationship['target'])
+            relationship_type = sanitize_names(str(relationship['relationship']).upper())   # Added as sanitize_names().upper() hence formatting here too!
+
+            relationship_key = (source, target, relationship_type)
+
+            if relationship_key in processed_relationships:
+                print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) when checking for existing summaries in graph DB")
+                continue
+
+            try:
+                existing_summary, existing_source_documents = get_summary_and_source_documents_for_relationship(graph, source.replace("'", ""), target.replace("'", ""), relationship_type)
+            except Exception as e:
+                existing_summary = []
+                existing_source_documents = []
+                handle_error_no_return(f"Could not check existing summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
+
+            if get_source_documents:
+                relationships_with_existing_summaries.append({
+                    'source': source,
+                    'target': target,
+                    'relationship': str(relationship['relationship']),
+                    'summary': existing_summary,
+                    'source_documents': existing_source_documents
+                })
+            else:
+                relationships_with_existing_summaries.append({
+                    'source': source,
+                    'target': target,
+                    'relationship': str(relationship['relationship']),
+                    'summary': existing_summary
+                })
+
+            processed_relationships[relationship_key] = True
+
+        except Exception as e:
+            handle_error_no_return(f"Could not get summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
+
+    return relationships_with_existing_summaries
 
 
 def get_summaries_from_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB):
