@@ -5626,7 +5626,6 @@ def search_knowledge_base(user_query:str, embedding_function:str, perform_graph_
         except Exception as e:
             handle_error_no_return("Could not execute graph RAG, encountered error: ", e)
 
-
     return docs, do_rag, graph_rag_context
 
 
