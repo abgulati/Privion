@@ -3389,3 +3389,88 @@ def get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk):
 
 
 skip_check_for_exisiting_summaries = is_graph_blank_or_newly_created(graph)
+
+
+def process_nodes(nodes: list, chunk_text: str, print_string: str = "", exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
+    processed_nodes = {}
+    summarized_nodes = []
+
+    for count, node in enumerate(nodes):
+        print(f"Generating summary for entity(node) {count+1} of {len(nodes)} {print_string}...")
+        try:
+            name = str(node['name'])
+            node_type = str(node['type'])
+            existing_summary = str(node.get('summary', '')) if node.get('summary') else ""   # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
+            
+            node_key = (name, node_type)
+            if node_key in processed_nodes:
+                print(f"Skipping duplicate node {name} of type {node_type}")
+                continue
+
+            node_summary_request_prompt = get_user_query_for_node_summary(name, node_type, existing_summary, chunk_text)
+            formatted_prompt = manually_format_prompt_with_prompt_template(
+                formatted_prompt="",
+                user_query=node_summary_request_prompt,
+                current_sequence_id=0,
+                base_template="",
+                local_llm_chat_template_format=exl2_prompt_template_format,
+                skip_system_prompt=True
+            )
+            full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+            full_response = trim_response(full_response, '"summary":', '}')
+            summarized_nodes.append({
+                'name': name,
+                'type': node_type,
+                'summary':full_response
+            })
+
+            processed_nodes[node_key] = True
+
+        except Exception as e:
+            handle_error_no_return(f"Could not generate summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
+
+    return summarized_nodes
+
+
+def process_relationships(relationships: list, chunk_text: str, print_string: str = "", exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
+    processed_relationships = {}
+    summarized_relationships = []
+
+    for count, relationship in enumerate(relationships):
+        print(f"Generating summary for relationship {count+1} of {len(relationships)} {print_string}...")
+
+        try:
+            source = str(relationship['source'])
+            target = str(relationship['target'])
+            relationship_type = str(relationship['relationship'])
+            existing_summary = str(relationship.get('summary', '')) if relationship.get('summary') else ""   # dict .get() method is safer than `if relationship['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
+
+            relationship_key = (source, target, relationship_type)
+            if relationship_key in processed_relationships:
+                print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type})")
+                continue
+
+            relationship_summary_request_prompt = get_user_query_for_relationship_summary(source, target, relationship_type, existing_summary, chunk_text)
+            formatted_prompt = manually_format_prompt_with_prompt_template(
+                formatted_prompt="",
+                user_query=relationship_summary_request_prompt,
+                current_sequence_id=0,
+                base_template="",
+                local_llm_chat_template_format=exl2_prompt_template_format,
+                skip_system_prompt=True
+            )
+            full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+            full_response = trim_response(full_response, '"summary":', '}')
+            summarized_relationships.append({
+                'source': source,
+                'target': target,
+                'relationship': relationship_type,
+                'summary':full_response
+            })
+
+            processed_relationships[relationship_key] = True
+
+        except Exception as e:
+            handle_error_no_return(f"Could not generate summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
+
+    return summarized_relationships
