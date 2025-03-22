@@ -23,7 +23,7 @@ except ImportError:
     print("transformers version is below 4.45.0 required from Llama3.2-Vision. Skipping MllamaForConditionalGeneration import.")
 
 try:
-    from prompt_formatting import manually_format_prompt_with_prompt_template, get_user_query_for_node_summary, get_user_query_for_relationship_summary, get_user_query_for_comprehensive_summary
+    from prompt_formatting import manually_format_prompt_with_prompt_template, get_user_query_for_comprehensive_summary
 except ImportError:
     print("Prompt Formatter module `prompt_formatting.py` is not present. Skipping import. Must be present for exl2 bulk-summary generation.")
 
@@ -485,7 +485,7 @@ def load_json_file(file_path):
         except Exception as e:
             return handle_local_error("Could not load JSON file, encountered error: ", e)
     else:
-        return {}
+        return None   # NOTE: isinstance({}, dict) will return True so better to return None!
 
 
 def save_json_file(data, file_path):
@@ -2233,28 +2233,23 @@ def completions_stream():
 
 def get_exl2_gen_settings(request):
     try:
-        read_return = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'knowledge_graph_cache_dir'])
-        temperature = float(read_return['temperature'])
-        top_k = int(read_return['top_k'])
-        top_p = float(read_return['top_p'])
-        max_new_tokens = int(read_return['max_new_tokens'])
-        knowledge_graph_cache_dir = read_return['knowledge_graph_cache_dir']
+        config_data = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'knowledge_graph_cache_dir'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting /exl2_grapher, encountered error: ", e)
 
     try:
         print("\nExLlamaV2Sampler.Settings In-Progress...\n")
         gen_settings = ExLlamaV2Sampler.Settings(
-            temperature = float(request.headers.get('X-Temperature', str(temperature))),
-            top_k = int(request.headers.get('X-Top-K', str(top_k))),
-            top_p = float(request.headers.get('X-Top-P', str(top_p)))
+            temperature = float(request.headers.get('X-Temperature', str(config_data['temperature']))),
+            top_k = int(request.headers.get('X-Top-K', str(config_data['top_k']))),
+            top_p = float(request.headers.get('X-Top-P', str(config_data['top_p'])))
         )
-        requested_max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens)))
+        requested_max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(config_data['max_new_tokens'])))
         print("\nExLlamaV2Sampler.Settings Defined Successfully\n")
     except Exception as e:
         handle_error_no_return("Could not set generation-arguments for /exl2_grapher, proceeding without them. Encountered error: ", e)
 
-    return gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir
+    return gen_settings, requested_max_new_tokens, config_data['knowledge_graph_cache_dir']
 
 
 @app.route('/exl2_stream', methods=['POST'])
@@ -2388,93 +2383,7 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
     except Exception as e:
         handle_error_no_return("Could not empty CUDA cache after ExLlamaV2 cleanup, encountered error: ", e)
 
-
     return full_response
-
-
-def process_nodes(nodes: list, chunk_text: str, print_string: str = "", exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
-    processed_nodes = {}
-    summarized_nodes = []
-
-    for count, node in enumerate(nodes):
-        print(f"Generating summary for entity(node) {count+1} of {len(nodes)} {print_string}...")
-        try:
-            name = str(node['name'])
-            node_type = str(node['type'])
-            existing_summary = str(node.get('summary', '')) if node.get('summary') else ""   # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
-            
-            node_key = (name, node_type)
-            if node_key in processed_nodes:
-                print(f"Skipping duplicate node {name} of type {node_type}")
-                continue
-
-            node_summary_request_prompt = get_user_query_for_node_summary(name, node_type, existing_summary, chunk_text)
-            formatted_prompt = manually_format_prompt_with_prompt_template(
-                formatted_prompt="",
-                user_query=node_summary_request_prompt,
-                current_sequence_id=0,
-                base_template="",
-                local_llm_chat_template_format=exl2_prompt_template_format,
-                skip_system_prompt=True
-            )
-            full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-            full_response = trim_response(full_response, '"summary":', '}')
-            summarized_nodes.append({
-                'name': name,
-                'type': node_type,
-                'summary':full_response
-            })
-
-            processed_nodes[node_key] = True
-
-        except Exception as e:
-            handle_error_no_return(f"Could not generate summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
-
-    return summarized_nodes
-
-
-def process_relationships(relationships: list, chunk_text: str, print_string: str = "", exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
-    processed_relationships = {}
-    summarized_relationships = []
-
-    for count, relationship in enumerate(relationships):
-        print(f"Generating summary for relationship {count+1} of {len(relationships)} {print_string}...")
-
-        try:
-            source = str(relationship['source'])
-            target = str(relationship['target'])
-            relationship_type = str(relationship['relationship'])
-            existing_summary = str(relationship.get('summary', '')) if relationship.get('summary') else ""   # dict .get() method is safer than `if relationship['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
-
-            relationship_key = (source, target, relationship_type)
-            if relationship_key in processed_relationships:
-                print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type})")
-                continue
-
-            relationship_summary_request_prompt = get_user_query_for_relationship_summary(source, target, relationship_type, existing_summary, chunk_text)
-            formatted_prompt = manually_format_prompt_with_prompt_template(
-                formatted_prompt="",
-                user_query=relationship_summary_request_prompt,
-                current_sequence_id=0,
-                base_template="",
-                local_llm_chat_template_format=exl2_prompt_template_format,
-                skip_system_prompt=True
-            )
-            full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-            full_response = trim_response(full_response, '"summary":', '}')
-            summarized_relationships.append({
-                'source': source,
-                'target': target,
-                'relationship': relationship_type,
-                'summary':full_response
-            })
-
-            processed_relationships[relationship_key] = True
-
-        except Exception as e:
-            handle_error_no_return(f"Could not generate summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
-
-    return summarized_relationships
 
 
 def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: str, source_doc_name: str, page_number_list: list, exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
@@ -2597,7 +2506,7 @@ def exl2_grapher():
         gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
-        handle_api_error("Could not read POST-request messages for /exl2_grapher, encountered error: ", e)
+        return handle_api_error("Could not read POST-request messages for /exl2_grapher, encountered error: ", e)
 
     stop_thread = threading.Event()
     output_queue = queue.Queue()
@@ -2613,17 +2522,18 @@ def exl2_grapher():
                 print(f"\nExtracting entities and relationships for chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
 
                 if not rag_response_mode:
-                    print(f"\nNon-response mode: Checking for existing nodes and relationships extraction cache for chunk {chunk_number}...\n")
+                    print(f"\nNon-response mode: Checking for existing cache of previously extracted nodes and relationships for chunk {chunk_number}...\n")
                     source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
                     extraction_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_extraction_cache.json")
                     if source_doc_name not in cache_data_map:
                         try:
+                            cached_data = load_json_file(extraction_cache_file_path)
                             cache_data_map[source_doc_name] = {
-                                'data': load_json_file(extraction_cache_file_path),
+                                'data': cached_data if isinstance(cached_data, dict) else {},
                                 'file_path': extraction_cache_file_path
                             }
                         except Exception as e:
-                            handle_error_no_return(f"Could not load nodes and relationships extraction from cache file {extraction_cache_file_path}, encountered error: ", e)
+                            handle_error_no_return(f"Could not load nodes and relationships from cache file {extraction_cache_file_path}, proceeding to extract afresh. Encountered error: ", e)
                     
                     cache_entry = cache_data_map.get(source_doc_name)
                     if (cache_entry and cache_entry['data'] and chunk_number in cache_entry['data'] and
@@ -2631,7 +2541,7 @@ def exl2_grapher():
 
                         chunk_entities[chunk_number]['entities_and_relationships'] = cache_entry['data'][chunk_number]['entities_and_relationships']
                         output_queue.put(chunk_entities[chunk_number])
-                        print(f"\nFound existing nodes and relationships extraction cache for chunk {chunk_number}, returning cached data...\n")
+                        print(f"\nFound existing cache of previously extracted nodes and relationships for chunk {chunk_number}, returning cached data...\n")
                         continue
                     
                 try:
@@ -2693,12 +2603,13 @@ def exl2_grapher():
                 summary_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_summary_cache.json")
                 if source_doc_name not in cache_data_map:
                     try:
+                        cached_data = load_json_file(summary_cache_file_path)
                         cache_data_map[source_doc_name] = {
-                            'data': load_json_file(summary_cache_file_path),
+                            'data': cached_data if isinstance(cached_data, dict) else {},
                             'file_path': summary_cache_file_path
                         }
                     except Exception as e:
-                        handle_error_no_return(f"Could not load nodes and relationships summary from cache file {summary_cache_file_path}, encountered error: ", e)
+                        handle_error_no_return(f"Could not load summary from cache file {summary_cache_file_path}, proceeding to generate afresh. Encountered error: ", e)
                 
                 # Check if cache available for this chunk
                 cache_entry = cache_data_map.get(source_doc_name)
@@ -2726,14 +2637,14 @@ def exl2_grapher():
                     try:
                         save_json_file({chunk_number: chunk_entities[chunk_number]}, summary_cache_file_path)
                         cache_data_map[source_doc_name]['data'][chunk_number] = chunk_entities[chunk_number]    # update in-memory cache as well to help with de-duplication
-                        print(f"\nSaved nodes and relationships summary to cache file {summary_cache_file_path} for chunk {chunk_number}\n")
+                        print(f"\nSaved summary to cache file {summary_cache_file_path} for chunk {chunk_number}\n")
                     except Exception as e:
-                        handle_error_no_return(f"Could not save nodes and relationships summary to cache file in {knowledge_graph_cache_dir}, skipping. Encountered error: ", e)
+                        handle_error_no_return(f"Could not save summary to cache file in {knowledge_graph_cache_dir}, skipping. Encountered error: ", e)
                 except Exception as e:
-                    handle_error_no_return(f"Could not process nodes and relationships for chunk {chunk_number}, skipping. Encountered error: ", e)
+                    handle_error_no_return(f"Could not generate summary for nodes and relationships for chunk {chunk_number}, skipping. Encountered error: ", e)
 
         except Exception as e:
-            return handle_error_no_return("Summary generation failed, encountered error: ", e)
+            handle_error_no_return("Summary generation failed, encountered error: ", e)
         finally:
             output_queue.put(None)
             print("\n\nLLM stream done, releasing semaphore\n\n")
@@ -2762,7 +2673,7 @@ def exl2_grapher():
     elif summary_generation_mode:
         thread = threading.Thread(target=summary_generation_task)
     else:
-        handle_api_error("Invalid request mode for /exl2_grapher. Must specify either 'extraction_mode' or 'summary_generation_mode'.")
+        return handle_api_error("Invalid request mode for /exl2_grapher. Must specify either 'extraction_mode' or 'summary_generation_mode'.")
 
     thread.start()
 
