@@ -2591,9 +2591,9 @@ def exl2_grapher():
                     else:
                         # Chunk may have been too large and overwhelmed the model, offset the overlap and re-try
                         try:
-                            print(f"Trimming reponse failed, offsetting chunk text by removing leading and trailing overlap of {chunk_overlap} chars and re-attempting entity extraction...")
-                            chunk_text = chunk_data['chunk_text'][chunk_overlap:-chunk_overlap]     # For example if the chunk overlap is 300, we remove the first 300 chars (from the last chunk) and the last 300 chars (will be the first 300 chars of the next chunk)
-                            offset_payload = get_request_payload_for_graph_entity_extraction(chunk_text)
+                            print(f"Trimming response failed, offsetting chunk text by removing leading and trailing overlap of {chunk_overlap} chars and re-attempting entity extraction...")
+                            offset_chunk_text = chunk_data['chunk_text'][chunk_overlap:-chunk_overlap]     # For example if the chunk overlap is 300, we remove the first 300 chars (from the last chunk) and the last 300 chars (will be the first 300 chars of the next chunk)
+                            offset_payload = get_request_payload_for_graph_entity_extraction(offset_chunk_text)
                             extraction_response_second_attempt = create_and_execute_exl2_job(payload=offset_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
                             retried_response_validation_result = validate_entity_extraction_response(extraction_response_second_attempt)
                             print("Response valid, proceeding") if retried_response_validation_result['is_valid'] else print("Response still invalid, saving and proceeding anyways!")
