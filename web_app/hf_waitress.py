@@ -2386,6 +2386,42 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
     return full_response
 
 
+def get_request_payload_for_graph_entity_extraction(chunk_text: str):
+    chunk_payload = "Extract nodes and relationships from the following text:\n" + chunk_text + "\n<knowledge_graph>"
+    full_payload = f"<start_of_turn>user\n{chunk_payload}<end_of_turn>\n<start_of_turn>model\n"
+    return full_payload
+
+
+def validate_entity_extraction_response(extraction_response: dict):
+    '''
+    This function attempts to validate the response from the entity extraction task.
+    It first attempts to evaluate the response as a dict, which is the expected format.
+    If this fails, it attempts to trim the response and then evaluate again.
+    If this also fails, it attempts to trim the response again with simpler conditions and then evaluate again.
+    If this also fails, it returns the unchanged response and a flag indicating that the response is invalid.
+    '''
+    try:
+        extraction_response = ast.literal_eval(extraction_response) # Sometimes additional text may be present and need to be stripped, which we can test for by trying to evaluate the response as a dict
+        return {'validated_response': extraction_response, 'is_valid': True}
+    except Exception as e:
+        print(f"Response invalid, attempting to trim. Encountered error: ", e)
+        extraction_response = trim_response(extraction_response, '{"nodes":', '"}]}', include_start_substring=True, include_end_substring=True)
+        try:
+            extraction_response = ast.literal_eval(extraction_response)
+            print("Success! Proceeding...")
+            return {'validated_response': extraction_response, 'is_valid': True}
+        except Exception as e:
+            print(f"Response still invalid, re-attempting with minimal trimming. Encountered error: ", e)
+            extraction_response = trim_response(extraction_response, '{"nodes":', '}', include_start_substring=True, include_end_substring=True)    # last-ditch effort!
+            try:
+                extraction_response = ast.literal_eval(extraction_response)
+                print("Success! Proceeding...")
+                return {'validated_response': extraction_response, 'is_valid': True}
+            except Exception as e:
+                print(f"Response still invalid, returning unchanged response. Encountered error: ", e)
+                return {'validated_response': extraction_response, 'is_valid': False}
+
+
 def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: str, source_doc_name: str, page_number_list: list, exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
     '''
     This function takes a dictionary containing nodes and relationships, and a chunk of text.
@@ -2503,6 +2539,7 @@ def exl2_grapher():
         summary_generation_mode = request.json.get('summary_generation_mode', False)
         rag_response_mode = request.json.get('rag_response_mode', False)
         exl2_prompt_template_format = request.json.get('exl2_prompt_template_format', None)
+        chunk_overlap = int(request.headers.get('X-Chunk-Overlap', 0))
         gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
@@ -2545,25 +2582,27 @@ def exl2_grapher():
                         continue
                     
                 try:
-                    chunk_payload = "Extract nodes and relationships from the following text:\n" + chunk_data['chunk_text'] + "\n<knowledge_graph>"
-                    full_payload = f"<start_of_turn>user\n{chunk_payload}<end_of_turn>\n<start_of_turn>model\n"
-                
-                    full_response = create_and_execute_exl2_job(payload=full_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-                    try:
-                        full_response = ast.literal_eval(full_response) # Sometimes additional text may be present and need to be stripped, which we can test for by trying to evaluate the response as a dict
-                    except Exception as e:
-                        full_response = trim_response(full_response, '{"nodes":', '"}]}', include_start_substring=True, include_end_substring=True)
-                        print(f"Trimmed response for chunk {chunk_number}...\n")
-                        try:
-                            full_response = ast.literal_eval(full_response)
-                        except Exception as e:
-                            full_response = trim_response(full_response, '{"nodes":', '}', include_start_substring=True, include_end_substring=True)    # last-ditch effort!
-                            print(f"Trimmed response again for chunk {chunk_number}...\n")
-                            try:
-                                full_response = ast.literal_eval(full_response)
-                            except Exception as e:
-                                raise # Re-raise the original exception if the second attempt also fails
+                    full_payload = get_request_payload_for_graph_entity_extraction(chunk_data['chunk_text'])
+                    extraction_response_first_attempt = create_and_execute_exl2_job(payload=full_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+                    response_validation_result = validate_entity_extraction_response(extraction_response_first_attempt)
                     
+                    if response_validation_result['is_valid']:
+                        full_response = response_validation_result['validated_response']
+                    else:
+                        # Chunk may have been too large and overwhelmed the model, offset the overlap and re-try
+                        try:
+                            print(f"Trimming reponse failed, offsetting chunk text by removing leading and trailing overlap of {chunk_overlap} chars and re-attempting entity extraction...")
+                            chunk_text = chunk_data['chunk_text'][chunk_overlap:-chunk_overlap]     # For example if the chunk overlap is 300, we remove the first 300 chars (from the last chunk) and the last 300 chars (will be the first 300 chars of the next chunk)
+                            offset_payload = get_request_payload_for_graph_entity_extraction(chunk_text)
+                            extraction_response_second_attempt = create_and_execute_exl2_job(payload=offset_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+                            retried_response_validation_result = validate_entity_extraction_response(extraction_response_second_attempt)
+                            print("Response valid, proceeding") if retried_response_validation_result['is_valid'] else print("Response still invalid, saving and proceeding anyways!")
+                            full_response = retried_response_validation_result['validated_response']    # Use offset response regardless of validation result as it's likely simpler
+                        
+                        except Exception as e:
+                            handle_error_no_return(f"Could not re-attempt entity extraction for chunk {chunk_number}, falling back to original response. Encountered error: ", e)
+                            full_response = response_validation_result['validated_response']    # Fallback to the original response from the first attempt
+
                     chunk_entities[chunk_number]['entities_and_relationships'] = full_response
                     output_queue.put(chunk_entities[chunk_number])
 
@@ -2577,6 +2616,7 @@ def exl2_grapher():
                 
                 except Exception as e:
                     handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number}, skipping. Encountered error: ", e)
+                    chunk_entities[chunk_number]['entities_and_relationships'] = {}     # Set empty or default value in case of complete failure
 
         except Exception as e:
             handle_error_no_return(f"Could not extract entities and relationships, encountered error: ", e)
