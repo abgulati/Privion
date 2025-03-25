@@ -1651,7 +1651,7 @@ def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
 
 def get_graphing_request_params():
     try:
-        config_data = read_config(['exl2_quantize_graph_model', 'graph_model_access_url', 'graph_model_server_port', 'graph_model_max_new_tokens', 'graph_model_temperature', 'graph_model_do_sample', 'graph_model_top_k', 'graph_model_top_p', 'graph_model_min_p'])
+        config_data = read_config(['exl2_quantize_graph_model', 'graph_model_access_url', 'graph_model_server_port', 'graph_model_max_new_tokens', 'graph_model_temperature', 'graph_model_do_sample', 'graph_model_top_k', 'graph_model_top_p', 'graph_model_min_p', 'graph_chunk_overlap'])
         exl2_quantize_graph_model = str(config_data['exl2_quantize_graph_model']).lower() == 'true'
     except Exception as e:
         return handle_local_error("Could not get graphing request params, encountered error: ", e)
@@ -1662,7 +1662,8 @@ def get_graphing_request_params():
         'X-Temperature': str(config_data['graph_model_temperature']),
         'X-Top-K': str(config_data['graph_model_top_k']),
         'X-Top-P': str(config_data['graph_model_top_p']),
-        'X-Min-P': str(config_data['graph_model_min_p'])
+        'X-Min-P': str(config_data['graph_model_min_p']),
+        'X-Chunk-Overlap': str(config_data['graph_chunk_overlap'])
     }
 
     grapher_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
@@ -1759,7 +1760,7 @@ def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payl
         return full_response
         
     except Exception as e:
-        return handle_local_error("Failed request to /exl2_stream or /exl2_grapher APIs, encountered error: ", e)
+        return handle_local_error("Failed request to exl2_stream or exl2_grapher APIs, encountered error: ", e)
 
 
 def graphing_request_response_handler(grapher_url, headers, payload):
@@ -1793,14 +1794,14 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
     except Exception as e:
         return handle_local_error("Could not get graphing request params, encountered error: ", e)
 
-    if exl2_quantize_graph_model:   # invoke /exl2_grapher
+    if exl2_quantize_graph_model:   # invoke exl2_grapher API
         try:
             payload = json.dumps({"chunk_entities": chunk_entities, "extraction_mode": True, "rag_response_mode": rag_response_mode})
             full_response = hf_waitress_bulk_stream_request_response_handler(grapher_url, headers, payload)
             # print(f"\nExl2 Bulk-Graphing Response (Entities and Relationships):\n\n{full_response}\n")
             return full_response
         except Exception as e:
-            return handle_local_error("Error with request to /exl2_grapher, encountered error: ", e)
+            return handle_local_error("Error with request to exl2_grapher API, encountered error: ", e)
 
     else:   # invoke /completions
         # TODO: Implement non-exl2 bulk-summary generation with /completions
@@ -1853,7 +1854,7 @@ def sanitize_names(name):
 
 def get_request_params_for_local_llm_server(formatted_prompt=""):
     try:
-        read_return = read_config(['local_llm_server', 'hf_waitress_access_url', 'hf_waitress_server_port', 'llama_cpp_access_url', 'llama_cpp_server_port', 'local_llm_temperature', 'local_llm_top_k', 'local_llm_top_p', 'local_llm_min_p'])
+        read_return = read_config(['local_llm_server', 'hf_waitress_access_url', 'hf_waitress_server_port', 'llama_cpp_access_url', 'llama_cpp_server_port', 'local_llm_temperature', 'local_llm_top_k', 'local_llm_top_p', 'local_llm_min_p', 'graph_chunk_overlap'])
     except Exception as e:
         return handle_local_error("Could not read request params from config.json, encountered error: ", e)
 
@@ -1893,7 +1894,8 @@ def get_request_params_for_local_llm_server(formatted_prompt=""):
             'temperature': read_return['local_llm_temperature'],
             'top_k': read_return['local_llm_top_k'],
             'top_p': read_return['local_llm_top_p'],
-            'min_p': read_return['local_llm_min_p']
+            'min_p': read_return['local_llm_min_p'],
+            'chunk_overlap': read_return['graph_chunk_overlap']
         }
 
         endpoint_url = f"http://{read_return['llama_cpp_access_url']}:{read_return['llama_cpp_server_port']}/completion"
@@ -1925,7 +1927,7 @@ def summary_generator(chunk_entities=None):
             # print(f"\nExl2 Bulk-Summary Generation Response:\n\n{full_response}\n")
             return full_response
         except Exception as e:
-            return handle_local_error("Error with request to /exl2_grapher, encountered error: ", e)
+            return handle_local_error("Error with request to exl2_grapher API, encountered error: ", e)
 
     elif local_llm_server == 'hf-waitress' and not exl2:
         # TODO: Implement non-exl2 bulk-summary generation with /completions
