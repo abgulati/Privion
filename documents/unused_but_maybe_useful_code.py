@@ -3474,3 +3474,34 @@ def process_relationships(relationships: list, chunk_text: str, print_string: st
             handle_error_no_return(f"Could not generate summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
 
     return summarized_relationships
+
+
+def convert_doc_object_to_dictionary_list(docs: list[Document]) -> dict:
+    parsed_documents = []
+    
+    for doc in docs:
+        
+        try:
+            relevant_page_text = str(doc.page_content)
+            relevant_page_number = str(doc.metadata.get('page_number'))
+            source_filepath_full = str(doc.metadata.get('source'))
+            source_filepath = os.path.basename(source_filepath_full)
+        
+            relevant_page_text = relevant_page_text.replace('\n', ' ')
+            parsed_documents.append({
+                'content': relevant_page_text.strip().replace("'", ""),
+                'source': source_filepath,
+                'page_number': relevant_page_number
+            })
+            
+        except Exception as e:
+            handle_error_no_return("Could not access doc.page_content and/or doc.metadata, encountered error: ", e)
+            continue
+
+    return parsed_documents
+
+
+try:
+    doc_object_as_dictionary_list = convert_doc_object_to_dictionary_list(docs)
+except Exception as e:
+    return handle_local_error("Could not get doc object dict, encountered error: ", e)
