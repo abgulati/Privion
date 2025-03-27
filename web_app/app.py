@@ -340,6 +340,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'skip_summary_generation':False,
                 'reuse_previously_extracted_graph_entities_and_relationships':True,
                 'reuse_previously_generated_graph_summaries':True,
+                'graph_rag_context_length_limit_chars':25000,
                 'base_template': (
                             "You are a helpful assistant deployed in a Retrieval Augmented Generation (RAG) system.\n"
                             "Your task is to evaluate retrieved contextual data to answer users' questions accurately and in detail.\n\n"
@@ -1649,7 +1650,7 @@ def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
     return True
 
 
-def get_graphing_request_params():
+def get_graphing_request_params(rag_response_mode: bool = False):
     try:
         config_data = read_config(['exl2_quantize_graph_model', 'graph_model_access_url', 'graph_model_server_port', 'graph_model_max_new_tokens', 'graph_model_temperature', 'graph_model_do_sample', 'graph_model_top_k', 'graph_model_top_p', 'graph_model_min_p', 'graph_chunk_overlap'])
         exl2_quantize_graph_model = str(config_data['exl2_quantize_graph_model']).lower() == 'true'
@@ -1663,7 +1664,7 @@ def get_graphing_request_params():
         'X-Top-K': str(config_data['graph_model_top_k']),
         'X-Top-P': str(config_data['graph_model_top_p']),
         'X-Min-P': str(config_data['graph_model_min_p']),
-        'X-Chunk-Overlap': str(config_data['graph_chunk_overlap'])
+        'X-Chunk-Overlap': str(config_data['graph_chunk_overlap']) if not rag_response_mode else '0'
     }
 
     grapher_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
@@ -1790,7 +1791,7 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
     print("\nExtracting all entities and relationships for the entire document\n")
 
     try:
-        grapher_url, headers, exl2_quantize_graph_model = get_graphing_request_params()
+        grapher_url, headers, exl2_quantize_graph_model = get_graphing_request_params(rag_response_mode=rag_response_mode)
     except Exception as e:
         return handle_local_error("Could not get graphing request params, encountered error: ", e)
 
@@ -2322,7 +2323,7 @@ def generate_graph_communities():
     return jsonify({"message": "Graph communities generated successfully"}), 200
 
 
-def assemble_chunks_for_graph_db(chunks, user_query=None):
+def assemble_chunks_for_graph_db(chunks):
     '''
     Assembles document chunks into a dictionary of entities for storage to the GraphDB:
     '''
@@ -2338,15 +2339,6 @@ def assemble_chunks_for_graph_db(chunks, user_query=None):
         chunk_entities = {}
         graph_chunk_count = 1
         overlap_text = ""
-
-        if user_query is not None:  # For GraphRAG response query-pipeline, we need to add the user query as a chunk
-            user_query = user_query.replace("'", "").replace("<br>", "").replace("?", "")
-            user_query_chunk_text = f"Do not attempt to answer any query that follows, simply proceed to extract nodes and relationships from the following text:\n{user_query}"
-            chunk_entities[0] = {
-                'chunk_text': user_query_chunk_text,
-                'source_chunks': [],
-                'source_doc_name': 'user_query'
-            }   # Graph chunk numbering starts from 1, so we can add the user query as chunk 0!
 
         print("\nGenerating Graphing Chunks Dictionary...\n")
         
@@ -2489,8 +2481,7 @@ def graph_generator(chunks, input_file):
 
     This is then passed to the graphing model which will process each graph_chunk and append the `entities_and_relationships` key to each chunk_entities dict:
         
-        '<entities_and_relationships>': '<node_relationships_dict>'
-        # eg: {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"}], "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"}]},
+        '<entities_and_relationships>': {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"},...], "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"},...]}
 
     The final `chunk_entities` dict is then passed to the `store_entities_and_relationships_in_graph_db()` function which will invoke the summary generator if applicable, and then store the entities and relationships in the GraphDB.
 
@@ -2691,41 +2682,61 @@ def highlight_text_on_page(highlight_list, stream_session_id):
 
 
 def highlighter_interface(reference_pages, stream_session_id):
+    try:
+        user_should_refer_pages_in_doc = {}
+        highlight_list = {}
+        docs_have_relevant_info = False
 
-    user_should_refer_pages_in_doc = {}
-    highlight_list = {}
-    docs_have_relevant_info = False
+        # print(f"\n\nreference_pages: {reference_pages}\n\n")
 
-    # print(f"\n\nreference_pages: {reference_pages}\n\n")
+        for file_path, content in reference_pages.items():
+            source_filename = os.path.basename(file_path)
+            print(f"\nsource_filename basename: {source_filename}\n")
+            output_file_extension = "_" + stream_session_id + '.pdf'
+            output_file_name = source_filename.replace(".pdf",output_file_extension) 
+            page_numbers = set()
+            highlight_strings = set()
 
-    for file_path, content in reference_pages.items():
-        source_filename = os.path.basename(file_path)
-        print(f"\nsource_filename basename: {source_filename}\n")
-        output_file_extension = "_" + stream_session_id + '.pdf'
-        output_file_name = source_filename.replace(".pdf",output_file_extension) 
-        page_numbers = set()
-        highlight_strings = set()
+            for item in content:
+                # Each item in the list has two elements
+                page_text, page_number = item
+                
+                if isinstance(page_number, int):
+                    page_numbers.add(int(page_number))
+                    highlight_strings.add((int(page_number), str(page_text[:50])))
+                
+                elif isinstance(page_number, str):
+                    page_number_str = page_number.replace('[', '').replace(']', '')
+                    str_to_page_number_list = page_number_str.split(',')
+                    for page_number in str_to_page_number_list:
+                        page_numbers.add(int(page_number.strip()))
+                        highlight_strings.add((int(page_number.strip()), str(page_text[:50])))
+                
+                elif isinstance(page_number, list):
+                    for page_number in page_number:
+                        page_numbers.add(int(page_number))
+                        highlight_strings.add((int(page_number), str(page_text[:50])))
 
-        for item in content:
-            # Each item in the list has two elements
-            page_text, page_number = item
-            page_numbers.add(int(page_number))
-            highlight_strings.add((int(page_number), str(page_text[:50])))
+                else:
+                    handle_error_no_return("Could not handle page number type, encountered error: ", e)
 
-        if page_numbers:
-            user_should_refer_pages_in_doc[output_file_name] = page_numbers
-            docs_have_relevant_info = True
+            if page_numbers:
+                user_should_refer_pages_in_doc[output_file_name] = page_numbers
+                docs_have_relevant_info = True
 
-        if highlight_strings:
-            highlight_list[source_filename] = list(highlight_strings)
+            if highlight_strings:
+                highlight_list[source_filename] = list(highlight_strings)
 
-    if docs_have_relevant_info:
-        try:
-            highlight_text_on_page(highlight_list, str(stream_session_id))
-        except Exception as e:
-            handle_error_no_return("Could not highlight text, encountered error: ", e)
+        if docs_have_relevant_info:
+            try:
+                highlight_text_on_page(highlight_list, str(stream_session_id))
+            except Exception as e:
+                handle_error_no_return("Could not highlight text, encountered error: ", e)
 
-    return docs_have_relevant_info, user_should_refer_pages_in_doc
+        return docs_have_relevant_info, user_should_refer_pages_in_doc
+    except Exception as e:
+        handle_error_no_return("Could not highlight text, encountered error: ", e)
+        return False, {}
 
 
 def determine_sequence_id_for_chat(chat_id):
@@ -4787,8 +4798,15 @@ def rerank_results_ml(query, documents, top_n=5):
         ranked_documents = [documents[idx] for idx, _ in sorted_indexes[:top_n]]
 
         # print(f"\n\nReturning Top {len(ranked_documents)} Ranked Documents: {ranked_documents}\n\n")
-    
+
+        '''
+        Studies show that LLMs and Transformers in-general tend to perform better when the most relevant context is towards the beginning or end of the input, while important context in between tends to get 'lost in the middle'! 
+        This can be a serious problem for a large multi-turn conversation, wherein extensive back-and-forth query-response history exists and grows with each prompt. 
+        Therefore, the re-ranker method has been modified below to return a reversed context docs list, placing the most relevant docs at the end, so the list is now in ascending order of relevance. 
+        This should be helpful right from query 1 especially when the system prompt is large!
+        '''
         return ranked_documents[::-1]   #Slice to reverse the list, as `.reverse()` would return None because it creates an inplace change on the original list without returning anything
+
     except Exception as e:
         handle_local_error("Could not reorder documents, encountered error: ", e)
         return [doc.page_content for doc in documents]
@@ -5211,10 +5229,46 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
             gc.collect()
 
 
-def get_summary_report(summarized_chunk_entities: dict) -> str:
+def extract_content_source_and_page_data_from_summary_text(summary_text: str) -> tuple[str, str, list]:
+    '''
+    Extracts content data, source document name and page numbers from a text string ending with the pattern:
+    {Source Document Name: xxx}\n{Page Number(s): [y,z]}\n\n
+    This pattern is established in the process_nodes_and_relationships method of hf_waitress.py
+    
+    Args:
+        summary_text (str): The input text containing the metadata
+    
+    Returns:
+        tuple[str, str, list]: (content_data, source_document_name, page_numbers_list)
+    '''
+    try:
+        source_pattern = r'{Source Document Name: (.*?)}'   # () creates a capturing group and .*? matches any char except newline zero or more times, non-greedily
+        source_match = re.search(source_pattern, summary_text)
+        source_doc_name = source_match.group(1) if source_match else ""  # group(1) returns the first (and in this case, only) capturing group. 0 would return the entire match.
+        
+        page_pattern = r'{Page Number\(s\): \[(.*?)\]}'
+        page_match = re.search(page_pattern, summary_text)
+        #pages = page_match.group(1) if page_match else ""
+        if page_match:
+            # Convert string representation of list to actual list of integers
+            pages_str = page_match.group(1)
+            pages = [int(p.strip()) for p in pages_str.split(',')]
+        else:
+            pages = []
+        
+        content_data = summary_text[:source_match.start()].strip() if source_match else summary_text.strip()
+
+        return content_data, source_doc_name, pages
+    except Exception as e:
+        handle_error_no_return("Could not extract content data, source document name and page numbers from summary text, returning unchanged summary text. Encountered error: ", e)
+        return summary_text, "", []
+
+
+def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length_limit_chars: int, user_query: str) -> str:
     print(f"\n\nGetting summary report\n\n")
     
     summary_report = set()
+    summary_doc_objects = []
     try:
         
         for _, chunk_data in summarized_chunk_entities.items():
@@ -5228,36 +5282,63 @@ def get_summary_report(summarized_chunk_entities: dict) -> str:
 
                 if not node.get('summary'):
                     continue    # Skip nodes with no summaries
-                
-                source_docs = node.get('source_documents')
-                node_source_doc_name = set(source_docs) if source_docs else set(source_doc_name.split(' '))
 
                 for summary in node.get('summary', []):
                     if summary is not None and summary != '':
+                        summary_preface_string = f"Summary for entity '{node['name']}' of type '{node['type']}'"
+
+                        try:
+                            content_data, source_doc_name, pages = extract_content_source_and_page_data_from_summary_text(summary)
+                            summary_doc_objects.append(Document(page_content=f"{summary_preface_string} - {summary}", metadata={'page_number': pages, 'source': source_doc_name}))
+                        except Exception as e:
+                            handle_error_no_return("Could not convert GraphRAG context to Document object, skipping. Encountered error: ", e)
+
                         entry = (
-                            f"Summary for node '{node['name']}' of type '{node['type']}' - {summary} \n"
-                            f"Source Document(s): {node_source_doc_name}\n\n"
+                            f"{summary_preface_string} - {summary}" #The summary, as generated in the process_nodes_and_relationships method of hf_waitress.py, contains metadata and newline spacing.
                         )
                         summary_report.add(entry)
             
             for relationship in chunk_data['entities_and_relationships']['relationships']:
+                
                 if not relationship.get('summary'):
                     continue    # Skip relationships with no summaries
-                
-                source_docs = relationship.get('source_documents')
-                relationship_source_doc_name = set(source_docs) if source_docs else set(source_doc_name.split(' '))
 
                 for summary in relationship.get('summary', []):
                     if summary is not None and summary != '':
+                        summary_preface_string = f"Summary for relationship '{relationship['relationship']}' between entities '{relationship['source']}' and '{relationship['target']}'"
+
+                        try:
+                            content_data, source_doc_name, pages = extract_content_source_and_page_data_from_summary_text(summary)
+                            summary_doc_objects.append(Document(page_content=f"{summary_preface_string} - {summary}", metadata={'page_number': pages, 'source': source_doc_name}))
+                        except Exception as e:
+                            handle_error_no_return("Could not convert GraphRAG context to Document object, skipping. Encountered error: ", e)
+
                         entry = (
-                            f"Summary for relationship '{relationship['relationship']}' between '{relationship['source']}' and '{relationship['target']}' - {summary} \n"
-                            f"Source Document(s): {relationship_source_doc_name}\n\n"
+                            f"{summary_preface_string} - {summary}"
                         )
                         summary_report.add(entry)
     
     except Exception as e:
         handle_error_no_return("Could not add to summary report, skipping chunk {count}. Encountered error: ", e)
-    return ''.join(summary_report)
+    
+    textual_summary_report = ''.join(summary_report)
+
+    if len(textual_summary_report) > graph_rag_context_length_limit_chars:
+        try:
+            textual_summary_report = ''
+            reranked_summaries_list_ascending = rerank_results_ml(user_query, summary_doc_objects, top_n=len(summary_doc_objects))
+            reranked_summaries_list_descending = reranked_summaries_list_ascending[::-1]    # The `rerank_results_ml` method returns a list of docs in ascending order of relevance, so we need to reverse it so we may iterate starting with the most relevant docs!
+            for doc in reranked_summaries_list_descending:
+                if len(textual_summary_report) + len(str(doc.page_content)) > graph_rag_context_length_limit_chars:
+                    break
+                textual_summary_report += str(doc.page_content)
+            
+            print(f"\n\nReturning Textual summary report: {textual_summary_report}\n\n")
+            return textual_summary_report, reranked_summaries_list_descending
+        except Exception as e:
+            return handle_local_error("Could not handle summary report that is too long, encountered error: ", e)
+    else:
+        return textual_summary_report, summary_doc_objects
 
 
 def get_summary_and_source_documents_for_node(graph, name, node_type):
@@ -5491,62 +5572,109 @@ def merge_chunk_entities_for_graph_rag(chunk_entities: dict) -> dict:
             'source_chunks': [],
             'source_doc_name': ''
         }}
+        
         for _, chunk_data in chunk_entities.items():
-            chunk_entities_merged[0]['chunk_text'] += chunk_data['chunk_text'] if chunk_entities_merged[0]['chunk_text'] == '' else f" {chunk_data['chunk_text']}"
-            chunk_entities_merged[0]['entities_and_relationships']['nodes'].extend(chunk_data['entities_and_relationships']['nodes'])
-            chunk_entities_merged[0]['entities_and_relationships']['relationships'].extend(chunk_data['entities_and_relationships']['relationships'])
+            chunk_entities_merged[0]['chunk_text'] += f"{chunk_data['chunk_text']} "
+            chunk_entities_merged[0]['entities_and_relationships']['nodes'].extend(chunk_data['entities_and_relationships']['nodes'])   # extend() is used to add multiple elements to the end of the list...
+            chunk_entities_merged[0]['entities_and_relationships']['relationships'].extend(chunk_data['entities_and_relationships']['relationships'])   # and we don't care about de-duplicating here as that'll happen anyways in the get_summaries step!
             chunk_entities_merged[0]['source_chunks'].extend(chunk_data['source_chunks'])
-            chunk_entities_merged[0]['source_doc_name'] += chunk_data['source_doc_name'] if chunk_entities_merged[0]['source_doc_name'] == '' else f" {chunk_data['source_doc_name']}"
+            chunk_entities_merged[0]['source_doc_name'] += f"{chunk_data['source_doc_name']} "
         
         print(f"\n\nMerged chunk entities for graph RAG. Resulting chunk_entities_merged: \n {chunk_entities_merged}\n\n")
         return chunk_entities_merged
     except Exception as e:
-        return handle_local_error("Could not merge chunk entities for graph RAG, encountered error: ", e)
+        handle_error_no_return("Could not merge chunk entities for graph RAG, proceeding with original chunk_entities dict. WARNING: Duplicates may be present and negatively impact response quality! Encountered error: ", e)
+        return chunk_entities
 
 
-def get_doc_object_dict(docs: list[Document]) -> dict:
-    parsed_documents = []
+def assemble_chunks_for_graph_rag(docs, user_query=None):
+    '''
+    Transforms docs, which is a list of Document objects:
+
+        docs = [
+            Document(
+                page_content = '<page_content>',
+                metadata = {
+                    'source': '<source_filepath>',
+                    'page_number': '<page_number>'
+                }
+            ),
+            ...
+        ]
+
+    into:
+
+        chunk_entities = {
+            '<graph_chunk_number>': {
+                'chunk_text': '<text>',
+                'source_chunks': '<chunk_numbers>', #eg: [12,13,14]
+                'source_doc_name': '<name>'
+            },
+            ...
+        }
     
-    for doc in docs:
-        
-        try:
-            relevant_page_text = str(doc.page_content)
-            relevant_page_number = str(doc.metadata.get('page_number'))
-            source_filepath_full = str(doc.metadata.get('source'))
-            source_filepath = os.path.basename(source_filepath_full)
-        
-            relevant_page_text = relevant_page_text.replace('\n', ' ')
-            parsed_documents.append({
-                'content': relevant_page_text.strip().replace("'", ""),
-                'source': source_filepath,
-                'page_number': relevant_page_number
-            })
-            
-        except Exception as e:
-            handle_error_no_return("Could not access doc.page_content and/or doc.metadata, encountered error: ", e)
-            continue
+    For the purposes of GraphRAG's query-response pipeline.
+    Since chunk content is not necessarily contigous document content, we need to treat each chunk as a separate entity.
+    '''
+    try:
+        chunk_entities = {}
+        graph_chunk_count = 1
 
-    return parsed_documents
+        if user_query is not None:  # For GraphRAG response query-pipeline, we need to add the user query as a chunk
+            user_query = user_query.replace("'", "").replace("<br>", "").replace("?", "")
+            user_query_chunk_text = f"Do not attempt to answer any query that follows, simply proceed to extract nodes and relationships from the following text:\n{user_query}"
+            chunk_entities[graph_chunk_count] = {
+                'chunk_text': user_query_chunk_text,
+                'source_chunks': [],
+                'source_doc_name': 'user_query'
+            }
+            graph_chunk_count += 1
+
+        print("\nGenerating Graphing Chunks Dictionary...\n")
+        
+        for count, doc in enumerate(docs):
+
+            try:
+                chunk_source_filepath = str(doc.metadata.get('source'))
+                source_filename = os.path.basename(chunk_source_filepath)
+
+                page_number_list = []
+                try:    # page numbers while useful are non-essential which is why I'm wrapping in a dedicated try-except block that does not raise an error!
+                    page_number_list.append(int(doc.metadata.get('page_number')))
+                    page_number_list = list(set(page_number_list))   # Remove duplicates
+                except Exception as e:
+                    handle_error_no_return(f"Could not obtain page number from context document number {count} of {len(docs)} documents, encountered error: ", e)
+
+                chunk_entities[graph_chunk_count] = {
+                    'chunk_text': str(doc.page_content).strip().replace("'", ""),
+                    'source_chunks': [count],
+                    'source_doc_name': source_filename,
+                    'page_number': page_number_list
+                }
+
+                graph_chunk_count += 1
+            except Exception as e:
+                handle_error_no_return(f"Error processing context document number {count} of {len(docs)} documents in assemble_chunks_for_graph_db(), encountered error: ", e)
+
+    except Exception as e:
+        return handle_local_error(f"Could not assemble chunk_entities dictionary for GraphRAG, encountered error: ", e)
+
+    return chunk_entities
 
 
 def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
     '''
-    Assembles document chunks (via assemble_chunks_for_graph_db()) into a dictionary of entities for storage to the GraphDB:
+    Assembles document chunks into a dictionary of entities (via the assemble_chunks_for_graph_rag method, check it for detailed documentation on the structure of docs and chunk_entities) for queries on the GraphDB.
 
-    chunk_entities = {
-        '<graph_chunk_number>': {
-            '<chunk_text>': '<text>',
-            '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
-            '<source_doc_name>': '<name>'
-        }
-    }
-
-    This is then passed to the graphing model which will process each graph_chunk and append the `entities_and_relationships` key to each chunk_entities dict:
+    These chunk_entities are then passed to the graphing model which will process each graph_chunk and append the `entities_and_relationships` key to each chunk_entities dict:
         
-        '<entities_and_relationships>': '<node_relationships_dict>'
-        # eg: {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"}], "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"}]},
+        '<entities_and_relationships>': {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"},...], "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"},...]}
 
-    The final `chunk_entities` dict is then passed to the `get_summaries_from_graph_db()` function which will store the entities and relationships in the GraphDB.
+    The various chunk_entities in the dict are then merged into a singular chunk_entity for querying the GraphDB to obtain summaries. 
+    The merge_chunk_entities_for_graph_rag and get_summaries_from_graph_db methods are respectively used for this purpose.
+
+    The obtained summaries are deduplicated and formatted into a summary report via the get_summary_report method, and finally re-ranked and trimmed (TODO) 
+    to obtain the final graphRAG context, which is then returned.
     '''
     
     print(f"\n\nExecuting GraphRAG. Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
@@ -5558,12 +5686,7 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
         return handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
 
     try:
-        doc_object_dict = get_doc_object_dict(docs)
-    except Exception as e:
-        return handle_local_error("Could not get doc object dict, encountered error: ", e)
-
-    try:
-        chunk_entities = assemble_chunks_for_graph_db(doc_object_dict, user_query)
+        chunk_entities = assemble_chunks_for_graph_rag(docs, user_query)
     except Exception as e:
         return handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
     
@@ -5575,27 +5698,27 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
         return handle_local_error(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB, encountered error: ", e)
 
     try:
-        complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities, True)  # RAG response mode = True
+        complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities=chunk_entities, rag_response_mode=True)  # RAG response mode = True
     except Exception as e:
         return handle_local_error("Failed to extract entities and relationships from chunk entities, encountered error: ", e)
 
     try:
         merged_graph_rag_entities_and_relationships_dict = merge_chunk_entities_for_graph_rag(complete_chunk_entities)
     except Exception as e:
-        handle_error_no_return("Could not merge chunk entities for graph RAG, proceeding with original chunk_entities dict. Encountered error: ", e)
-        merged_graph_rag_entities_and_relationships_dict = complete_chunk_entities
+        return handle_local_error("Fatal error merging chunk entities for GraphRAG: ", e)
 
     try:
-        summarized_chunk_entities = get_summaries_from_graph_db(merged_graph_rag_entities_and_relationships_dict, selected_knowledge_domain, graph)
+        summarized_and_deduplicated_chunk_entities = get_summaries_from_graph_db(merged_graph_rag_entities_and_relationships_dict, selected_knowledge_domain, graph)
     except Exception as e:
         return handle_local_error("Could not store entities and relationships in graph DB, encountered error: ", e)
 
     try:
-        summary_report = get_summary_report(summarized_chunk_entities)
+        graph_rag_context_length_limit_chars = read_config(['graph_rag_context_length_limit_chars'])['graph_rag_context_length_limit_chars']
+        summary_report, reranked_summaries_list_descending = get_summary_report(summarized_and_deduplicated_chunk_entities, graph_rag_context_length_limit_chars, user_query)
     except Exception as e:
         return handle_local_error("Could not get summary report, encountered error: ", e)
 
-    return summary_report
+    return summary_report, reranked_summaries_list_descending
 
 
 def search_knowledge_base(user_query:str, embedding_function:str, perform_graph_rag:bool, force_enable_rag:bool, force_disable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int, ) -> tuple[list[Document], bool]:
@@ -5632,7 +5755,9 @@ def search_knowledge_base(user_query:str, embedding_function:str, perform_graph_
     graph_rag_context = None
     if perform_graph_rag:
         try:
-            graph_rag_context = execute_graph_rag(user_query, docs)
+            graph_rag_context, reranked_summaries_list_descending = execute_graph_rag(user_query, docs)
+            if reranked_summaries_list_descending != []:
+                return reranked_summaries_list_descending, do_rag, graph_rag_context
         except Exception as e:
             handle_error_no_return("Could not execute graph RAG, encountered error: ", e)
 
@@ -5912,15 +6037,15 @@ def get_sources_and_pages_for_get_references(docs: list[Document], llm_response:
         
         try:
             source_filename = os.path.basename(source_filepath)
-            _, file_extension = os.path.splitext(source_filepath)
+            source_filename_without_extension = os.path.splitext(source_filename)[0]
+            pdf_version_path = os.path.join(upload_folder, source_filename_without_extension + '.pdf')   # Construct the path to the potential PDF version.
         except Exception as e:
-            handle_error_no_return("Could not parse path with OS lib, encountered error: ", e)
+            handle_error_no_return("Could not parse source file path when getting sources and pages for get_references(), encountered error: ", e)
             continue
 
-        pdf_version_path = os.path.join(upload_folder, os.path.basename(source_filepath).replace('.txt', '.pdf'))   # not catching an error here as os.path.basename(source_filepath) has already been caught just above! Construct the path to the potential PDF version.
         if os.path.exists(pdf_version_path):
             #print("\n\pdf exists\n\n")
-            source_filename = source_filename.replace('.txt', '.pdf')
+            source_filename = source_filename_without_extension + '.pdf'
             
             if pdf_version_path in reference_pages:
                 reference_pages[pdf_version_path].extend([[relevant_page_text,relevant_page_number]])
@@ -5932,7 +6057,7 @@ def get_sources_and_pages_for_get_references(docs: list[Document], llm_response:
                 all_sources.update({source_filename: source_filepath})
 
         else:
-            print("\n\nNo PDF source doc found (TXT Source) in the 'uploaded_pdfs' dir, RAG ACTIVE BUT REFERENCING WILL NOT DISPLAY!\n\n")
+            print(f"\n\nCould not find source doc at {pdf_version_path}, RAG ACTIVE BUT REFERENCING WILL NOT DISPLAY!\n\n")
             if source_filename not in all_sources: # Do not duplicate if the TXT file is already in the sources dict
                 try:
                     source_filepath = os.path.join(upload_folder, source_filename) # reconstructed path using the OS module just to be safe
