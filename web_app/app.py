@@ -5248,9 +5248,7 @@ def extract_content_source_and_page_data_from_summary_text(summary_text: str) ->
         
         page_pattern = r'{Page Number\(s\): \[(.*?)\]}'
         page_match = re.search(page_pattern, summary_text)
-        #pages = page_match.group(1) if page_match else ""
-        if page_match:
-            # Convert string representation of list to actual list of integers
+        if page_match:  # Convert string representation of list to actual list of integers
             pages_str = page_match.group(1)
             pages = [int(p.strip()) for p in pages_str.split(',')]
         else:
