@@ -220,3 +220,38 @@ def manually_format_prompt_with_prompt_template(formatted_prompt:str, user_query
             formatted_prompt += f"{base_template}\nUser: {user_query}\nAssistant: "
 
     return formatted_prompt
+
+
+def append_eot_token_to_llm_response(local_llm_chat_template_format: str, llm_response: str) -> str:
+    if local_llm_chat_template_format == 'llama3':
+        return f"{llm_response}<|eot_id|>"
+    elif local_llm_chat_template_format == 'llama2':
+        return f"{llm_response} </s>\n"
+    elif local_llm_chat_template_format == 'chatml':
+        return f"{llm_response}<|im_end|>\n"
+    elif local_llm_chat_template_format == 'qwen-chatml':
+        return f"{llm_response}<|im_end|>\n"
+    elif local_llm_chat_template_format == 'phi3':
+        return f"{llm_response}<|end|>\n"
+    elif local_llm_chat_template_format == 'phi4':
+        return f"{llm_response}<|im_end|>\n"
+    elif local_llm_chat_template_format == 'command-r':
+        return f"{llm_response}<|END_OF_TURN_TOKEN|>"
+    elif local_llm_chat_template_format == 'deepseek':
+        return f"{llm_response}\n\n"
+    elif local_llm_chat_template_format == 'deepseek-coder-v2':
+        return f"{llm_response}<|end_of_sentence|>"
+    elif local_llm_chat_template_format == 'vicuna':
+        return f"{llm_response} </s>\n"
+    elif local_llm_chat_template_format == 'openchat':
+        return f"{llm_response}<|end_of_turn|>"
+    elif local_llm_chat_template_format == 'gemma2':
+        return f"{llm_response}<end_of_turn>\n"
+    elif local_llm_chat_template_format == 'mistral-small-v7':
+        return f"{llm_response}</s>"
+    elif local_llm_chat_template_format == 'mistral-large-v7':
+        return f"{llm_response}</s>"
+    elif local_llm_chat_template_format == 'raw':
+        return f"{llm_response}\n"
+    else:
+        return False
