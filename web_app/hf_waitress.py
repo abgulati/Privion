@@ -2310,10 +2310,24 @@ def exl2_stream():
             stop_thread.set()
 
     def generate():
+
+        global STOP_GENERATION
+        STOP_GENERATION = False
+
+        thread = threading.Thread(target=llm_task)
+        thread.start()
+
         while True:
+            if STOP_GENERATION:
+                print("\n\nStopping generation with stop_event\n\n")
+                output_queue.put(None)
+                STOP_GENERATION = False
+                thread.join()
+            
             line = output_queue.get()
             if line is None:
                 print("\nNone read, breaking and stopping thread\n")
+                thread.join()
                 break
             yield f"data: {json.dumps(line)}\n\n"
         
@@ -2325,9 +2339,6 @@ def exl2_stream():
             handle_error_no_return("Could not empty CUDA cache after ExLlamaV2 cleanup, encountered error: ", e)
 
         print("\n/exl2_stream done\n")
-
-    thread = threading.Thread(target=llm_task)
-    thread.start()
 
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
