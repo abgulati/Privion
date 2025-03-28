@@ -5807,10 +5807,11 @@ def setup_for_local_llm_response():
         write_config({'do_rag':do_rag})
         if do_rag:    # Add similarity search results for RAG if necessary!
             QUERIES[key_for_vector_results] = docs
+            user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference useful documents by name and specific page numbers in your response:\n"
             if graph_rag_context is not None:
-                user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference useful documents by name and specific page numbers in your response:\n{graph_rag_context}"
+                user_query += f"{graph_rag_context}"
             else:
-                user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference useful documents by name and specific page numbers in your response:\n{docs}"
+                user_query += f"{docs}"
     except Exception as e:
         reject_rag()
         handle_error_no_return("Could not write do_rag or prepare RAG context during setup_for_streaming_response, encountered error: ", e)
@@ -6033,22 +6034,8 @@ def get_sources_and_pages_for_get_references(docs: list[Document], llm_response:
 
 
 def get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc: dict[str, list[list[str]]], stream_session_id: str, is_graph_rag: bool) -> tuple[str, str]:
-    if is_graph_rag:
-
-        refer_pages_string = "<br><h6>Additional data may be found in the following documents:</h6>"
-        
-        for index, doc in enumerate(user_should_refer_pages_in_doc, start=1):
-            pdf_iframe_id = f"stream{stream_session_id}PdfViewer{str(index)}"
-            tab_name_string = f"stream{stream_session_id}tabName{str(index)}"
-            frame_doc_path = f"/pdf/{doc}"
-            try:
-                stream_id_string_to_remove = f"_{stream_session_id}"
-                doc_name_without_stream_id = str(doc).replace(stream_id_string_to_remove, "")
-                refer_pages_string += f"<br><h6>{doc_name_without_stream_id}</h6>"
-            except Exception as e:
-                handle_error_no_return("Could not construct refer_pages_string, encountered error: ", e)
-
-    else:
+    refer_pages_string = ""
+    if not is_graph_rag:
         refer_pages_string = "<br><h6>Additional data may be found in the following documents & pages:</h6>"
         
         for index, doc in enumerate(user_should_refer_pages_in_doc, start=1):
@@ -6088,7 +6075,7 @@ def get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc: dict[
             pdf_iframe_id = f"stream{stream_session_id}PdfViewer{str(index)}"
             tab_name_string = f"stream{stream_session_id}tabName{str(index)}"
             download_link_html += f'<div id="tab{tab_name_string}" class="tab-content" stream-session-id="{stream_session_id}">'
-            download_link_html += f'<iframe id="{pdf_iframe_id}" src="{download_link_url}" width="100%" height="600"></iframe>'
+            download_link_html += f'<iframe class="citations-pdf-iframe" id="{pdf_iframe_id}" src="{download_link_url}"></iframe>'
             download_link_html += "</div>"
         except Exception as e:
             handle_error_no_return("Could not construct download_link_html, encountered error: ", e)
