@@ -62,7 +62,7 @@ except Exception as e:
     print(f"Could not import graph_clustering (likely not installed), skipping. Encountered error: {e}")
 
 try:
-    from prompt_formatting import manually_format_prompt_with_prompt_template
+    from prompt_formatting import manually_format_prompt_with_prompt_template, append_eot_token_to_llm_response
 except ImportError:
     print("WARNING: Prompt Formatter module `prompt_formatting.py` is not present. Skipping import. Exl2 and llama.cpp will not work!")
 
@@ -331,7 +331,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'launch_graph_db_with_ui':True,
                 'apply_clustering_to_graph_db_on_doc_load': False,
                 'graph_model_max_new_tokens':4096,
-                'graph_model_max_seq_len':20480,
+                'graph_model_max_seq_len':15360,
                 'graph_model_temperature':0.1,
                 'graph_model_do_sample':True,
                 'graph_model_top_k':40,
@@ -5808,9 +5808,9 @@ def setup_for_local_llm_response():
         if do_rag:    # Add similarity search results for RAG if necessary!
             QUERIES[key_for_vector_results] = docs
             if graph_rag_context is not None:
-                user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference useful documents by name in your response:\n{graph_rag_context}"
+                user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference useful documents by name and specific page numbers in your response:\n{graph_rag_context}"
             else:
-                user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference it in your response by name and page number:\n{docs}"
+                user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference useful documents by name and specific page numbers in your response:\n{docs}"
     except Exception as e:
         reject_rag()
         handle_error_no_return("Could not write do_rag or prepare RAG context during setup_for_streaming_response, encountered error: ", e)
@@ -5922,16 +5922,17 @@ def filter_all_citations(docs: list[Document], llm_response: str, return_top_k: 
     return all_docs
 
 
-def read_config_for_get_references() -> tuple[str, str, str, bool, bool, str]:
+def read_config_for_get_references() -> tuple[str, str, str, bool, bool, str, bool]:
     try:
-        read_return = read_config(['local_llm_server', 'upload_folder', 'local_llm_chat_template_format', 'llm_filter_citations', 'force_enable_rag', 'exl2_prompt_template_format'])
+        read_return = read_config(['local_llm_server', 'upload_folder', 'local_llm_chat_template_format', 'llm_filter_citations', 'force_enable_rag', 'exl2_prompt_template_format', 'perform_graph_rag'])
         local_llm_server = read_return['local_llm_server']
         upload_folder = read_return['upload_folder']
         local_llm_chat_template_format = read_return['local_llm_chat_template_format']
         llm_filter_citations = read_return['llm_filter_citations']
         force_enable_rag = read_return['force_enable_rag']
         exl2_prompt_template_format = read_return['exl2_prompt_template_format']
-        return local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations, force_enable_rag, exl2_prompt_template_format
+        perform_graph_rag = str(read_return['perform_graph_rag']).lower() == 'true'
+        return local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations, force_enable_rag, exl2_prompt_template_format, perform_graph_rag
     except Exception as e:
         return handle_local_error("Could not read config.json in method read_config_for_get_references(), encountered error: ", e)
 
@@ -5958,41 +5959,6 @@ def get_vector_results_for_get_references(stream_session_id: str) -> tuple[list[
         return docs, docs is not None
     except Exception as e:
         return handle_local_error("Could not get vector results for stream_session_id in method get_vector_results_for_get_references(), encountered error: ", e)
-
-
-def get_llama_cpp_formatted_user_prompt(local_llm_chat_template_format: str, llm_response: str) -> str:
-    if local_llm_chat_template_format == 'llama3':
-        return f"{llm_response}<|eot_id|>"
-    elif local_llm_chat_template_format == 'llama2':
-        return f"{llm_response} </s>\n"
-    elif local_llm_chat_template_format == 'chatml':
-        return f"{llm_response}<|im_end|>\n"
-    elif local_llm_chat_template_format == 'qwen-chatml':
-        return f"{llm_response}<|im_end|>\n"
-    elif local_llm_chat_template_format == 'phi3':
-        return f"{llm_response}<|end|>\n"
-    elif local_llm_chat_template_format == 'phi4':
-        return f"{llm_response}<|im_end|>\n"
-    elif local_llm_chat_template_format == 'command-r':
-        return f"{llm_response}<|END_OF_TURN_TOKEN|>"
-    elif local_llm_chat_template_format == 'deepseek':
-        return f"{llm_response}\n\n"
-    elif local_llm_chat_template_format == 'deepseek-coder-v2':
-        return f"{llm_response}<|end_of_sentence|>"
-    elif local_llm_chat_template_format == 'vicuna':
-        return f"{llm_response} </s>\n"
-    elif local_llm_chat_template_format == 'openchat':
-        return f"{llm_response}<|end_of_turn|>"
-    elif local_llm_chat_template_format == 'gemma2':
-        return f"{llm_response}<end_of_turn>\n"
-    elif local_llm_chat_template_format == 'mistral-small-v7':
-        return f"{llm_response}</s>"
-    elif local_llm_chat_template_format == 'mistral-large-v7':
-        return f"{llm_response}</s>"
-    elif local_llm_chat_template_format == 'raw':
-        return f"{llm_response}\n"
-    else:
-        return False
 
 
 def determine_if_flux_diffusers_is_enabled() -> bool:
@@ -6066,25 +6032,42 @@ def get_sources_and_pages_for_get_references(docs: list[Document], llm_response:
     return all_sources, reference_pages
 
 
-def get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc: dict[str, list[list[str]]], stream_session_id: str) -> tuple[str, str]:
-    refer_pages_string = "<br><h6>Additional data may be found in the following documents & pages:</h6>"
-    
-    for index, doc in enumerate(user_should_refer_pages_in_doc, start=1):
-        pdf_iframe_id = f"stream{stream_session_id}PdfViewer{str(index)}"
-        tab_name_string = f"stream{stream_session_id}tabName{str(index)}"
-        frame_doc_path = f"/pdf/{doc}"
-        try:
-            stream_id_string_to_remove = f"_{stream_session_id}"
-            doc_name_without_stream_id = str(doc).replace(stream_id_string_to_remove, "")
-            refer_pages_string += f"<br><h6>{doc_name_without_stream_id}: "
-            for page in user_should_refer_pages_in_doc[doc]:
-                frame_doc_path += f"#page={str(page)}" 
-                refer_pages_string += f'<a href="javascript:void(0)" onclick="goToPageAndSwitchTab(\'{pdf_iframe_id}\', \'{frame_doc_path}\', \'tab{tab_name_string}\', \'{stream_session_id}\')">Page {page}</a>, '
-                frame_doc_path = f"/pdf/{doc}"
-            refer_pages_string = refer_pages_string.strip(', ') + "</h6>"
-        except Exception as e:
-            handle_error_no_return("Could not construct refer_pages_string, encountered error: ", e)
+def get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc: dict[str, list[list[str]]], stream_session_id: str, is_graph_rag: bool) -> tuple[str, str]:
+    if is_graph_rag:
 
+        refer_pages_string = "<br><h6>Additional data may be found in the following documents:</h6>"
+        
+        for index, doc in enumerate(user_should_refer_pages_in_doc, start=1):
+            pdf_iframe_id = f"stream{stream_session_id}PdfViewer{str(index)}"
+            tab_name_string = f"stream{stream_session_id}tabName{str(index)}"
+            frame_doc_path = f"/pdf/{doc}"
+            try:
+                stream_id_string_to_remove = f"_{stream_session_id}"
+                doc_name_without_stream_id = str(doc).replace(stream_id_string_to_remove, "")
+                refer_pages_string += f"<br><h6>{doc_name_without_stream_id}</h6>"
+            except Exception as e:
+                handle_error_no_return("Could not construct refer_pages_string, encountered error: ", e)
+
+    else:
+        refer_pages_string = "<br><h6>Additional data may be found in the following documents & pages:</h6>"
+        
+        for index, doc in enumerate(user_should_refer_pages_in_doc, start=1):
+            pdf_iframe_id = f"stream{stream_session_id}PdfViewer{str(index)}"
+            tab_name_string = f"stream{stream_session_id}tabName{str(index)}"
+            frame_doc_path = f"/pdf/{doc}"
+            try:
+                stream_id_string_to_remove = f"_{stream_session_id}"
+                doc_name_without_stream_id = str(doc).replace(stream_id_string_to_remove, "")
+                refer_pages_string += f"<br><h6>{doc_name_without_stream_id}: "
+                for page in user_should_refer_pages_in_doc[doc]:
+                    frame_doc_path += f"#page={str(page)}" 
+                    refer_pages_string += f'<a href="javascript:void(0)" onclick="goToPageAndSwitchTab(\'{pdf_iframe_id}\', \'{frame_doc_path}\', \'tab{tab_name_string}\', \'{stream_session_id}\')">Page {page}</a>, '
+                    frame_doc_path = f"/pdf/{doc}"
+                refer_pages_string = refer_pages_string.strip(', ') + "</h6>"
+            except Exception as e:
+                handle_error_no_return("Could not construct refer_pages_string, encountered error: ", e)
+
+    
     pdf_right_pane_id = f"stream{stream_session_id}PdfPane"
     download_link_html = f'<div class="pdf-viewer-container" id="{pdf_right_pane_id}">'
 
@@ -6129,7 +6112,7 @@ def get_references():
     print("\n\nStoring History Post-Response -- Determining if Citations are Necessary\n\n")
 
     try:
-        local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations, force_enable_rag, exl2_prompt_template_format = read_config_for_get_references()
+        local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations, force_enable_rag, exl2_prompt_template_format, perform_graph_rag = read_config_for_get_references()
         exl2 = read_hf_config(['exl2'])['exl2']
     except Exception as e:
         return handle_api_error("Missing values in config.json when attempting to get_references. Error: ", e)
@@ -6146,7 +6129,7 @@ def get_references():
         handle_error_no_return("Error determining if RAG was used in method get_references - Could not check the QUERIES dict. Proceeding without RAG. Encountered error: ", e)
 
     if local_llm_server == 'llama-cpp':
-        formatted_user_prompt += get_llama_cpp_formatted_user_prompt(local_llm_chat_template_format, llm_response)
+        formatted_user_prompt += append_eot_token_to_llm_response(local_llm_chat_template_format, llm_response)
     elif local_llm_server == 'hf-waitress':
         local_llm_chat_template_format = "hf-transformers"
         flux_diffusers = determine_if_flux_diffusers_is_enabled()
@@ -6154,7 +6137,7 @@ def get_references():
             do_rag = False
         else:
             if exl2:
-                formatted_user_prompt += get_llama_cpp_formatted_user_prompt(exl2_prompt_template_format, llm_response)
+                formatted_user_prompt += append_eot_token_to_llm_response(exl2_prompt_template_format, llm_response)
             else:
                 formatted_user_prompt = get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response)
 
@@ -6188,7 +6171,7 @@ def get_references():
     download_link_html = ""
     if docs_have_relevant_info:
         try:
-            reference_response, download_link_html = get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc, stream_session_id)
+            reference_response, download_link_html = get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc, stream_session_id, perform_graph_rag)
         except Exception as e:
             handle_error_no_return("Could not get refer_pages_string and download_link_html, encountered error: ", e)
     
