@@ -512,6 +512,7 @@ body {
 .response-and-viewer-container {
     display: flex;
     margin-bottom: 33px;
+    min-height: 500px;  /*Add a minimum height to ensure the container is visible*/
 }
 
 .pdf-viewer {
@@ -1065,12 +1066,19 @@ body {
     /* height: 750px; */
     padding: 10px;
     padding-right: 7px;
+    flex: 1;
+    box-sizing: border-box;
+    display: flex;  /* Make this a flex container */
+    flex-direction: column;  /* Stack children vertically */
 }
 
 .tab-buttons {
     overflow: hidden;
     border: 1px solid #3A3E41; /*darkslategray;*/
     background-color: transparent;
+    display: flex;
+    overflow-x: auto;
+    flex-shrink: 0;  /* Prevent the tab buttons from shrinking */
 }
 
 .tab-button {
@@ -1099,6 +1107,14 @@ body {
     padding: 6px 12px;
     border: 1px solid #3A3E41; /*darkslategray;*/
     border-top: none;
+    flex: 1;    /* Take up remaining space */
+    overflow-y: auto;   /* Enable vertical scrolling if content exceeds height */
+}
+
+.citations-pdf-iframe {
+    width: 100%;
+    height: 100%;
+    display: block;     /* Ensure iframe behaves as a block-level element */
 }
 
 .hf-waitress-llm-custom-select,
