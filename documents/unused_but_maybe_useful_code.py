@@ -3505,3 +3505,20 @@ try:
     doc_object_as_dictionary_list = convert_doc_object_to_dictionary_list(docs)
 except Exception as e:
     return handle_local_error("Could not get doc object dict, encountered error: ", e)
+
+
+
+    if is_graph_rag:
+
+        refer_pages_string = "<br><h6>Additional data may be found in the following documents:</h6>"
+        
+        for index, doc in enumerate(user_should_refer_pages_in_doc, start=1):
+            pdf_iframe_id = f"stream{stream_session_id}PdfViewer{str(index)}"
+            tab_name_string = f"stream{stream_session_id}tabName{str(index)}"
+            frame_doc_path = f"/pdf/{doc}"
+            try:
+                stream_id_string_to_remove = f"_{stream_session_id}"
+                doc_name_without_stream_id = str(doc).replace(stream_id_string_to_remove, "")
+                refer_pages_string += f"<br><h6>{doc_name_without_stream_id}</h6>"
+            except Exception as e:
+                handle_error_no_return("Could not construct refer_pages_string, encountered error: ", e)
