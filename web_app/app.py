@@ -6124,6 +6124,12 @@ def get_references():
             do_rag = False
         else:
             if exl2:
+                if perform_graph_rag:
+                    try:
+                        last_context_index = formatted_user_prompt.rindex("The following context might be helpful in answering the user query above.")
+                        formatted_user_prompt = formatted_user_prompt[:last_context_index]
+                    except Exception as e:
+                        handle_error_no_return("Trimming RAG context unnecessary, skipping. Encountered error: ", e)
                 formatted_user_prompt += append_eot_token_to_llm_response(exl2_prompt_template_format, llm_response)
             else:
                 formatted_user_prompt = get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response)
