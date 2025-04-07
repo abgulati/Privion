@@ -54,6 +54,8 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
         - [1. Build Tools](https://github.com/abgulati/LARS?tab=readme-ov-file#1-build-tools)
         - [2. llama.cpp](https://github.com/abgulati/LARS?tab=readme-ov-file#2-llamacpp)
     - [Nvidia CUDA (if supported Nvidia GPU present)](https://github.com/abgulati/LARS?tab=readme-ov-file#nvidia-cuda-if-supported-nvidia-gpu-present)
+    - [Flash-Attention 2](https://github.com/abgulati/LARS?tab=readme-ov-file#flash-attention-2)
+    - [ExLlamaV2](https://github.com/abgulati/LARS?tab=readme-ov-file#exllamav2)
     - [LibreOffice](https://github.com/abgulati/LARS?tab=readme-ov-file#libreoffice)
     - [Poppler](https://github.com/abgulati/LARS?tab=readme-ov-file#poppler)
     - [PyTesseract (optional)](https://github.com/abgulati/LARS?tab=readme-ov-file#pytesseract-optional)
@@ -223,18 +225,124 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
 - Install Nvidia [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archive) - LARS built and tested with v12.2 and v12.4
 
 - Verify Installation via the terminal:
-    ```
-    nvcc -V
-    nvidia-smi
-    ```
 
-- CMAKE-CUDA Fix (Very Important!):
+    - Basic Check:
+        ```
+        nvcc -V
+        nvidia-smi
+        ```
+
+    - Compile a test program to say Hello World:
+
+        - Save the following as `hello.cu`:
+            ```
+            #include <stdio.h>
+            #include <cuda_runtime.h>
+
+            __global__ void helloCUDA()
+            {
+                printf("Hello from the GPU!\n");
+            }
+
+            int main()
+            {
+                printf("Starting CUDA program...\n");
+                
+                int deviceCount;
+                cudaGetDeviceCount(&deviceCount);
+                printf("Number of CUDA devices: %d\n", deviceCount);
+                
+                if (deviceCount > 0) {
+                    helloCUDA<<<1, 1>>>();
+                    cudaDeviceSynchronize();
+                    
+                    cudaError_t error = cudaGetLastError();
+                    if (error != cudaSuccess) {
+                        printf("CUDA error: %s\n", cudaGetErrorString(error));
+                    }
+                }
+                
+                printf("CUDA program finished.\n");
+                return 0;
+            }
+            ```
+
+        - Add cl.exe to PATH (exact path may differ slightly on your setup, use the following as a guideline): `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.43.34808\bin\Hostx64\x64`
+
+        - Open a terminal in the same directory and compile the program: `nvcc hello.cu -o hello`
+
+        - As it finishes compilation, you should see an output akin to the below:
+            ```
+            hello.cu
+            tmpxft_0000579c_00000000-10_hello.cudafe1.cpp
+            Creating library hello.lib and object hello.exp
+            ```
+
+        - Run: `./hello`
+
+        - The output should be the following:
+            ```
+            Starting CUDA program...
+            Number of CUDA devices: 1
+            Hello from the GPU!
+            CUDA program finished.
+        ```
+
+        - Done & done!
+
+- For CMake CUDA compilation, implement the below CMAKE-CUDA Fix too (Very Important!):
 
     Copy all the four files from the following directory:   
     ```C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.2\extras\visual_studio_integration\MSBuildExtensions```
     
     and Paste them to the following directory:   
     ```C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Microsoft\VC\v170\BuildCustomizations```
+
+
+### Flash-Attention 2:
+
+- Flash-Attention 2 is used to reduce the memory footprint of a model's KV-Cache context space, and speed up inferencing.
+
+- It has the following pre-:
+    ```
+    - CUDA toolkit or ROCm toolkit
+    - PyTorch 2.2 and above.
+    - packaging Python package (pip install packaging)
+    - ninja Python package (pip install ninja) *
+    ```
+
+    * Make sure that ninja is installed and that it works correctly (e.g. ninja --version then echo $? should return exit code 0). If not (sometimes ninja --version then echo $? returns a nonzero exit code), uninstall then reinstall ninja (pip uninstall -y ninja && pip install ninja). Without ninja, compiling can take a very long time (2h) since it does not use multiple CPU cores. With ninja compiling takes 3-5 minutes on a 64-core machine using CUDA toolkit.
+
+- To install, you can either:
+
+    1. Clone the repository:
+        ```
+        git clone https://github.com/Dao-AILab/flash-attention.git
+        cd flash-attention
+        pip install . --no-build-isolation
+        ```
+
+    2. Install directly via PIP:
+        ```
+        pip install flash-attn --no-build-isolation
+        ```
+
+
+### ExLlamaV2:
+
+- ExLlama is a highly optimized LLM inference library optimized for Nvidia GPUs
+
+- It attempts to utilize Flash-Attention (v2.5.7+) by default so do install that before ExLlama (see above)
+
+- Since HF-Waitress includes full management of ExLlama, including the downloading and quantization of models and saving of measurements for each model processed, it's required to clone the ExLlamav2 repo into the LARS `web_app` dir:
+    ```
+    cd LARS-Enterprise/web_app
+    git clone https://github.com/turboderp-org/exllamav2.git
+    cd exllamav2
+    pip install .
+    ```
+
+- There's no need to `pip install` the dependencies in the requirements.txt within the ExLlamaV2 dir as these are included in LARS's requirements.txt already
 
 
 ### LibreOffice:
