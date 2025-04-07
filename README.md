@@ -43,36 +43,36 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
 
 ## Table of Contents
 
-1. [LARS - The LLM & Advanced Referencing Solution](https://github.com/abgulati/LARS?tab=readme-ov-file#lars---the-llm--advanced-referencing-solution)
-    - [Detailed list of LARS's feature-set](https://github.com/abgulati/LARS?tab=readme-ov-file#heres-a-list-detailing-larss-feature-set-as-it-stands-today)
-    - [A demonstration video showcasing these features](https://github.com/abgulati/LARS?tab=readme-ov-file#a-demonstration-video-showcasing-these-features-can-be-viewed-at-the-link-below)
-2. [Dependencies](https://github.com/abgulati/LARS?tab=readme-ov-file#dependencies)
-3. [Installing LARS](https://github.com/abgulati/LARS?tab=readme-ov-file#installing-lars)
-4. [Usage - First Run](https://github.com/abgulati/LARS?tab=readme-ov-file#usage---first-run)
-5. [Optional Dependencies](https://github.com/abgulati/LARS?tab=readme-ov-file#optional-dependencies)
-    - [llama.cpp - Installation Instructions](https://github.com/abgulati/LARS?tab=readme-ov-file#llamacpp---installation-instructions)
-        - [1. Build Tools](https://github.com/abgulati/LARS?tab=readme-ov-file#1-build-tools)
-        - [2. llama.cpp](https://github.com/abgulati/LARS?tab=readme-ov-file#2-llamacpp)
-    - [Nvidia CUDA (if supported Nvidia GPU present)](https://github.com/abgulati/LARS?tab=readme-ov-file#nvidia-cuda-if-supported-nvidia-gpu-present)
-    - [Flash-Attention 2](https://github.com/abgulati/LARS?tab=readme-ov-file#flash-attention-2)
-    - [ExLlamaV2](https://github.com/abgulati/LARS?tab=readme-ov-file#exllamav2)
-    - [LibreOffice](https://github.com/abgulati/LARS?tab=readme-ov-file#libreoffice)
-    - [Poppler](https://github.com/abgulati/LARS?tab=readme-ov-file#poppler)
-    - [PyTesseract (optional)](https://github.com/abgulati/LARS?tab=readme-ov-file#pytesseract-optional)
-6. [Troubleshooting Installation Issues](https://github.com/abgulati/LARS?tab=readme-ov-file#troubleshooting-installation-issues)
-    - [Python Issues](https://github.com/abgulati/LARS?tab=readme-ov-file#python-issues)
-    - [Other Issues](https://github.com/abgulati/LARS?tab=readme-ov-file#other-issues)
-7. [First Run with llama.cpp](https://github.com/abgulati/LARS?tab=readme-ov-file#first-run-with-llamacpp)
-8. [General User Guide - Post First-Run Steps](https://github.com/abgulati/LARS?tab=readme-ov-file#general-user-guide---post-first-run-steps)
-9. [Troubleshooting](https://github.com/abgulati/LARS?tab=readme-ov-file#troubleshooting)
-10. [Docker - Deploying Containerized LARS](https://github.com/abgulati/LARS?tab=readme-ov-file#docker---deploying-containerized-lars)
-    - [Background and Setup](https://github.com/abgulati/LARS?tab=readme-ov-file#background-and-setup)
-    - [Building & Running the CPU-Inferencing Container](https://github.com/abgulati/LARS?tab=readme-ov-file#building--running-the-cpu-inferencing-container)
-    - [Building & Running the Nvidia-CUDA GPU-Enabled Container](https://github.com/abgulati/LARS?tab=readme-ov-file#building--running-the-nvidia-cuda-gpu-enabled-container)
-    - [Special Note for Containers - Troubleshooting Networking Issues and Errors on First Run](https://github.com/abgulati/LARS?tab=readme-ov-file#special-note-for-containers---troubleshooting-networking-issues-and-errors-on-first-run)
-    - [Special Note for Containers - Updating the Container Image Post-First-Run](https://github.com/abgulati/LARS?tab=readme-ov-file#special-note-for-containers---updating-the-container-image-post-first-run)
-11. [Current Development Roadmap](https://github.com/abgulati/LARS?tab=readme-ov-file#current-development-roadmap)
-12. [Support and Donations](https://github.com/abgulati/LARS?tab=readme-ov-file#support-and-donations)
+1. [LARS - The LLM & Advanced Referencing Solution](https://github.com/abgulati/LAR-Enterprise?tab=readme-ov-file#lars---the-llm--advanced-referencing-solution)
+    - [Detailed list of LARS's feature-set](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#heres-a-list-detailing-larss-feature-set-as-it-stands-today)
+    - [A demonstration video showcasing these features](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#a-demonstration-video-showcasing-these-features-can-be-viewed-at-the-link-below)
+2. [Dependencies](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#dependencies)
+3. [Installing LARS](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#installing-lars)
+4. [Usage - First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#usage---first-run)
+5. [Optional Dependencies](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#optional-dependencies)
+    - [llama.cpp - Installation Instructions](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#llamacpp---installation-instructions)
+        - [1. Build Tools](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#1-build-tools)
+        - [2. llama.cpp](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#2-llamacpp)
+    - [Nvidia CUDA (if supported Nvidia GPU present)](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#nvidia-cuda-if-supported-nvidia-gpu-present)
+    - [Flash-Attention 2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#flash-attention-2)
+    - [ExLlamaV2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#exllamav2)
+    - [LibreOffice](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#libreoffice)
+    - [Poppler](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#poppler)
+    - [PyTesseract (optional)](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#pytesseract-optional)
+6. [Troubleshooting Installation Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting-installation-issues)
+    - [Python Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#python-issues)
+    - [Other Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#other-issues)
+7. [First Run with llama.cpp](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#first-run-with-llamacpp)
+8. [General User Guide - Post First-Run Steps](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#general-user-guide---post-first-run-steps)
+9. [Troubleshooting](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting)
+10. [Docker - Deploying Containerized LARS](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#docker---deploying-containerized-lars)
+    - [Background and Setup](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#background-and-setup)
+    - [Building & Running the CPU-Inferencing Container](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#building--running-the-cpu-inferencing-container)
+    - [Building & Running the Nvidia-CUDA GPU-Enabled Container](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#building--running-the-nvidia-cuda-gpu-enabled-container)
+    - [Special Note for Containers - Troubleshooting Networking Issues and Errors on First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#special-note-for-containers---troubleshooting-networking-issues-and-errors-on-first-run)
+    - [Special Note for Containers - Updating the Container Image Post-First-Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#special-note-for-containers---updating-the-container-image-post-first-run)
+11. [Current Development Roadmap](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#current-development-roadmap)
+12. [Support and Donations](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#support-and-donations)
 
 
 ## Dependencies
@@ -115,7 +115,7 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
         pip3 install -r ./requirements_mac.txt
         ```
 
-[Back to Table of Contents](https://github.com/abgulati/LARS?tab=readme-ov-file#table-of-contents)
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
 
 ## Usage - First Run
@@ -134,7 +134,7 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
 
 - On first-query, an embedding model (all-mpnet-base-v2) will be downloaded from HuggingFace Hub, which should take a brief time
 
-[Back to Table of Contents](https://github.com/abgulati/LARS?tab=readme-ov-file#table-of-contents)
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
 
 ## Optional Dependencies
@@ -439,7 +439,7 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
             Set PATH=%PATH%;C:\Program Files\Tesseract-OCR
             ```
 
-[Back to Table of Contents](https://github.com/abgulati/LARS?tab=readme-ov-file#table-of-contents)
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
 
 ## Troubleshooting Installation Issues
@@ -604,14 +604,14 @@ This typically indicates an issue with your Microsoft Visual Studio build tools,
 
 - LARS will also remember your LLM settings for subsequent use
 
-[Back to Table of Contents](https://github.com/abgulati/LARS?tab=readme-ov-file#table-of-contents)
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
 
 ## General User Guide - Post First-Run Steps
 
 1. Document Formats Supported:
 
-    - If LibreOffice is installed and added to PATH as detailed in Step 4 of the [Dependencies](https://github.com/abgulati/LARS?tab=readme-ov-file#dependencies) section, the following formats are supported:
+    - If LibreOffice is installed and added to PATH as detailed in Step 4 of the [Dependencies](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#dependencies) section, the following formats are supported:
 
         - PDFs
         - Word files: doc, docx, odt, rtf, txt
@@ -733,7 +733,7 @@ This typically indicates an issue with your Microsoft Visual Studio build tools,
 
     - Do NOT tweak any settings or submit additional queries while a response to a query is already being generated! Wait for any ongoing response generation to complete.
 
-[Back to Table of Contents](https://github.com/abgulati/LARS?tab=readme-ov-file#table-of-contents)
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
 
 ## Troubleshooting
@@ -742,14 +742,14 @@ This typically indicates an issue with your Microsoft Visual Studio build tools,
 
 - Alternatively, start a new chat by simply refreshing the page
 
-- If issues are faced with citations or RAG performance, try resetting the vectorDB as described in Step 4 of the [General User Guide](https://github.com/abgulati/LARS?tab=readme-ov-file#general-user-guide---post-first-run-steps) above
+- If issues are faced with citations or RAG performance, try resetting the vectorDB as described in Step 4 of the [General User Guide](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#general-user-guide---post-first-run-steps) above
 
 - If any application issues crop up and are not resolved simply by starting a new chat or restarting LARS, try deleting the config.json file by following the steps below:
 
     - Shut-down the LARS app server by terminating the Python program with ```CTRL+C```
     - Backup and delete the ```config.json``` file located in ```LARS/web_app``` (same directory as ```app.py```)
 
-- For any severe data and citation issues that are not resolved even by resetting the VectorDB as described in Step 4 of the [General User Guide](https://github.com/abgulati/LARS?tab=readme-ov-file#general-user-guide---post-first-run-steps) above, perform the following steps:
+- For any severe data and citation issues that are not resolved even by resetting the VectorDB as described in Step 4 of the [General User Guide](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#general-user-guide---post-first-run-steps) above, perform the following steps:
 
     - Shut-down the LARS app server by terminating the Python program with ```CTRL+C```
     - Backup and delete the entire app directory:
@@ -759,7 +759,7 @@ This typically indicates an issue with your Microsoft Visual Studio build tools,
 
 - If problems persist, consider opening an issue on the [LARS GitHub repository](https://github.com/abgulati/LARS/issues) for support.
 
-[Back to Table of Contents](https://github.com/abgulati/LARS?tab=readme-ov-file#table-of-contents)
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
 
 ## Docker - Deploying Containerized LARS
@@ -825,13 +825,13 @@ This typically indicates an issue with your Microsoft Visual Studio build tools,
     docker run -p 5000:5000 -p 8080:8080 -v lars_storage:/app/storage lars-no-gpu
     ```
 
-- Once done, Navigate to ```http://localhost:5000/``` in your browser and follow the remainder of the [First Run Steps](https://github.com/abgulati/LARS?tab=readme-ov-file#first-run---important-steps-for-first-time-setup) and [User Guide](https://github.com/abgulati/LARS?tab=readme-ov-file#general-user-guide---post-first-run-steps)
+- Once done, Navigate to ```http://localhost:5000/``` in your browser and follow the remainder of the [First Run Steps](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#first-run---important-steps-for-first-time-setup) and [User Guide](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#general-user-guide---post-first-run-steps)
 
-- The [Troubleshooting](https://github.com/abgulati/LARS?tab=readme-ov-file#troubleshooting) sections applies to Container-LARS as well
+- The [Troubleshooting](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting) sections applies to Container-LARS as well
 
 ### Building & Running the Nvidia-CUDA GPU-Enabled Container
 
-- Requirements (in addition to [Docker](https://github.com/abgulati/LARS?tab=readme-ov-file#background-and-setup)):
+- Requirements (in addition to [Docker](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#background-and-setup)):
 
     ```
     Compatible Nvidia GPU(s)
@@ -853,7 +853,7 @@ This typically indicates an issue with your Microsoft Visual Studio build tools,
         Windows Subsystem for Linux (WSL)
         ```
 
-    - Refer to the [Nvidia CUDA Dependencies section](https://github.com/abgulati/LARS?tab=readme-ov-file#2-nvidia-cuda-if-supported-nvidia-gpu-present) and the [Docker Setup section](https://github.com/abgulati/LARS?tab=readme-ov-file#background-and-setup) above if unsure
+    - Refer to the [Nvidia CUDA Dependencies section](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#2-nvidia-cuda-if-supported-nvidia-gpu-present) and the [Docker Setup section](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#background-and-setup) above if unsure
 
     - If the above are present and setup, you're clear to proceed
 
@@ -931,9 +931,9 @@ This typically indicates an issue with your Microsoft Visual Studio build tools,
     docker run --gpus all -p 5000:5000 -p 8080:8080 -v lars_storage:/app/storage lars-nvcuda
     ```
 
-- Once done, Navigate to ```http://localhost:5000/``` in your browser and follow the remainder of the [First Run Steps](https://github.com/abgulati/LARS?tab=readme-ov-file#first-run---important-steps-for-first-time-setup) and [User Guide](https://github.com/abgulati/LARS?tab=readme-ov-file#general-user-guide---post-first-run-steps)
+- Once done, Navigate to ```http://localhost:5000/``` in your browser and follow the remainder of the [First Run Steps](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#first-run---important-steps-for-first-time-setup) and [User Guide](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#general-user-guide---post-first-run-steps)
 
-- The [Troubleshooting](https://github.com/abgulati/LARS?tab=readme-ov-file#troubleshooting) sections applies to Container-LARS as well
+- The [Troubleshooting](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting) sections applies to Container-LARS as well
 
 ### Special Note for Containers - Troubleshooting Networking Issues and Errors on First Run
 
@@ -977,7 +977,7 @@ This typically indicates an issue with your Microsoft Visual Studio build tools,
     docker system df
     ```
 
-[Back to Table of Contents](https://github.com/abgulati/LARS?tab=readme-ov-file#table-of-contents)
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
     
 
 ## Current Development Roadmap
@@ -1002,7 +1002,7 @@ This typically indicates an issue with your Microsoft Visual Studio build tools,
 |                                               | RAG Improvements: Re-ranker, [RAPTOR](https://arxiv.org/html/2401.18059v1), [T-RAG](https://arxiv.org/abs/2402.07483)                                                                                                       | :calendar: Future Task                    |
 |                                               | Investigate GraphDB integration: using LLMs to extract entity-relationship data from documents and populate, update & maintain a GraphDB                                                                                    | :calendar: Future Task                    |
 
-[Back to Table of Contents](https://github.com/abgulati/LARS?tab=readme-ov-file#table-of-contents)
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
 
 # Support and Donations
@@ -1015,4 +1015,4 @@ To make a donation, please use the following link to my PayPal:
 
 Your contributions are greatly appreciated and will be used to fund further development efforts.
 
-[Back to Table of Contents](https://github.com/abgulati/LARS?tab=readme-ov-file#table-of-contents)
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
