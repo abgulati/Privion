@@ -330,6 +330,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                                     'google/gemma-2-2b-it',
                                     'google/gemma-2-9b-it',
                                     'google/gemma-2-27b-it',
+                                    'Qwen/Qwen2.5-1.5B-Instruct',
                                     'Qwen/Qwen2-7B-Instruct',
                                     'Qwen/Qwen2-72B-Instruct',
                                     'alpindale/goliath-120b',
