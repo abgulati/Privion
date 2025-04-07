@@ -35,3 +35,4 @@ azure-core>=1.29.6
 whoosh>=2.7.4
 waitress>=3.0.0
 werkzeug>=3.0.1
+wheel>=0.43.0
