@@ -330,9 +330,9 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
 
 ### ExLlamaV2:
 
-- ExLlama is a highly optimized LLM inference library optimized for Nvidia GPUs
+- ExLlama is a highly optimized LLM inference library spcifically for consumer GPUs.
 
-- It attempts to utilize Flash-Attention (v2.5.7+) by default so do install that before ExLlama (see above)
+- It attempts to utilize Flash-Attention (v2.5.7+) by default so do install that before ExLlama (see above). MAKE SURE TO INSTALL IT AFTER INSTALLING FLASH ATTENTION 2!
 
 - Since HF-Waitress includes full management of ExLlama, including the downloading and quantization of models and saving of measurements for each model processed, it's required to clone the ExLlamav2 repo into the LARS `web_app` dir:
     ```
@@ -342,7 +342,97 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
     pip install .
     ```
 
-- There's no need to `pip install` the dependencies in the requirements.txt within the ExLlamaV2 dir as these are included in LARS's requirements.txt already
+- There's no need to `pip install` the dependencies in the requirements.txt within the ExLlamaV2 dir as these are included in LARS's requirements.txt already.
+
+- Sometimes, after setup when trying to quantize a model for the first time, you may encounter an error:
+    ```
+    FAILED: exllamav2_ext.pyd
+    "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.43.34808\bin\Hostx64\x64/link.exe" ext_bindings.o ext_cache.o ext_gemm.o ext_hadamard.o ext_norm.o ext_qattn.o ext_qmatrix.o ext_qmlp.o ext_quant.o ext_rope.o ext_stloader.o ext_sampling.o ext_element.o ext_tp.o graph.cuda.o h_add.cuda.o h_gemm.cuda.o lora.cuda.o pack_tensor.cuda.o quantize.cuda.o q_matrix.cuda.o q_attn.cuda.o q_mlp.cuda.o q_gemm.cuda.o rms_norm.cuda.o head_norm.cuda.o layer_norm.cuda.o rope.cuda.o cache.cuda.o util.cuda.o softcap.cuda.o tp.cuda.o kernel_select.cuda.o unit_gptq_1.cuda.o unit_gptq_2.cuda.o unit_gptq_3.cuda.o unit_exl2_1a.cuda.o unit_exl2_1b.cuda.o unit_exl2_2a.cuda.o unit_exl2_2b.cuda.o unit_exl2_3a.cuda.o unit_exl2_3b.cuda.o quantize_func.o profiling.o generator.o sampling.o sampling_avx2.o /nologo /DLL cublas.lib c10.lib c10_cuda.lib torch_cpu.lib torch_cuda.lib -INCLUDE:?warp_size@cuda@at@@YAHXZ torch.lib "/LIBPATH:C:\Users\LARS Demo\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\lib" torch_python.lib "/LIBPATH:C:\Users\LARS Demo\AppData\Local\Programs\Python\Python311\libs" "/LIBPATH:C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4\lib\x64" cudart.lib /out:exllamav2_ext.pyd
+    LINK : fatal error LNK1104: cannot open file 'exllamav2_ext.pyd'
+    ninja: build stopped: subcommand failed.
+    ```
+
+- Having encountered this, the fix was to launch CMD as an admin, run `pip uninstall exllamav2 -y` from within the `exllamav2` dir, delete the entire directory and then re-clone and re-install, and retry quantization via `python hf_waitress.py --exl2` from the `web_app` dir, all from within the admin shell.
+
+- That said, Gemini-2.5-Pro had the following to say about this:
+    ```
+    Okay, this LNK1104: cannot open file 'exllamav2_ext.pyd' error is quite common when compiling C++/CUDA extensions for Python, especially on Windows. It almost always means the linker (link.exe) tried to write or modify the output file (exllamav2_ext.pyd), but couldn't because the file was locked or inaccessible.
+
+    Here's a breakdown of the common causes and how to fix them, starting with the most likely:
+
+    File is Locked by a Running Python Process:
+
+    Problem: The most frequent cause is that you have another Python script, interpreter, IDE (like VS Code with a Python kernel, Jupyter Notebook), or application (like a web UI using ExLlamaV2) running that has already imported the old version of exllamav2_ext.pyd. The operating system locks the file while it's loaded in memory.
+
+    Solution:
+
+    Close all Python instances: Shut down any running Python scripts, interactive shells (like cmd or PowerShell where you ran python), Jupyter notebooks, IDEs (VS Code, PyCharm, Spyder), and any applications that might be using ExLlamaV2.
+
+    Check Task Manager: Open Task Manager (Ctrl+Shift+Esc), go to the "Details" or "Processes" tab, and look for any python.exe or pythonw.exe processes. End any that might be related to your project or ExLlamaV2 usage. Pay attention to processes launched by web UIs or background tasks.
+
+    Restart your IDE/Terminal: Sometimes just closing the terminal or IDE window where you ran the previous Python code is enough.
+
+    Restart your computer: If you can't find the locking process, a simple reboot will ensure all file locks are released. Try the build again immediately after restarting.
+
+    Antivirus Interference:
+
+    Problem: Antivirus software can sometimes mistakenly flag .pyd files (which are essentially DLLs) during the compilation process, locking them temporarily for scanning or even quarantining them.
+
+    Solution:
+
+    Temporarily Disable: Temporarily disable your antivirus's real-time protection just for the duration of the build process. Remember to re-enable it immediately afterward.
+
+    Add Exclusions: A safer, more permanent solution is to add exclusions to your antivirus settings. Exclude:
+
+    The Python site-packages directory (e.g., C:\Users\LARS Demo\AppData\Local\Programs\Python\Python311\Lib\site-packages\exllamav2)
+
+    The build directory (if you know where ninja/setuptools creates it, often a build subfolder in your project).
+
+    Possibly the specific file exllamav2_ext.pyd.
+
+    Permission Issues:
+
+    Problem: The user account running the build process might not have sufficient write permissions in the target directory (likely within your Python installation's site-packages).
+
+    Solution:
+
+    Run as Administrator: Try running your command prompt (cmd or PowerShell) or your IDE "As Administrator" (right-click the icon -> Run as administrator) and then execute the build command again.
+
+    Check Folder Permissions: Navigate to the directory where exllamav2_ext.pyd is supposed to be created (find the exllamav2 folder inside C:\Users\LARS Demo\AppData\Local\Programs\Python\Python311\Lib\site-packages), right-click it, go to Properties -> Security, and ensure your user account has "Full control" or at least "Modify" and "Write" permissions.
+
+    Corrupted Build State / Leftover File:
+
+    Problem: A previous failed build might have left a corrupted or incomplete exllamav2_ext.pyd file that cannot be overwritten, or other build artifacts are causing issues.
+
+    Solution:
+
+    Manual Deletion: Go to the exllamav2 directory within your site-packages (C:\Users\LARS Demo\AppData\Local\Programs\Python\Python311\Lib\site-packages\exllamav2) and manually delete the exllamav2_ext.pyd file if it exists.
+
+    Clean Build: If you are building from source (e.g., using python setup.py install or pip install .):
+
+    Delete any build or dist folders in your source directory.
+
+    Delete the .egg-info directory related to exllamav2.
+
+    Uninstall the package first: pip uninstall exllamav2 -y
+
+    Then try reinstalling, potentially clearing the pip cache: pip install . --no-cache-dir -v (or however you were installing it).
+
+    Steps to Try:
+
+    Close everything: Shut down all Python-related processes and terminals. Try the build again.
+
+    Restart: If step 1 fails, restart your computer. Try the build again.
+
+    Admin Rights: If restarting fails, try running the build command from an Administrator terminal.
+
+    Antivirus: If Admin rights fail, temporarily disable your antivirus and try the build. Re-enable AV afterwards. If this works, add exclusions.
+
+    Clean Build: If AV isn't the issue, perform a clean build: uninstall, delete build artifacts (build/ folder, the .pyd file in site-packages), and reinstall.
+
+    Start with step 1, as it's the most common fix. Good luck!
+    ```
+
 
 
 ### LibreOffice:
