@@ -3522,3 +3522,138 @@ except Exception as e:
                 refer_pages_string += f"<br><h6>{doc_name_without_stream_id}</h6>"
             except Exception as e:
                 handle_error_no_return("Could not construct refer_pages_string, encountered error: ", e)
+
+
+
+// Call sendMessage() if the user presses the 'Enter' key
+const maxRows = 11; // Replace this value with the maximum allowed number of rows you want
+const inputTextAreaElement = document.getElementById("user-input");
+//var currentRows = inputTextAreaElement.rows;
+
+
+// event listener for javascript variable:
+let _currentRows = inputTextAreaElement.rows;
+Object.defineProperty(window, 'currentRows', {
+    get: function() { 
+        return _currentRows; 
+    },
+    set: function(value) {
+        console.log(`currentRows changed from ${_currentRows} to ${value}`);
+        console.log('Stack trace:', new Error().stack);
+        _currentRows = value;
+    }
+});
+
+// Function to automatically adjust textarea height:
+// function autoAdjustHeight() {
+//     // Store the current scroll position
+//     const scrollPos = inputTextAreaElement.scrollTop;
+    
+//     // Temporarily set height to 'auto' to measure content
+//     inputTextAreaElement.style.height = 'auto';
+    
+//     // Calculate new height within bounds
+//     const lineHeight = parseInt(window.getComputedStyle(inputTextAreaElement).lineHeight);
+//     const maxHeight = lineHeight * maxRows;
+//     const newHeight = Math.min(inputTextAreaElement.scrollHeight, maxHeight);
+    
+//     // Set the new height directly
+//     inputTextAreaElement.style.height = `${newHeight}px`;
+    
+//     // Restore scroll position
+//     window.scrollTo(0, scrollPos);
+// }
+
+function autoAdjustHeight() {
+    // Store the current scroll position
+    const scrollPos = inputTextAreaElement.scrollTop;
+    
+    // Temporarily store the current height
+    const currentHeight = inputTextAreaElement.style.height;
+    
+    // Set height to 'auto' to get the natural height based on content
+    inputTextAreaElement.style.height = 'auto';
+    
+    // Get the actual content height
+    const contentHeight = inputTextAreaElement.scrollHeight;
+    const lineHeight = parseInt(window.getComputedStyle(inputTextAreaElement).lineHeight);
+    const newRows = Math.min(Math.ceil(contentHeight / lineHeight), maxRows);
+    
+    // Restore the previous height before setting new rows to prevent visual jumping
+    inputTextAreaElement.style.height = currentHeight;
+    
+    // Set the new rows if they're different
+    if (newRows !== currentRows) {
+        inputTextAreaElement.rows = newRows;
+        currentRows = newRows;
+    }
+    
+    // Restore scroll position
+    window.scrollTo(0, scrollPos);
+}
+
+// Add input event listener for dynamic resizing:
+// const debouncedAdjustHeight = debounce(autoAdjustHeight, 100);  // necessary to declare a const as this ensures only one instance of the debounced function is created, rather than creating a new instance on each call via `inputTextAreaElement.addEventListener('input', debounce(autoAdjustHeight, 70));`
+// inputTextAreaElement.addEventListener('input', debouncedAdjustHeight);
+//inputTextAreaElement.addEventListener('input', autoAdjustHeight);
+
+// Also handle paste events explicitly:
+inputTextAreaElement.addEventListener('paste', function() {
+    setTimeout(autoAdjustHeight, 0); // Using timeout to let the paste complete before resizing
+});
+
+// Handle focus (clciking back into the textarea):
+inputTextAreaElement.addEventListener('focus', function() {
+    console.log("Focus event, restoring rows to: ", currentRows);
+    if (this.value.trim()) {
+        inputTextAreaElement.rows = currentRows;
+    }
+});
+
+// Handle blur events (when the textarea is no longer focused):
+inputTextAreaElement.addEventListener('blur', function() {
+    console.log("Blur event, collapsing to 1 row")
+    inputTextAreaElement.rows = 1;
+});
+
+// Handle SHIFT + ENTER for new lines and ENTER for sending messages:
+inputTextAreaElement.addEventListener("keydown", function(event) {
+    console.log("Keydown event, rows before: ", inputTextAreaElement.rows);
+    const sendButton = document.getElementById('sendButton');
+
+    if (!event.shiftKey && event.key == "Enter" && this.value.trim() !== "") {
+        
+        if(!sendButton.disabled) {  //Only trigger a send event if the button is not disabled, i.e. another stream is in progress!
+            inputTextAreaElement.rows = 1;
+            requestFormattedPrompt();
+        }
+    } 
+    else if (event.shiftKey && event.key == "Enter") {
+        if (currentRows < maxRows) {
+            inputTextAreaElement.rows += 1;
+            currentRows += 1;
+        }
+    } else if (event.keyCode === 8 || event.keyCode === 46) { //8 is Backspace and 46 is Delete
+        console.log("backspace or delete pressed")
+        newlineCount = inputTextAreaElement.value.split("\n").length;
+        if (newlineCount < currentRows) {
+            console.log("trimming rows")
+            inputTextAreaElement.rows = newlineCount;
+            currentRows = newlineCount;
+        }
+    }
+    console.log("Keydown event, rows after: ", inputTextAreaElement.rows);
+});
+
+// function adjustTextareaRows() {
+//     newlineCount = inputTextAreaElement.value.split("\n").length;
+//     if (newlineCount < maxRows) {
+//         inputTextAreaElement.rows = newlineCount;
+//         currentRows = newlineCount;
+//     } else if (newlineCount >= maxRows) {
+//         inputTextAreaElement.rows = maxRows;
+//         currentRows = newlineCount;
+//     }
+// }
+// document.getElementById("user-input").addEventListener('input', adjustTextareaRows);
+// document.getElementById("user-input").addEventListener('change', adjustTextareaRows);
