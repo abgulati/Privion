@@ -1156,7 +1156,7 @@ body {
 .hf-waitress-llm-custom-dropdown-items-list,
 .hf-waitress-kb-custom-dropdown-items-list,
 .hf-waitress-embed-custom-dropdown-items-list {
-    max-height: calc(90vh - 575px);
+    /*max-height: calc(90vh - 575px);*/
     overflow-y: auto;
 }
 
