@@ -716,7 +716,7 @@ function autoAdjustHeight() {
     // Store the current scroll position
     const scrollPos = inputTextAreaElement.scrollTop;
     
-    // Temporarily set height to 'auto' to measure content
+    // Temporarily set height to 'auto' - to measure the true height needed for the content in the textarea, we need to temporarily remove any height constraints!
     inputTextAreaElement.style.height = 'auto';
     
     // Calculate new height within bounds
@@ -726,8 +726,8 @@ function autoAdjustHeight() {
     inputTextAreaElement.style.height = `${newHeight}px`;
     currentHeight = newHeight;
     
-    // Restore scroll position
-    window.scrollTo(0, scrollPos);
+    // Restore scroll position - If the user has manually scrolled around the textarea, setting the height to auto would cause this position to be lost, so it's important to restore it!
+    inputTextAreaElement.scrollTop = scrollPos;
 }
 
 
