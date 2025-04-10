@@ -4669,7 +4669,7 @@ def extract_significant_phrases(query):
     try:
         nltk.download('stopwords')
         stop_words = set(stopwords.words('english'))
-        custom_stop_words = {"you", "me", "anything", "tell", "can", "could", "would", "should", "write", "writes", "wrote", "written", "read", "reads"}
+        custom_stop_words = {"you", "me", "anything", "tell", "can", "could", "would", "should", "write", "writes", "wrote", "written", "read", "reads", "hi", "hello", "hey"}
         stop_words.update(custom_stop_words)
     except Exception as e:
         handle_error_no_return("Failed to download & set stopwords, encountered error: ", e)
@@ -5751,7 +5751,7 @@ def search_knowledge_base(user_query:str, embedding_function:str, perform_graph_
     do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
 
     graph_rag_context = None
-    if perform_graph_rag:
+    if perform_graph_rag and do_rag:
         try:
             graph_rag_context, reranked_summaries_list_descending = execute_graph_rag(user_query, docs)
             if reranked_summaries_list_descending != []:
