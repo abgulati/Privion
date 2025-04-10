@@ -78,6 +78,19 @@ function debounce(func, wait) {
     };
 }
 
+// event listener for javascript variable - use this to trace a troublesome variable and see exactly where it's being changed:
+let _tracedVariable; // Can be equal to any variable, like inputTextAreaElement.rows;
+Object.defineProperty(window, '_tracedVariable', {
+    get: function() { 
+        return _tracedVariable; 
+    },
+    set: function(value) {
+        console.log(`_tracedVariable changed from ${_tracedVariable} to ${value}`);
+        console.log('Stack trace:', new Error().stack);
+        _tracedVariable = value;
+    }
+});
+
 function showStreamSpinner() {
     document.getElementById('info_stream_spinner').style.display = 'inline-block';
 }
