@@ -112,6 +112,7 @@
             <div class="input-area" id="input-area">
                 <div class="input-wrapper">
                     <textarea rows="1" cols="50" class="form-control" id="user-input" onclick="closeNav()" placeholder="Type your prompts here..."></textarea>
+                    <button id="stopGenerationButton" class="btn btn-sm btn-danger" style="display: none;" onclick="stopGeneration()" title="Stop the current LLM's response generation"><i class="fas fa-stop"></i></button>
                     <input type="file" id="textAttachmentInput" style="display: none;">
                     <button type="button" id="textAttachmentButton" class="btn btn-sm btn-outline-secondary" onclick="closeNav(); document.getElementById('textAttachmentInput').click();" title="Attach a file to your message for Vision inferencing" disabled>
                         <i class="fas fa-paperclip"></i>
@@ -120,7 +121,6 @@
                         <span id="textAttachmentFileName"></span>
                         <button id="textAttachmentRemoveBtn" class="btn btn-sm btn-danger"><i class="fas fa-times"></i></button>
                     </div>
-                    <button id="stopGenerationButton" class="btn btn-sm btn-danger" style="display: none;" onclick="stopGeneration()" title="Stop the current LLM's response generation"><i class="fas fa-stop"></i></button>
                 </div>
                 <!-- <textarea rows="1" cols="50" class="form-control" id="user-input" onclick="closeNav()" placeholder="Type your prompts here..."></textarea> -->
                 <input type="file" name="file" id="fileInput" style="display:none;">

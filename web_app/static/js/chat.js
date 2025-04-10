@@ -705,37 +705,77 @@ async function requestFormattedPrompt(regeneration_request=false, regenerate_wit
 
 
 // Call sendMessage() if the user presses the 'Enter' key
-const maxRows = 5; // Replace this value with the maximum allowed number of rows you want
+const maxRows = 11; // Replace this value with the maximum allowed number of rows you want
 const inputTextAreaElement = document.getElementById("user-input");
-var currentRows = inputTextAreaElement.rows;
+const lineHeight = parseInt(window.getComputedStyle(inputTextAreaElement).lineHeight);
+const maxHeight = lineHeight * maxRows;
+let currentHeight = lineHeight; // Start with 1 line height
 
+// Function to automatically adjust textarea height:
+function autoAdjustHeight() {
+    // Store the current scroll position
+    const scrollPos = inputTextAreaElement.scrollTop;
+    
+    // Temporarily set height to 'auto' to measure content
+    inputTextAreaElement.style.height = 'auto';
+    
+    // Calculate new height within bounds
+    const newHeight = Math.min(inputTextAreaElement.scrollHeight, maxHeight);
+    
+    // Set the new height directly
+    inputTextAreaElement.style.height = `${newHeight}px`;
+    currentHeight = newHeight;
+    
+    // Restore scroll position
+    window.scrollTo(0, scrollPos);
+}
+
+
+// Add input event listener for dynamic resizing:
+const debouncedAdjustHeight = debounce(autoAdjustHeight, 100);  // necessary to declare a const as this ensures only one instance of the debounced function is created, rather than creating a new instance on each call via `inputTextAreaElement.addEventListener('input', debounce(autoAdjustHeight, 70));`
+inputTextAreaElement.addEventListener('input', debouncedAdjustHeight);
+
+// Also handle paste events explicitly:
+inputTextAreaElement.addEventListener('paste', function() {
+    setTimeout(autoAdjustHeight, 0); // Using timeout to let the paste complete before resizing
+});
+
+// Handle focus (clciking back into the textarea):
+inputTextAreaElement.addEventListener('focus', function() {
+    if (this.value.trim()) {
+        inputTextAreaElement.style.height = `${currentHeight}px`;
+    }
+});
+
+// Handle blur events (when the textarea is no longer focused):
+inputTextAreaElement.addEventListener('blur', function() {
+    inputTextAreaElement.style.height = `${lineHeight}px`;
+});
+
+// Handle SHIFT + ENTER for new lines and ENTER for sending messages:
 inputTextAreaElement.addEventListener("keydown", function(event) {
     const sendButton = document.getElementById('sendButton');
-    // Check if the Enter key was pressed and the input isn't empty
+
     if (!event.shiftKey && event.key == "Enter" && this.value.trim() !== "") {
-        // Prevent the default action (i.e., adding a new line)
         event.preventDefault();
-        // Call the send function
-        // sendMessage()
         if(!sendButton.disabled) {  //Only trigger a send event if the button is not disabled, i.e. another stream is in progress!
-            inputTextAreaElement.rows = 1;
-            //sendMessageAndProcessResponseStream()
+            inputTextAreaElement.style.height = `${lineHeight}px`;
+            currentHeight = lineHeight;
             requestFormattedPrompt();
         }
-    } else if (event.shiftKey && event.key == "Enter") {
-        if (currentRows <= maxRows) {
-            inputTextAreaElement.rows += 1;
-            currentRows += 1;
+    } 
+    else if (event.shiftKey && event.key == "Enter") {
+        const potentialNewHeight = currentHeight + lineHeight;
+        if (potentialNewHeight <= maxHeight) {
+            // The actual height adjustment will be handled by the input event
+            // Just update our tracking variable
+            currentHeight = potentialNewHeight;
         }
-    } else if (event.keyCode === 8 || event.keyCode === 46) { //8 is Backspace and 46 is
-        //console.log("backspace or delete pressed")
-        newlineCount = inputTextAreaElement.value.split("\n").length;
-        if (newlineCount < currentRows) {
-            //console.log("trimming rows")
-            inputTextAreaElement.rows = newlineCount;
-            currentRows = newlineCount;
-        }
-    }
+    } 
+    // else if (event.key === "Backspace" || event.key === "Delete") { //KeyDown, which used 8 for Backspace and 46 for Delete, is obsolete and deprecated!
+    //     // Let the deletion happen and let autoAdjustHeight handle the height adjustment
+    //     // We'll update currentHeight in the autoAdjustHeight function
+    // }
 });
 
 
@@ -761,20 +801,6 @@ function removeTextAttachment() {
 }
 
 textAttachmentRemoveBtn.addEventListener('click', removeTextAttachment);
-
-
-function adjustTextareaRows() {
-    newlineCount = inputTextAreaElement.value.split("\n").length;
-    if (newlineCount < maxRows) {
-        inputTextAreaElement.rows = newlineCount;
-        currentRows = newlineCount;
-    } else if (newlineCount >= maxRows) {
-        inputTextAreaElement.rows = maxRows;
-        currentRows = newlineCount;
-    }
-}
-document.getElementById("user-input").addEventListener('input', adjustTextareaRows);
-document.getElementById("user-input").addEventListener('change', adjustTextareaRows);
 
 
 // Upload new files to VectorDB

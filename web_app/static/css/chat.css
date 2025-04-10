@@ -360,12 +360,18 @@ body {
     color: #d1cdc7;
     border: solid #383d3f;
     border-width: thin;
-    padding-right: 39px; /* Make room for the attachment button */
+    padding-right: 100px; /* Make room for the attachment button */
+}
+
+#user-input {
+    transition: height 0.1s ease-out;
+    overflow-y: hidden; /* Hide scrollbar during transitions */
+    box-sizing: border-box; /* Include padding in height calculations */
 }
 
 #textAttachmentButton {
     position: absolute;
-    right: 10px;
+    right: 60px;
     top: 3px;
     background-color: transparent;
     border: none;
@@ -384,7 +390,7 @@ body {
 
 #stopGenerationButton {
     position: absolute;
-    right: 49px;
+    right: 25px;
     top: 5px;
     font-size: small;
     border-radius: 69px;
@@ -408,7 +414,12 @@ body {
     padding: 0.5rem;
     border-radius: 1rem;
     color: white;
+    transition: margin-bottom 0.3s ease;
     /* box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); */
+}
+
+.user-message:has(.regenerate-menu:hover) {
+    margin-bottom: 150px;
 }
 
 .llm-response {
@@ -512,7 +523,11 @@ body {
 .response-and-viewer-container {
     display: flex;
     margin-bottom: 33px;
-    min-height: 500px;  /*Add a minimum height to ensure the container is visible*/
+}
+
+/*Example of a CSS-style `if` statement!*/
+.response-and-viewer-container:has(.pdf-viewer-container) {
+    min-height: 500px;
 }
 
 .pdf-viewer {

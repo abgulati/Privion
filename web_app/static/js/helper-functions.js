@@ -66,6 +66,18 @@ function getUniqueId() {
     });
 }
 
+// Debounce function to limit how often it's called:
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) { // ...args allows the function to accept any number of arguments.
+        clearTimeout(timeout);   // clearTimeout() cancels a timeout previously set with setTimeout(). We invoke it here as a precaution to ensure that any previous timeout is cleared before setting a new one.
+        const later = () => {   // later is an arrow function (an arrow function expression has a shorter syntax and lexically binds the 'this' value) that clears the timeout and calls the original function with the arguments.
+            func(...args);
+        };
+        timeout = setTimeout(later, wait);   // setTimeout() calls a function or evaluates an expression after a specified number of milliseconds.
+    };
+}
+
 function showStreamSpinner() {
     document.getElementById('info_stream_spinner').style.display = 'inline-block';
 }
