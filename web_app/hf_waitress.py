@@ -2423,15 +2423,17 @@ def validate_entity_extraction_response(extraction_response: dict):
             print("Success! Proceeding...")
             return {'validated_response': extraction_response, 'is_valid': True}
         except Exception as e:
-            print(f"Response still invalid, re-attempting with minimal trimming. Encountered error: ", e)
-            extraction_response = trim_response(extraction_response, '{"nodes":', '}', include_start_substring=True, include_end_substring=True)    # last-ditch effort!
-            try:
-                extraction_response = ast.literal_eval(extraction_response)
-                print("Success! Proceeding...")
-                return {'validated_response': extraction_response, 'is_valid': True}
-            except Exception as e:
-                print(f"Response still invalid, returning unchanged response. Encountered error: ", e)
-                return {'validated_response': extraction_response, 'is_valid': False}
+            print(f"Response still invalid, returning unchanged response. Encountered error: ", e)
+            return {'validated_response': extraction_response, 'is_valid': False}
+            # print(f"Response still invalid, re-attempting with minimal trimming. Encountered error: ", e)
+            # extraction_response = trim_response(extraction_response, '{"nodes":', '}', include_start_substring=True, include_end_substring=True)    # last-ditch effort!
+            # try:
+            #     extraction_response = ast.literal_eval(extraction_response)
+            #     print("Success! Proceeding...")
+            #     return {'validated_response': extraction_response, 'is_valid': True}
+            # except Exception as e:
+            #     print(f"Response still invalid, returning unchanged response. Encountered error: ", e)
+            #     return {'validated_response': extraction_response, 'is_valid': False}
 
 
 def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: str, source_doc_name: str, page_number_list: list, exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
