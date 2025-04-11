@@ -191,11 +191,11 @@ body {
 
 .regenerate-menu {
     position: absolute;
-    top: 0;
-    right: 10px;
+    top: -16px;
+    right: 0px;
     cursor: pointer;
     color: white;
-    padding: 10px;
+    padding: 25px;
 }
 
 .regenerate-menu i {
