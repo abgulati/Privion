@@ -5271,7 +5271,6 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
     try:
         
         for _, chunk_data in summarized_chunk_entities.items():
-            print(f"Type of chunk_data: {type(chunk_data)}")
             source_doc_name = chunk_data['source_doc_name']
             
             if source_doc_name == 'user_query':
@@ -5280,7 +5279,6 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
             
             try:
                 for node in chunk_data['entities_and_relationships']['nodes']:
-                    print(f"Type of node: {type(node)}")
 
                     if not node.get('summary'):
                         continue    # Skip nodes with no summaries
@@ -5308,28 +5306,27 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
             
             try:
                 for relationship in chunk_data['entities_and_relationships']['relationships']:
-                    print(f"Type of relationship: {type(relationship)}")
                 
-                if not relationship.get('summary'):
-                    continue    # Skip relationships with no summaries
+                    if not relationship.get('summary'):
+                        continue    # Skip relationships with no summaries
 
-                for summary in relationship.get('summary', []):
-                    try:
-                        if summary is not None and summary != '':
-                            summary_preface_string = f"Summary for relationship '{relationship['relationship']}' between entities '{relationship['source']}' and '{relationship['target']}'"
-
+                    for summary in relationship.get('summary', []):
                         try:
-                            content_data, source_doc_name, pages = extract_content_source_and_page_data_from_summary_text(summary)
-                            summary_doc_objects.append(Document(page_content=f"{summary_preface_string} - {summary}", metadata={'page_number': pages, 'source': source_doc_name}))
-                        except Exception as e:
-                            handle_error_no_return("Could not convert GraphRAG context to Document object, skipping. Encountered error: ", e)
+                            if summary is not None and summary != '':
+                                summary_preface_string = f"Summary for relationship '{relationship['relationship']}' between entities '{relationship['source']}' and '{relationship['target']}'"
 
-                            entry = (
-                                f"{summary_preface_string} - {summary}"
-                            )
-                            summary_report.add(entry)
-                    except Exception as e:
-                        handle_error_no_return("Error processing a relationship's summary when adding to summary report. Skipping this summary. encountered error: ", e)
+                            try:
+                                content_data, source_doc_name, pages = extract_content_source_and_page_data_from_summary_text(summary)
+                                summary_doc_objects.append(Document(page_content=f"{summary_preface_string} - {summary}", metadata={'page_number': pages, 'source': source_doc_name}))
+                            except Exception as e:
+                                handle_error_no_return("Could not convert GraphRAG context to Document object, skipping. Encountered error: ", e)
+
+                                entry = (
+                                    f"{summary_preface_string} - {summary}"
+                                )
+                                summary_report.add(entry)
+                        except Exception as e:
+                            handle_error_no_return("Error processing a relationship's summary when adding to summary report. Skipping this summary. encountered error: ", e)
             
             except Exception as e:
                 handle_error_no_return("Error processing relationship in chunk_data when adding to summary report, likely a corrupt dict. Skipping relationship summaries for this chunk. encountered error: ", e)
