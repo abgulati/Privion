@@ -997,6 +997,51 @@ a.list-group-item.list-group-item-action.active {
     color: #D1CDC7;
 }
 
+.loading-indicator-container {
+    display: flex;
+    align-items: center;
+    padding: 15px 20px;
+    margin: 10px 0;
+    background-color: #1e2022;
+    border-radius: 1rem;
+    border: 1px solid #3A3E41;
+}
+
+.typing-indicator {
+    display: flex;
+    align-items: center;
+}
+
+.typing-indicator span {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 5px;
+    background-color: #6bb3ff;
+    border-radius: 50%;
+    opacity: 0.4;
+    animation: typing-pulse 1.4s infinite;
+}
+
+.typing-indicator span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing-pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.4;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+}
+
 /*SCROLLBAR STYLING - For WebKit-based browsers (Chrome, Safari, newer versions of Edge):*/
 /* This styles the scrollbar track (the part the thumb slides along) */
 ::-webkit-scrollbar-track {

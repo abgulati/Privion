@@ -91,6 +91,43 @@ Object.defineProperty(window, '_tracedVariable', {
     }
 });
 
+function scrollChatAreaToBottom() {
+    const chatArea = document.getElementById('chat-area');
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function appendLoadingAnimation(regenrationUserMessage = null) {
+    const chatArea = document.getElementById('chat-area');
+    const lastUserMessage = regenrationUserMessage || chatArea.querySelector('.user-message:last-of-type');
+
+    const loadingContainer = document.createElement('div');
+    loadingContainer.className = 'loading-indicator-container';
+    
+    loadingContainer.innerHTML = `
+        <div class="typing-indicator">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    `;
+
+    if (lastUserMessage) {
+        console.log("appending loading animation after last user message");
+        lastUserMessage.insertAdjacentElement('afterend', loadingContainer);
+    } else {
+        chatArea.appendChild(loadingContainer);
+    }
+
+    scrollChatAreaToBottom();
+}
+
+function removeLoadingAnimation() {
+    const loadingContainer = document.querySelector('.loading-indicator-container');
+    if (loadingContainer) {
+        loadingContainer.remove();
+    }
+}
+
 function showStreamSpinner() {
     document.getElementById('info_stream_spinner').style.display = 'inline-block';
 }
@@ -129,6 +166,7 @@ function getUserMessageContent(element) {
 }
 
 function resetResponseAndViewerContainerWithStreamSessionId(streamSessionId) {
+    //appendLoadingAnimation();
     const responseAndViewerContainer = document.querySelector(`.response-and-viewer-container[data-stream-session-id="${streamSessionId}"]`);
     if (responseAndViewerContainer) {
         responseAndViewerContainer.id = `MasterWrapper${streamSessionId}`;

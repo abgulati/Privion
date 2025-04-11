@@ -90,11 +90,6 @@ function initializePromptRequest() {
     displayProcessingStatus('Reading documents...');
 }
 
-function scrollChatAreaToBottom() {
-    const chatArea = document.getElementById('chat-area');
-    chatArea.scrollTop = chatArea.scrollHeight;
-}
-
 function handleAutoScroll(chatContainer) {
     const scrollThreshold = 100; //100px towards the bottom
     const isNearBottom =  chatContainer.scrollHeight - chatContainer.clientHeight - chatContainer.scrollTop < scrollThreshold;   //by calculating this way, we're finding the difference between the total height of the chat area including the invisble part that's overflown (scrollHeight), the visible height of the chat area (clientHeight), and how far down the chat area has been scrolled (scrollTop). If less than the threshold, auto-scroll engages!
@@ -128,7 +123,7 @@ function createUserMessageHTML(userInputForHtml){
 
 function updateChatAreaWithUserInput(userInputForHtml) {
     const uniqueId = createUserMessageHTML(userInputForHtml);
-    scrollChatAreaToBottom();
+    appendLoadingAnimation();
     return uniqueId;
 }
 
@@ -162,6 +157,8 @@ function shouldAppendContent(streamedContent) {
 
 function appendContentToResponse(responseContentID, content) {
     const responseContentElement = document.getElementById(responseContentID);
+
+    removeLoadingAnimation();
 
     // document.getElementById(responseContentID).innerHTML += event.data;
                 
@@ -533,9 +530,9 @@ async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, 
             img.src = `${hfWaitress_URL}/serve_generated_image/${data.image_name}`;
             imageDiv.appendChild(img);
             document.getElementById(responseContentID).appendChild(imageDiv);
-
+            removeLoadingAnimation();
             handleAutoScroll(chatContainer);
-            console.log("returning imageDiv.outerHTML: ", imageDiv.outerHTML);
+            // console.log("returning imageDiv.outerHTML: ", imageDiv.outerHTML);
             return imageDiv.outerHTML;
         } else {
             throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
@@ -645,7 +642,7 @@ async function getReferences(do_rag, params, responseContentID, masterWrapperID,
 
         handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, params.stream_session_id, user_message_html_unique_id, params.regeneration_request);
     } catch (error) {
-        errorHandler("fetching relevant reference material", "getReferences()", String(error))
+        errorHandler("fetching relevant reference material", "getReferences()", String(error));
     }
 }
 

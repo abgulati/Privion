@@ -18,6 +18,7 @@ function initializeScrollDownButton() {
     });
 }
 
+
 function initializeRegenerateResponseButton() {
     document.getElementById('chat-area').addEventListener('click', function(e) {
         if (e.target.classList.contains('regenerate-option')) {
@@ -25,16 +26,19 @@ function initializeRegenerateResponseButton() {
             const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
             requestFormattedPrompt(true, false, false, streamSessionId, sequenceId);    // Request the formatted prompt
             deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
+            appendLoadingAnimation(userMessageDiv);
         } else if (e.target.classList.contains('regenerate-with-citations-enabled-option')) {
             const userMessageDiv = e.target.closest('.user-message');
             const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
             requestFormattedPrompt(true, true, false, streamSessionId, sequenceId);    // Request the formatted prompt
             deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
+            appendLoadingAnimation(userMessageDiv);
         } else if (e.target.classList.contains('regenerate-with-citations-disabled-option')) {
             const userMessageDiv = e.target.closest('.user-message');
             const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
             requestFormattedPrompt(true, false, true, streamSessionId, sequenceId);    // Request the formatted prompt
             deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
+            appendLoadingAnimation(userMessageDiv);
         } else if (e.target.classList.contains('delete-option')) {
             const userMessageDiv = e.target.closest('.user-message');
             const chatId = userMessageDiv.getAttribute('data-chat-id');
