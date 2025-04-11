@@ -5267,43 +5267,56 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
     
     summary_report = set()
     summary_doc_objects = []
+    
     try:
         
         for _, chunk_data in summarized_chunk_entities.items():
+            print(f"Type of chunk_data: {type(chunk_data)}")
             source_doc_name = chunk_data['source_doc_name']
             
             if source_doc_name == 'user_query':
                 print("\nSkipping user query chunk\n")
                 continue
             
-            for node in chunk_data['entities_and_relationships']['nodes']:
+            try:
+                for node in chunk_data['entities_and_relationships']['nodes']:
+                    print(f"Type of node: {type(node)}")
 
-                if not node.get('summary'):
-                    continue    # Skip nodes with no summaries
-
-                for summary in node.get('summary', []):
-                    if summary is not None and summary != '':
-                        summary_preface_string = f"Summary for entity '{node['name']}' of type '{node['type']}'"
-
+                    if not node.get('summary'):
+                        continue    # Skip nodes with no summaries
+                    
+                    for summary in node.get('summary', []): # There may be multiple summaries for a single node, so we iterate over the list of summaries.
                         try:
-                            content_data, source_doc_name, pages = extract_content_source_and_page_data_from_summary_text(summary)
-                            summary_doc_objects.append(Document(page_content=f"{summary_preface_string} - {summary}", metadata={'page_number': pages, 'source': source_doc_name}))
-                        except Exception as e:
-                            handle_error_no_return("Could not convert GraphRAG context to Document object, skipping. Encountered error: ", e)
+                            if summary is not None and summary != '':
+                                summary_preface_string = f"Summary for entity '{node['name']}' of type '{node['type']}'"
 
-                        entry = (
-                            f"{summary_preface_string} - {summary}" #The summary, as generated in the process_nodes_and_relationships method of hf_waitress.py, contains metadata and newline spacing.
-                        )
-                        summary_report.add(entry)
+                            try:
+                                content_data, source_doc_name, pages = extract_content_source_and_page_data_from_summary_text(summary)
+                                summary_doc_objects.append(Document(page_content=f"{summary_preface_string} - {summary}", metadata={'page_number': pages, 'source': source_doc_name}))
+                            except Exception as e:
+                                handle_error_no_return("Could not convert GraphRAG context to Document object, skipping. Encountered error: ", e)
+
+                            entry = (
+                                f"{summary_preface_string} - {summary}" #The summary, as generated in the process_nodes_and_relationships method of hf_waitress.py, contains metadata and newline spacing.
+                            )
+                            summary_report.add(entry)
+                        except Exception as e:
+                            handle_error_no_return("Error processing a node's summary when adding to summary report. Skipping this summary. encountered error: ", e)
             
-            for relationship in chunk_data['entities_and_relationships']['relationships']:
+            except Exception as e:
+                handle_error_no_return("Error processing node in chunk_data when adding to summary report, likely a corrupt dict. Skipping node summaries for this chunk. encountered error: ", e)
+            
+            try:
+                for relationship in chunk_data['entities_and_relationships']['relationships']:
+                    print(f"Type of relationship: {type(relationship)}")
                 
                 if not relationship.get('summary'):
                     continue    # Skip relationships with no summaries
 
                 for summary in relationship.get('summary', []):
-                    if summary is not None and summary != '':
-                        summary_preface_string = f"Summary for relationship '{relationship['relationship']}' between entities '{relationship['source']}' and '{relationship['target']}'"
+                    try:
+                        if summary is not None and summary != '':
+                            summary_preface_string = f"Summary for relationship '{relationship['relationship']}' between entities '{relationship['source']}' and '{relationship['target']}'"
 
                         try:
                             content_data, source_doc_name, pages = extract_content_source_and_page_data_from_summary_text(summary)
@@ -5311,13 +5324,18 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
                         except Exception as e:
                             handle_error_no_return("Could not convert GraphRAG context to Document object, skipping. Encountered error: ", e)
 
-                        entry = (
-                            f"{summary_preface_string} - {summary}"
-                        )
-                        summary_report.add(entry)
+                            entry = (
+                                f"{summary_preface_string} - {summary}"
+                            )
+                            summary_report.add(entry)
+                    except Exception as e:
+                        handle_error_no_return("Error processing a relationship's summary when adding to summary report. Skipping this summary. encountered error: ", e)
+            
+            except Exception as e:
+                handle_error_no_return("Error processing relationship in chunk_data when adding to summary report, likely a corrupt dict. Skipping relationship summaries for this chunk. encountered error: ", e)
     
     except Exception as e:
-        handle_error_no_return("Could not add to summary report, skipping chunk {count}. Encountered error: ", e)
+        handle_error_no_return("Could not process summary report, skipping remaining items and exiting. Encountered error: ", e)
     
     textual_summary_report = ''.join(summary_report)
 
@@ -5671,8 +5689,7 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
     The various chunk_entities in the dict are then merged into a singular chunk_entity for querying the GraphDB to obtain summaries. 
     The merge_chunk_entities_for_graph_rag and get_summaries_from_graph_db methods are respectively used for this purpose.
 
-    The obtained summaries are deduplicated and formatted into a summary report via the get_summary_report method, and finally re-ranked and trimmed (TODO) 
-    to obtain the final graphRAG context, which is then returned.
+    The obtained summaries are deduplicated and formatted into a summary report via the get_summary_report method, and finally re-ranked and trimmed to obtain the final graphRAG context, which is then returned.
     '''
     
     print(f"\n\nExecuting GraphRAG. Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
