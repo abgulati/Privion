@@ -2610,12 +2610,12 @@ def exl2_grapher():
                             offset_payload = get_request_payload_for_graph_entity_extraction(offset_chunk_text)
                             extraction_response_second_attempt = create_and_execute_exl2_job(payload=offset_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
                             retried_response_validation_result = validate_entity_extraction_response(extraction_response_second_attempt)
-                            print("Response valid, proceeding") if retried_response_validation_result['is_valid'] else print("Response still invalid, saving and proceeding anyways!")
-                            full_response = retried_response_validation_result['validated_response']    # Use offset response regardless of validation result as it's likely simpler
+                            print("Response valid, proceeding") if retried_response_validation_result['is_valid'] else print("Response still invalid, saving as blank and proceeding...")
+                            full_response = retried_response_validation_result['validated_response'] if retried_response_validation_result['is_valid'] else {}
                         
                         except Exception as e:
-                            handle_error_no_return(f"Could not re-attempt entity extraction for chunk {chunk_number}, falling back to original response. Encountered error: ", e)
-                            full_response = response_validation_result['validated_response']    # Fallback to the original response from the first attempt
+                            handle_error_no_return(f"Could not re-attempt entity extraction for chunk {chunk_number}, saving as blank and proceeding. Encountered error: ", e)
+                            full_response = {}
 
                     chunk_entities[chunk_number]['entities_and_relationships'] = full_response
                     output_queue.put(chunk_entities[chunk_number])
