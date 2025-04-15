@@ -365,7 +365,7 @@ body {
 
 #user-input {
     transition: height 0.1s ease-out;
-    overflow-y: hidden; /* Hide scrollbar during transitions */
+    overflow-y: auto; /* Hidden will hide scrollbar during transitions */
     box-sizing: border-box; /* Include padding in height calculations */
 }
 
