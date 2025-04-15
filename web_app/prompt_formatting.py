@@ -98,6 +98,58 @@ def get_user_query_for_node_summary(name, node_type, summary, chunk):
         """
 
 
+def get_service_request_prompt(user_query:str):
+    return f"""You're orchestrating a RAG system and must select the **best service** from the list below to address the user's query. Follow these **strict rules** to decide:
+
+    ### Services:
+    1. **RAG**
+    - Utilizes a semantic/lexical search engine to find the most relevant documents and pages to answer the user's query.
+    - **Use only if**: The query asks for **specific facts**, such as:
+    - A single number/date (e.g., "What was <company_or_individual>'s Q2 revenue?").
+    - Exact details (e.g., "What is the EIN of <company_or_individual>?").
+    - Questions with **one definitive answer** derived from a single source.
+
+    2. **GraphDB**
+    - Utilizes a graph database to analyze relationships between entities and generate comprehensive summary reports.
+    - **Use only if**: The query requires **analysis of multiple data points**, such as:
+    - Summaries, trends, or comparisons (e.g., "Summarize <company_or_individual>'s 2024 performance").
+    - Open-ended questions needing **insights from relationships between entities** (e.g., "How did <company_or_individual>'s sales correlate with market trends?").
+    - Broad questions lacking a single factual answer (e.g., "Was <company_or_individual>'s 2024 performance strong?").
+
+    3. **Direct Response**
+    - **Use only if**: The query is very simple, such as:
+    - A greeting (e.g., "Hi", "Hello!", "Hey!", "What's up?", etc.)
+    - A request for a simple service (e.g., "What is your name?", "How are you?")
+    - A request for a simple fact (e.g., "What is the capital of France?")
+    - Such queries do not require detailed analysis or lookups and can be answered directly!
+
+    ---
+
+    ### Decision Flow (Do this step-by-step):
+    1. **Ask yourself**: Does the query demand a **single fact** or a **synthesis of information**?
+    - If it's a fact (e.g., "What was <company_or_individual>'s net income?"), choose **RAG**.
+    - If it requires analysis (e.g., "How did <company_or_individual> perform in 2024?"), choose **GraphDB**.
+
+    2. **Check keywords**:
+    - **RAG triggers**: "What is...", "When was...", "Who is...", "Exact figure...", "Specific...".
+    - **GraphDB triggers**: "Analyze...", "Summarize...", "Compare...", "Why...", "How...", "Trends...", "Overall...".
+
+    ---
+
+    ### User Query:
+    <user_query>
+    {user_query}
+    </user_query>
+
+    ---
+
+    ### Output Format:
+    {{
+        "service": "service name here"
+    }}
+    """
+
+
 def manually_format_prompt_with_prompt_template(formatted_prompt:str, user_query:str, current_sequence_id:int, base_template:str, local_llm_chat_template_format:str, skip_system_prompt=False) -> str:
 
     print(f"\n\nFormatting prompt for LMM with template format: {local_llm_chat_template_format}\n\n")
@@ -255,3 +307,23 @@ def append_eot_token_to_llm_response(local_llm_chat_template_format: str, llm_re
         return f"{llm_response}\n"
     else:
         return False
+
+
+def trim_response(response, start_substring, end_substring, include_start_substring=False, include_end_substring=False):
+    try:
+        if start_substring in response and end_substring in response:
+            start_index = response.rindex(start_substring)  # Sometimes the model re-gurgitates multiple copies of the same dict in it's response
+            end_index = response.rindex(end_substring) # rindex() returns the index of the last occurrence of the substring
+            
+            if not include_start_substring:
+                start_index += len(start_substring)
+            if include_end_substring:
+                end_index += len(end_substring)
+            
+            return response[start_index:end_index]
+        else:
+            print(f"\nResponse does not contain start_substring: {start_substring} or end_substring: {end_substring}, returning unchanged response: {response}\n")
+            return response
+    except Exception as e:
+        print(f"Failed to trim response, encountered error: {e}")
+        return response
