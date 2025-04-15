@@ -62,7 +62,7 @@ except Exception as e:
     print(f"Could not import graph_clustering (likely not installed), skipping. Encountered error: {e}")
 
 try:
-    from prompt_formatting import manually_format_prompt_with_prompt_template, append_eot_token_to_llm_response
+    import prompt_formatting as prompt_formatting_module
 except ImportError:
     print("WARNING: Prompt Formatter module `prompt_formatting.py` is not present. Skipping import. Exl2 and llama.cpp will not work!")
 
@@ -4890,7 +4890,7 @@ def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_
         handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
 
     if exl2:
-        return(manually_format_prompt_with_prompt_template(formatted_prompt, user_query, current_sequence_id, base_template, exl2_prompt_template_format, skip_system_prompt))
+        return(prompt_formatting_module.manually_format_prompt_with_prompt_template(formatted_prompt, user_query, current_sequence_id, base_template, exl2_prompt_template_format, skip_system_prompt))
 
     try:
     
@@ -5100,7 +5100,7 @@ def read_request_data_for_response_setup(request: Request) -> tuple[str, str, st
 
 def get_full_prompt_for_server(local_llm_server: str, formatted_history_prompt: str, user_query: str, current_sequence_id: int, base_template: str, local_llm_chat_template_format: str, skip_system_prompt: bool) -> str:
     if local_llm_server == 'llama-cpp':
-        formatted_updated_prompt = manually_format_prompt_with_prompt_template(formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
+        formatted_updated_prompt = prompt_formatting_module.manually_format_prompt_with_prompt_template(formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
     elif local_llm_server == 'hf-waitress':
         formatted_updated_prompt = format_prompt_for_hf_waitress(formatted_history_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
     elif local_llm_server == 'hfw-vision':
@@ -5346,7 +5346,7 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
                     break
                 textual_summary_report += str(doc.page_content)
             
-            print(f"\n\nReturning Textual summary report: {textual_summary_report}\n\n")
+            # print(f"\n\nReturning Textual summary report: {textual_summary_report}\n\n")
             return textual_summary_report, reranked_summaries_list_descending
         except Exception as e:
             return handle_local_error("Could not handle summary report that is too long, encountered error: ", e)
@@ -5368,12 +5368,12 @@ def get_summary_and_source_documents_for_node(graph, name, node_type):
         result = graph.query(query)
         
         if hasattr(result, 'result_set') and result.result_set:
-            print(f"\nExisting summary for node found: {result.result_set[0][0]}\n")
+            # print(f"\nExisting summary for node found: {result.result_set[0][0]}\n")
             summary_list = list(result.result_set[0][0]) if result.result_set[0][0] else []
             source_documents_list = list(result.result_set[0][1]) if result.result_set[0][1] else []
             return summary_list, source_documents_list
         else:
-            print(f"\nNo existing summary for node found...\n")
+            # print(f"\nNo existing summary for node found...\n")
             return [], []   # If no summary is found, return an empty list:
 
     except Exception as e:
@@ -5442,12 +5442,12 @@ def get_summary_and_source_documents_for_relationship(graph, source, target, rel
         result = graph.query(query)
 
         if hasattr(result, 'result_set') and result.result_set:
-            print(f"\nExisting summary for relationship found: {result.result_set[0][0]}\n")
+            # print(f"\nExisting summary for relationship found: {result.result_set[0][0]}\n")
             summary_list = list(result.result_set[0][0]) if result.result_set[0][0] else []
             source_documents_list = list(result.result_set[0][1]) if result.result_set[0][1] else []
             return summary_list, source_documents_list
         else:
-            print(f"\nNo existing summary for relationship found...\n")
+            # print(f"\nNo existing summary for relationship found...\n")
             return [], []   # If no summary is found, return an empty list:
 
     except Exception as e:
@@ -5733,9 +5733,188 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
     return summary_report, reranked_summaries_list_descending
 
 
+def hf_waitress_streaming_request_response_handler(endpoint_url, headers, payload):
+    print(f"\nHF-Waitress Streaming Request Response Handler Invoked\n")
+    try:
+        response = requests.post(endpoint_url, headers=headers, data=payload, stream=True)
+        response.raise_for_status()  # Raise an exception for bad status codes so we can catch them in the except block
+
+        full_response = ""
+        for line in response.iter_lines(decode_unicode=True):
+            if line:
+                if line.startswith("data:"):
+                    event_data = line[6:].strip()
+                    try:
+                        token = str(json.loads(event_data))
+                        full_response += token
+                    except json.JSONDecodeError as e:
+                        handle_error_no_return(f"Failed to parse event data: {event_data}, encountered error: ", e)
+                elif line.startswith("event: END"):
+                    break
+                else:
+                    print(f"\nUnexpected Line Format: {line}\n")
+
+        if not full_response:
+            print("\nWarning: No response from exl2_stream / exl2_grapher request\n")
+            return None
+
+        print("\nCompleted, returning response\n")
+        return full_response
+        
+    except Exception as e:
+        return handle_local_error("Failed request to /exl2_stream or /exl2_grapher APIs, encountered error: ", e)
+
+
+def get_request_params_for_generic_hf_waitress_request():
+    try:
+        hf_config_data = read_hf_config(['exl2'])
+        config_data = read_config(['hf_waitress_access_url', 'hf_waitress_server_port'])
+        exl2 = str(hf_config_data['exl2']).lower() == 'true'
+    except Exception as e:
+        return handle_local_error("Could not get graphing request params, encountered error: ", e)
+
+    headers = {
+        'Content-Type': 'application/json'
+    }
+
+    waitress_url = f"http://{config_data['hf_waitress_access_url']}:{config_data['hf_waitress_server_port']}"
+
+    if not exl2:
+        headers['X-Return-Full-Text'] = 'False'
+        waitress_url += "/completions_stream"
+    else:
+        headers['Connection'] = 'keep-alive'
+        waitress_url += "/exl2_stream"
+
+    return waitress_url, headers, exl2
+
+
+def make_request_to_hf_waitress(user_query:str):
+    try:
+        waitress_url, headers, _ = get_request_params_for_generic_hf_waitress_request()
+    except Exception as e:
+        return handle_local_error("Could not get request params for generic HF-Waitress request, encountered error: ", e)
+
+    try:
+        payload = format_prompt_for_hf_waitress(formatted_prompt="", user_query=user_query, current_sequence_id=0, base_template="", skip_system_prompt=True)
+        json_payload = json.dumps(payload)
+    except Exception as e:
+        return handle_local_error("Could not format prompt for generic HF-Waitress request, encountered error: ", e)
+
+    try:
+        return hf_waitress_streaming_request_response_handler(waitress_url, headers, json_payload)
+    except Exception as e:
+        return handle_local_error("Failed /exl2_stream request to extract entities and relationships from chunk, encountered error: ", e)
+
+
+def parse_service_response(response:str):
+    """
+    Helper function to parse and clean the service response.
+    
+    Args:
+        response: Raw response string from HF-Waitress
+        
+    Returns:
+        dict: Parsed service selection or default RAG service
+    """
+    try:
+        json_parsed_response = json.loads(response)
+        return json_parsed_response
+    except Exception as e:
+        print(f"\nFailed to parse service response, attempting to literal-eval and maybe even trim. Encountered error: {e}\n")
+
+    try:
+        return ast.literal_eval(response)
+    except (ValueError, SyntaxError):
+        # Sometimes additional text may be present so we need to strip it:
+        try:
+            print(f"\nAdditional text present, trimming response...\n")
+            cleaned_response = prompt_formatting_module.trim_response(
+                response,
+                '"service":', '}',
+                include_start_substring=True,
+                include_end_substring=False
+            )
+            cleaned_response = "{" + cleaned_response.strip() + "}"
+            print(f"\nTrimmed response to dictionary: {cleaned_response}\n")
+            return ast.literal_eval(cleaned_response)
+        except (ValueError, SyntaxError):
+            print("Failed to identify selected service even after trimming, defaulting to RAG...")
+            return {'service': 'RAG'}
+
+
+VALID_SERVICES = {
+    'rag': {'do_rag': True, 'perform_graph_rag': False},
+    'graphdb': {'do_rag': True, 'perform_graph_rag': True},
+    'direct response': {'do_rag': False, 'perform_graph_rag': False}
+}
+
+DEFAULT_CONFIG = {'do_rag': True, 'perform_graph_rag': False}
+
+
+def determine_response_service(user_query:str):
+    """
+    Determines which service should handle the user query.
+    
+    Args:
+        user_query: The user's input query
+        
+    Returns:
+        dict: Configuration for the selected service with 'do_rag' and 'perform_graph_rag' settings
+    """
+    print(f"\nDetermining response service...\n")
+
+    try:
+        service_request_prompt = prompt_formatting_module.get_service_request_prompt(user_query)
+    except Exception as e:
+        return handle_local_error("Could not get service request prompt, encountered error: ", e)
+
+    try:
+        full_response = make_request_to_hf_waitress(service_request_prompt)
+    except Exception as e:
+        return handle_local_error("Could not make streaming request to HF-Waitress, encountered error: ", e)
+    
+    try:
+        selected_service = parse_service_response(full_response)
+        print(f"\nLLM selected service: {selected_service}\n")
+    except Exception as e:
+        handle_error_no_return("Could not parse service response, encountered error: ", e)
+        selected_service = {'service': 'RAG'}
+
+    try:
+        service_name = selected_service.get('service', 'RAG').lower().strip()
+        print(f"\nService name: {service_name}\n")
+        config = VALID_SERVICES.get(service_name, DEFAULT_CONFIG)
+        write_config(config)
+        print(f"\nConfig: {config}\n")
+        return config['do_rag']
+    except Exception as e:
+        handle_error_no_return("Could not determine service selected by the LLM, defaulting to use Naive RAG. Encountered error: ", e)
+        return DEFAULT_CONFIG['do_rag']
+
+
 def search_knowledge_base(user_query:str, embedding_function:str, perform_graph_rag:bool, force_enable_rag:bool, force_disable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int, ) -> tuple[list[Document], bool]:
     print("Searching knowledge base")
 
+    if force_disable_rag:
+        print("\n\nFORCE_DISABLE_RAG True, force disabling RAG and returning\n\n")
+        return [], False, None
+
+    try:
+        do_rag = determine_response_service(user_query)
+    except Exception as e:
+        handle_error_no_return("Could not determine response service, defaulting to use Naive RAG. Encountered error: ", e)
+        do_rag = DEFAULT_CONFIG['do_rag']
+    
+    if force_enable_rag:
+        print("\n\nFORCE_ENABLE_RAG True, force enabling RAG and returning\n\n")
+        do_rag = True   # We don't check this earlier as if force_enable_rag is True, we also want to determine if GraphRAG should be performed! We only set it to True here to ensure force_enable_rag takes precedence over the LLM's selection.
+
+    if do_rag is False:
+        print("Do RAG is False, returning...")
+        return [], False, None
+
+    print("Do RAG is True, continuing...")
     filtered_docs = []
     try:
         docs_list_with_cosine_distance = search_vector_db(user_query, embedding_function, fetch_top_k_results_from_vectordb)
@@ -5759,10 +5938,12 @@ def search_knowledge_base(user_query:str, embedding_function:str, perform_graph_
         do_rag = False
         return [], do_rag, None
 
-    print(f"\n\nContext docs prior to reranking: {combined_docs}\n\n")
+    # print(f"\n\nContext docs prior to reranking: {combined_docs}\n\n")
     docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
-    print(f"\n\nContext docs after reranking: {docs}\n\n")
-    do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
+    # print(f"\n\nContext docs after reranking: {docs}\n\n")
+    # do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
+    
+    perform_graph_rag = read_config(['perform_graph_rag'])['perform_graph_rag']
 
     graph_rag_context = None
     if perform_graph_rag and do_rag:
@@ -5845,10 +6026,10 @@ def is_fuzzy_subset(string1: str, string2: str, threshold: int) -> bool:
 
 
 def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
-    print(f"Checking citation relevance: {source_filename} in LLM response?")
+    print(f"\nChecking citation relevance: {source_filename} in LLM response?\n")
     try:
         if not llm_response or not source_filename:
-            print("LLM response or source filename is empty, returning False")
+            print("\nLLM response or source filename is empty, returning False\n")
             return False
         
         # Normalize inputs:
@@ -5886,13 +6067,13 @@ def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
             for response in responses_to_check
         )
 
-        threshold = 80
-        if not is_relevant: # No exact matches found, LLM may have mentioned the filename just differently enough, so time to check if a Fuzzy match is found
-            print(f"\nNo exact matches found, checking for fuzzy match with a {threshold}% or higher threshold\n")
-            is_relevant = is_fuzzy_subset(llm_response_cleaned, source_filename_cleaned, threshold)
-            print(f"Fuzzy match result: {is_relevant} for {source_filename}\n")
+        # threshold = 90
+        # if not is_relevant: # No exact matches found, LLM may have mentioned the filename just differently enough, so time to check if a Fuzzy match is found
+        #     print(f"\nNo exact matches found, checking for fuzzy match with a {threshold}% or higher threshold\n")
+        #     is_relevant = is_fuzzy_subset(llm_response_cleaned, source_filename_cleaned, threshold)
+        #     print(f"Fuzzy match result: {is_relevant} for {source_filename}\n")
 
-        print(f"Citation relevance check result: {is_relevant} for {source_filename}")
+        print(f"\nCitation relevance check result: {is_relevant} for {source_filename}\n")
         return is_relevant
     
     except Exception as e:
@@ -6049,24 +6230,24 @@ def get_sources_and_pages_for_get_references(docs: list[Document], llm_response:
 
 def get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc: dict[str, list[list[str]]], stream_session_id: str, is_graph_rag: bool) -> tuple[str, str]:
     refer_pages_string = ""
-    if not is_graph_rag:
-        refer_pages_string = "<br><h6>Additional data may be found in the following documents & pages:</h6>"
+    # if not is_graph_rag:
+    #     refer_pages_string = "<br><h6>Additional data may be found in the following documents & pages:</h6>"
         
-        for index, doc in enumerate(user_should_refer_pages_in_doc, start=1):
-            pdf_iframe_id = f"stream{stream_session_id}PdfViewer{str(index)}"
-            tab_name_string = f"stream{stream_session_id}tabName{str(index)}"
-            frame_doc_path = f"/pdf/{doc}"
-            try:
-                stream_id_string_to_remove = f"_{stream_session_id}"
-                doc_name_without_stream_id = str(doc).replace(stream_id_string_to_remove, "")
-                refer_pages_string += f"<br><h6>{doc_name_without_stream_id}: "
-                for page in user_should_refer_pages_in_doc[doc]:
-                    frame_doc_path += f"#page={str(page)}" 
-                    refer_pages_string += f'<a href="javascript:void(0)" onclick="goToPageAndSwitchTab(\'{pdf_iframe_id}\', \'{frame_doc_path}\', \'tab{tab_name_string}\', \'{stream_session_id}\')">Page {page}</a>, '
-                    frame_doc_path = f"/pdf/{doc}"
-                refer_pages_string = refer_pages_string.strip(', ') + "</h6>"
-            except Exception as e:
-                handle_error_no_return("Could not construct refer_pages_string, encountered error: ", e)
+    #     for index, doc in enumerate(user_should_refer_pages_in_doc, start=1):
+    #         pdf_iframe_id = f"stream{stream_session_id}PdfViewer{str(index)}"
+    #         tab_name_string = f"stream{stream_session_id}tabName{str(index)}"
+    #         frame_doc_path = f"/pdf/{doc}"
+    #         try:
+    #             stream_id_string_to_remove = f"_{stream_session_id}"
+    #             doc_name_without_stream_id = str(doc).replace(stream_id_string_to_remove, "")
+    #             refer_pages_string += f"<br><h6>{doc_name_without_stream_id}: "
+    #             for page in user_should_refer_pages_in_doc[doc]:
+    #                 frame_doc_path += f"#page={str(page)}" 
+    #                 refer_pages_string += f'<a href="javascript:void(0)" onclick="goToPageAndSwitchTab(\'{pdf_iframe_id}\', \'{frame_doc_path}\', \'tab{tab_name_string}\', \'{stream_session_id}\')">Page {page}</a>, '
+    #                 frame_doc_path = f"/pdf/{doc}"
+    #             refer_pages_string = refer_pages_string.strip(', ') + "</h6>"
+    #         except Exception as e:
+    #             handle_error_no_return("Could not construct refer_pages_string, encountered error: ", e)
 
     
     pdf_right_pane_id = f"stream{stream_session_id}PdfPane"
@@ -6130,7 +6311,7 @@ def get_references():
         handle_error_no_return("Error determining if RAG was used in method get_references - Could not check the QUERIES dict. Proceeding without RAG. Encountered error: ", e)
 
     if local_llm_server == 'llama-cpp':
-        formatted_user_prompt += append_eot_token_to_llm_response(local_llm_chat_template_format, llm_response)
+        formatted_user_prompt += prompt_formatting_module.append_eot_token_to_llm_response(local_llm_chat_template_format, llm_response)
     elif local_llm_server == 'hf-waitress':
         local_llm_chat_template_format = "hf-transformers"
         flux_diffusers = determine_if_flux_diffusers_is_enabled()
@@ -6144,7 +6325,7 @@ def get_references():
                         formatted_user_prompt = formatted_user_prompt[:last_context_index]
                     except Exception as e:
                         handle_error_no_return("Trimming RAG context unnecessary, skipping. Encountered error: ", e)
-                formatted_user_prompt += append_eot_token_to_llm_response(exl2_prompt_template_format, llm_response)
+                formatted_user_prompt += prompt_formatting_module.append_eot_token_to_llm_response(exl2_prompt_template_format, llm_response)
             else:
                 formatted_user_prompt = get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response)
 
