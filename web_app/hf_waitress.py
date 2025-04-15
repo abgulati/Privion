@@ -23,7 +23,7 @@ except ImportError:
     print("transformers version is below 4.45.0 required from Llama3.2-Vision. Skipping MllamaForConditionalGeneration import.")
 
 try:
-    from prompt_formatting import manually_format_prompt_with_prompt_template, get_user_query_for_comprehensive_summary
+    import prompt_formatting as prompt_formatting_module
 except ImportError:
     print("Prompt Formatter module `prompt_formatting.py` is not present. Skipping import. Must be present for exl2 bulk-summary generation.")
 
@@ -1495,7 +1495,8 @@ def restart_server_stream():
         vision = str(read_return['vision']).lower() == 'true'
         exl2 = str(read_return['exl2']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting /restart_server_stream, encountered error: ", e)
+        llm_semaphore.release()
+        return handle_api_error("Could not read values from hf_config.json when attempting /restart_server_stream, encountered error: ", e)
 
     model_params = {}
 
@@ -2126,7 +2127,8 @@ def completions_stream():
         data = request.json
         messages = data.get('messages', [])
     except Exception as e:
-        handle_api_error("Could not read POST-request messages for /completions_stream, encountered error: ", e)
+        llm_semaphore.release()
+        return handle_api_error("Could not read POST-request messages for /completions_stream, encountered error: ", e)
 
     try:
         read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep'])
@@ -2139,7 +2141,8 @@ def completions_stream():
         min_p = float(read_return['min_p'])
         n_keep = int(read_return['n_keep'])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting /completions_stream, encountered error: ", e)
+        llm_semaphore.release()
+        return handle_api_error("Could not read values from hf_config.json when attempting /completions_stream, encountered error: ", e)
 
     try:
         generation_args = {
@@ -2268,7 +2271,8 @@ def exl2_stream():
         gen_settings, max_new_tokens, _  = get_exl2_gen_settings(request)
         print(f"\nRead request - message received: {messages}\n")
     except Exception as e:
-        handle_api_error("Could not read POST-request messages for /exl2_stream, encountered error: ", e)
+        llm_semaphore.release()
+        return handle_api_error("Could not read POST-request messages for /exl2_stream, encountered error: ", e)
 
     try:
         print("\nCreating ExLlamaV2DynamicJob Object...\n")
@@ -2281,6 +2285,7 @@ def exl2_stream():
         PIPE.enqueue(job)
         print("\nExLlamaV2DynamicJob Defined & Enqueued Successfully\n")
     except Exception as e:
+        llm_semaphore.release()
         return handle_api_error("Could not create ExLlamaV2DynamicJob object for /exl2_stream, encountered error: ", e)
 
     stop_thread = threading.Event()
@@ -2348,26 +2353,6 @@ def exl2_stream():
 
 ### Exl2 Graph Helper Functions ###
 
-def trim_response(response, start_substring, end_substring, include_start_substring=False, include_end_substring=False):
-    try:
-        if start_substring in response and end_substring in response:
-            start_index = response.rindex(start_substring)  # Sometimes the model re-gurgitates multiple copies of the same dict in it's response
-            end_index = response.rindex(end_substring) # rindex() returns the index of the last occurrence of the substring
-            
-            if not include_start_substring:
-                start_index += len(start_substring)
-            if include_end_substring:
-                end_index += len(end_substring)
-            
-            return response[start_index:end_index]
-        else:
-            print(f"\nResponse does not contain start_substring: {start_substring} or end_substring: {end_substring}, returning unchanged response: {response}\n")
-            return response
-    except Exception as e:
-        handle_error_no_return("Failed to trim response, encountered error: ", e)
-        return response
-
-
 def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
     job = ExLlamaV2DynamicJob(
         input_ids= EXL2_TOKENIZER.encode(payload, add_bos=True),
@@ -2417,7 +2402,7 @@ def validate_entity_extraction_response(extraction_response: dict):
         return {'validated_response': extraction_response, 'is_valid': True}
     except Exception as e:
         print(f"Response invalid, attempting to trim. Encountered error: ", e)
-        extraction_response = trim_response(extraction_response, '{"nodes":', '"}]}', include_start_substring=True, include_end_substring=True)
+        extraction_response = prompt_formatting_module.trim_response(extraction_response, '{"nodes":', '"}]}', include_start_substring=True, include_end_substring=True)
         try:
             extraction_response = ast.literal_eval(extraction_response)
             print("Success! Proceeding...")
@@ -2425,15 +2410,6 @@ def validate_entity_extraction_response(extraction_response: dict):
         except Exception as e:
             print(f"Response still invalid, returning unchanged response. Encountered error: ", e)
             return {'validated_response': extraction_response, 'is_valid': False}
-            # print(f"Response still invalid, re-attempting with minimal trimming. Encountered error: ", e)
-            # extraction_response = trim_response(extraction_response, '{"nodes":', '}', include_start_substring=True, include_end_substring=True)    # last-ditch effort!
-            # try:
-            #     extraction_response = ast.literal_eval(extraction_response)
-            #     print("Success! Proceeding...")
-            #     return {'validated_response': extraction_response, 'is_valid': True}
-            # except Exception as e:
-            #     print(f"Response still invalid, returning unchanged response. Encountered error: ", e)
-            #     return {'validated_response': extraction_response, 'is_valid': False}
 
 
 def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: str, source_doc_name: str, page_number_list: list, exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
@@ -2445,8 +2421,8 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
     try:
 
         try:
-            comprehensive_summary_request_prompt = get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
-            formatted_prompt = manually_format_prompt_with_prompt_template(
+            comprehensive_summary_request_prompt = prompt_formatting_module.get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
+            formatted_prompt = prompt_formatting_module.manually_format_prompt_with_prompt_template(
                 formatted_prompt="",
                 user_query=comprehensive_summary_request_prompt,
                 current_sequence_id=0,
@@ -2455,7 +2431,7 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
                 skip_system_prompt=True
             )
             full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-            full_response = trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n{Page Number(s): " + str(page_number_list) + "}\n\n"
+            full_response = prompt_formatting_module.trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n{Page Number(s): " + str(page_number_list) + "}\n\n"
             print(f"\n\nfull_response:\n\n{full_response}\n\n")
         except Exception as e:
             return handle_local_error(f"Could not get comprehensive summary from LLM, encountered error: ", e)
@@ -2557,6 +2533,7 @@ def exl2_grapher():
         gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
+        llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for /exl2_grapher, encountered error: ", e)
 
     stop_thread = threading.Event()
@@ -2727,6 +2704,7 @@ def exl2_grapher():
     elif summary_generation_mode:
         thread = threading.Thread(target=summary_generation_task)
     else:
+        llm_semaphore.release()
         return handle_api_error("Invalid request mode for /exl2_grapher. Must specify either 'extraction_mode' or 'summary_generation_mode'.")
 
     thread.start()
