@@ -3657,3 +3657,34 @@ inputTextAreaElement.addEventListener("keydown", function(event) {
 // }
 // document.getElementById("user-input").addEventListener('input', adjustTextareaRows);
 // document.getElementById("user-input").addEventListener('change', adjustTextareaRows);
+
+
+
+def validate_entity_extraction_response(extraction_response: dict):
+    '''
+    This function attempts to validate the response from the entity extraction task.
+    It first attempts to evaluate the response as a dict, which is the expected format.
+    If this fails, it attempts to trim the response and then evaluate again.
+    If this also fails, it attempts to trim the response again with simpler conditions and then evaluate again.
+    If this also fails, it returns the unchanged response and a flag indicating that the response is invalid.
+    '''
+    try:
+        extraction_response = ast.literal_eval(extraction_response) # Sometimes additional text may be present and need to be stripped, which we can test for by trying to evaluate the response as a dict
+        return {'validated_response': extraction_response, 'is_valid': True}
+    except Exception as e:
+        print(f"Response invalid, attempting to trim. Encountered error: ", e)
+        extraction_response = prompt_formatting_module.trim_response(extraction_response, '{"nodes":', '"}]}', include_start_substring=True, include_end_substring=True)
+        try:
+            extraction_response = ast.literal_eval(extraction_response)
+            print("Success! Proceeding...")
+            return {'validated_response': extraction_response, 'is_valid': True}
+        except Exception as e:
+            print(f"Response still invalid, re-attempting with minimal trimming. Encountered error: ", e)
+            extraction_response = prompt_formatting_module.trim_response(extraction_response, '{"nodes":', '}', include_start_substring=True, include_end_substring=True)    # last-ditch effort!
+            try:
+                extraction_response = ast.literal_eval(extraction_response)
+                print("Success! Proceeding...")
+                return {'validated_response': extraction_response, 'is_valid': True}
+            except Exception as e:
+                print(f"Response still invalid, returning unchanged response. Encountered error: ", e)
+                return {'validated_response': extraction_response, 'is_valid': False}
