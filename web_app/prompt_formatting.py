@@ -99,40 +99,46 @@ def get_user_query_for_node_summary(name, node_type, summary, chunk):
 
 
 def get_service_request_prompt(user_query:str):
-    return f"""You're orchestrating a RAG system and must select the **best service** from the list below to address the user's query. Follow these **strict rules** to decide:
+    return f"""You're orchestrating a RAG system, and your task is to select the **single best service** from the list below to address the user's query, following the rules precisely.
 
-    ### Services:
-    1. **RAG**
-    - Utilizes a semantic/lexical search engine to find the most relevant documents and pages to answer the user's query.
-    - **Use only if**: The query asks for **specific facts**, such as:
-    - A single number/date (e.g., "What was <company_or_individual>'s Q2 revenue?").
-    - Exact details (e.g., "What is the EIN of <company_or_individual>?").
-    - Questions with **one definitive answer** derived from a single source.
+    ### Services & Usage Rules:
 
-    2. **GraphDB**
-    - Utilizes a graph database to analyze relationships between entities and generate comprehensive summary reports.
-    - **Use only if**: The query requires **analysis of multiple data points**, such as:
-    - Summaries, trends, or comparisons (e.g., "Summarize <company_or_individual>'s 2024 performance").
-    - Open-ended questions needing **insights from relationships between entities** (e.g., "How did <company_or_individual>'s sales correlate with market trends?").
-    - Broad questions lacking a single factual answer (e.g., "Was <company_or_individual>'s 2024 performance strong?").
+    1.  **RAG**
+        *   **Function:** Uses semantic/lexical search to find specific documents/passages containing factual answers.
+        *   **Use ONLY if the query primarily asks for:**
+            *   **One or more specific, distinct facts:** Numbers, dates, names, definitions, IDs (e.g., "What was <company_or_individual>'s Q2 revenue?", "What is the EIN for <company>?", "List the board members of <company>.").
+            *   **Direct comparisons of specific data points:** Retrieving two or more specific values and comparing them directly (e.g., "What was <company_or_individual>'s gross margin in Q4 2024 vs Q4 2023?", "Compare <company_or_individual>'s revenue in 2023 and 2022.").
+            *   Questions requiring a precise or definitive answer that can be found by searching documents or databases.
 
-    3. **Direct Response**
-    - **Use only if**: The query is very simple, such as:
-    - A greeting (e.g., "Hi", "Hello!", "Hey!", "What's up?", etc.)
-    - A request for a simple service (e.g., "What is your name?", "How are you?")
-    - A request for a simple fact (e.g., "What is the capital of France?")
-    - Such queries do not require detailed analysis or lookups and can be answered directly!
+    2.  **GraphDB**
+        *   **Function:** Uses a graph database to analyze patterns and relationships between entities to generate comprehensive summary reports.
+        *   **Use ONLY if the query requires:**
+            *   **Synthesis or complex analysis:** Summarizing performance, explaining trends, identifying correlations, understanding relationships (e.g., "Summarize <company_or_individual>'s 2024 performance", "How did <company_or_individual>'s sales correlate with market trends?", "Analyze the competitive landscape for <product>.", etc.).
+            *   **Qualitative assessments:** Questions about strength, weakness, position, or outlook that require interpretation beyond simple facts (e.g., "Was <company_or_individual>'s 2024 performance strong?", "What are the key risks facing <company_or_individual>?").
+            *   **Open-ended questions:** Broad questions needing insights derived from connecting multiple pieces of information, not just retrieving facts (e.g., "Why did <company>'s stock price change?", "Tell me about <company_or_individual>'s strategy.").
+            *   **It is NOT for** simple factual lookups or direct A-vs-B value comparisons, even if keywords like "compare" or "how" are present in that simple context.
+
+    3.  **Direct Response**
+        *   **Function:** Answers directly without needing external data retrieval or complex analysis.
+        *   **Use ONLY for:**
+            *   Greetings, simple conversational phrases (e.g., "Hi", "Thank you", "How are you?").
+            *   Basic requests about the AI itself (e.g., "What is your name?", "What can you do?").
+            *   Common knowledge facts not requiring lookup in specific databases (e.g., "What is the capital of France?").
 
     ---
 
-    ### Decision Flow (Do this step-by-step):
-    1. **Ask yourself**: Does the query demand a **single fact** or a **synthesis of information**?
-    - If it's a fact (e.g., "What was <company_or_individual>'s net income?"), choose **RAG**.
-    - If it requires analysis (e.g., "How did <company_or_individual> perform in 2024?"), choose **GraphDB**.
+    ### Guiding Principle:
+    Focus on the **core intent**: Is the user asking for specific **data points** (even multiple for comparison) -> **RAG**, or are they asking for **analysis, synthesis, interpretation, or understanding relationships** -> **GraphDB**?
 
-    2. **Check keywords**:
-    - **RAG triggers**: "What is...", "When was...", "Who is...", "Exact figure...", "Specific...".
-    - **GraphDB triggers**: "Analyze...", "Summarize...", "Compare...", "Why...", "How...", "Trends...", "Overall...".
+    ---
+
+    ### Decision Flow (Follow these steps):
+
+    1.  **Assess Core Need:** Does the query ask for specific facts/values (RAG) or analysis/synthesis/interpretation (GraphDB)? Check if it's a simple conversation (Direct Response).
+    2.  **Consider Keywords (as supporting evidence):**
+        *   **Strong RAG indicators:** "What is/was [specific value]...", "When was...", "Who is...", "List...", "Specific figure for...", "Value of X vs Y...", "How much/many...". *Note: "How was [metric]" often implies asking for the value, favouring RAG unless context clearly demands analysis.*
+        *   **Strong GraphDB indicators:** "Analyze...", "Summarize...", "Compare [performance/trends/strategies]...", "Why...", "How did [X relate to Y]...", "Trends...", "Overall performance...", "Correlate...", "Relationship between...", "Risks/Opportunities...".
+    3.  **Select the Service:** Based on the core need (Step 1) and supported by keywords (Step 2), choose the single most appropriate service. Prioritize the core need over ambiguous keywords.
 
     ---
 
@@ -143,10 +149,12 @@ def get_service_request_prompt(user_query:str):
 
     ---
 
-    ### Output Format:
+    ### Output Format (Strict JSON):
+    ```json
     {{
         "service": "service name here"
     }}
+    ```
     """
 
 
