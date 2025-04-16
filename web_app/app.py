@@ -4954,7 +4954,7 @@ def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_
     return formatted_prompt
 
 
-def combine_whoosh_and_vector_results(whoosh_results, vector_results):
+def combine_and_deduplicate_search_results(whoosh_results, vector_results):
     print("\n\nCombining whoosh and vector results\n\n")
 
     combined_results = []
@@ -4983,7 +4983,7 @@ def combine_whoosh_and_vector_results(whoosh_results, vector_results):
 
         combined_results = unique_results
     except Exception as e:
-        handle_error_no_return("Could not filter out duplicate documents in method combine_whoosh_and_vector_results. Returning all results. Encountered error: ", e)
+        handle_error_no_return("Could not filter out duplicate documents in method combine_and_deduplicate_search_results. Returning all results. Encountered error: ", e)
     
     return combined_results
 
@@ -5340,7 +5340,11 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
     if len(textual_summary_report) > graph_rag_context_length_limit_chars:
         try:
             textual_summary_report = ''
-            reranked_summaries_list_ascending = rerank_results_ml(user_query, summary_doc_objects, top_n=len(summary_doc_objects))
+            try:
+                reranked_summaries_list_ascending = rerank_results_ml(user_query, summary_doc_objects, top_n=len(summary_doc_objects))
+            except Exception as e:
+                handle_error_no_return("Could not rerank search results, skipping. Encountered error: ", e)
+                reranked_summaries_list_ascending = summary_doc_objects
             reranked_summaries_list_descending = reranked_summaries_list_ascending[::-1]    # The `rerank_results_ml` method returns a list of docs in ascending order of relevance, so we need to reverse it so we may iterate starting with the most relevant docs!
             for doc in reranked_summaries_list_descending:
                 if len(textual_summary_report) + len(str(doc.page_content)) > graph_rag_context_length_limit_chars:
@@ -5930,9 +5934,11 @@ def search_knowledge_base(user_query:str, embedding_function:str, force_enable_r
     except Exception as e:
         handle_error_no_return("Could not perform whoosh search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
 
-    if whoosh_results:  # Combine the whoosh and vector results
-        combined_docs = combine_whoosh_and_vector_results(whoosh_results, filtered_docs)
-    else:
+    combined_docs = []
+    try:
+        combined_docs = combine_and_deduplicate_search_results(whoosh_results, filtered_docs)   # Combine the whoosh and vector results
+    except Exception as e:
+        handle_error_no_return("Could not combine and deduplicate search results, skipping. Encountered error: ", e)
         combined_docs = filtered_docs
 
     if not combined_docs:   # i.e. if blank
@@ -5940,9 +5946,12 @@ def search_knowledge_base(user_query:str, embedding_function:str, force_enable_r
         do_rag = False
         return [], do_rag, None
 
-    # print(f"\n\nContext docs prior to reranking: {combined_docs}\n\n")
-    docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
-    # print(f"\n\nContext docs after reranking: {docs}\n\n")
+    try:
+        docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
+    except Exception as e:
+        handle_error_no_return("Could not rerank search results, skipping. Encountered error: ", e)
+        docs = combined_docs
+    
     # do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
     
     perform_graph_rag = read_config(['perform_graph_rag'])['perform_graph_rag']
@@ -6127,7 +6136,11 @@ def filter_all_citations(docs: list[Document], llm_response: str, return_top_k: 
 
     if all_docs == [] and return_top_k:
         print("No relevant citations found but top K requested, reranking all docs")
-        all_docs = rerank_results_ml(user_query, docs, top_n=3)
+        try:
+            all_docs = rerank_results_ml(user_query, docs, top_n=3)
+        except Exception as e:
+            handle_error_no_return("Could not rerank search results, skipping. Encountered error: ", e)
+            all_docs = docs
 
     return all_docs
 
