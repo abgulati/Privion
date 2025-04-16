@@ -3688,3 +3688,271 @@ def validate_entity_extraction_response(extraction_response: dict):
             except Exception as e:
                 print(f"Response still invalid, returning unchanged response. Encountered error: ", e)
                 return {'validated_response': extraction_response, 'is_valid': False}
+
+
+def parse_ocr_output(kosmos_response_output_json, threshold=20):
+    print("\n\nParsing Kosmos-2.5 response output\n\n")
+    print(f"\n\nKosmos-2.5 response output: {kosmos_response_output_json}\n\n")
+
+    try:    # to extract the 'results' field from the JSON
+        if isinstance(kosmos_response_output_json, str):
+            print("\n\nKosmos-2.5 response output is a string\n\n")
+            clean_json_str = kosmos_response_output_json.replace("Using flash_attn\n\n", "").replace("\ndone\n", "")
+            parsed_data = ast.literal_eval(clean_json_str)
+            results = parsed_data.get('results', '')
+        else:
+            results = kosmos_response_output_json.get('results', '')
+    except Exception as e:
+        return handle_local_error("Could not extract results, encountered error: ", e)
+
+    # Sort the text elements by vertical position (y0) first - If y-positions are close (within threshold pixels), sort by horizontal x-position (x0):
+    def sort_key(item):
+        y = item['bounding box']['y0']
+        x = item['bounding box']['x0']
+        
+        # Group items that are roughly on the same line of text together - Grouped items are sorted by their x-coordinate
+        line_number = y // threshold    # Floor division to get the line number
+        return (line_number, x)
+
+    try:    # to sort the OCR elements by the sort_key
+        sorted_elements = sorted(results, key=sort_key) # the sorted() function takes a list and a key function, and returns a new sorted list without modifying the original list
+        # print(f"\n\nSorted elements: {sorted_elements}\n\n")
+    except Exception as e:
+        return handle_local_error("Could not sort OCR elements, encountered error: ", e)
+
+    try:    # to extract just the text in order
+        ordered_text = [elem['text'] for elem in sorted_elements]
+    except Exception as e:
+        return handle_local_error("Could not extract text in order, encountered error: ", e)
+
+    full_text = ""
+    for text in ordered_text:
+        full_text += text + " "
+    
+    return sorted_elements, ordered_text, full_text
+
+
+def parse_ocr_output(kosmos_response_output_json, threshold=20):
+    print("\n\nParsing Kosmos-2.5 response output\n\n")
+    print(f"\n\nKosmos-2.5 response output: {kosmos_response_output_json}\n\n")
+
+    try:    # to extract the 'results' field from the JSON
+        if isinstance(kosmos_response_output_json, str):
+            print("\n\nKosmos-2.5 response output is a string\n\n")
+            clean_json_str = kosmos_response_output_json.replace("Using flash_attn\n\n", "").replace("\ndone\n", "")
+            parsed_data = ast.literal_eval(clean_json_str)
+            results = parsed_data.get('results', '')
+        else:
+            results = kosmos_response_output_json.get('results', '')
+    except Exception as e:
+        return handle_local_error("Could not extract results, encountered error: ", e)
+
+    def calculate_distances(item1, item2):
+        """Calculate vertical and horizontal distances between two bounding boxes."""
+        box1 = item1['bounding box']
+        box2 = item2['bounding box']
+
+        # Vertical distance between midpoints
+        y1_mid = (box1['y0'] + box1['y1']) / 2 # y0 is the top of the bounding box, y1 is the bottom
+        y2_mid = (box2['y0'] + box2['y1']) / 2
+        vertical_distance = abs(y1_mid - y2_mid) # The absolute difference between the midpoints of the two bounding boxes
+
+        # Horizontal distance (from end of first box to the start of the second)
+        horizontal_dist = abs(box1['x1'] - box2['x0'])
+
+        return vertical_distance, horizontal_dist
+    
+    def sort_elements(elements):
+
+        if not elements:
+            return []
+        
+        sort_elements = []
+        remaining = elements.copy()
+
+        # Start with the leftmost, topmost element
+        current = min(remaining, key=lambda x: (x['bounding box']['y0'], x['bounding box']['x0']))
+        '''
+        The min() function can take either two items to compare directly, or a list and a key function that defines how to compare the items.
+        We chose the latter approach here via the lambda function, which for each element x in the remaining list,
+        creates a tuple of (y0, x0) coordinates from the bounding box of x, i.e. the top-vertical and left-horizontal start positions of the bounding box.
+        The min() function then returns the element with the smallest y0 coordinate (topmost element), which explains why the tuple is constructed as (y0, x0):
+            - First compare by y0 (vertical position) to ensure the topmost element is selected
+            - If there are multiple elements with the same y0, then compare by x0 (horizontal position) to ensure the leftmost element is selected
+        
+        Edge case: if the very first word is smaller than the rest of the title/heading/text, then it will NOT be picked as the first, as it may not be topmost!
+        An example is the word "Form" in the "W2_Elizabeth_Darling.pdf" document: it should be the first, but as it's not the topmost, it will not be picked as such.
+        Thing is, titles and headings are often centered at the top so it would be unnatural to pick the first by topmost of the leftmost.
+        There are some ways to handle this, but handling every edge case can lead to additional complexity and unpredicatable issues elsewhere.
+        As this particular edge case does not affect the overall / core functionality of the OCR output, it is not handled.
+        '''
+        sort_elements.append(current)
+        remaining.remove(current)
+
+        while remaining:
+            best_next = None
+            min_score = float('inf')    # This initializes the minimum score to infinity, which is the highest possible score
+
+            for candidate in remaining:
+                vert_dist, horiz_dist = calculate_distances(current, candidate) # we're trying to find the word that comes after the current word
+
+                # If elements are roughly on the same line (within threshold)
+                if vert_dist < threshold:
+                    # Prefer elements to the right (lower x0 means to the right in the coordinate system)
+                    if candidate['bounding box']['x0'] > current['bounding box']['x0']:
+                        score = horiz_dist
+                    else:
+                        # Heavily penalize elements to the left on the same line by shifting to the right by a large amount
+                        score = horiz_dist + 10000
+                else:
+                    # For elements on different lines, prefer the leftmost element of the next line
+                    score = vert_dist + candidate['bounding box']['x0'] / 10    
+
+                if score < min_score:
+                    min_score = score
+                    best_next = candidate
+
+            if best_next is None:
+                # If no good next element found, take the topmost leftmost remaining element
+                best_next = min(remaining, key=lambda x: (x['bounding box']['y0'], x['bounding box']['x0']))
+
+            sort_elements.append(best_next)
+            current = best_next
+            remaining.remove(best_next)
+
+        return sort_elements
+
+    try:
+        sorted_elements = sort_elements(results)
+    except Exception as e:
+        return handle_local_error("Could not sort OCR elements, encountered error: ", e)
+
+    try:    # to extract just the text in order
+        ordered_text = [elem['text'] for elem in sorted_elements]
+    except Exception as e:
+        return handle_local_error("Could not extract text in order, encountered error: ", e)
+
+    full_text = ""
+    for text in ordered_text:
+        full_text += text + " "
+    
+    return sorted_elements, ordered_text, full_text
+
+
+
+def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
+    print(f"\nChecking citation relevance: {source_filename} in LLM response?\n")
+    try:
+        if not llm_response or not source_filename:
+            print("\nLLM response or source filename is empty, returning False\n")
+            return False
+        
+        # Normalize inputs:
+        llm_response_norm = llm_response.lower().strip()
+        source_filename_norm = source_filename.lower().strip()
+
+        # Variations of the filename:
+        source_filename_no_extension, _ = os.path.splitext(source_filename_norm) # os.path.splitext() returns a tuple containing the path's name and extension. It handles edge cases and is platform-independent.
+        
+        # Clean by replacing common separators with spaces and collapsing multiple spaces into a single space
+        # For filename: process both with and without extension initially for regex
+        source_filename_cleaned_with_ext = re.sub(r'[-_+]', ' ', source_filename_norm)
+        source_filename_cleaned_with_ext = re.sub(r' +', ' ', source_filename_cleaned_with_ext).strip()
+
+        source_filename_cleaned_no_ext = re.sub(r'[-_+]', ' ', source_filename_no_extension)
+        source_filename_cleaned_no_ext = re.sub(r' +', ' ', source_filename_cleaned_no_ext).strip()
+
+        # Clean the LLM response similarly:
+        llm_response_cleaned = re.sub(r'[-_+]', ' ', llm_response_norm)
+        llm_response_cleaned = re.sub(r' +', ' ', llm_response_cleaned).strip()
+
+        # --- Check 1: Regex matching variations of the *full* filename ---
+        print("--- Running Check 1: Regex Checks ---")
+        # These patterns try to match the filename more precisely, often as whole words.
+        """
+        re.escape() is used to escape special characters in the source filename, ensuring they are treated as literal characters in the regex pattern.
+        \b is a word boundary, ensuring the pattern is a whole word. 
+        rf'' is a raw f-string, allowing for the use of \b without it being interpreted as an escape character. This prevents partial matches, eg "doc1" matching on "doc123".
+        """
+        patterns = [
+            rf'\b{re.escape(source_filename_norm)}\b', # Exact filename match with extension, case-insensitive due to prior normalization
+            rf'\b{re.escape(source_filename_no_extension)}\b', # Filename without extension
+            rf'\b{re.escape(source_filename_cleaned_no_ext)}\b', # Cleaned filename without extension (spaces for separators)
+            rf'\b{re.escape(source_filename_cleaned_with_ext)}\b', # Cleaned filename with extension (less common, but possible)
+        ]
+
+        # Check original and cleaned LLm response against regex patterns
+        # Using original llm_response_norm as well, in case cleaning removed crucial context for regex
+        responses_to_check = [llm_response_norm, llm_response_cleaned]
+
+        is_relevant = any(
+            re.search(pattern, response) 
+            for pattern in patterns
+            for response in responses_to_check
+        )
+
+        # threshold = 90
+        # if not is_relevant: # No exact matches found, LLM may have mentioned the filename just differently enough, so time to check if a Fuzzy match is found
+        #     print(f"\nNo exact matches found, checking for fuzzy match with a {threshold}% or higher threshold\n")
+        #     is_relevant = is_fuzzy_subset(llm_response_cleaned, source_filename_cleaned_no_ext, threshold)
+        #     print(f"Fuzzy match result: {is_relevant} for {source_filename}\n")
+
+        # print(f"\nCitation relevance check result: {is_relevant} for {source_filename}\n")
+        # return is_relevant
+
+        if is_relevant:
+            print(f"RegEx match for {source_filename} in LLM response. Citation check result: True for {source_filename}")
+            return True
+                
+        # --- Check 2: Simple Substring Checks ---
+        if not is_relevant:
+            print("--- Running Check 2: Simple Substring Checks ---")
+
+            filename_variants = [
+                v for v in [
+                    source_filename_norm,
+                    source_filename_no_extension,
+                    source_filename_cleaned_no_ext,
+                    source_filename_cleaned_with_ext
+                ]
+                if v # Filter out empty strings
+            ]
+
+            llm_response_variants = [
+                v for v in [
+                    llm_response_norm,
+                    llm_response_cleaned
+                ]
+                if v # Filter out empty strings
+            ]
+
+            if not filename_variants or not llm_response_variants:
+                print(f"No valid filename variants or LLM response variants, skipping substring checks. Citation check result: False for {source_filename}")
+                return False
+            
+            check_A = any(
+                fn_var in llm_var
+                for fn_var in filename_variants
+                for llm_var in llm_response_variants
+            )
+            
+            if check_A:
+                print(f"Found filename variant in LLM response. Citation check result: True for {source_filename}")
+                return True
+            
+            check_B = any(
+                llm_var in fn_var
+                for llm_var in llm_response_variants
+                for fn_var in filename_variants
+            )
+
+            if check_B:
+                print(f"Found LLM response variant in filename variant. Citation check result: True for {source_filename}")
+                return True
+            
+            print(f"No filename variant in LLM response or LLM response variant in filename variant. Citation check result: False for {source_filename}")
+            return False
+    
+    except Exception as e:
+        handle_error_no_return("Could not determine if citation is relevant in is_citation_relevant(), encountered error: ", e)
+        return False
