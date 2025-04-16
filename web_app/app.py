@@ -316,6 +316,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'chunk_overlap':0,
                 'perform_graph_rag':True,
                 'perform_only_graph_rag':False,
+                'upload_doc_to_graph_db':True,
                 'graph_chunk_size':1500,    # Larger chunks are better because they provide more context for the model to identify meaningful entities and relationships
                 'graph_chunk_overlap':300,  # 20% overlap for a 1500 char chunk: provides very reasonable overlap while not being too redundant.
                 'graph_generator_model':'Metin/Gemma-2-2B-TR-Knowledge-Graph',
@@ -2555,18 +2556,18 @@ def graph_generator(chunks, input_file):
 def read_embeddings_config() -> tuple[str, str]:
     print("\n\nReading embeddings config\n\n")
     try:
-        read_return = read_config(['selected_embedding_model', 'chunk_size', 'chunk_overlap', 'perform_graph_rag', 'perform_only_graph_rag'])
+        read_return = read_config(['selected_embedding_model', 'chunk_size', 'chunk_overlap', 'upload_doc_to_graph_db', 'perform_only_graph_rag'])
         selected_embedding_model = read_return['selected_embedding_model']
         chunk_sz = read_return['chunk_size']
         chunk_olp = read_return['chunk_overlap']
-        perform_graph_rag = str(read_return['perform_graph_rag']).lower() == 'true'
+        upload_doc_to_graph_db = str(read_return['upload_doc_to_graph_db']).lower() == 'true'
         perform_only_graph_rag = str(read_return['perform_only_graph_rag']).lower() == 'true'
     except Exception as e:
         handle_local_error("Missing values in config.json, could not read_embeddings_config. Error: ", e)
 
     path_to_knowledge_domain = get_path_to_knowledge_domain()
 
-    return selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp, perform_graph_rag, perform_only_graph_rag
+    return selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp, upload_doc_to_graph_db, perform_only_graph_rag
 
 
 # Document vectorization and chunking
@@ -2575,7 +2576,7 @@ def whoosh_embed_and_graph_doc_chunks(input_file):
 
     # Read Embeddings Config
     try:
-        selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp, perform_graph_rag, perform_only_graph_rag = read_embeddings_config()
+        selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp, upload_doc_to_graph_db, perform_only_graph_rag = read_embeddings_config()
     except Exception as e:
         handle_local_error("Could not read embeddings config, encountered error: ", e)
 
@@ -2599,7 +2600,7 @@ def whoosh_embed_and_graph_doc_chunks(input_file):
             else:
                 print("Performing only graph RAG")
             
-            if perform_graph_rag:
+            if upload_doc_to_graph_db:
                 try:
                     graph_generator(chunks, input_file)
                 except Exception as e:
@@ -5573,7 +5574,8 @@ def merge_chunk_entities_for_graph_rag(chunk_entities: dict) -> dict:
     merging will allow for de-duplication of nodes and relationships in the get_summary step.
     '''
 
-    print(f"\n\nMerging chunk entities for graph RAG. Received chunk_entities: \n {chunk_entities}\n\n")
+    #print(f"\n\nMerging chunk entities for graph RAG. Received chunk_entities: \n {chunk_entities}\n\n")
+    print(f"\nMerging chunk entities for graph RAG.\n")
 
     try:
         chunk_entities_merged = {0: {
@@ -5893,7 +5895,7 @@ def determine_response_service(user_query:str):
         return DEFAULT_CONFIG['do_rag']
 
 
-def search_knowledge_base(user_query:str, embedding_function:str, perform_graph_rag:bool, force_enable_rag:bool, force_disable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int, ) -> tuple[list[Document], bool]:
+def search_knowledge_base(user_query:str, embedding_function:str, force_enable_rag:bool, force_disable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int, ) -> tuple[list[Document], bool]:
     print("Searching knowledge base")
 
     if force_disable_rag:
@@ -5989,8 +5991,7 @@ def setup_for_local_llm_response():
     try:    # RAG Routine Begins: Perform semantic search on the vector DB, lexical search on the whoosh index, combine and rerank results and determine if RAG is necessary
         print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n") 
         selected_embedding_function = read_config(['selected_embedding_model'])['selected_embedding_model']
-        perform_graph_rag = read_config(['perform_graph_rag'])['perform_graph_rag']
-        docs, do_rag, graph_rag_context = search_knowledge_base(user_query, selected_embedding_function, perform_graph_rag,
+        docs, do_rag, graph_rag_context = search_knowledge_base(user_query, selected_embedding_function,
         (config['force_enable_rag'] or regenerate_with_citations_force_enabled), 
         (config['force_disable_rag'] or regenerate_with_citations_force_disabled), 
         config['filter_top_k_results_by_reranking'], config['fetch_top_k_results_from_vectordb'])
@@ -6033,33 +6034,42 @@ def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
             return False
         
         # Normalize inputs:
-        llm_response = llm_response.lower().strip()
-        source_filename = source_filename.lower().strip()
+        llm_response_norm = llm_response.lower().strip()
+        source_filename_norm = source_filename.lower().strip()
 
         # Variations of the filename:
-        source_filename_no_extension, _ = os.path.splitext(source_filename) # os.path.splitext() returns a tuple containing the path's name and extension. It handles edge cases and is platform-independent.
-        source_filename_cleaned = re.sub(r'[-_+]', ' ', source_filename_no_extension)
-        source_filename_cleaned = re.sub(r' +', ' ', source_filename_cleaned)
+        source_filename_no_extension, _ = os.path.splitext(source_filename_norm) # os.path.splitext() returns a tuple containing the path's name and extension. It handles edge cases and is platform-independent.
+        
+        # Clean by replacing common separators with spaces and collapsing multiple spaces into a single space
+        # For filename: process both with and without extension initially for regex
+        source_filename_cleaned_with_ext = re.sub(r'[-_+]', ' ', source_filename_norm)
+        source_filename_cleaned_with_ext = re.sub(r' +', ' ', source_filename_cleaned_with_ext).strip()
 
-        llm_response_cleaned = re.sub(r'[-_+]', ' ', llm_response)
-        llm_response_cleaned = re.sub(r' +', ' ', llm_response_cleaned)
+        source_filename_cleaned_no_ext = re.sub(r'[-_+]', ' ', source_filename_no_extension)
+        source_filename_cleaned_no_ext = re.sub(r' +', ' ', source_filename_cleaned_no_ext).strip()
 
-        # Regex patterns for matching:
+        # Clean the LLM response similarly:
+        llm_response_cleaned = re.sub(r'[-_+]', ' ', llm_response_norm)
+        llm_response_cleaned = re.sub(r' +', ' ', llm_response_cleaned).strip()
+
+        # --- Check 1: Regex matching variations of the *full* filename ---
+        print("--- Running Check 1: Regex Checks ---")
+        # These patterns try to match the filename more precisely, often as whole words.
         """
         re.escape() is used to escape special characters in the source filename, ensuring they are treated as literal characters in the regex pattern.
         \b is a word boundary, ensuring the pattern is a whole word. 
         rf'' is a raw f-string, allowing for the use of \b without it being interpreted as an escape character. This prevents partial matches, eg "doc1" matching on "doc123".
         """
         patterns = [
-            rf'\b{re.escape(source_filename)}\b', # Exact filename match with extension
-            rf'\b{re.escape(source_filename_cleaned)}\b', # Filename with dashes or underscores replaced by spaces
+            rf'\b{re.escape(source_filename_norm)}\b', # Exact filename match with extension, case-insensitive due to prior normalization
             rf'\b{re.escape(source_filename_no_extension)}\b', # Filename without extension
+            rf'\b{re.escape(source_filename_cleaned_no_ext)}\b', # Cleaned filename without extension (spaces for separators)
+            rf'\b{re.escape(source_filename_cleaned_with_ext)}\b', # Cleaned filename with extension (less common, but possible)
         ]
 
-        responses_to_check = [
-            llm_response,
-            llm_response_cleaned
-        ]
+        # Check original and cleaned LLm response against regex patterns
+        # Using original llm_response_norm as well, in case cleaning removed crucial context for regex
+        responses_to_check = [llm_response_norm, llm_response_cleaned]
 
         is_relevant = any(
             re.search(pattern, response) 
@@ -6070,7 +6080,7 @@ def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
         # threshold = 90
         # if not is_relevant: # No exact matches found, LLM may have mentioned the filename just differently enough, so time to check if a Fuzzy match is found
         #     print(f"\nNo exact matches found, checking for fuzzy match with a {threshold}% or higher threshold\n")
-        #     is_relevant = is_fuzzy_subset(llm_response_cleaned, source_filename_cleaned, threshold)
+        #     is_relevant = is_fuzzy_subset(llm_response_cleaned, source_filename_cleaned_no_ext, threshold)
         #     print(f"Fuzzy match result: {is_relevant} for {source_filename}\n")
 
         print(f"\nCitation relevance check result: {is_relevant} for {source_filename}\n")
@@ -6228,9 +6238,9 @@ def get_sources_and_pages_for_get_references(docs: list[Document], llm_response:
     return all_sources, reference_pages
 
 
-def get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc: dict[str, list[list[str]]], stream_session_id: str, is_graph_rag: bool) -> tuple[str, str]:
+def get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc: dict[str, list[list[str]]], stream_session_id: str, perform_graph_rag: bool) -> tuple[str, str]:
     refer_pages_string = ""
-    # if not is_graph_rag:
+    # if not perform_graph_rag:
     #     refer_pages_string = "<br><h6>Additional data may be found in the following documents & pages:</h6>"
         
     #     for index, doc in enumerate(user_should_refer_pages_in_doc, start=1):
