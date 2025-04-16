@@ -5028,7 +5028,7 @@ def read_request_data_for_setup_for_local_llm_response(request: Request) -> tupl
     return user_query, chat_id, file_attached
 
 
-def determine_special_model_type_for_hf_waitress() -> tuple[bool, bool]:
+def read_hf_waitress_multimodal_config() -> tuple[bool, bool]:
     try:
         hf_read_return = read_hf_config(['flux_diffusers', 'vision'])
         return (
@@ -5036,7 +5036,7 @@ def determine_special_model_type_for_hf_waitress() -> tuple[bool, bool]:
             str(hf_read_return['vision']).lower() == 'true'
         )
     except Exception as e:
-        handle_error_no_return("Could not determine if flux_diffusers or vision model in method determine_special_model_type_for_hf_waitress, encountered error: ", e)
+        handle_error_no_return("Could not determine if flux_diffusers or vision model in method read_hf_waitress_multimodal_config, encountered error: ", e)
         return False, False
 
 
@@ -5127,15 +5127,15 @@ def get_base_values_for_setup_for_local_llm_response(stream_session_id:str, chat
 
 
 def handle_special_model_case(local_llm_server:str, current_sequence_id:int, file_attached:bool, stream_session_id:str, user_query:str, formatted_history_prompt:str, regeneration_request:bool) -> tuple[str, Response]:
-    print("\n\nHandling special model case\n\n")
+    print("\nChecking if special handling for multi-modal models is required...\n")
     if local_llm_server != 'hf-waitress':   #if llama.cpp
         return local_llm_server, None
     
-    flux_diffusers, vision = determine_special_model_type_for_hf_waitress()
+    flux_diffusers, vision = read_hf_waitress_multimodal_config()
 
     if flux_diffusers or file_attached:
         new_sequence_id = prepare_for_quick_response(current_sequence_id, regeneration_request)
-        new_local_llm_server='hfw-diffusers' if flux_diffusers else 'hfw-vision'
+        new_local_llm_server='hfw-diffusers' if flux_diffusers else 'hfw-vision'    # 'hfw-vision' since a file is attached for visual analysis!
         try:
             response = prepare_special_model_response(
                 local_llm_server=new_local_llm_server,
@@ -5148,12 +5148,12 @@ def handle_special_model_case(local_llm_server:str, current_sequence_id:int, fil
             print(f"Returning quick-return formatted_user_prompt: {response['formatted_user_prompt']}")
             return new_local_llm_server, jsonify(response)
         except Exception as e:
-            return handle_api_error("Could not prepare special model response in method setup_for_local_llm_response, encountered error: ", e)
+            return handle_local_error("Could not prepare special model response in method setup_for_local_llm_response, encountered error: ", e)
     
     if vision: 
         return 'hfw-vision', None
     
-    return local_llm_server, None   #if hf-waitress but not hfw-diffusers or hfw-vision
+    return local_llm_server, None   # Likely hf-waitress, but not multi-modal (hfw-diffusers or hfw-vision)
 
 
 def handle_force_disabled_rag(local_llm_server:str, formatted_history_prompt:str, user_query:str, current_sequence_id:int, stream_session_id:str, regeneration_request:bool, base_template:str, local_llm_chat_template_format:str, skip_system_prompt:bool) -> Response:
@@ -5980,7 +5980,11 @@ def setup_for_local_llm_response():
     except Exception as e:
         return handle_api_error("Could not get formatted_history_prompt from history db in method setup_for_local_llm_response, encountered error: ", e)
     
-    local_llm_server, special_response = handle_special_model_case(config['local_llm_server'], current_sequence_id, file_attached, stream_session_id, user_query, formatted_history_prompt, regeneration_request)
+    try:
+        local_llm_server, special_response = handle_special_model_case(config['local_llm_server'], current_sequence_id, file_attached, stream_session_id, user_query, formatted_history_prompt, regeneration_request)
+    except Exception as e:
+        return handle_api_error("Error determining appropriate model type and server for setup_for_local_llm_response: ", e)
+    
     if special_response is not None:    # If a special model response is returned, quick-return here
         print(f"Returning special model response: {special_response}")
         return special_response
@@ -5996,7 +6000,7 @@ def setup_for_local_llm_response():
         (config['force_disable_rag'] or regenerate_with_citations_force_disabled), 
         config['filter_top_k_results_by_reranking'], config['fetch_top_k_results_from_vectordb'])
     except Exception as e:
-        return handle_error_no_return("Could not process vector search in method setup_for_local_llm_response, encountered error: ", e)
+        return handle_api_error("Could not process vector search in method setup_for_local_llm_response, encountered error: ", e)
 
     try:    # Write do_rag to config and prepare RAG context if necessary
         print(f'Do RAG? {do_rag}')
