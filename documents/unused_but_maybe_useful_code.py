@@ -3956,3 +3956,365 @@ def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
     except Exception as e:
         handle_error_no_return("Could not determine if citation is relevant in is_citation_relevant(), encountered error: ", e)
         return False
+
+
+
+
+def is_fuzzy_subset(string1: str, string2: str, threshold: int) -> bool:
+    score = fuzz.partial_ratio(string1, string2)
+    return score >= threshold
+
+
+def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
+    print(f"Checking citation relevance: {source_filename} in LLM response?")
+    try:
+        if not llm_response or not source_filename:
+            print("LLM response or source filename is empty, returning False")
+            return False
+        
+        # Normalize inputs:
+        llm_response = llm_response.lower().strip()
+        source_filename = source_filename.lower().strip()
+
+        # Variations of the filename:
+        source_filename_no_extension, _ = os.path.splitext(source_filename) # os.path.splitext() returns a tuple containing the path's name and extension. It handles edge cases and is platform-independent.
+        source_filename_cleaned = re.sub(r'[-_+]', ' ', source_filename_no_extension)
+        source_filename_cleaned = re.sub(r' +', ' ', source_filename_cleaned)
+
+        llm_response_cleaned = re.sub(r'[-_+]', ' ', llm_response)
+        llm_response_cleaned = re.sub(r' +', ' ', llm_response_cleaned)
+
+        # Regex patterns for matching:
+        """
+        re.escape() is used to escape special characters in the source filename, ensuring they are treated as literal characters in the regex pattern.
+        \b is a word boundary, ensuring the pattern is a whole word. 
+        rf'' is a raw f-string, allowing for the use of \b without it being interpreted as an escape character. This prevents partial matches, eg "doc1" matching on "doc123".
+        """
+        patterns = [
+            rf'\b{re.escape(source_filename)}\b', # Exact filename match with extension
+            rf'\b{re.escape(source_filename_cleaned)}\b', # Filename with dashes or underscores replaced by spaces
+            rf'\b{re.escape(source_filename_no_extension)}\b', # Filename without extension
+        ]
+
+        responses_to_check = [
+            llm_response,
+            llm_response_cleaned
+        ]
+
+        is_relevant = any(
+            re.search(pattern, response) 
+            for pattern in patterns
+            for response in responses_to_check
+        )
+
+        threshold = 80
+        if not is_relevant: # No exact matches found, LLM may have mentioned the filename just differently enough, so time to check if a Fuzzy match is found
+            print(f"\nNo exact matches found, checking for fuzzy match with a {threshold}% or higher threshold\n")
+            is_relevant = is_fuzzy_subset(llm_response_cleaned, source_filename_cleaned, threshold)
+            print(f"Fuzzy match result: {is_relevant} for {source_filename}\n")
+
+        print(f"Citation relevance check result: {is_relevant} for {source_filename}")
+        return is_relevant
+    
+    except Exception as e:
+        handle_error_no_return("Could not determine if citation is relevant in is_citation_relevant(), encountered error: ", e)
+        return False
+
+
+def filter_all_citations(docs: list[Document], llm_response: str, return_top_k: bool, user_query: str) -> list[Document]:
+    print(f"Pre-filtering citations to determine if any are relevant to the LLM response")
+    all_docs = []
+    for doc in docs:
+        
+        try:
+            relevant_page_text = str(doc.page_content)
+            source_filepath = str(doc.metadata.get('source'))
+        except Exception as e:
+            handle_error_no_return("Could not access doc.page_content and/or doc.metadata, encountered error: ", e)
+            continue
+        
+        relevant_page_text = relevant_page_text.replace('\n', ' ')
+        
+        try:
+            source_filename = os.path.basename(source_filepath)
+        except Exception as e:
+            handle_error_no_return("Could not parse path with OS lib, encountered error: ", e)
+            continue
+        
+        try:
+            if is_citation_relevant(llm_response, source_filename):
+                all_docs.append(doc)
+            else:
+                print(f"Citation {source_filename} is not relevant, skipping")
+                continue
+        except Exception as e:
+            handle_error_no_return("Could not determine if citation is relevant in filter_all_citations(), encountered error: ", e)
+            continue
+
+    if all_docs == [] and return_top_k:
+        print("No relevant citations found but top K requested, reranking all docs")
+        all_docs = rerank_results_ml(user_query, docs, top_n=3)
+
+    return all_docs
+
+
+def read_config_for_get_references() -> tuple[str, str, str, bool, bool, str, bool]:
+    try:
+        read_return = read_config(['local_llm_server', 'upload_folder', 'local_llm_chat_template_format', 'llm_filter_citations', 'force_enable_rag', 'exl2_prompt_template_format', 'perform_graph_rag'])
+        local_llm_server = read_return['local_llm_server']
+        upload_folder = read_return['upload_folder']
+        local_llm_chat_template_format = read_return['local_llm_chat_template_format']
+        llm_filter_citations = read_return['llm_filter_citations']
+        force_enable_rag = read_return['force_enable_rag']
+        exl2_prompt_template_format = read_return['exl2_prompt_template_format']
+        perform_graph_rag = str(read_return['perform_graph_rag']).lower() == 'true'
+        return local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations, force_enable_rag, exl2_prompt_template_format, perform_graph_rag
+    except Exception as e:
+        return handle_local_error("Could not read config.json in method read_config_for_get_references(), encountered error: ", e)
+
+
+def get_request_parameters_for_get_references(request: Request) -> tuple[str, str, str, str, str, str, bool, bool]:
+    try:
+        stream_session_id = request.json['stream_session_id']
+        user_query = request.json['user_query']
+        llm_response = request.json['llm_response']
+        formatted_user_prompt = request.json['formatted_user_prompt']
+        chat_id = request.json['chat_id']
+        sequence_id = request.json['sequence_id']
+        regeneration_request = request.json['regeneration_request']
+        regenerate_with_citations_force_enabled = request.json['regenerate_with_citations_force_enabled']
+        return stream_session_id, user_query, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request, regenerate_with_citations_force_enabled
+    except Exception as e:
+        return handle_local_error("Could not read request content in method get_request_parameters_for_get_references(), encountered error: ", e)
+
+
+def get_vector_results_for_get_references(stream_session_id: str) -> tuple[list[Document], bool]:
+    try:
+        key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
+        docs = QUERIES.pop(key_for_vector_results, None)
+        return docs, docs is not None
+    except Exception as e:
+        return handle_local_error("Could not get vector results for stream_session_id in method get_vector_results_for_get_references(), encountered error: ", e)
+
+
+def determine_if_flux_diffusers_is_enabled() -> bool:
+    try:
+        hf_read_return = read_hf_config(['flux_diffusers'])
+        flux_diffusers = str(hf_read_return['flux_diffusers']).lower() == 'true'
+        return flux_diffusers
+    except Exception as e:
+        return False
+
+
+def get_hf_waitress_formatted_user_prompt(formatted_user_prompt: str, llm_response: str) -> str:
+    history_prompt_json = json.loads(formatted_user_prompt)
+    new_response = {"role":"assistant", "content":llm_response}
+    history_prompt_json['messages'].append(new_response)
+    updated_history_prompt_json = json.dumps(history_prompt_json, indent=4)
+    return str(updated_history_prompt_json)
+
+
+def get_sources_and_pages_for_get_references(docs: list[Document], llm_response: str, llm_filter_citations: bool, upload_folder: str, force_enable_rag: bool, user_query: str) -> tuple[dict[str, str], dict[str, list[list[str]]]]:
+    if llm_filter_citations:
+        try:
+            docs = filter_all_citations(docs=docs, llm_response=llm_response, return_top_k=force_enable_rag, user_query=user_query)
+        except Exception as e:
+            handle_error_no_return("Could not pre-filter citations in get_sources_and_pages_for_get_references(), proceeding without pre-filtering. Encountered error: ", e)
+    
+    all_sources = {}
+    reference_pages = {}
+    for doc in docs:
+        
+        try:
+            relevant_page_text = str(doc.page_content)
+            relevant_page_number = str(doc.metadata.get('page_number'))
+            source_filepath = str(doc.metadata.get('source'))
+        except Exception as e:
+            handle_error_no_return("Could not access doc.page_content and/or doc.metadata, encountered error: ", e)
+            continue
+        
+        relevant_page_text = relevant_page_text.replace('\n', ' ')
+        
+        try:
+            source_filename = os.path.basename(source_filepath)
+            source_filename_without_extension = os.path.splitext(source_filename)[0]
+            pdf_version_path = os.path.join(upload_folder, source_filename_without_extension + '.pdf')   # Construct the path to the potential PDF version.
+        except Exception as e:
+            handle_error_no_return("Could not parse source file path when getting sources and pages for get_references(), encountered error: ", e)
+            continue
+
+        if os.path.exists(pdf_version_path):
+            #print("\n\pdf exists\n\n")
+            source_filename = source_filename_without_extension + '.pdf'
+            
+            if pdf_version_path in reference_pages:
+                reference_pages[pdf_version_path].extend([[relevant_page_text,relevant_page_number]])
+            else:
+                reference_pages[pdf_version_path] = [[relevant_page_text,relevant_page_number]]
+
+            if source_filename not in all_sources:  # Add this file to our sources dictionary if it's not already present
+                source_filepath = pdf_version_path
+                all_sources.update({source_filename: source_filepath})
+
+        else:
+            print(f"\n\nCould not find source doc at {pdf_version_path}, RAG ACTIVE BUT REFERENCING WILL NOT DISPLAY!\n\n")
+            if source_filename not in all_sources: # Do not duplicate if the TXT file is already in the sources dict
+                try:
+                    source_filepath = os.path.join(upload_folder, source_filename) # reconstructed path using the OS module just to be safe
+                    all_sources.update({source_filename: source_filepath})
+                except Exception as e:
+                    handle_error_no_return("Could not construct filepath for TXT file, encountered error: ", e)
+
+    return all_sources, reference_pages
+
+
+def get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc: dict[str, list[list[str]]], stream_session_id: str, is_graph_rag: bool) -> tuple[str, str]:
+    refer_pages_string = ""
+    if not is_graph_rag:
+        refer_pages_string = "<br><h6>Additional data may be found in the following documents & pages:</h6>"
+        
+        for index, doc in enumerate(user_should_refer_pages_in_doc, start=1):
+            pdf_iframe_id = f"stream{stream_session_id}PdfViewer{str(index)}"
+            tab_name_string = f"stream{stream_session_id}tabName{str(index)}"
+            frame_doc_path = f"/pdf/{doc}"
+            try:
+                stream_id_string_to_remove = f"_{stream_session_id}"
+                doc_name_without_stream_id = str(doc).replace(stream_id_string_to_remove, "")
+                refer_pages_string += f"<br><h6>{doc_name_without_stream_id}: "
+                for page in user_should_refer_pages_in_doc[doc]:
+                    frame_doc_path += f"#page={str(page)}" 
+                    refer_pages_string += f'<a href="javascript:void(0)" onclick="goToPageAndSwitchTab(\'{pdf_iframe_id}\', \'{frame_doc_path}\', \'tab{tab_name_string}\', \'{stream_session_id}\')">Page {page}</a>, '
+                    frame_doc_path = f"/pdf/{doc}"
+                refer_pages_string = refer_pages_string.strip(', ') + "</h6>"
+            except Exception as e:
+                handle_error_no_return("Could not construct refer_pages_string, encountered error: ", e)
+
+    
+    pdf_right_pane_id = f"stream{stream_session_id}PdfPane"
+    download_link_html = f'<div class="pdf-viewer-container" id="{pdf_right_pane_id}">'
+
+    # Add tab buttons
+    download_link_html += '<div class="tab-buttons">'
+    for index, source in enumerate(user_should_refer_pages_in_doc, start=1):
+        tab_name_string = f"stream{stream_session_id}tabName{str(index)}"
+        stream_id_string_to_remove = f"_{stream_session_id}"
+        doc_name_without_stream_id = str(source).replace(stream_id_string_to_remove, "")
+        default_open = ' defaultTabs' if index == 1 else ''
+        download_link_html += f'<button class="tab-button{default_open}" stream-session-id="{stream_session_id}" onclick="openTab(event, \'tab{tab_name_string}\', \'{stream_session_id}\')">{doc_name_without_stream_id}</button>'
+    download_link_html += '</div>'
+
+    # Add tab content
+    for index, source in enumerate(user_should_refer_pages_in_doc, start=1):
+        try:
+            download_link_url = url_for('download_file', filename=source)
+            pdf_iframe_id = f"stream{stream_session_id}PdfViewer{str(index)}"
+            tab_name_string = f"stream{stream_session_id}tabName{str(index)}"
+            download_link_html += f'<div id="tab{tab_name_string}" class="tab-content" stream-session-id="{stream_session_id}">'
+            download_link_html += f'<iframe class="citations-pdf-iframe" id="{pdf_iframe_id}" src="{download_link_url}"></iframe>'
+            download_link_html += "</div>"
+        except Exception as e:
+            handle_error_no_return("Could not construct download_link_html, encountered error: ", e)
+
+    download_link_html += "</div>"
+
+    return refer_pages_string, download_link_html
+
+
+def get_model_response_for_history_db_for_get_references(download_link_html: str, llm_response: str, reference_response: str) -> str:
+    model_response_for_history_db = str(llm_response)
+    model_response_for_history_db += f"\n\n{reference_response}"
+    model_response_for_history_db += f"\n\npdf_pane_data={download_link_html}"
+    model_response_for_history_db = model_response_for_history_db.strip('\n')
+    return model_response_for_history_db
+
+
+
+@app.route('/get_references', methods=['POST'])
+def get_references():
+
+    print("\n\nStoring History Post-Response -- Determining if Citations are Necessary\n\n")
+
+    try:
+        local_llm_server, upload_folder, local_llm_chat_template_format, llm_filter_citations, force_enable_rag, exl2_prompt_template_format, perform_graph_rag = read_config_for_get_references()
+        exl2 = read_hf_config(['exl2'])['exl2']
+    except Exception as e:
+        return handle_api_error("Missing values in config.json when attempting to get_references. Error: ", e)
+
+    try:
+        stream_session_id, user_query, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request, regenerate_with_citations_force_enabled = get_request_parameters_for_get_references(request)
+    except Exception as e:
+        return handle_api_error("Could not read request content in method get_references, encountered error: ", e)
+
+    do_rag = False
+    try:
+        docs, do_rag = get_vector_results_for_get_references(stream_session_id)
+    except Exception as e:
+        handle_error_no_return("Error determining if RAG was used in method get_references - Could not check the QUERIES dict. Proceeding without RAG. Encountered error: ", e)
+
+    if local_llm_server == 'llama-cpp':
+        formatted_user_prompt += append_eot_token_to_llm_response(local_llm_chat_template_format, llm_response)
+    elif local_llm_server == 'hf-waitress':
+        local_llm_chat_template_format = "hf-transformers"
+        flux_diffusers = determine_if_flux_diffusers_is_enabled()
+        if flux_diffusers:
+            do_rag = False
+        else:
+            if exl2:
+                if perform_graph_rag:
+                    try:
+                        last_context_index = formatted_user_prompt.rindex("The following context might be helpful in answering the user query above.")
+                        formatted_user_prompt = formatted_user_prompt[:last_context_index]
+                    except Exception as e:
+                        handle_error_no_return("Trimming RAG context unnecessary, skipping. Encountered error: ", e)
+                formatted_user_prompt += append_eot_token_to_llm_response(exl2_prompt_template_format, llm_response)
+            else:
+                formatted_user_prompt = get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response)
+
+    if not do_rag:
+        print("\n\nRAG Citations unnecessary, storing chat history and returning\n\n")
+        try:
+            if not regeneration_request:
+                stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+            else:
+                stored_datetime, chat_id = update_llm_response_in_history_db(chat_id, stream_session_id, user_query, llm_response)
+        except Exception as e:
+            handle_error_no_return("Could not store or update chat history DB in get_references(), encountered error: ", e)
+        return jsonify({'success': True, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
+    
+
+    print("\n\nFetching Citations\n\n")
+
+    all_sources = {}
+    reference_pages = {}
+    try:
+        all_sources, reference_pages = get_sources_and_pages_for_get_references(docs, llm_response, llm_filter_citations, upload_folder, (force_enable_rag or regenerate_with_citations_force_enabled), user_query)
+    except Exception as e:
+        return handle_api_error("Could not get sources and pages for get_references(), encountered error: ", e)
+    
+    try:
+        docs_have_relevant_info, user_should_refer_pages_in_doc = highlighter_interface(reference_pages, stream_session_id)
+    except Exception as e:
+        handle_error_no_return("Could not complete highlighter_interface, encountered error: ", e)
+    
+    reference_response = ""
+    download_link_html = ""
+    if docs_have_relevant_info:
+        try:
+            reference_response, download_link_html = get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc, stream_session_id, perform_graph_rag)
+        except Exception as e:
+            handle_error_no_return("Could not get refer_pages_string and download_link_html, encountered error: ", e)
+    
+    try:
+        model_response_for_history_db = get_model_response_for_history_db_for_get_references(download_link_html, llm_response, reference_response)
+    except Exception as e:
+        handle_error_no_return("Could not prep data to store to chat history DB in get_references(), encountered error: ", e)
+
+    try:
+        if not regeneration_request:
+            stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+        else:
+            stored_datetime, chat_id = update_llm_response_in_history_db(chat_id, stream_session_id, user_query, model_response_for_history_db)
+    except Exception as e:
+        handle_error_no_return("Could not store or update chat history DB in get_references(), encountered error: ", e)
+
+    return jsonify({'success': True, 'response': reference_response, 'pdf_frame':download_link_html, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
