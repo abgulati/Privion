@@ -20,6 +20,9 @@ import chromadb
 from pdf2image import convert_from_path
 from PIL import Image
 
+from urllib.parse import urlparse, parse_qs
+from urlextract import URLExtract
+
 import fitz # PyMuPDF
 from rapidfuzz import fuzz
 
@@ -681,6 +684,7 @@ def create_whoosh_index_in_folder(whoosh_index_folder):
      # Define the Index schema: what fields it contains
     schema = Schema(
         content=TEXT(stored=True),
+        source_link=ID(stored=True),
         source=ID(stored=True),
         page_number=ID(stored=True)
     )
@@ -737,6 +741,7 @@ def whoosh_indexer(new_chunks):
         for chunk in new_chunks:
             writer.add_document(
                 content=chunk['content'], 
+                source_link=chunk['source_link'],
                 source=chunk['source'], 
                 page_number=str(chunk['page_number'])
             )
@@ -786,6 +791,7 @@ def search_whoosh_index(query):
             filtered_results = [
                 {
                     'content': result['content'],
+                    'source_link': result['source_link'],
                     'source': result['source'],
                     'page_number': result['page_number'],
                     'score': result.score
@@ -806,6 +812,7 @@ def search_whoosh_index(query):
                 filtered_results = [
                     {
                         'content': result['content'],
+                        'source_link': result['source_link'],
                         'source': result['source'],
                         'page_number': result['page_number'],
                         'score': result.score
@@ -1518,8 +1525,11 @@ def chunk_docs_with_page_numbers(input_file, chunk_size=250):
     def add_chunk(chunk, page):
         if chunk.strip():   #if chunk is not empty!
             #print(f"\n\nAdding chunk from page {page}: {chunk.strip()}\n\n")
+            input_file_name = os.path.basename(input_file)
+            source_link = f"http://llm-citations-database.net/source?doc_name={input_file_name}&page_number={page}"
             documents.append({
                 'content': chunk.strip(),
+                'source_link': source_link,
                 'source': input_file,
                 'page_number': page
             })
@@ -1581,8 +1591,8 @@ def create_vector_db_directory(path_to_knowledge_domain, embedding_function):
 
 def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
     # Convert Chunks to Document objects:
-    try:
-        numbered_splits = [Document(page_content=chunk['content'], metadata={'page_number': chunk['page_number'], 'source': chunk['source']}) for chunk in chunks]  # Generates a list of Document objects, each containing a 'page_content' string, and a 'metadata' dictionary with 'source' and 'page_number' keys
+    try:    # To generate a list of Document objects, each containing a 'page_content' string, and a 'metadata' dictionary with 'source_link', 'page_number', and 'source' keys
+        numbered_splits = [Document(page_content=chunk['content'], metadata={'source_link':chunk['source_link'], 'page_number': chunk['page_number'], 'source': chunk['source']}) for chunk in chunks]
     except Exception as e:
         handle_local_error("Failed to convert chunks to Document objects for storage to VectorDB, encountered error: ", e)
 
@@ -2683,6 +2693,12 @@ def highlight_text_on_page(highlight_list, stream_session_id):
 
 
 def highlighter_interface(reference_pages, stream_session_id):
+    '''
+    This function takes a dictionary of reference pages, and a stream session ID.
+    It returns a tuple containing two elements:
+    - A boolean indicating whether any relevant information was found in any of the documents
+    - A dictionary containing the pages the user should refer to in the document
+    '''
     try:
         user_should_refer_pages_in_doc = {}
         highlight_list = {}
@@ -2690,9 +2706,9 @@ def highlighter_interface(reference_pages, stream_session_id):
 
         # print(f"\n\nreference_pages: {reference_pages}\n\n")
 
-        for file_path, content in reference_pages.items():
-            source_filename = os.path.basename(file_path)
-            print(f"\nsource_filename basename: {source_filename}\n")
+        for source_pdf_path, content in reference_pages.items():
+            source_filename = os.path.basename(source_pdf_path)
+            # print(f"\nsource_filename basename: {source_filename}\n")
             output_file_extension = "_" + stream_session_id + '.pdf'
             output_file_name = source_filename.replace(".pdf",output_file_extension) 
             page_numbers = set()
@@ -4964,6 +4980,7 @@ def combine_and_deduplicate_search_results(whoosh_results, vector_results):
         combined_results.append(Document(
             page_content=result['content'].strip().replace('\n', ' '),
             metadata={
+                'source_link': result['source_link'],
                 'source': result['source'],
                 'page_number': result['page_number']
             }
@@ -5291,7 +5308,8 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
 
                             try:
                                 content_data, source_doc_name, pages = extract_content_source_and_page_data_from_summary_text(summary)
-                                summary_doc_objects.append(Document(page_content=f"{summary_preface_string} - {summary}", metadata={'page_number': pages, 'source': source_doc_name}))
+                                source_link = f"http://llm-citations-database.net/source?doc_name={source_doc_name}&page_number={[pages[0]]}"
+                                summary_doc_objects.append(Document(page_content=f"{summary_preface_string} -\nsource_link:{source_link}:\n{summary}\nsource_link:{source_link}\n\n", metadata={'page_number': pages, 'source': source_doc_name}))
                             except Exception as e:
                                 handle_error_no_return("Could not convert GraphRAG context to Document object, skipping. Encountered error: ", e)
 
@@ -5318,7 +5336,8 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
 
                             try:
                                 content_data, source_doc_name, pages = extract_content_source_and_page_data_from_summary_text(summary)
-                                summary_doc_objects.append(Document(page_content=f"{summary_preface_string} - {summary}", metadata={'page_number': pages, 'source': source_doc_name}))
+                                source_link = f"http://llm-citations-database.net/source?doc_name={source_doc_name}&page_number={[pages[0]]}"
+                                summary_doc_objects.append(Document(page_content=f"{summary_preface_string} -\nsource_link:{source_link}:\n{summary}\nsource_link:{source_link}\n\n", metadata={'page_number': pages, 'source': source_doc_name}))
                             except Exception as e:
                                 handle_error_no_return("Could not convert GraphRAG context to Document object, skipping. Encountered error: ", e)
 
@@ -6201,14 +6220,26 @@ def get_hf_waitress_formatted_user_prompt(formatted_user_prompt: str, llm_respon
     return str(updated_history_prompt_json)
 
 
-def get_sources_and_pages_for_get_references(docs: list[Document], llm_response: str, llm_filter_citations: bool, upload_folder: str, force_enable_rag: bool, user_query: str) -> tuple[dict[str, str], dict[str, list[list[str]]]]:
+def get_sources_and_pages_for_get_references(docs: list[Document], llm_response: str, llm_filter_citations: bool, upload_folder: str, force_enable_rag: bool, user_query: str) -> dict[str: list[list[str]]]:
+    '''
+    This function iterates through the list of Document objects, and for each Document object, it extracts the source filename, source filepath, and page number,a nd returns:
+
+    reference_pages = {
+        'source_pdf_path': [
+            ['page_content', 'page_number'],
+            ['page_content', 'page_number'],
+            ...
+        ],
+        ...
+    }
+    '''
+
     if llm_filter_citations:
         try:
             docs = filter_all_citations(docs=docs, llm_response=llm_response, return_top_k=force_enable_rag, user_query=user_query)
         except Exception as e:
             handle_error_no_return("Could not pre-filter citations in get_sources_and_pages_for_get_references(), proceeding without pre-filtering. Encountered error: ", e)
     
-    all_sources = {}
     reference_pages = {}
     for doc in docs:
         
@@ -6225,34 +6256,20 @@ def get_sources_and_pages_for_get_references(docs: list[Document], llm_response:
         try:
             source_filename = os.path.basename(source_filepath)
             source_filename_without_extension = os.path.splitext(source_filename)[0]
-            pdf_version_path = os.path.join(upload_folder, source_filename_without_extension + '.pdf')   # Construct the path to the potential PDF version.
+            source_pdf_path = os.path.join(upload_folder, source_filename_without_extension + '.pdf')   # Construct the path to the potential PDF version.
         except Exception as e:
             handle_error_no_return("Could not parse source file path when getting sources and pages for get_references(), encountered error: ", e)
             continue
 
-        if os.path.exists(pdf_version_path):
-            #print("\n\pdf exists\n\n")
-            source_filename = source_filename_without_extension + '.pdf'
-            
-            if pdf_version_path in reference_pages:
-                reference_pages[pdf_version_path].extend([[relevant_page_text,relevant_page_number]])
+        if os.path.exists(source_pdf_path):
+            if source_pdf_path in reference_pages:
+                reference_pages[source_pdf_path].extend([[relevant_page_text,relevant_page_number]])
             else:
-                reference_pages[pdf_version_path] = [[relevant_page_text,relevant_page_number]]
-
-            if source_filename not in all_sources:  # Add this file to our sources dictionary if it's not already present
-                source_filepath = pdf_version_path
-                all_sources.update({source_filename: source_filepath})
-
+                reference_pages[source_pdf_path] = [[relevant_page_text,relevant_page_number]]
         else:
-            print(f"\n\nCould not find source doc at {pdf_version_path}, RAG ACTIVE BUT REFERENCING WILL NOT DISPLAY!\n\n")
-            if source_filename not in all_sources: # Do not duplicate if the TXT file is already in the sources dict
-                try:
-                    source_filepath = os.path.join(upload_folder, source_filename) # reconstructed path using the OS module just to be safe
-                    all_sources.update({source_filename: source_filepath})
-                except Exception as e:
-                    handle_error_no_return("Could not construct filepath for TXT file, encountered error: ", e)
-
-    return all_sources, reference_pages
+            print(f"\n\nCould not find source doc at {source_pdf_path}, RAG ACTIVE BUT REFERENCING WILL NOT DISPLAY!\n\n")
+            
+    return reference_pages
 
 
 def get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc: dict[str, list[list[str]]], stream_session_id: str, perform_graph_rag: bool) -> tuple[str, str]:
@@ -6315,6 +6332,167 @@ def get_model_response_for_history_db_for_get_references(download_link_html: str
     return model_response_for_history_db
 
 
+def final_cleanup_of_llm_response(llm_response: str) -> str:
+    pattern = r'\s*<br>\s+<br>\s*<br>\s*'    # Replace multiple <br> tags with a single <br> tag; \r?\n means optional carriage return and/or newline
+    llm_response = re.sub(pattern, '<br><br>', llm_response)
+    llm_response = llm_response.strip()
+    return llm_response
+
+
+def construct_citation_html(pdf_tab_buttons_set: set[str], pdf_tab_content_set: set[str], stream_session_id: str) -> str:
+    download_link_html = f'<div class="pdf-viewer-container" id="stream{stream_session_id}PdfPane">'
+    download_link_html += '<div class="tab-buttons">'
+
+    for pdf_tab_button in pdf_tab_buttons_set:
+        download_link_html += pdf_tab_button
+    download_link_html += '</div>'   # Close the tab-buttons
+
+    for pdf_tab_content in pdf_tab_content_set:
+        download_link_html += pdf_tab_content   # tab-content elements are complete divs
+
+    download_link_html += "</div>"  # Close the pdf-viewer-container
+
+    return download_link_html
+
+
+def save_pdf_to_download_dir(doc_name: str, stream_session_id: str):
+
+    print("\nSaving PDF to Download Dir\n")
+
+    try:
+        read_return = read_config(['upload_folder', 'highlighted_docs'])
+        upload_folder = read_return['upload_folder']
+        highlighted_pdfs_path = read_return['highlighted_docs']
+    except Exception as e:
+        handle_local_error("Missing upload_folder in config.json for method highlight_text_on_page. Error: ", e)
+
+    try:
+        doc_name_without_extension = os.path.splitext(doc_name)[0]
+        pdf_path = os.path.join(upload_folder, doc_name_without_extension + ".pdf").replace("\\","/")
+        citation_doc = fitz.open(pdf_path)
+
+        output_file_extension = "_" + stream_session_id + '.pdf'
+        output_file_name = doc_name_without_extension + output_file_extension
+        
+        output_pdf_path = os.path.join(highlighted_pdfs_path, output_file_name).replace("\\","/")
+        citation_doc.save(output_pdf_path, garbage=0, deflate=False, clean=False)
+
+        return output_file_name
+    except Exception as e:
+        handle_error_no_return("Could not save PDF to download dir, encountered error: ", e)
+
+
+def get_doc_name_and_page_number_from_url(url: str) -> tuple[str, str]:
+    parsed_url = urlparse(url)
+    params = parse_qs(parsed_url.query)
+    doc_name = params.get('doc_name', [None])[0]
+    page_number = params.get('page_number', [None])[0]
+    return doc_name, page_number
+
+
+def obtain_singular_page_number_from_url(page_number: str) -> str:
+    try:
+        page_number = str(page_number)
+        if page_number.startswith('[') and not page_number.endswith(']'):
+            page_number = page_number + ']'
+        elif page_number.endswith(']') and not page_number.startswith('['):
+            page_number = '[' + page_number
+        
+        if page_number.startswith('[') and page_number.endswith(']'):
+            page_number = list(page_number)
+            page_number = page_number[1] if len(page_number) > 1 else "1"
+        
+        return str(page_number)
+    except Exception as e:
+        handle_error_no_return("Could not obtain singular page number from url, returning 1. Encountered error: ", e)
+        return "1"
+
+
+def obtain_citation_urls_from_llm_response(llm_response: str) -> list[str]:
+    try:
+        extractor = URLExtract()
+        urls = extractor.find_urls(llm_response)
+        return [url for url in urls if 'llm-citations-database.net/source' in url]  # Filter out our citation urls
+    except Exception as e:
+        handle_error_no_return("Could not obtain citation urls from llm_response, encountered error: ", e)
+        return []
+
+
+def remove_embedded_links_from_llm_response(llm_response: str) -> str:
+    embedded_link_start_pattern = r'\(*\[[^\]]+\]\(\s*'
+    embedded_link_end_pattern = r'\s*\){1,2}\.?'
+    llm_response_without_embedded_links = re.sub(embedded_link_start_pattern, '', llm_response)
+    llm_response_without_embedded_links = re.sub(embedded_link_end_pattern, '', llm_response_without_embedded_links)
+    return llm_response_without_embedded_links
+
+
+def add_citations_and_pdf_browser_to_llm_response(llm_response: str, stream_session_id: str) -> str:
+    '''
+    This function takes a LLM response, identifies all the documents linked within the response, and returns a new LLM response with citations and a PDF browser.
+    '''
+    llm_response_with_citations = llm_response
+    llm_response_with_citations = remove_embedded_links_from_llm_response(llm_response_with_citations)
+
+    pdf_tab_buttons_set = set()
+    pdf_tab_content_set = set()
+    
+    try:
+        urls = obtain_citation_urls_from_llm_response(llm_response) # Extract all URLs from the LLM response
+        tab_count = 1
+        tabs_created_for_doc = {}
+        
+        # For each citation (URL), create the HTML to be substituted into the LLM response, and populate the tab button and content for the PDF viewer
+        for url in urls:
+            try:
+                doc_name, page_number = get_doc_name_and_page_number_from_url(url)
+                if not page_number: page_number = 1
+                page_number = obtain_singular_page_number_from_url(page_number)
+                print(f"doc_name: {doc_name}, page_number: {page_number}")
+                
+                tab_previously_created = False
+                if doc_name in tabs_created_for_doc:
+                    count = tabs_created_for_doc[doc_name]
+                    tab_previously_created = True
+                else:
+                    count = tab_count
+
+                # 1. Create clickable HTML link for the citation mentioned
+                pdf_iframe_id = f"stream{stream_session_id}PdfViewer{str(count)}"
+                doc_name_with_stream_id = save_pdf_to_download_dir(doc_name, stream_session_id)
+                frame_doc_path = f"/pdf/{doc_name_with_stream_id}#page={str(page_number)}"
+                tab_name_string = f"stream{stream_session_id}tabName{str(count)}"            
+
+                citation_html = f'''<a href="javascript:void(0)" onclick="goToPageAndSwitchTab(\'{pdf_iframe_id}\', \'{frame_doc_path}\', \'tab{tab_name_string}\', \'{stream_session_id}\')"><h6>{doc_name} - Page {page_number}</h6></a>'''
+                llm_response_with_citations = llm_response_with_citations.replace(url, citation_html)   # Swap the current URL with the citation HTML
+                
+                if not tab_previously_created:  # 2. Create tab button and content for the cited document, if not already created
+                    default_open = ' defaultTabs' if count == 1 else '' # First tab of every response will be open by default
+                    pdf_tab_button = f'<button class="tab-button{default_open}" stream-session-id="{stream_session_id}" onclick="openTab(event, \'tab{tab_name_string}\', \'{stream_session_id}\')">{doc_name}</button>'
+                    pdf_tab_buttons_set.add(pdf_tab_button)
+
+                    download_link_url = url_for('download_file', filename=doc_name_with_stream_id)
+                    pdf_tab_content = f'''<div id="tab{tab_name_string}" class="tab-content" stream-session-id="{stream_session_id}"><iframe class="citations-pdf-iframe" id="{pdf_iframe_id}" src="{download_link_url}"></iframe></div>'''
+                    pdf_tab_content_set.add(pdf_tab_content)
+
+                    tabs_created_for_doc[doc_name] = count
+                    tab_count += 1
+            except Exception as e:
+                handle_error_no_return("Could not process citation, the LLM may have mis-spelled the document name, skipping. Encountered error: ", e)
+
+        download_link_html = construct_citation_html(pdf_tab_buttons_set, pdf_tab_content_set, stream_session_id)
+
+        try:
+            llm_response_with_citations_cleaned = final_cleanup_of_llm_response(llm_response_with_citations)
+        except Exception as e:
+            handle_error_no_return("Could not clean up llm_response_with_citations, skipping. Encountered error: ", e)
+            llm_response_with_citations_cleaned = llm_response_with_citations
+
+        return llm_response_with_citations_cleaned, download_link_html
+
+    except Exception as e:
+        handle_error_no_return("Could not add citations and pdf browser to llm_response, encountered error: ", e)
+
+
 @app.route('/get_references', methods=['POST'])
 def get_references():
 
@@ -6370,28 +6548,34 @@ def get_references():
 
     print("\n\nFetching Citations\n\n")
 
-    all_sources = {}
-    reference_pages = {}
+    download_link_html = ""
     try:
-        all_sources, reference_pages = get_sources_and_pages_for_get_references(docs, llm_response, llm_filter_citations, upload_folder, (force_enable_rag or regenerate_with_citations_force_enabled), user_query)
+        llm_response_with_citations_and_pdf_browser, download_link_html = add_citations_and_pdf_browser_to_llm_response(llm_response, stream_session_id)    # TODO: force_enable / regen_with_force_enable logic
     except Exception as e:
-        return handle_api_error("Could not get sources and pages for get_references(), encountered error: ", e)
+        handle_error_no_return("Could not add citations and pdf browser to llm_response, encountered error: ", e)
+
+    # reference_pages = {}
+    # try:
+    #     reference_pages = get_sources_and_pages_for_get_references(docs, llm_response, llm_filter_citations, upload_folder, (force_enable_rag or regenerate_with_citations_force_enabled), user_query)
+    # except Exception as e:
+    #     return handle_api_error("Could not get sources and pages for get_references(), encountered error: ", e)
     
-    try:
-        docs_have_relevant_info, user_should_refer_pages_in_doc = highlighter_interface(reference_pages, stream_session_id)
-    except Exception as e:
-        handle_error_no_return("Could not complete highlighter_interface, encountered error: ", e)
+    # try:
+    #     docs_have_relevant_info, user_should_refer_pages_in_doc = highlighter_interface(reference_pages, stream_session_id)
+    # except Exception as e:
+    #     handle_error_no_return("Could not complete highlighter_interface, encountered error: ", e)
+    
+    # reference_response = ""
+    # download_link_html = ""
+    # if docs_have_relevant_info:
+    #     try:
+    #         reference_response, download_link_html = get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc, stream_session_id, perform_graph_rag)
+    #     except Exception as e:
+    #         handle_error_no_return("Could not get refer_pages_string and download_link_html, encountered error: ", e)
     
     reference_response = ""
-    download_link_html = ""
-    if docs_have_relevant_info:
-        try:
-            reference_response, download_link_html = get_refer_pages_and_download_link_html(user_should_refer_pages_in_doc, stream_session_id, perform_graph_rag)
-        except Exception as e:
-            handle_error_no_return("Could not get refer_pages_string and download_link_html, encountered error: ", e)
-    
     try:
-        model_response_for_history_db = get_model_response_for_history_db_for_get_references(download_link_html, llm_response, reference_response)
+        model_response_for_history_db = get_model_response_for_history_db_for_get_references(download_link_html, llm_response_with_citations_and_pdf_browser, reference_response)
     except Exception as e:
         handle_error_no_return("Could not prep data to store to chat history DB in get_references(), encountered error: ", e)
 
@@ -6403,7 +6587,7 @@ def get_references():
     except Exception as e:
         handle_error_no_return("Could not store or update chat history DB in get_references(), encountered error: ", e)
 
-    return jsonify({'success': True, 'response': reference_response, 'pdf_frame':download_link_html, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
+    return jsonify({'success': True, 'response': llm_response_with_citations_and_pdf_browser, 'pdf_frame':download_link_html, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
 
 
 
