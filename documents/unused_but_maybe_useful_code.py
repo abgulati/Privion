@@ -4247,6 +4247,18 @@ def get_hf_waitress_formatted_user_prompt(formatted_user_prompt: str, llm_respon
 
 
 def get_sources_and_pages_for_get_references(docs: list[Document], llm_response: str, llm_filter_citations: bool, upload_folder: str, force_enable_rag: bool, user_query: str) -> tuple[dict[str, str], dict[str, list[list[str]]]]:
+    '''
+    This function iterates through the list of Document objects, and for each Document object, it extracts the source filename, source filepath, and page number,a nd returns:
+
+    reference_pages = {
+        'source_pdf_path': [
+            ['page_content', 'page_number'],
+            ['page_content', 'page_number'],
+            ...
+        ],
+        ...
+    }
+    '''
     if llm_filter_citations:
         try:
             docs = filter_all_citations(docs=docs, llm_response=llm_response, return_top_k=force_enable_rag, user_query=user_query)
