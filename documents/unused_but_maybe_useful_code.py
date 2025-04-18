@@ -3960,6 +3960,138 @@ def is_citation_relevant(llm_response: str, source_filename: str) -> bool:
 
 
 
+def highlight_text_on_page(highlight_list, stream_session_id):
+
+    print("\nHighlighting Document\n")
+    threshold = 80
+
+    try:
+        read_return = read_config(['upload_folder', 'highlighted_docs'])
+        upload_folder = read_return['upload_folder']
+        highlighted_pdfs_path = read_return['highlighted_docs']
+    except Exception as e:
+        handle_local_error("Missing upload_folder in config.json for method highlight_text_on_page. Error: ", e)
+    
+    for index, doc in enumerate(highlight_list, start=1):
+
+        try:
+            pdf_path = os.path.join(upload_folder, doc).replace("\\","/")
+            output_file_extension = "_" + stream_session_id + '.pdf'
+            output_file_name = doc.replace(".pdf",output_file_extension) 
+            output_pdf_path = os.path.join(highlighted_pdfs_path, output_file_name).replace("\\","/")
+            highlight_doc = fitz.open(pdf_path)
+        except Exception as e:
+            handle_error_no_return("Could not open doc for highlighting, encountered error: ", e)
+            continue
+        
+        for target in highlight_list[doc]:
+            try:
+                text_to_highlight = str(target[1])
+                text_to_highlight = re.sub(r'Row \d+, Column \d+: ', '', text_to_highlight)
+                page_number = int(target[0])
+                page = highlight_doc.load_page(page_number-1)
+                page_text = page.get_text("text")
+
+                # Split the page text into overlapping phrases
+                words = page_text.split()
+                phrases = [' '.join(words[i:i+len(text_to_highlight.split())]) for i in range(len(words))]
+
+                # Find fuzzy matches
+                good_matches = []
+                for phrase in phrases:
+                    score = fuzz.partial_ratio(text_to_highlight.lower(), phrase.lower())
+                    if score >= threshold:
+                        good_matches.append(phrase)
+
+                for match in good_matches:
+                    if len(str(match)) > 3:
+                        text_instances = page.search_for(match)
+                        for inst in text_instances:
+                            try:
+                                #print(f"HIGHLIGHTING inst {inst} in document {doc}")
+                                page.add_highlight_annot(inst)
+                            except Exception as e:
+                                handle_error_no_return("Could not highlight text instance, encountered error: ", e)
+                                continue
+
+            except Exception as e:
+                handle_error_no_return("Error loading page or searching for text to highlight, encountered error: ", e)
+                continue
+            
+        try:
+            highlight_doc.save(output_pdf_path, garbage=0, deflate=False, clean=False)
+        except Exception as e:
+            handle_error_no_return("Could not save highlighted doc, encountered error: ", e)
+            continue
+
+    return True
+
+
+def highlighter_interface(reference_pages, stream_session_id):
+    '''
+    This function takes a dictionary of reference pages, and a stream session ID.
+    It returns a tuple containing two elements:
+    - A boolean indicating whether any relevant information was found in any of the documents
+    - A dictionary containing the pages the user should refer to in the document
+    '''
+    try:
+        user_should_refer_pages_in_doc = {}
+        highlight_list = {}
+        docs_have_relevant_info = False
+
+        # print(f"\n\nreference_pages: {reference_pages}\n\n")
+
+        for source_pdf_path, content in reference_pages.items():
+            source_filename = os.path.basename(source_pdf_path)
+            # print(f"\nsource_filename basename: {source_filename}\n")
+            output_file_extension = "_" + stream_session_id + '.pdf'
+            output_file_name = source_filename.replace(".pdf",output_file_extension) 
+            page_numbers = set()
+            highlight_strings = set()
+
+            for item in content:
+                # Each item in the list has two elements
+                page_text, page_number = item
+                
+                if isinstance(page_number, int):
+                    page_numbers.add(int(page_number))
+                    highlight_strings.add((int(page_number), str(page_text[:50])))
+                
+                elif isinstance(page_number, str):
+                    page_number_str = page_number.replace('[', '').replace(']', '')
+                    str_to_page_number_list = page_number_str.split(',')
+                    for page_number in str_to_page_number_list:
+                        page_numbers.add(int(page_number.strip()))
+                        highlight_strings.add((int(page_number.strip()), str(page_text[:50])))
+                
+                elif isinstance(page_number, list):
+                    for page_number in page_number:
+                        page_numbers.add(int(page_number))
+                        highlight_strings.add((int(page_number), str(page_text[:50])))
+
+                else:
+                    handle_error_no_return("Could not handle page number type, encountered error: ", e)
+
+            if page_numbers:
+                user_should_refer_pages_in_doc[output_file_name] = page_numbers
+                docs_have_relevant_info = True
+
+            if highlight_strings:
+                highlight_list[source_filename] = list(highlight_strings)
+
+        if docs_have_relevant_info:
+            try:
+                highlight_text_on_page(highlight_list, str(stream_session_id))
+            except Exception as e:
+                handle_error_no_return("Could not highlight text, encountered error: ", e)
+
+        return docs_have_relevant_info, user_should_refer_pages_in_doc
+    except Exception as e:
+        handle_error_no_return("Could not highlight text, encountered error: ", e)
+        return False, {}
+
+
+
 def is_fuzzy_subset(string1: str, string2: str, threshold: int) -> bool:
     score = fuzz.partial_ratio(string1, string2)
     return score >= threshold
