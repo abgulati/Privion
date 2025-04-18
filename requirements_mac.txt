@@ -31,6 +31,7 @@ azure-ai-vision-imageanalysis>=1.0.0
 azure-cognitiveservices-vision-computervision>=0.9.0
 azure-common>=1.1.28
 azure-core>=1.29.6
+urlextract>=1.9.0
 whoosh>=2.7.4
 waitress>=3.0.0
 werkzeug>=3.0.1
