@@ -53,10 +53,13 @@ function cleanStreamedContent(dataObj) {
     streamed_content = streamed_content.replace(/\\t/g, '    ');
 
     // Finally, encode HTML special characters, but preserve <br> tags
-    streamed_content = streamed_content.replace(/&/g, '&amp;')
-                                    .replace(/</g, '&lt;')
-                                    .replace(/>/g, '&gt;')
-                                    .replace(/&lt;br&gt;/g, '<br>');
+    // streamed_content = streamed_content.replace(/&/g, '&amp;')
+    //                                 .replace(/</g, '&lt;')
+    //                                 .replace(/>/g, '&gt;')
+    //                                 .replace(/&lt;br&gt;/g, '<br>');
+
+    // Replace <br> tags with <br>
+    streamed_content = streamed_content.replace(/&lt;br&gt;/g, '<br>');
 
     // console.log("streamed_content: ", streamed_content);
     return streamed_content;
@@ -594,10 +597,11 @@ function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapper
     console.log("get_references data: ", data);
 
     if (do_rag) {
-        document.getElementById(responseContentID).innerHTML += `
-        </br> 
-        ${data.response}
-        ` 
+        // document.getElementById(responseContentID).innerHTML += `
+        // </br> 
+        // ${data.response}
+        // ` 
+        document.getElementById(responseContentID).innerHTML = `${data.response}` 
     }
     
     document.getElementById(responseContentID).innerHTML += `
