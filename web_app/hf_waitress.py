@@ -2567,7 +2567,7 @@ def exl2_grapher():
                     if (cache_entry and cache_entry['data'] and chunk_number in cache_entry['data'] and
                         cache_entry['data'][chunk_number]['entities_and_relationships'] is not None):
 
-                        chunk_entities[chunk_number]['entities_and_relationships'] = cache_entry['data'][chunk_number]['entities_and_relationships']
+                        chunk_entities[chunk_number]['entities_and_relationships'] = cache_entry['data'][chunk_number]['entities_and_relationships']    # NOTE: Only the 'entities_and_relationships' key is updated in the chunk_entities dict received in the POST request!
                         output_queue.put(chunk_entities[chunk_number])
                         print(f"\nFound existing cache of previously extracted nodes and relationships for chunk {chunk_number}, returning cached data...\n")
                         continue
