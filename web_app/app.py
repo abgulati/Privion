@@ -5954,8 +5954,6 @@ def construct_citation_html(pdf_tab_buttons_set: set[str], pdf_tab_content_set: 
 
 def save_pdf_to_download_dir(doc_name: str, stream_session_id: str):
 
-    print("\nSaving PDF to Download Dir\n")
-
     try:
         read_return = read_config(['upload_folder', 'highlighted_docs'])
         upload_folder = read_return['upload_folder']
@@ -5996,8 +5994,12 @@ def obtain_singular_page_number_from_url(page_number: str) -> str:
             page_number = '[' + page_number
         
         if page_number.startswith('[') and page_number.endswith(']'):
-            page_number = ast.literal_eval(page_number)
-            page_number = page_number[0] if len(page_number) > 0 else "1"
+            try:
+                page_number = ast.literal_eval(page_number)
+                page_number = page_number[0] if len(page_number) > 0 else "1"
+            except Exception as e:
+                handle_error_no_return("Could not ast.literal_eval page_number, returning 1. Encountered error: ", e)
+                return "1"
         
         return str(page_number)
     except Exception as e:
@@ -6062,7 +6064,6 @@ def add_citations_and_pdf_browser_to_llm_response(llm_response: str, stream_sess
             
             if not page_number: page_number = 1
             page_number = obtain_singular_page_number_from_url(page_number)
-            print(f"doc_name: {doc_name}, page_number: {page_number}")
             
             tab_previously_created = False
             if doc_name in tabs_created_for_doc:
