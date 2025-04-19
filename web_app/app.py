@@ -5996,8 +5996,8 @@ def obtain_singular_page_number_from_url(page_number: str) -> str:
             page_number = '[' + page_number
         
         if page_number.startswith('[') and page_number.endswith(']'):
-            page_number = list(page_number)
-            page_number = page_number[1] if len(page_number) > 1 else "1"
+            page_number = ast.literal_eval(page_number)
+            page_number = page_number[0] if len(page_number) > 0 else "1"
         
         return str(page_number)
     except Exception as e:
@@ -6031,10 +6031,8 @@ def add_citations_and_pdf_browser_to_llm_response(llm_response: str, stream_sess
     '''
     print(f"\n\nAdding citations and PDF browser to LLM response\n\n")
 
-    print(f"llm_response:\n\n{llm_response}\n\n")
     try:
         llm_response_without_embedded_links = remove_embedded_links_from_llm_response(llm_response)
-        print(f"llm_response_without_embedded_links:\n\n{llm_response_without_embedded_links}\n\n")
     except Exception as e:
         return handle_local_error("Could not remove embedded links from llm_response, encountered error: ", e)
     
@@ -6078,7 +6076,7 @@ def add_citations_and_pdf_browser_to_llm_response(llm_response: str, stream_sess
             frame_doc_path = f"/pdf/{doc_name_with_stream_id}#page={str(page_number)}"
             tab_name_string = f"stream{stream_session_id}tabName{str(count)}"            
 
-            citation_html = f'''<a href="javascript:void(0)" onclick="goToPageAndSwitchTab(\'{pdf_iframe_id}\', \'{frame_doc_path}\', \'tab{tab_name_string}\', \'{stream_session_id}\')">{doc_name} - Page {page_number}</a>'''
+            citation_html = f'''<a href="javascript:void(0)" onclick="goToPageAndSwitchTab(\'{pdf_iframe_id}\', \'{frame_doc_path}\', \'tab{tab_name_string}\', \'{stream_session_id}\')">Reference: {doc_name}</a>'''
             llm_response_without_embedded_links = llm_response_without_embedded_links.replace(url, citation_html.strip())   # Swap the current URL with the citation HTML
             
             if not tab_previously_created:  # 2. Create tab button and content for the cited document, if not already created
@@ -6104,7 +6102,6 @@ def add_citations_and_pdf_browser_to_llm_response(llm_response: str, stream_sess
 
     try:
         llm_response_with_citations_cleaned = final_cleanup_of_llm_response(llm_response_without_embedded_links.strip())
-        print(f"llm_response_with_citations_cleaned:\n\n{llm_response_with_citations_cleaned}\n\n")
     except Exception as e:
         handle_error_no_return("Could not clean up llm_response_without_embedded_links, skipping. Encountered error: ", e)
         llm_response_with_citations_cleaned = llm_response_without_embedded_links.strip()
