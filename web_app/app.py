@@ -3136,7 +3136,7 @@ def download_folder(service, folder_id, path, data_queue=None, folder_name=None,
 
                 except Exception as e:
                     data_queue.put(f"Server-side error - could not save file: '{filename}' downloaded from Google Drive | failure")
-                    handle_error_no_return("Server-side error - could not save Google Drive file: '{filename}' in the download_folder() method: ", e)
+                    handle_error_no_return(f"Server-side error - could not save Google Drive file: '{filename}' in the download_folder() method: ", e)
     except Exception as e:
         data_queue.put(f"Error downloading Google Drive folder: '{folder_name}' | failure")
         return handle_local_error("Error downloading Google Drive folder: '{folder_name}' in the download_folder() method, encountered error: ", e)
@@ -3432,7 +3432,7 @@ def document_extractor_and_loader(filename, filepath):
         try:
             input_file = PDFtoTXT(filepath)
         except Exception as e:
-            return handle_local_error("Failed to extract text from the PDF document, even via fallback PyPDF2, encountered error: ", e)
+            return handle_local_error("Failed to extract text from the PDF document via PyPDF2, encountered error: ", e)
     
     try:
         if os.path.getsize(input_file) > 0:
