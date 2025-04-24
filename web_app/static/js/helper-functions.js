@@ -975,15 +975,21 @@ function sortByColumn(button) {
     tbody.append(...rows);
 }
 
+
 function filterByDocType(e) {
     const filterValue = e.target.value.toLowerCase();
+    const searchWords = document.getElementById('gdrive-search-bar').value.toLowerCase();
     const tbody = document.querySelector('#google_drive_files_tables tbody');
     const rows = Array.from(tbody.querySelectorAll('tr'));
     rows.forEach(row => {
-        const type = row.cells[2].textContent.toLowerCase();
-        row.style.display = filterValue === '' || type === filterValue ? '' : 'none';   //If the filter value is empty (showing all types) OR the row's type matches the filter value, set the row's display style to an empty string (which means "display normally"). Otherwise, set the row's display style to 'none!
+        const type = row.cells[2].textContent.toLowerCase();    // cell 2 is column 3 which is the document type column
+        const name = row.cells[1].textContent.toLowerCase();    // cell 1 is column 2 which is the document name column
+        if (name.includes(searchWords) || searchWords === '') {
+            row.style.display = (filterValue === '' || type === filterValue) ? '' : 'none';   //If the filter value is empty (showing all types) OR the row's type matches the filter value, set the row's display style to an empty string (which means "display normally"). Otherwise, set the row's display style to 'none!
+        }
     }); 
 }
+
 
 function selectAll(e) {
     const tbody = document.querySelector('#google_drive_files_tables tbody');
@@ -992,6 +998,7 @@ function selectAll(e) {
         row.querySelector('input[type="checkbox"]').checked = e.target.checked; //`e.target` refers to the checkbox that triggered the event (the "Select All" checkbox) and `e.target.checked` is a boolean value indicating whether this checkbox is checked or not, basis which the checkbox for all other rows is set via the querySelector.
     });
 }
+
 
 function initSortingAndFiltering() {
     // Sort by selected
@@ -1415,21 +1422,6 @@ function coreFilterFunction(search_words, items) {
 }
 
 
-function coreFilterGDriveRowsFunction(search_words, items) {
-    const searchQuery = search_words.toLowerCase();
-
-    Array.from(items).forEach(item => {
-        const text = item.textContent.toLowerCase();
-        const row_id = item.getAttribute('data-gdrive-row-id');
-        const row = document.getElementById(`gdrive_doc_row_${row_id}`);
-        if (text.includes(searchQuery)) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    })
-}
-
 function coreFilterVectorListRowsFunction(search_words, items) {
     const searchQuery = search_words.toLowerCase();
     Array.from(items).forEach(item => {
@@ -1472,10 +1464,28 @@ function filterChatHistoryItems(search_words) {
 }
 
 
+function coreFilterGDriveRowsFunction(search_words, items, filterValue) {
+    const searchQuery = search_words.toLowerCase();
+
+    Array.from(items).forEach(item => {
+        const text = item.textContent.toLowerCase();
+        const row_id = item.getAttribute('data-gdrive-row-id');
+        const row = document.getElementById(`gdrive_doc_row_${row_id}`);
+        if (text.includes(searchQuery)) {
+            const type = row.cells[2].textContent.toLowerCase();    // cell 2 is column 3 which is the document type column
+            row.style.display = (filterValue === '' || type === filterValue) ? '' : 'none';
+        } else {
+            row.style.display = 'none';
+        }
+    })
+}
+
+
 function filterGoogleDriveTable(search_words) {
     const fullGdriveTable = document.getElementById('google_drive_files_tables');
     const gdrive_doc_name_cells = fullGdriveTable.getElementsByClassName('gdrive_doc_name');
-    coreFilterGDriveRowsFunction(search_words, gdrive_doc_name_cells);
+    const filterValue = document.getElementById('filterDocType').value.toLowerCase();
+    coreFilterGDriveRowsFunction(search_words, gdrive_doc_name_cells, filterValue);
 }
 
 
