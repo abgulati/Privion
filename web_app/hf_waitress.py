@@ -539,10 +539,17 @@ def empty_cuda_cache():
             torch.cuda.empty_cache()
             print("CUDA cache successfully emptied")
         except Exception as e:
-            handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
+            return handle_local_error("Could not empty cuda cache, encountered error: ", e)
     else:
         print("\n\nCUDA is not available, skipping cache-emptying\n\n")
-        return
+        return True
+
+
+def safe_empty_cuda_cache():
+    try:
+        empty_cuda_cache()
+    except Exception as e:
+        handle_error_no_return("Could not empty CUDA cache, encountered error: ", e)
 
 
 def shutdown_model():
@@ -559,7 +566,7 @@ def shutdown_model():
             handle_error_no_return("Could not gracefully offload model. Proceeding to directly force-offload. Encountered error: ", e)
         finally:
             MODEL = None
-            empty_cuda_cache()
+            safe_empty_cuda_cache()
     print("\n\nModel offloading complete\n\n")
 
 
@@ -577,8 +584,9 @@ def shutdown_pipe():
             handle_error_no_return("Could not gracefully offload pipeline. Proceeding to directly force-offload pipeline. Encountered error: ", e)
         finally:
             PIPE = None
-            empty_cuda_cache()
+            safe_empty_cuda_cache()
     print("\n\nPipeline offloading complete\n\n")
+
 
 def shutdown_exl2():
     print("\n\nShutting down ExLlamaV2 model\n\n")
@@ -605,10 +613,7 @@ def shutdown_exl2():
         finally:
             EXL2_TOKENIZER = None
     
-    try:
-        empty_cuda_cache()
-    except Exception as e:
-        handle_error_no_return("Could not empty CUDA cache after ExLlamaV2 cleanup, encountered error: ", e)
+    safe_empty_cuda_cache()
     
     print("\n\nExLlamaV2 cleanup complete\n\n")
 
@@ -1887,10 +1892,7 @@ def inference_with_vision_model(request):
             handle_local_error("Could not generate output, encountered error: ", e)
             return False
 
-        try:
-            empty_cuda_cache()
-        except Exception as e:
-            handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
+        safe_empty_cuda_cache()
     
     return inference_output
 
@@ -1986,10 +1988,7 @@ def completions():
 
         print("\n\nCompletions done - releasing LLM semaphore\n\n")
 
-        try:
-            empty_cuda_cache()
-        except Exception as e:
-            handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
+        safe_empty_cuda_cache()
 
         return jsonify({"success": True, "response": inference_output})
 
@@ -2059,7 +2058,7 @@ def vision_stream():
                 data_queue.put(decoded_output)
                 data_queue.put("\n\n\n")
 
-                empty_cuda_cache()
+                safe_empty_cuda_cache()
         finally:
             data_queue.put(None)
             print("\n\nLLM stream done, releasing semaphore\n\n")
@@ -2090,10 +2089,7 @@ def vision_stream():
 
         STOP_GENERATION = False
 
-        try:
-            empty_cuda_cache()
-        except Exception as e:
-            handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
+        safe_empty_cuda_cache()
             
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
@@ -2226,10 +2222,7 @@ def completions_stream():
 
         STOP_GENERATION = False
 
-        try:
-            empty_cuda_cache()
-        except Exception as e:
-            handle_error_no_return("Could not empty cuda cache, encountered error: ", e)
+        safe_empty_cuda_cache()
             
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
@@ -2339,10 +2332,7 @@ def exl2_stream():
         
         yield f"event: END\ndata: \"null\"\n\n"
 
-        try:
-            empty_cuda_cache()
-        except Exception as e:
-            handle_error_no_return("Could not empty CUDA cache after ExLlamaV2 cleanup, encountered error: ", e)
+        safe_empty_cuda_cache()
 
         print("\n/exl2_stream done\n")
 
@@ -2375,10 +2365,7 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
                     if 'text' in job: 
                         full_response += job['text']
 
-    try:
-        empty_cuda_cache()
-    except Exception as e:
-        handle_error_no_return("Could not empty CUDA cache after ExLlamaV2 cleanup, encountered error: ", e)
+    safe_empty_cuda_cache()
 
     return full_response
 
@@ -2692,10 +2679,7 @@ def exl2_grapher():
         
         yield f"event: END\ndata: \"null\"\n\n"
 
-        try:
-            empty_cuda_cache()
-        except Exception as e:
-            handle_error_no_return("Could not empty CUDA cache after ExLlamaV2 cleanup, encountered error: ", e)
+        safe_empty_cuda_cache()
 
         print("\n/exl2_grapher done\n")
 
