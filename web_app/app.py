@@ -4046,6 +4046,13 @@ def clean_up_docs_loaded_db(selected_embedding_model_choice, knowledge_domain):
 
 def delete_knowledge_domain_graph(knowledge_domain):
     print(f"Deleting knowledge domain graph for: {knowledge_domain}")
+
+    try:
+        if not graph_db_docker_container_is_running('falkor-db'):
+            bring_graph_db_online()
+            time.sleep(5)   # While the bring_graph_db_online() method waits for the container to start, loading the datasets takes a bit longer so we wait 5 seconds before proceeding.
+    except Exception as e:
+        return handle_local_error(f"Could not bring graph DB online, unable to delete knowledge graph for {knowledge_domain} domain. Encountered error: ", e)
     
     try:
         client = get_graph_db_client()
@@ -4089,7 +4096,11 @@ def reset_vector_db_on_disk():
     shell_delete_folder(vector_db_path, delete_vector_db=True)
     shell_delete_folder(whoosh_index_path, delete_vector_db=False)
     clean_up_docs_loaded_db(selected_embedding_model_choice, knowledge_domain)
-    delete_knowledge_domain_graph(knowledge_domain)
+
+    try:
+        delete_knowledge_domain_graph(knowledge_domain)
+    except Exception as e:
+        handle_error_no_return(f"Could not delete knowledge graph for {knowledge_domain} domain in graph DB, encountered error: ", e)
     
     return jsonify({'success': True})
 
