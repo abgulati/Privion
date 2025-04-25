@@ -262,6 +262,8 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'ocr_pdfs':base_directory + '/ocr_pdfs',
                 'pdfs_to_txts':base_directory + '/pdfs_to_txts',
                 'docs_to_knowledge_graph_dir': base_directory + '/docs_to_knowledge_graph',
+                'upload_staging_folder':base_directory + '/upload_staging',
+                'upload_staging_db':base_directory + '/upload_staging.db',
                 'local_llm_server':'hf-waitress',
                 'model_choice':'Meta-Llama-3-8B-Instruct.f16.gguf',
                 'vision_llm_local_url':"http://localhost:9069/completions",
@@ -553,13 +555,14 @@ except Exception as e:
     handle_local_error("Failed to create Base App Directory, encountered error: ", e)
         
 try:
-    read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 'docs_to_knowledge_graph_dir'])
+    read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 'docs_to_knowledge_graph_dir', 'upload_staging_folder'])
     model_dir = read_return['model_dir']
     highlighted_docs = read_return['highlighted_docs']
     upload_folder = read_return['upload_folder']
     ocr_pdfs = read_return['ocr_pdfs']
     pdfs_to_txts = read_return['pdfs_to_txts']
     docs_to_knowledge_graph_dir = read_return['docs_to_knowledge_graph_dir']
+    upload_staging_folder = read_return['upload_staging_folder']
 except Exception as e:
     handle_local_error("Could not read paths for app directories (model_dir, highlighted_docs, upload_folder, etc.) from config.json on boot, encountered error: ", e)
 
@@ -593,10 +596,14 @@ try:
 except Exception as e:
     handle_local_error("Failed to create docs_to_knowledge_graph_dir, encountered error: ", e)
 
+try:
+    os.makedirs(upload_staging_folder, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create upload_staging_folder, encountered error: ", e)
 
 app.config['UPLOAD_FOLDER'] = upload_folder
 app.config['DOWNLOAD_FOLDER'] = highlighted_docs
-
+app.config['UPLOAD_STAGING_FOLDER'] = upload_staging_folder
 
 def clean_text_string(text_to_be_cleaned):
     
@@ -634,6 +641,22 @@ def save_json_file(data, file_path):
         return handle_local_error("Could not save JSON file, encountered error: ", e)
 
     return True
+
+
+def remove_file_from_filepath(filepath):
+    print(f"\n\nRemoving file from filepath: {filepath}\n\n")
+    try:
+        os.remove(filepath)
+        print("Removed")
+    except Exception as e:
+        return handle_local_error(f"Could not remove file from filepath: {filepath}, encountered error: ", e)
+
+
+def safe_remove_file_from_filepath(filepath):
+    try:
+        remove_file_from_filepath(filepath)
+    except Exception as e:
+        handle_error_no_return(f"Could not remove file from filepath: {filepath}, encountered error: ", e)
 
 
 def get_path_to_knowledge_domain():
@@ -1433,6 +1456,87 @@ def init_and_connect_to_docs_loaded_db() -> tuple[sqlite3.Connection, sqlite3.Cu
     return conn, cursor
 
 
+def init_and_connect_to_upload_staging_db() -> tuple[sqlite3.Connection, sqlite3.Cursor]:
+    try:
+        read_return = read_config(['upload_staging_db'])
+        upload_staging_db = read_return['upload_staging_db']
+    except Exception as e:
+        return handle_local_error("Missing upload_staging_db in config.json for method init_and_connect_to_upload_staging_db. Error: ", e)
+    
+    try:
+        conn = sqlite3.connect(upload_staging_db)
+        cursor = conn.cursor()
+    except Exception as e:
+        return handle_local_error("Could not establish connection to upload_staging_db, encountered error: ", e)
+    
+    try:    # 1. Create table if it doesn't already exist - not adding the UNIQUE constraint here as it will only apply to new table creations, not future schema changes!
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS upload_staging (
+                id INTEGER PRIMARY KEY,
+                filepath TEXT NOT NULL,
+                embedding_model TEXT NOT NULL,
+                knowledge_domain TEXT NOT NULL,
+                source TEXT NOT NULL,
+                text_extraction_method TEXT NOT NULL,
+                upload_date TEXT NOT NULL
+            )
+        ''')
+
+        conn.commit()   # Auto-incrementing primary key 'id'
+    except Exception as e:
+        return handle_local_error("Could not create upload_staging table, encountered error: ", e)
+    
+    try:    # 2. Add columns if they don't already exist
+        add_column_if_not_exists(cursor, 'upload_staging', 'filepath', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'embedding_model', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'knowledge_domain', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'source', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'text_extraction_method', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'upload_date', 'TEXT')
+    except Exception as e:
+        return handle_local_error("Could not add necessary columns to upload_staging table, encountered error: ", e)
+
+    try: # 3. Apply UNIQUE constraint with a UNIQUE INDEX - works even if the table already exists!
+        index_name = 'idx_upload_staging_unique_constraint'
+        columns_for_uniqueness = [
+            'filepath',
+            'embedding_model',
+            'knowledge_domain',
+            'source',
+            'text_extraction_method',
+            'upload_date'
+        ]
+        cursor.execute(f'''
+            CREATE UNIQUE INDEX IF NOT EXISTS {index_name}
+            ON upload_staging ({", ".join(columns_for_uniqueness)})
+        ''')
+    except Exception as e:
+        return handle_local_error("Could not create unique index for upload_staging table, encountered error: ", e)
+    
+    return conn, cursor
+
+
+def insert_into_staging_db(txt_filepath, doc, conn, cursor):
+    try:    # Queue in staging DB
+        cursor.execute('''
+        INSERT INTO upload_staging (
+            filepath,
+            embedding_model,
+            knowledge_domain,
+            source, 
+            text_extraction_method,
+            upload_date
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        ''',
+        (txt_filepath, doc['embedding_model'], doc['knowledge_domain'], doc['source'], doc['text_extraction_method'], doc['upload_date'])
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        return handle_local_error("Could not queue document in upload staging DB, encountered error: ", e)
+
+
 def is_doc_already_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
     print(f"Checking if {document_name} already exists in the appropriate records DB")
 
@@ -1465,9 +1569,16 @@ def is_doc_already_loaded_to_db(document_name, embedding_model, chunk_size, chun
         return False
 
 
-def record_doc_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
+def record_doc_loaded_to_db(document_name, chunk_size, chunk_overlap):
 
     print("\n\nRecording document loading to records DB\n\n")
+
+    try:
+        read_return = read_config(['selected_embedding_model', 'selected_knowledge_domain'])
+        embedding_model = read_return['selected_embedding_model']
+        knowledge_domain = read_return['selected_knowledge_domain']
+    except Exception as e:
+        return handle_local_error("Could not determine use_ocr in config.json for process_new_file. Disabling OCR and proceeding. Error: ", e)
 
     if is_doc_already_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
         print("Document already exists in records DB, skipping insertion.")
@@ -3356,6 +3467,39 @@ def upload_new_llm():
     return jsonify(success=True)
 
 
+def get_text_extract_from_pdf(filepath):
+    try:
+        read_return = read_config(['use_ocr', 'ocr_service_choice'])
+        use_ocr = read_return.get('use_ocr', False)
+        ocr_service_choice = read_return.get('ocr_service_choice', None)
+    except Exception as e:
+        return handle_local_error("Could not determine use_ocr in config.json for process_new_file. Disabling OCR and proceeding. Error: ", e)
+    
+    if use_ocr:
+        try:
+            if ocr_service_choice == 'AzureVision':
+                txt_file = PDFtoAzureOCRTXT(filepath)
+            elif ocr_service_choice == 'AzureDocAi':
+                txt_file = PDFtoAzureDocAiTXT(filepath)
+            elif ocr_service_choice == 'LocalVisionLLM':
+                txt_file = PDFtoVisionLLMOCRTXT(filepath)
+            elif ocr_service_choice == 'Kosmos':
+                txt_file = PDFtoKosmosOCRTXT(filepath)
+        except Exception as e:
+            handle_error_no_return("Failed to OCR text from PDF. Will now attempt to extract text via PyPDF2. Encountered error: ", e)
+            try:
+                txt_file = PDFtoTXT(filepath)
+            except Exception as e:
+                return handle_local_error("Failed to extract text from the PDF document, even via fallback PyPDF2, encountered error: ", e)
+    else:
+        try:
+            txt_file = PDFtoTXT(filepath)
+        except Exception as e:
+            return handle_local_error("Failed to extract text from the PDF document via PyPDF2, encountered error: ", e)
+    
+    return txt_file
+
+
 def convert_to_pdf_with_unoconv(input_file_path, output_file_path):
     print("\n\nConverting non-PDF document to PDF format\n\n")
     if platform.system() == 'Windows':
@@ -3383,74 +3527,81 @@ def convert_non_pdf_to_pdf_with_unoconv(filename, filepath):
 def check_if_converted_file_exists(filepath):
     try:
         source_filename = os.path.basename(filepath)
-        check_file_name = os.path.splitext(source_filename)[0] + ".pdf"   # os.path.splitext() returns a tuple containing the path's name and extension separately
-        check_file_path = os.path.join(app.config['UPLOAD_FOLDER'], check_file_name).replace("\\","/")
-        return os.path.exists(check_file_path), check_file_path
+        pdf_filename = os.path.splitext(source_filename)[0] + ".pdf"   # os.path.splitext() returns a tuple containing the path's name and extension separately
+        pdf_filepath = os.path.join(app.config['UPLOAD_FOLDER'], pdf_filename)
+        return os.path.exists(pdf_filepath), pdf_filepath
     except Exception as e:
         handle_error_no_return("Could not determine if converted file already exists, proceeding to convert file regardless. Encountered error: ", e)
         return False, None
 
-def document_extractor_and_loader(filename, filepath):
-    print("Vector Embedding Document")
 
-    if not filename.lower().endswith('.pdf'):
-        converted_file_exists, converted_pdf_file_path = check_if_converted_file_exists(filepath)
-        if not converted_file_exists:
-            _, filepath = convert_non_pdf_to_pdf_with_unoconv(filename, filepath)
-        else:
-            filepath = converted_pdf_file_path
-
-    use_ocr = False
+def get_pdf_filepath_for_upload(filename, filepath):
     try:
-        read_return = read_config(['use_ocr', 'ocr_service_choice', 'selected_embedding_model', 'selected_knowledge_domain'])
-        use_ocr = read_return['use_ocr']
-        ocr_service_choice = read_return['ocr_service_choice']
-        selected_embedding_model = read_return['selected_embedding_model']
-        selected_knowledge_domain = read_return['selected_knowledge_domain']
+        if not filename.lower().endswith('.pdf'):
+            converted_file_exists, converted_pdf_file_path = check_if_converted_file_exists(filepath)
+            if not converted_file_exists:
+                _, pdf_filepath = convert_non_pdf_to_pdf_with_unoconv(filename, filepath)
+            else:
+                pdf_filepath = converted_pdf_file_path
+            return pdf_filepath
+        else:
+            return filepath
     except Exception as e:
-        return handle_local_error("Could not determine use_ocr in config.json for process_new_file. Disabling OCR and proceeding. Error: ", e)
-    
-    print("Processing PDF file")
-    
-    if use_ocr:
-        try:
-            if ocr_service_choice == 'AzureVision':
-                input_file = PDFtoAzureOCRTXT(filepath)
-            elif ocr_service_choice == 'AzureDocAi':
-                input_file = PDFtoAzureDocAiTXT(filepath)
-            elif ocr_service_choice == 'LocalVisionLLM':
-                input_file = PDFtoVisionLLMOCRTXT(filepath)
-            elif ocr_service_choice == 'Kosmos':
-                input_file = PDFtoKosmosOCRTXT(filepath)
-        except Exception as e:
-            handle_error_no_return("Failed to OCR text from PDF. Will now attempt to extract text via PyPDF2. Encountered error: ", e)
-            try:
-                input_file = PDFtoTXT(filepath)
-            except Exception as e:
-                return handle_local_error("Failed to extract text from the PDF document, even via fallback PyPDF2, encountered error: ", e)
-    else:
-        try:
-            input_file = PDFtoTXT(filepath)
-        except Exception as e:
-            return handle_local_error("Failed to extract text from the PDF document via PyPDF2, encountered error: ", e)
-    
+        return handle_local_error("Could not get PDF filepath for upload, encountered error: ", e)
+
+
+def upload_to_rag_and_records_databases(original_filename, txt_filepath):
+
     try:
-        if os.path.getsize(input_file) > 0:
-            chunk_size, chunk_overlap = whoosh_embed_and_graph_doc_chunks(input_file)
+        if os.path.getsize(txt_filepath) > 0:
+            chunk_size, chunk_overlap = whoosh_embed_and_graph_doc_chunks(txt_filepath)
         else:
-            print("Extracted document is empty! Skipping vector embedding & whoosh indexing.")
+            print("Extracted document is empty! Skipping upload to RAG databases.")
     except Exception as e:
         return handle_local_error("Failed to embed & index document: ", e)
 
     try:
-        if os.path.getsize(input_file) > 0:
-            record_doc_loaded_to_db(filename, selected_embedding_model, chunk_size, chunk_overlap, selected_knowledge_domain)
+        if os.path.getsize(txt_filepath) > 0:
+            record_doc_loaded_to_db(original_filename, chunk_size, chunk_overlap)
         else:
-            print("Extracted document is empty! Not saving to records DB.")
+            print("Extracted document is empty! Not saving to Records DB.")
     except Exception as e:
-        handle_error_no_return("Unable to record document loading to records DB, encountered error: ", e)
+        handle_error_no_return("Unable to record document loading to Records DB, encountered error: ", e)
 
     return True
+
+
+def document_extractor_and_loader(filename, filepath):
+    print("Document Extraction and Loading to RAG & Records Databases in progress for single file...")
+
+    try:
+        pdf_filepath = get_pdf_filepath_for_upload(filename, filepath)
+    except Exception as e:
+        return handle_local_error("Could not get PDF filepath for upload, encountered error: ", e)
+        
+    try:
+        txt_filepath = get_text_extract_from_pdf(pdf_filepath)
+    except Exception as e:
+        return handle_local_error("Failed to extract text from the PDF document, encountered error: ", e)
+    
+    try:
+        upload_to_rag_and_records_databases(filename, txt_filepath)
+    except Exception as e:
+        handle_error_no_return("Unable to upload to RAG & Records databases, encountered error: ", e)
+
+    return True
+
+
+def save_file_to_upload_dir(input_file):
+    try:
+        filename = secure_filename(input_file.filename)
+        filename = filename.replace("PDF", "pdf") if "PDF" in filename else filename
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        input_file.save(filepath)
+        print(f"\nSaved file {filename} to {filepath} successfully.\n")
+        return filename, filepath
+    except Exception as e:
+        return handle_local_error("Could not save file to upload directory, encountered error: ", e)
 
 
 # Route to handle the submission of the second form (file loading)
@@ -3462,19 +3613,8 @@ def process_new_file():
     except Exception as e:
         return handle_api_error("Server-side error recieving file: ", e)
 
-    # Ensure the filename is secure
-    filename = secure_filename(input_file.filename)
-    if "PDF" in filename:
-        filename = filename.replace("PDF", "pdf")
-
     try:
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
-        print("Loading new file - filename: ", filename)
-        print("Loading new file - filepath: ", filepath)
-
-        # Save the uploaded file to the specified path
-        input_file.save(filepath)
+        filename, filepath = save_file_to_upload_dir(input_file)
     except Exception as e:
         return handle_api_error("Failed to save document to app folder, encountered error: ", e)
 
@@ -3484,6 +3624,93 @@ def process_new_file():
         return handle_api_error("Could not document_extractor_and_loader() in the process_new_file() method, encountered error: ", e)
 
     return jsonify(success=True)
+
+
+def save_staged_file_to_upload_dir(staged_filename: str):
+    try:
+        upload_staging_folder = read_config(['upload_staging_folder'])['upload_staging_folder']
+        upload_folder = app.config['UPLOAD_FOLDER']
+    except Exception as e:
+        return handle_local_error("Could not determine directories for upload_staging_coordinator. Error: ", e)
+    
+    try:
+        staged_filepath = os.path.join(upload_staging_folder, staged_filename)
+        final_filename = secure_filename(staged_filename)
+        final_filename = final_filename.replace("PDF", "pdf") if "PDF" in final_filename else final_filename
+        final_filepath = os.path.join(upload_folder, final_filename)
+        
+        try:    # copy from staging to upload folder
+            shutil.copy2(staged_filepath, final_filepath)   # copy2 preserves more metadata than copy()
+            safe_remove_file_from_filepath(staged_filepath)
+            return final_filename, final_filepath
+        except FileNotFoundError as f:
+            return handle_local_error(f"File not found: {staged_filepath}", f)
+        except Exception as e:
+            return handle_local_error("Could not copy file to upload folder, encountered error: ", e)
+        
+    except Exception as e:
+        return handle_local_error("Could not move file from staging to upload folder, encountered error: ", e)
+
+
+def bulk_upload_from_staging_area(staged_docs_to_upload: list[dict]):
+    '''
+    Receives a list of dictionaries from bulk downloader methods, each containing the following keys:
+
+        staged_docs_to_upload = [
+            {
+                'document_name_and_extension': str,
+                'embedding_model': str,
+                'knowledge_domain': str,
+                'source': str,
+                'text_extraction_method': str,
+                'upload_date': str
+            },...
+        ]
+    
+    And iterates through the list, adding documents to LARS
+    '''
+
+    try:
+        conn, cursor = init_and_connect_to_upload_staging_db()
+    except Exception as e:
+        return handle_local_error("Could not connect to upload staging DB, encountered error: ", e)
+
+    try:    # 1. Bulk text-extract and stage
+
+        txt_files_to_bulk_upload = []
+        for doc in staged_docs_to_upload:
+            try:    # Move to upload dir
+                filename, filepath = save_staged_file_to_upload_dir(doc['document_name_and_extension'])
+            except Exception as e:
+                handle_error_no_return("Could not open file in upload_staging_folder, skipping this document. Encountered error: ", e)
+            
+            try:    # Get PDF filepath for upload
+                pdf_filepath = get_pdf_filepath_for_upload(filename, filepath)
+            except Exception as e:
+                handle_error_no_return("Could not get PDF filepath for upload, skipping this document. Encountered error: ", e)
+            
+            try:    # Get text from PDF
+                txt_filepath = get_text_extract_from_pdf(pdf_filepath)
+            except Exception as e:
+                handle_error_no_return("Could not extract text from the PDF document, skipping this document. Encountered error: ", e)
+            
+            try:    # Queue in staging DB
+                txt_files_to_bulk_upload.append((doc['document_name_and_extension'], txt_filepath))
+                insert_into_staging_db(txt_filepath, doc, conn, cursor)
+            except Exception as e:
+                handle_error_no_return("Could not queue document in upload staging DB, skipping this document. Encountered error: ", e)
+    
+        # 2. Bulk upload from staging area
+        for doc in txt_files_to_bulk_upload:
+            try:
+                upload_to_rag_and_records_databases(doc[0], doc[1])
+            except Exception as e:
+                handle_error_no_return("Could not upload to RAG & Records databases, skipping this document. Encountered error: ", e)
+
+    finally:
+        cursor.close()
+        conn.close()
+    
 
 
 # Route to store user rating: 
