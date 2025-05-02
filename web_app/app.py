@@ -267,9 +267,10 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'local_llm_server':'hf-waitress',
                 'model_choice':'Meta-Llama-3-8B-Instruct.f16.gguf',
                 'vision_llm_local_url':"http://localhost:9069/completions",
-                'kosmos_local_url':"http://localhost:25000/infer_file_stream",
+                'kosmos_local_url':"http://localhost:25000",
                 'kosmos_task':'ocr',
-                'kosmos_threshold':20,
+                'kosmos_threshold':30,
+                'kosmos_offload_vram':True,
                 'lars_host':'0.0.0.0',
                 'lars_port':5000,
                 'hf_waitress_serving_url':'0.0.0.0',
@@ -647,7 +648,7 @@ def remove_file_from_filepath(filepath):
     print(f"\n\nRemoving file from filepath: {filepath}\n\n")
     try:
         os.remove(filepath)
-        print("Removed")
+        print(f"Successfully deleted file: {filepath}")
     except Exception as e:
         return handle_local_error(f"Could not remove file from filepath: {filepath}, encountered error: ", e)
 
@@ -1225,16 +1226,18 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
 
 def get_kosmos_request_params():
     try:
-        read_return = read_config(['kosmos_local_url', 'kosmos_task', 'kosmos_threshold'])
-        kosmos_local_url = read_return['kosmos_local_url']
+        read_return = read_config(['kosmos_local_url', 'kosmos_task', 'kosmos_threshold', 'kosmos_offload_vram'])
+        kosmos_local_url = read_return['kosmos_local_url'] + '/infer_file_stream'
         kosmos_task = read_return['kosmos_task']
         kosmos_threshold = read_return['kosmos_threshold']
+        kosmos_offload_vram = str(read_return['kosmos_offload_vram']).lower() == 'true'
     except Exception as e:
         handle_local_error("Missing Kosmos API config, please provide required API config. Error: ", e)
 
     payload = {
         'task': kosmos_task,
-        'threshold': kosmos_threshold
+        'threshold': kosmos_threshold,
+        'offload_vram': kosmos_offload_vram
     }
 
     headers = {}
@@ -1260,7 +1263,7 @@ def PDFtoKosmosOCRTXT(input_filepath):
 
     # Set output path
     output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
-    output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
+    output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name)
 
     if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
         if os.path.getsize(output_text_file_path) > 0:
@@ -1456,87 +1459,6 @@ def init_and_connect_to_docs_loaded_db() -> tuple[sqlite3.Connection, sqlite3.Cu
     return conn, cursor
 
 
-def init_and_connect_to_upload_staging_db() -> tuple[sqlite3.Connection, sqlite3.Cursor]:
-    try:
-        read_return = read_config(['upload_staging_db'])
-        upload_staging_db = read_return['upload_staging_db']
-    except Exception as e:
-        return handle_local_error("Missing upload_staging_db in config.json for method init_and_connect_to_upload_staging_db. Error: ", e)
-    
-    try:
-        conn = sqlite3.connect(upload_staging_db)
-        cursor = conn.cursor()
-    except Exception as e:
-        return handle_local_error("Could not establish connection to upload_staging_db, encountered error: ", e)
-    
-    try:    # 1. Create table if it doesn't already exist - not adding the UNIQUE constraint here as it will only apply to new table creations, not future schema changes!
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS upload_staging (
-                id INTEGER PRIMARY KEY,
-                filepath TEXT NOT NULL,
-                embedding_model TEXT NOT NULL,
-                knowledge_domain TEXT NOT NULL,
-                source TEXT NOT NULL,
-                text_extraction_method TEXT NOT NULL,
-                upload_date TEXT NOT NULL
-            )
-        ''')
-
-        conn.commit()   # Auto-incrementing primary key 'id'
-    except Exception as e:
-        return handle_local_error("Could not create upload_staging table, encountered error: ", e)
-    
-    try:    # 2. Add columns if they don't already exist
-        add_column_if_not_exists(cursor, 'upload_staging', 'filepath', 'TEXT')
-        add_column_if_not_exists(cursor, 'upload_staging', 'embedding_model', 'TEXT')
-        add_column_if_not_exists(cursor, 'upload_staging', 'knowledge_domain', 'TEXT')
-        add_column_if_not_exists(cursor, 'upload_staging', 'source', 'TEXT')
-        add_column_if_not_exists(cursor, 'upload_staging', 'text_extraction_method', 'TEXT')
-        add_column_if_not_exists(cursor, 'upload_staging', 'upload_date', 'TEXT')
-    except Exception as e:
-        return handle_local_error("Could not add necessary columns to upload_staging table, encountered error: ", e)
-
-    try: # 3. Apply UNIQUE constraint with a UNIQUE INDEX - works even if the table already exists!
-        index_name = 'idx_upload_staging_unique_constraint'
-        columns_for_uniqueness = [
-            'filepath',
-            'embedding_model',
-            'knowledge_domain',
-            'source',
-            'text_extraction_method',
-            'upload_date'
-        ]
-        cursor.execute(f'''
-            CREATE UNIQUE INDEX IF NOT EXISTS {index_name}
-            ON upload_staging ({", ".join(columns_for_uniqueness)})
-        ''')
-    except Exception as e:
-        return handle_local_error("Could not create unique index for upload_staging table, encountered error: ", e)
-    
-    return conn, cursor
-
-
-def insert_into_staging_db(txt_filepath, doc, conn, cursor):
-    try:    # Queue in staging DB
-        cursor.execute('''
-        INSERT INTO upload_staging (
-            filepath,
-            embedding_model,
-            knowledge_domain,
-            source, 
-            text_extraction_method,
-            upload_date
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-        ''',
-        (txt_filepath, doc['embedding_model'], doc['knowledge_domain'], doc['source'], doc['text_extraction_method'], doc['upload_date'])
-        )
-        conn.commit()
-        return True
-    except Exception as e:
-        return handle_local_error("Could not queue document in upload staging DB, encountered error: ", e)
-
-
 def is_doc_already_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
     print(f"Checking if {document_name} already exists in the appropriate records DB")
 
@@ -1587,7 +1509,7 @@ def record_doc_loaded_to_db(document_name, chunk_size, chunk_overlap):
     try:
         conn, cursor = init_and_connect_to_docs_loaded_db()
     except Exception as e:
-        return handle_local_error("Could not initialize and connect to docs_loaded_db to record_doc_loaded_to_db, encountered error: ", e)
+        return handle_local_error("Could not connect to docs_loaded_db, encountered error: ", e)
     
     try:
         cursor.execute("INSERT INTO document_records (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain) VALUES (?, ?, ?, ?, ?)", (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain))
@@ -2205,7 +2127,7 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
             handle_error_no_return(f"Could NOT create relationship from data: {relationship} in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
 
 
-def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB, skip_summary_generation: bool = False, summaries_filepath: str = None,):
+def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB, skip_summary_generation: bool = False, summaries_filepath: str = None):
     '''
     Receives a complete chunk_entities dict:
 
@@ -3250,7 +3172,7 @@ def download_folder(service, folder_id, path, data_queue=None, folder_name=None,
                     handle_error_no_return(f"Server-side error - could not save Google Drive file: '{filename}' in the download_folder() method: ", e)
     except Exception as e:
         data_queue.put(f"Error downloading Google Drive folder: '{folder_name}' | failure")
-        return handle_local_error("Error downloading Google Drive folder: '{folder_name}' in the download_folder() method, encountered error: ", e)
+        return handle_local_error(f"Error downloading Google Drive folder: '{folder_name}' in the download_folder() method, encountered error: ", e)
 
     return True
 
@@ -3359,7 +3281,7 @@ def google_drive_loader():
                 mime_type = file_metadata.get('mimeType', gdrive_file_mimeType)
             except Exception as e:
                 data_queue.put(f"Error fetching metadata for '{original_filename}' | failure")
-                return handle_api_error("Could not read GoogleDrive file metadata for file: '{original_filename}' in the google_drive_loader() method, encountered error: ", e)
+                return handle_api_error(f"Could not read GoogleDrive file metadata for file: '{original_filename}' in the google_drive_loader() method, encountered error: ", e)
             
             data_queue.put(f"Fetched metadata for '{original_filename}', proceeding to download...")
             
@@ -3367,7 +3289,7 @@ def google_drive_loader():
                 filename_with_extension, file_content = gdrive_downloader(service, gdrive_file_id, original_filename, mime_type, data_queue)
             except Exception as e:
                 data_queue.put(f"Error downloading {original_filename} from Google Drive | failure")
-                return handle_api_error("Server-side error - could not download file: '{original_filename}' from Google Drive in the google_drive_loader() method: ", e)
+                return handle_api_error(f"Server-side error - could not download file: '{original_filename}' from Google Drive in the google_drive_loader() method: ", e)
 
             if file_content is not None:    # gdrive_downloader downloaded & returned a single file
                 try:
@@ -3383,7 +3305,7 @@ def google_drive_loader():
 
                 except Exception as e:
                     data_queue.put(f"Server-side error - could not process file: '{original_filename}' from Google Drive | failure")
-                    return handle_api_error("Server-side error - could not process file: '{original_filename}' from Google Drive in the google_drive_loader() method: ", e)
+                    return handle_api_error(f"Server-side error - could not process file: '{original_filename}' from Google Drive in the google_drive_loader() method: ", e)
         
         finally:
             data_queue.put(None)
@@ -3468,6 +3390,8 @@ def upload_new_llm():
 
 
 def get_text_extract_from_pdf(filepath):
+    print("\nGetting text extract from PDF\n")
+
     try:
         read_return = read_config(['use_ocr', 'ocr_service_choice'])
         use_ocr = read_return.get('use_ocr', False)
@@ -3478,26 +3402,28 @@ def get_text_extract_from_pdf(filepath):
     if use_ocr:
         try:
             if ocr_service_choice == 'AzureVision':
-                txt_file = PDFtoAzureOCRTXT(filepath)
+                txt_filepath = PDFtoAzureOCRTXT(filepath)
             elif ocr_service_choice == 'AzureDocAi':
-                txt_file = PDFtoAzureDocAiTXT(filepath)
+                txt_filepath = PDFtoAzureDocAiTXT(filepath)
             elif ocr_service_choice == 'LocalVisionLLM':
-                txt_file = PDFtoVisionLLMOCRTXT(filepath)
+                txt_filepath = PDFtoVisionLLMOCRTXT(filepath)
             elif ocr_service_choice == 'Kosmos':
-                txt_file = PDFtoKosmosOCRTXT(filepath)
+                txt_filepath = PDFtoKosmosOCRTXT(filepath)
+            else:
+                raise Exception(f"Invalid OCR service choice: {ocr_service_choice}")
         except Exception as e:
             handle_error_no_return("Failed to OCR text from PDF. Will now attempt to extract text via PyPDF2. Encountered error: ", e)
             try:
-                txt_file = PDFtoTXT(filepath)
+                txt_filepath = PDFtoTXT(filepath)
             except Exception as e:
                 return handle_local_error("Failed to extract text from the PDF document, even via fallback PyPDF2, encountered error: ", e)
     else:
         try:
-            txt_file = PDFtoTXT(filepath)
+            txt_filepath = PDFtoTXT(filepath)
         except Exception as e:
             return handle_local_error("Failed to extract text from the PDF document via PyPDF2, encountered error: ", e)
     
-    return txt_file
+    return txt_filepath
 
 
 def convert_to_pdf_with_unoconv(input_file_path, output_file_path):
@@ -3551,7 +3477,6 @@ def get_pdf_filepath_for_upload(filename, filepath):
 
 
 def upload_to_rag_and_records_databases(original_filename, txt_filepath):
-
     try:
         if os.path.getsize(txt_filepath) > 0:
             chunk_size, chunk_overlap = whoosh_embed_and_graph_doc_chunks(txt_filepath)
@@ -3587,7 +3512,7 @@ def document_extractor_and_loader(filename, filepath):
     try:
         upload_to_rag_and_records_databases(filename, txt_filepath)
     except Exception as e:
-        handle_error_no_return("Unable to upload to RAG & Records databases, encountered error: ", e)
+        return handle_local_error("Failed to upload to RAG & Records databases, encountered error: ", e)
 
     return True
 
@@ -3621,96 +3546,654 @@ def process_new_file():
     try:
         document_extractor_and_loader(filename, filepath)
     except Exception as e:
-        return handle_api_error("Could not document_extractor_and_loader() in the process_new_file() method, encountered error: ", e)
+        return handle_api_error("Failed to upload new document, encountered error: ", e)
 
     return jsonify(success=True)
 
 
-def save_staged_file_to_upload_dir(staged_filename: str):
+def init_and_connect_to_upload_staging_db() -> tuple[sqlite3.Connection, sqlite3.Cursor]:
     try:
-        upload_staging_folder = read_config(['upload_staging_folder'])['upload_staging_folder']
-        upload_folder = app.config['UPLOAD_FOLDER']
+        read_return = read_config(['upload_staging_db'])
+        upload_staging_db = read_return['upload_staging_db']
     except Exception as e:
-        return handle_local_error("Could not determine directories for upload_staging_coordinator. Error: ", e)
+        return handle_local_error("Missing upload_staging_db in config.json for method init_and_connect_to_upload_staging_db. Error: ", e)
     
     try:
-        staged_filepath = os.path.join(upload_staging_folder, staged_filename)
-        final_filename = secure_filename(staged_filename)
-        final_filename = final_filename.replace("PDF", "pdf") if "PDF" in final_filename else final_filename
-        final_filepath = os.path.join(upload_folder, final_filename)
-        
-        try:    # copy from staging to upload folder
-            shutil.copy2(staged_filepath, final_filepath)   # copy2 preserves more metadata than copy()
-            safe_remove_file_from_filepath(staged_filepath)
-            return final_filename, final_filepath
-        except FileNotFoundError as f:
-            return handle_local_error(f"File not found: {staged_filepath}", f)
-        except Exception as e:
-            return handle_local_error("Could not copy file to upload folder, encountered error: ", e)
-        
+        conn = sqlite3.connect(upload_staging_db)
+        cursor = conn.cursor()
     except Exception as e:
-        return handle_local_error("Could not move file from staging to upload folder, encountered error: ", e)
+        return handle_local_error("Could not establish connection to upload_staging_db, encountered error: ", e)
+    
+    try:    # 1. Create table if it doesn't already exist - not adding the UNIQUE constraint here as it will only apply to new table creations, not future schema changes!
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS upload_staging (
+                id INTEGER PRIMARY KEY,
+                upload_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                document_name_and_extension TEXT NOT NULL,
+                txt_filepath TEXT NOT NULL,
+                staged_filepath TEXT NOT NULL,
+                embedding_model TEXT NOT NULL,
+                knowledge_domain TEXT NOT NULL,
+                source TEXT NOT NULL,
+                text_extraction_method TEXT NOT NULL,
+                upload_initiated_datetime TEXT NOT NULL,
+                staged_datetime TEXT NOT NULL,
+                status TEXT NOT NULL
+            )
+        ''')
+
+        conn.commit()   # Auto-incrementing primary key 'id'
+    except Exception as e:
+        return handle_local_error("Could not create upload_staging table, encountered error: ", e)
+    
+    try:    # 2. Add columns if they don't already exist
+        add_column_if_not_exists(cursor, 'upload_staging', 'upload_id', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'user_id', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'document_name_and_extension', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'txt_filepath', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'staged_filepath', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'embedding_model', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'knowledge_domain', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'source', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'text_extraction_method', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'upload_initiated_datetime', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'staged_datetime', 'TEXT')
+        add_column_if_not_exists(cursor, 'upload_staging', 'status', 'TEXT')
+    except Exception as e:
+        return handle_local_error("Could not add necessary columns to upload_staging table, encountered error: ", e)
+    
+    return conn, cursor
 
 
-def bulk_upload_from_staging_area(staged_docs_to_upload: list[dict]):
+def update_existing_entry_in_staging_db(doc_info: dict, id: int):
+    try:
+        conn, cursor = init_and_connect_to_upload_staging_db()
+    except Exception as e:
+        return handle_local_error("Could not connect to upload staging DB, encountered error: ", e)
+    
+    try:
+        cursor.execute('''
+            UPDATE upload_staging
+            SET txt_filepath = ?, staged_filepath = ?, upload_initiated_datetime = ?, staged_datetime = ?, status = ?
+            WHERE id = ?
+            ''',
+            (doc_info['txt_filepath'], doc_info['staged_filepath'], doc_info['upload_initiated_datetime'], doc_info['staged_datetime'], doc_info['status'], id)
+        )
+        conn.commit()
+    except Exception as e:
+        return handle_local_error("Could not update existing entry in upload staging DB, encountered error: ", e)
+    finally:
+        cursor.close()
+        conn.close()
+    return True
+
+
+def check_if_file_already_staged(file_transfer_info: dict):
+    try:
+        conn, cursor = init_and_connect_to_upload_staging_db()
+    except Exception as e:
+        return handle_local_error("Could not connect to upload staging DB, encountered error: ", e)
+    
+    try:
+        cursor.execute('''
+            SELECT * FROM upload_staging
+            WHERE user_id = ?
+            AND document_name_and_extension = ?
+            AND embedding_model = ?
+            AND knowledge_domain = ?
+            AND source = ?
+            AND text_extraction_method = ?
+            ''',
+            (
+                file_transfer_info['user_id'],
+                file_transfer_info['document_name_and_extension'],
+                file_transfer_info['embedding_model'],
+                file_transfer_info['knowledge_domain'],
+                file_transfer_info['source'],
+                file_transfer_info['text_extraction_method']
+            )
+        )
+
+        column_names = [desc[0] for desc in cursor.description]
+        result = cursor.fetchone()
+        if result:
+            row_dict = dict(zip(column_names, result))  # Convert tuple to dictionary
+            return row_dict
+        else:
+            return None
+    except Exception as e:
+        return handle_local_error("Could not check if files are already staged, encountered error: ", e)
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def insert_into_staging_db(doc_info: dict, skip_check: bool = False):
+    if not skip_check:
+        try:
+            result = check_if_file_already_staged(doc_info)
+            if result is not None:  # this call is likely made by the bulk_text_extract_from_staging_area to update the txt_filepath!
+                try:
+                    update_existing_entry_in_staging_db(doc_info, result['id'])
+                    return True
+                except Exception as e:
+                    handle_error_no_return("Could not update existing entry in upload staging DB. Adding fresh entry. Encountered error: ", e)
+        except Exception as e:
+            handle_error_no_return("Could not check if file is already staged when attempting to avoid duplicate entries in upload staging DB. Adding fresh entry. Encountered error: ", e)
+    
+    try:
+        conn, cursor = init_and_connect_to_upload_staging_db()
+    except Exception as e:
+        return handle_local_error("Could not connect to upload staging DB, encountered error: ", e)
+    
+    try:    # Queue in staging DB
+        cursor.execute('''
+            INSERT INTO upload_staging (
+                upload_id,
+                user_id,
+                document_name_and_extension,
+                txt_filepath,
+                staged_filepath,
+                embedding_model,
+                knowledge_domain,
+                source, 
+                text_extraction_method,
+                upload_initiated_datetime,
+                staged_datetime,
+                status
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                doc_info['upload_id'],
+                doc_info['user_id'],
+                doc_info['document_name_and_extension'],
+                doc_info['txt_filepath'],
+                doc_info['staged_filepath'],
+                doc_info['embedding_model'],
+                doc_info['knowledge_domain'],
+                doc_info['source'],
+                doc_info['text_extraction_method'],
+                doc_info['upload_initiated_datetime'],
+                doc_info['staged_datetime'],
+                doc_info['status']
+            )
+        )
+        conn.commit()
+    except Exception as e:
+        return handle_local_error("Could not add new entry to upload staging DB, encountered error: ", e)
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return True
+
+
+def delete_entry_from_staging_db(doc: dict):
+    try:
+        result = check_if_file_already_staged(doc)
+        if result is not None:
+            try:
+                conn, cursor = init_and_connect_to_upload_staging_db()
+                cursor.execute('''
+                    DELETE FROM upload_staging
+                    WHERE id = ?
+                    ''',
+                    (result['id'],)
+                )
+                conn.commit()
+            except Exception as e:
+                return handle_local_error("Could not delete entry from upload staging DB, encountered error: ", e)
+            finally:
+                cursor.close()
+                conn.close()
+        return True
+    except Exception as e:
+        handle_error_no_return("Error deleting entry from staging records DB. Encountered error: ", e)
+
+
+def safe_delete_entry_from_staging_db(doc: dict):
+    try:
+        delete_entry_from_staging_db(doc)
+    except Exception as e:
+        handle_error_no_return("Could not delete entry from staging records DB, skipping. Encountered error: ", e)
+
+
+def bulk_upload_files_to_rag_and_records_databases(docs_to_upload: list[dict], data_queue: queue.Queue = None):
+    for count, doc in enumerate(docs_to_upload):
+        if data_queue is not None: data_queue.put(f"Uploading Document to RAG & Records Databases: {doc.get('document_name_and_extension', 'Unknown document name')} | waiting")
+        try:
+            doc['status'] = 'Processing - Uploading to RAG & Records Databases'
+            insert_into_staging_db(doc)
+        except Exception as e:
+            if data_queue is not None: data_queue.put(f"Error staging file for upload | failure")
+            handle_error_no_return(f"Could not update the `status` key in the staging DB. Encountered error: ", e)
+
+        try:
+            upload_to_rag_and_records_databases(doc['document_name_and_extension'], doc['txt_filepath'])
+            if data_queue is not None: data_queue.put(f"Successfully Uploaded Document: {doc.get('document_name_and_extension', 'Unknown document name')} | success")
+            safe_delete_entry_from_staging_db(doc)
+        except Exception as e:
+            if data_queue is not None: data_queue.put(f"Error uploading file to RAG & Records databases | failure")
+            handle_error_no_return(f"Could not upload {doc.get('document_name_and_extension', 'Unknown document name')} to RAG & Records databases, skipping this document. Encountered error: ", e)
+        if data_queue is not None: data_queue.put(f"Completed processing file {count + 1} of {len(docs_to_upload)}! | success")
+    return True
+
+
+def move_file_to_upload_dir(staged_filename: str, staged_filepath: str):
+    
+    try:    # copy from staging to upload folder
+        final_filepath = os.path.join(app.config['UPLOAD_FOLDER'], staged_filename)   # staged_filename is the clean, secure_filename version of the original filename
+        shutil.copy2(staged_filepath, final_filepath)   # copy2 preserves more metadata than copy()
+        safe_remove_file_from_filepath(staged_filepath)
+        return staged_filename, final_filepath
+    except FileNotFoundError as f:
+        return handle_local_error(f"File not found: {staged_filepath}", f)
+    except Exception as e:
+        return handle_local_error("Could not move file to upload folder, encountered error: ", e)
+
+
+def enable_kosmos_vram_offloading():
+    try:
+        write_config({'kosmos_offload_vram': 'true'})
+        return True
+    except Exception as e:
+        handle_error_no_return("Could not enable Kosmos VRAM offloading, encountered error: ", e)
+
+
+def disable_kosmos_vram_offloading():
+    try:
+        kosmos_offload_vram_enabled = str(read_config(['kosmos_offload_vram'])['kosmos_offload_vram']).lower() == 'true'
+        if kosmos_offload_vram_enabled: write_config({'kosmos_offload_vram': 'false'})
+        return kosmos_offload_vram_enabled
+    except Exception as e:
+        handle_error_no_return("Could not disable Kosmos VRAM offloading, encountered error: ", e)
+
+
+def invoke_offload_kosmos_vram_endpoint():
+    kosmos_local_url = read_config(['kosmos_local_url'])['kosmos_local_url']
+    url = f"{kosmos_local_url}/reclaim_kosmos_vram"
+    response = requests.request("GET", url, headers={}, data={})
+    print(response.text)
+
+
+def bulk_text_extract_from_staging_area(staged_docs_to_upload: list[dict], data_queue: queue.Queue = None):
     '''
     Receives a list of dictionaries from bulk downloader methods, each containing the following keys:
 
         staged_docs_to_upload = [
             {
+                'upload_id': str,
+                'user_id': str,
                 'document_name_and_extension': str,
+                'staged_filepath': str,
+                'txt_filepath': str,    # will be added here!
                 'embedding_model': str,
                 'knowledge_domain': str,
                 'source': str,
                 'text_extraction_method': str,
-                'upload_date': str
+                'upload_initiated_datetime': str,
+                'staged_datetime': str,
+                'status': str
             },...
         ]
     
     And iterates through the list, adding documents to LARS
     '''
+    print("\nBulk uploading documents from staging area\n")
 
+    must_enable_kosmos_vram_offloading_after_bulk_upload_completes = disable_kosmos_vram_offloading()
+
+    for count, doc in enumerate(staged_docs_to_upload):
+        if data_queue is not None: data_queue.put(f"Processing document {count + 1} of {len(staged_docs_to_upload)}... | waiting")
+        try:    # Move to upload dir
+            filename, filepath = move_file_to_upload_dir(doc['document_name_and_extension'], doc['staged_filepath']) # will also delete from staging dir
+        except Exception as e:
+            if data_queue is not None: data_queue.put(f"Error processing file - Could not move file to upload directory | failure")
+            handle_error_no_return(f"Could not move file to upload directory. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
+            continue
+        
+        try:
+            doc['status'] = 'Extracting Text - Moved to Upload Dir'
+            insert_into_staging_db(doc)
+        except Exception as e:
+            if data_queue is not None: data_queue.put(f"Error processing file - Could not update file status in staging DB | failure")
+            handle_error_no_return(f"Could not update the `status` key in the staging DB. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
+        
+        try:    # Get PDF filepath for upload
+            pdf_filepath = get_pdf_filepath_for_upload(filename, filepath)
+        except Exception as e:
+            if data_queue is not None: data_queue.put(f"Error processing file - Could not get filepath for upload | failure")
+            handle_error_no_return(f"Could not get PDF filepath for upload. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
+            continue
+        
+        try:    # Get text from PDF
+            if data_queue is not None: data_queue.put(f"Extracting text from document: {doc.get('document_name_and_extension', 'Unknown document name')} | waiting")
+            txt_filepath = get_text_extract_from_pdf(pdf_filepath)
+            if data_queue is not None: data_queue.put(f"Successfully extracted text from document: {doc.get('document_name_and_extension', 'Unknown document name')} | success")
+        except Exception as e:
+            if data_queue is not None: data_queue.put(f"Error processing file - Could not extract text from the document | failure")
+            handle_error_no_return(f"Could not extract text from the PDF document. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
+            continue
+
+        try:
+            doc['txt_filepath'] = txt_filepath
+            doc['status'] = 'Text Extraction Completed - Path to TXT File Saved'
+            insert_into_staging_db(doc) # update the `txt_filepath` key in the staging DB
+        except Exception as e:
+            if data_queue is not None: data_queue.put(f"Error processing file - Could not save text extract | failure")
+            handle_error_no_return(f"Could not update the `txt_filepath` key in the staging DB. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
+    
+    if must_enable_kosmos_vram_offloading_after_bulk_upload_completes: 
+        enable_kosmos_vram_offloading()
+        invoke_offload_kosmos_vram_endpoint()
+    return True
+
+
+@app.route('/bulk_upload_files', methods=['POST'])
+def bulk_upload_files():
+    '''
+    Step Two of the bulk upload process!
+
+    Will receive a JSON list of dictionaries, each entry comprising a complete set of information on a file to be uploaded:
+        user_id: str
+        upload_id: str
+        staged_filepath: str
+        txt_filepath: str
+        document_name_and_extension: str
+        embedding_model: str
+        knowledge_domain: str
+        source: str
+        text_extraction_method: str
+        upload_initiated_datetime: str
+        staged_datetime: str
+        status: str
+    
+    This list is used to first bulk text-extract (eg OCR) all files, and then bulk upload to the RAG & Records databases.
+
+    Files are removed from the staging area as text extraction progresses and their respective entries are removed from the staging database after sucessful RAG upload.
+    They can then be found in the docs_loaded DB.
+    '''
+    try:
+        docs_to_upload = request.form['docs_to_upload']
+        docs_to_upload = json.loads(docs_to_upload)
+    except Exception as e:
+        return handle_api_error("Server-side error, could not read bulk upload request, encountered error: ", e)
+    
+    data_queue = queue.Queue()
+    stop_event = threading.Event()
+
+    def sync_task():
+        try:
+            try:
+                bulk_text_extract_from_staging_area(docs_to_upload, data_queue)
+            except Exception as e:
+                return handle_api_error("Server-side error, could not perform bulk text extraction, encountered error: ", e)
+            
+            try:
+                bulk_upload_files_to_rag_and_records_databases(docs_to_upload, data_queue)
+            except Exception as e:
+                return handle_api_error("Server-side error, could not bulk upload files to RAG & Records databases, encountered error: ", e)
+        finally:
+            data_queue.put(None)
+            print("\n\nGDrive-Sync stream done, breaking thread\n\n")
+
+    def bulk_process_files():
+
+        try:
+            thread = threading.Thread(target=sync_task)
+            thread.start()
+        except Exception as e:
+            data_queue.put(f"Could not start sync process for bulk file upload | failure")
+            return handle_api_error("Could not start thread in the bulk_process_files() method, encountered error: ", e)
+
+        while True:
+            if stop_event.is_set(): #TODO: Add Cancel-Sync button to UI! Logic here will be simialr to STOP_GENERATION in hf_waitress.py
+                print("\n\nStopping bulk file upload stream as requested by stop_event\n\n")
+                thread.join()
+                break
+            output = data_queue.get()
+            if output is None:
+                print("\n\nNone read, breaking and stopping thread\n\n")
+                thread.join()
+                break
+            yield f"data: {json.dumps(output)}\n\n"
+        
+        yield f"event: END\ndata: \"null\"\n\n"
+    
+    print("\n\nBulk file upload begins!\n\n")
+    return Response(bulk_process_files(), content_type='text/event-stream')
+
+
+def save_file_to_staging_dir(input_file):   # input_file is a Request.files object
+    try:
+        filename = secure_filename(input_file.filename)
+        filename = filename.replace("PDF", "pdf") if "PDF" in filename else filename
+        filepath = os.path.join(app.config['UPLOAD_STAGING_FOLDER'], filename)
+        input_file.save(filepath)
+        print(f"\nSaved file {filename} to {filepath} successfully.\n")
+        return filename, filepath
+    except Exception as e:
+        return handle_local_error("Could not save file to staging directory, encountered error: ", e)
+
+
+def validate_file_transfer_info(file_transfer_info: dict):
+    try:
+        keys_to_validate = ['user_id', 'upload_id', 'document_name_and_extension', 'embedding_model', 'knowledge_domain', 'source', 'text_extraction_method', 'upload_initiated_datetime']
+        for key in keys_to_validate:
+            if key not in file_transfer_info:
+                raise Exception(f"Invalid request, missing key information for bulk download request: {key}")
+        return True
+    except Exception as e:
+        return handle_local_error("File transfer info validation failed, encountered error: ", e)
+
+
+@app.route('/file_transfer_to_staging', methods=['POST'])
+def file_transfer_to_staging():
+    '''
+    ### MAIN ENTRY POINT FOR (BULK) FILE UPLOADS ###
+
+    Step One - Transfer to Staging Area and create entry in Staging-Records DB, after checking if the file and record are already staged.
+
+    Step Two - Invoke bulk_upload_files to perform two-step upload:
+        - First, extracting text for all staged documents (benefit :when using local OCR models such as Kosmos, they can be loaded once and used to process all files before offloading)
+        - Second, uploading to RAG & Records databases
+
+    Receives a JSON object named `file_transfer_info` comprising the following keys detailing the file to be uploaded:
+        user_id: str
+        upload_id: str
+        document_name_and_extension: str
+        embedding_model: str
+        knowledge_domain: str
+        source: str
+        text_extraction_method: str
+        upload_initiated_datetime: str
+    
+    And the file to uploaded as a Request.files object.
+
+    Will save the file to the staging area, and add the following keys to the `file_transfer_info` dictionary and return it:
+        staged_datetime: str
+        staged_filepath: str
+        txt_filepath: str   # will be left blank for now and updated after text extraction by the bulk_text_extract_from_staging_area method
+        status: str
+
+    Additionally, the `document_name_and_extension` key will be updated to the secure_filename version of the original filename.
+
+    So this method receives a single dict, the front-end JS is responsible for collecting them into a list for step two.
+    '''
+
+    print("\n\nFile transfer to staging area begins!\n\n")
+    
+    try:    # First validate file-transfer info and check if file is already staged
+        file_transfer_info = request.form['file_transfer_info']
+        file_transfer_info = json.loads(file_transfer_info)
+    except Exception as e:
+        return handle_api_error("Server-side error, could not read file transfer data, encountered error: ", e)
+
+    try:    # validate file transfer data
+        validate_file_transfer_info(file_transfer_info) # exception will be raised if invalid
+    except Exception as e:
+        return handle_api_error("Error validating request: ", e)
+
+    try:
+        staged_file_info = check_if_file_already_staged(file_transfer_info)
+        print(f"\n\nStaged file info: {staged_file_info}\n\n")
+        if staged_file_info is not None:
+            print(f"\n\nStaged file info is not None!\n\n")
+            try:    # validate file transfer data
+                validate_file_transfer_info(staged_file_info) # exception will be raised if invalid
+                print(f"\n\nStaged file info validated successfully!\n\n")
+                if os.path.exists(os.path.join(app.config['UPLOAD_STAGING_FOLDER'], staged_file_info['document_name_and_extension'])):
+                    print(f"\n\nStaged file info is valid and file exists in staging area!\n\n")
+                    staged_file_info.pop('id', None)    # 'id' primary key is for internal DB use only
+                    return jsonify(success=True, file_previously_staged=True, staged_file_info=staged_file_info)
+            except Exception as e:
+                handle_error_no_return("File already staged for uploading but error validating staged file data. Deleting entry and proceeding with fresh upload. Error Log: ", e)
+                safe_delete_entry_from_staging_db(staged_file_info)
+    except Exception as e:
+        handle_error_no_return("Server-side error, could not check if files are already staged, proceeding with upload. Encountered error: ", e)
+    
+    try:    # New file, proceed with fresh upload
+        file_to_stage = request.files['file']
+    except Exception as e:
+        return handle_api_error("Server-side error recieving file: ", e)
+    
+    try:
+        staged_filename, staged_filepath = save_file_to_staging_dir(file_to_stage)
+    except Exception as e:
+        return handle_api_error("Server-side error, could not save file to staging area, encountered error: ", e)
+
+    try:
+        file_transfer_info['document_name_and_extension'] = staged_filename # secure_filename version of original filename
+        file_transfer_info['staged_datetime'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        file_transfer_info['staged_filepath'] = staged_filepath
+        file_transfer_info['txt_filepath'] = ''
+        file_transfer_info['status'] = 'Staged - File Saved to Staging Area'
+        insert_into_staging_db(file_transfer_info, skip_check=True)  # `check_if_file_already_staged` has already been performed, so this will insert directly into the DB barring some error.
+    except Exception as e:
+        return handle_api_error("Server-side error, could not insert file into staging DB, encountered error: ", e)
+    
+    return jsonify(success=True, file_previously_staged=False, staged_file_info=file_transfer_info)
+    
+
+
+### *** FUTURE USE: Check if files are already staged for a user, and cancel pending uploads ***
+def check_for_pending_uploads_for_user(user_id: str):
     try:
         conn, cursor = init_and_connect_to_upload_staging_db()
     except Exception as e:
-        return handle_local_error("Could not connect to upload staging DB, encountered error: ", e)
+        return handle_local_error("Could not connect to upload staging DB to check for pending uploads, encountered error: ", e)
 
-    try:    # 1. Bulk text-extract and stage
+    try:
+        cursor.execute('''
+            SELECT * FROM upload_staging
+            WHERE user_id = ?
+            ''',
+            (user_id,)
+        )
+        result = cursor.fetchall()  # fetchall() returns a list of tuples equal in length to the number of columns in the query. For `SELECT *` this is the number of columns in the table.
+        if result:
+            files_staged = []
+            for file in result:
+                file_info = {
+                    'upload_id': file[1],
+                    'user_id': file[2],
+                    'document_name_and_extension': file[3],
+                    'txt_filepath': file[4],
+                    'staged_filepath': file[5],
+                    'embedding_model': file[6],
+                    'knowledge_domain': file[7],
+                    'source': file[8],
+                    'text_extraction_method': file[9],
+                    'upload_initiated_datetime': file[10],
+                    'staged_datetime': file[11],
+                    'status': file[12]
+                }
+                files_staged.append(file_info)
+            return files_staged
+        else:
+            return []
+    except Exception as e:
+        return handle_local_error("Could not check for pending uploads, encountered error: ", e)
+    finally:
+        cursor.close()
+        conn.close()
 
-        txt_files_to_bulk_upload = []
-        for doc in staged_docs_to_upload:
-            try:    # Move to upload dir
-                filename, filepath = save_staged_file_to_upload_dir(doc['document_name_and_extension'])
-            except Exception as e:
-                handle_error_no_return("Could not open file in upload_staging_folder, skipping this document. Encountered error: ", e)
-            
-            try:    # Get PDF filepath for upload
-                pdf_filepath = get_pdf_filepath_for_upload(filename, filepath)
-            except Exception as e:
-                handle_error_no_return("Could not get PDF filepath for upload, skipping this document. Encountered error: ", e)
-            
-            try:    # Get text from PDF
-                txt_filepath = get_text_extract_from_pdf(pdf_filepath)
-            except Exception as e:
-                handle_error_no_return("Could not extract text from the PDF document, skipping this document. Encountered error: ", e)
-            
-            try:    # Queue in staging DB
-                txt_files_to_bulk_upload.append((doc['document_name_and_extension'], txt_filepath))
-                insert_into_staging_db(txt_filepath, doc, conn, cursor)
-            except Exception as e:
-                handle_error_no_return("Could not queue document in upload staging DB, skipping this document. Encountered error: ", e)
+
+@app.route('/check_for_pending_uploads', methods=['POST'])
+def check_for_pending_uploads():
+    try:
+        user_id = request.form['user_id']
+    except Exception as e:
+        return handle_api_error("Server-side error, could not read user ID, encountered error: ", e)
     
-        # 2. Bulk upload from staging area
-        for doc in txt_files_to_bulk_upload:
-            try:
-                upload_to_rag_and_records_databases(doc[0], doc[1])
-            except Exception as e:
-                handle_error_no_return("Could not upload to RAG & Records databases, skipping this document. Encountered error: ", e)
+    try:
+        files_staged = check_for_pending_uploads_for_user(user_id)
+        return jsonify(success=True, files_already_staged = True, list_of_files_staged=files_staged) if len(files_staged) > 0 else jsonify(success=True, files_already_staged = False, list_of_files_staged=[])
+    except Exception as e:
+        return handle_api_error("Server-side error, could not check for pending uploads, encountered error: ", e)
+    
 
+def cancel_upload_for_staged_files(user_id: str):
+    try:
+        conn, cursor = init_and_connect_to_upload_staging_db()
+    except Exception as e:
+        return handle_local_error("Could not connect to upload staging DB to cancel pending uploads, encountered error: ", e)
+    
+    # 1. Check for staged files and attmept disk deletion
+    try:
+        cursor.execute('''
+            SELECT * FROM upload_staging
+            WHERE user_id = ?
+            ''',
+            (user_id,)
+        )
+        result = cursor.fetchall()
+        if result:
+            for file in result:
+                safe_remove_file_from_filepath(file['staged_filepath'])
+                safe_remove_file_from_filepath(file['txt_filepath'])
+    except Exception as e:
+        return handle_local_error("Could not check for pending uploads, encountered error: ", e)
+    
+    # 2. Delete from staging DB
+    try:
+        cursor.execute('''
+            DELETE FROM upload_staging
+            WHERE user_id = ?
+            ''',
+            (user_id,)
+        )
+        conn.commit()
+    except Exception as e:
+        return handle_local_error("Could not delete pending uploads from staging DB, encountered error: ", e)
+    
     finally:
         cursor.close()
         conn.close()
     
+    return jsonify(success=True)
+
+
+@app.route('/cancel_pending_uploads', methods=['POST'])
+def cancel_pending_uploads():
+    try:
+        user_id = request.form['user_id']
+    except Exception as e:
+        return handle_api_error("Server-side error, could not read user ID, encountered error: ", e)
+    
+    try:
+        cancel_upload_for_staged_files(user_id)
+    except Exception as e:
+        return handle_api_error("Server-side error, could not cancel pending uploads, encountered error: ", e)
+    
+    return jsonify(success=True)
+
+#TODO: Resume interrupted uploads! - Should be triggered by LARS Server (this file) on boot, not the UI on refresh!
+
+### *** END FUTURE USE: Check if files are already staged for a user, and cancel pending uploads ***
+
 
 
 # Route to store user rating: 
