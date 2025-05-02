@@ -123,8 +123,22 @@
                     </div>
                 </div>
                 <!-- <textarea rows="1" cols="50" class="form-control" id="user-input" onclick="closeNav()" placeholder="Type your prompts here..."></textarea> -->
-                <input type="file" name="file" id="fileInput" style="display:none;">
-                <button type="button" id="fileInputButton" class="btn btn-primary upload-file-btn" onclick="closeNav(); document.getElementById('fileInput').click();" title="Add a file LARS' Retrieval Augmented Generation (RAG) & Citations Pipeline"><i class="fas fa-upload"></i></button>
+                
+                <!-- Hidden input for selecting FILES -->
+                <input type="file" name="filesInput" id="filesInput" style="display:none;" multiple> 
+                <!-- Hidden input for selecting FOLDERS -->
+                <input type="file" name="folderInput" id="folderInput" style="display:none;" webkitdirectory>
+
+                 <!-- Button to trigger FILE selection -->
+                <button type="button" id="fileInputButton" class="btn btn-primary upload-file-btn" onclick="closeNav(); document.getElementById('filesInput').click();" title="Add file(s) to LARS' Retrieval Augmented Generation (RAG) & Citations Pipeline">
+                    <i class="fas fa-upload"></i>
+                </button>
+
+                <!-- Button to trigger FOLDER selection -->
+                <button type="button" id="folderInputButton" class="btn btn-primary upload-folder-btn" onclick="closeNav(); document.getElementById('folderInput').click();" title="Upload a Folder to LARS' RAG Pipeline" style="margin-right: 7px;">
+                    <i class="fas fa-folder-open"></i> <!-- Icon for folders -->
+                </button>
+
                 <button class="btn btn-primary" id="sendButton" onclick="closeNav(); requestFormattedPrompt()">Send</button>
             </div>
             
