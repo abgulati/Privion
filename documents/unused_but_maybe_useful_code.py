@@ -4462,3 +4462,25 @@ def get_references():
         handle_error_no_return("Could not store or update chat history DB in get_references(), encountered error: ", e)
 
     return jsonify({'success': True, 'response': reference_response, 'pdf_frame':download_link_html, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
+
+
+
+
+    # try: # 3. Apply UNIQUE constraint with a UNIQUE INDEX - works even if the table already exists!
+    #     index_name = 'idx_upload_staging_unique_constraint'
+    #     columns_for_uniqueness = [
+    #         'upload_id',
+    #         'user_id',
+    #         'filepath',
+    #         'embedding_model',
+    #         'knowledge_domain',
+    #         'source',
+    #         'text_extraction_method',
+    #         'upload_date'
+    #     ]
+    #     cursor.execute(f'''
+    #         CREATE UNIQUE INDEX IF NOT EXISTS {index_name}
+    #         ON upload_staging ({", ".join(columns_for_uniqueness)})
+    #     ''')
+    # except Exception as e:
+    #     return handle_local_error("Could not create unique index for upload_staging table, encountered error: ", e)
