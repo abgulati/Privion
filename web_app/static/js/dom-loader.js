@@ -49,11 +49,18 @@ function initializeRegenerateResponseButton() {
 }
 
 
+function initializeFileUploadButtons() {
+    document.getElementById('filesInput').addEventListener('change', handleFileOrFolderSelection);
+    document.getElementById('folderInput').addEventListener('change', handleFileOrFolderSelection);
+}
+
+
 function initializeUI() {
     attachWindowEvents();
     initializeChatLink();
     initializeScrollDownButton();
     initializeRegenerateResponseButton();
+    initializeFileUploadButtons();
 }
 
 
