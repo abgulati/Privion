@@ -804,62 +804,6 @@ function removeTextAttachment() {
 textAttachmentRemoveBtn.addEventListener('click', removeTextAttachment);
 
 
-// Upload new files to VectorDB
-document.getElementById('fileInput').addEventListener('change', function (event) {
-    const confirmed = confirm('Make sure to verify that the following Settings pertaining to File Uploading are correct:\n\n- Text Extraction Method: ' 
-        + (document.getElementById('ocr_yes_radio_button').checked ? 'OCR' : 'Non-OCR (Plain-Text Extraction)') 
-        + '\n- OCR Service Choice: ' + (document.getElementById('ocr_yes_radio_button').checked ? document.getElementById('ocrApiDropdown').value : 'Not Applicable') 
-        + '\n- Embedding Model: ' + document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent
-        + '\n- Knowledge Domain: ' + document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent
-        + '\n\nIf unsure, click Cancel to abort the file upload process.');
-
-    if (!confirmed) {
-        document.getElementById('fileInput').value = "";  // Clear the input value
-        return;
-    }
-    
-    if (this.value) {    // Check if a file is selected
-    
-        document.getElementById('overlay').style.display = 'block';
-        
-        let newFile = document.getElementById('fileInput');
-        let file = newFile.files[0]
-
-        if (file) {
-            let formData = new FormData();
-            formData.append('file', file);
-
-            // Make the AJAX request to the server
-            fetch('/process_new_file', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => { throw new Error(err.error)});
-                }
-                return response
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    populateDocsLoadedTable();
-                    document.getElementById('overlay').style.display = 'none';
-                    document.getElementById('fileInput').value = "";  // Clear the input value
-                } else {
-                    throw new Error(`Internal Server Error: Check server-log and server command-line for more details.`);
-                }
-            })
-            .catch(error => {
-                errorHandler("processing file", "/process_new_file", String(error.message))
-                document.getElementById('overlay').style.display = 'none';
-                document.getElementById('fileInput').value = "";  // Clear the input value
-            });
-        }
-    }    
-});
-
-
 // Store user rating & update UI - confirm the associated route does not contain print() statements as the stdout is redirected during response generation!
 document.getElementById('chat-area').addEventListener('click', function(e) {
     if(e.target.classList.contains('fa-star')) {
