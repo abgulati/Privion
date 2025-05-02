@@ -159,6 +159,28 @@ function appendStreamInfo(message, status='waiting') {
     scrollStreamInfoBoxToBottom();
 }
 
+function updateUIForFile(row, status) {
+    let statusCell = row.cells[row.cells.length - 1];
+
+    statusCell.textContent = ''; // Clear existing content
+
+    switch(status) {
+        case 'loading':
+            statusCell.innerHTML = '<div class="cell-loader"></div>';
+            break;
+        case 'waiting':
+            statusCell.innerHTML = '<i class="fas fa-clock waiting" title="Waiting"></i>';
+            break;
+        case 'success':
+            statusCell.innerHTML = '<i class="fas fa-check-circle success" title="Success"></i>';
+            break;
+        case 'failure':
+            statusCell.innerHTML = '<i class="fas fa-times-circle failure" title="Failed"></i>';
+            break;
+    }
+}
+
+
 function getUserMessageContent(element) {
     const childNodes = Array.from(element.childNodes);  //childNodes is a property that returns a live collection of all child nodes of an element, including text nodes, comment nodes, and element nodes
     const textNode = childNodes.find(node => node.nodeType === Node.TEXT_NODE);
@@ -1030,6 +1052,7 @@ function initSortingAndFiltering() {
     document.getElementById('selectAll').addEventListener('change', selectAll);
 }
 
+
 function populateGoogleDriveTable(gdrive_files) {
     const gdriveTableBody = document.querySelector('#google_drive_files_tables tbody');
     const filterSelect = document.getElementById('filterDocType');
@@ -1061,210 +1084,6 @@ function populateGoogleDriveTable(gdrive_files) {
     });
 }
 
-async function loadGoogleDriveDoc(file_id, file_mimeType) {
-    try {
-        let formData = new FormData();
-        formData.append('file_id', file_id);
-        formData.append('file_mimeType', file_mimeType);
-
-        const gdrive_loader_response = await fetch('/google_drive_loader', {
-            method: 'POST',
-            body: formData,
-            redirect: 'follow'
-        });
-
-        if (!gdrive_loader_response.ok) {
-            throw new Error('Failed to load document from Google Drive');
-        }
-
-        const gdrive_loader_reader = gdrive_loader_response.body.getReader();
-        let gdrive_loader_receivedComplete = false;
-
-        async function gdrive_loader_processChunk() {
-            while (true) {
-                const { done, value } = await gdrive_loader_reader.read();
-                if (done) {
-                    console.log("Google Drive Loader stream complete");
-                    break;
-                }
-                const textChunk = new TextDecoder("utf-8").decode(value);
-                const messages = textChunk.split('\n');
-
-                messages.forEach(message => {
-                    if (message.startsWith('data: ')) {
-                        const jsonStr = message.slice(7, -1);
-
-                        try {
-                            let dataObj = String(jsonStr);
-                            if (dataObj == "null") {
-                                dataObj = "";
-                            }
-
-                            if (dataObj != "") {
-                                string_and_status = dataObj.split('|');
-                                console.log(string_and_status);
-                                appendStreamInfo(string_and_status[0].trim(), string_and_status[1] === undefined ? 'waiting' : string_and_status[1].trim());
-                            }
-
-                        } catch (error) {
-                            console.error('Error parsing message: ', error);
-                        }
-                    }
-                });
-
-            }
-        }
-
-        await gdrive_loader_processChunk();
-    } catch (error) {
-        console.error("Error loading document from Google Drive in method loadGoogleDriveDoc(). Error details: ", String(error.message));
-    }
-}
-
-
-function updateUIForFile(row, status) {
-    let statusCell = row.cells[row.cells.length - 1];
-
-    statusCell.textContent = ''; // Clear existing content
-
-    switch(status) {
-        case 'loading':
-            statusCell.innerHTML = '<div class="cell-loader"></div>';
-            break;
-        case 'waiting':
-            statusCell.innerHTML = '<i class="fas fa-clock waiting" title="Waiting"></i>';
-            break;
-        case 'success':
-            statusCell.innerHTML = '<i class="fas fa-check-circle success" title="Success"></i>';
-            break;
-        case 'failure':
-            statusCell.innerHTML = '<i class="fas fa-times-circle failure" title="Failed"></i>';
-            break;
-    }
-}
-
-function triggerSyncGoogleDrive() {
-    const confirmed = confirm('Make sure to verify that the following Settings pertaining to File Uploading are correct:\n\n- Text Extraction Method: ' 
-        + (document.getElementById('ocr_yes_radio_button').checked ? 'OCR' : 'Non-OCR (Plain-Text Extraction)') 
-        + '\n- OCR Service Choice: ' + (document.getElementById('ocr_yes_radio_button').checked ? document.getElementById('ocrApiDropdown').value : 'Not Applicable') 
-        + '\n- Embedding Model: ' + document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent 
-        + '\n- Knowledge Domain: ' + document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent 
-        + '\n\nIf unsure, click Cancel to abort the file upload process.');
-
-    if (!confirmed) {
-        return;
-    }
-
-    const table = document.getElementById('google_drive_files_tables');
-    const syncButton = document.getElementById('googleDriveSyncAction');
-    const selectedFiles = [];
-
-    if (!table || !syncButton) {
-        console.error('Required elements not found');
-        return;
-    }
-
-    syncButton.disabled = true;
-    appendStreamInfo("Google Drive Synchronization In-Progress...", 'waiting');
-    showStreamSpinner();
-
-    for (let i = 1; i < table.rows.length; i++) {
-        const checkbox = table.rows[i].cells[0].querySelector('input[type="checkbox"]');
-        if (checkbox && checkbox.checked) {
-            selectedFiles.push({
-                id: table.rows[i].getAttribute('data-gdrive-file-id'),
-                mimeType: table.rows[i].getAttribute('data-gdrive-mime-type'),
-                row: table.rows[i]
-            });
-            // Add status cell if it doesn't exist
-            if (table.rows[i].cells.length < 6) {
-                table.rows[i].insertCell(-1);
-            }
-            updateUIForFile(table.rows[i], 'waiting');
-        }
-    }
-
-    // Process files sequentially
-    selectedFiles.reduce((promise, file, index) => {
-        return promise.then(() => {
-            updateUIForFile(file.row, 'loading');
-            return loadGoogleDriveDoc(file.id, file.mimeType)
-                .then(() => {
-                    console.log(`File ${index + 1} loaded successfully`);
-                    clearDocsLoadedTable();
-                    populateDocsLoadedTable();
-                    updateUIForFile(file.row, 'success');
-                })
-                .catch(error => {
-                    console.error(`Error loading file ${index + 1}:`, error);
-                    updateUIForFile(file.row, 'failure');
-                });
-        });
-    }, Promise.resolve())
-    .finally(() => {
-        syncButton.disabled = false;
-        appendStreamInfo("Google Drive Synchronization Completed!", 'success');
-        hideStreamSpinner();
-    });
-}
-
-
-function handleGoogleDrivePostAuth() {
-    appendStreamInfo("Checking Google Drive Auth...", 'waiting');
-    fetch('/check_gdrive_auth')
-    .then(response => response.json())
-    .then(data => {
-        if (!data.is_authenticated) {
-            console.log("User not authenticated to GDrive, skipping Google Drive sync.");
-            return;
-        }
-        console.log("User authenticated to GDrive, proceeding with Google Drive sync.");
-        showLoader();
-        fetch('/get_google_drive_user')
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => { throw new Error(err.error)});
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                appendStreamInfo("Google Drive Logged In Successfully, proceeding to fetch file list...", 'success');
-                document.getElementById('googleDriveUserName').textContent = "Logged in as: " + data.user_name;
-                document.getElementById('googleDriveUserName').style.display = 'block';
-
-                return fetch('/fetch_file_list_from_google_drive');
-            } else {
-                throw new Error("Failed to fetch Google Drive user.");
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error("Failed to fetch Google Drive files.");
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                appendStreamInfo("Google Drive Files Fetched Successfully", 'success');
-                hideLoader();
-                console.log("GDrive Files Fetched");
-                console.log(data.gdrive_files);
-                if (data.gdrive_files.length > 0) {
-                    clearGoogleDriveTable();
-                    populateGoogleDriveTable(data.gdrive_files);
-                    document.getElementById('googleDriveSyncAction').style.display = 'block';
-                }
-            } else {
-                throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
-            }
-        })
-    })
-    .catch(error => {
-        errorHandler("Google Auth Check Failed", "handleGoogleDrivePostAuth()", String(error.message));
-    });
-}
-
 function googleDriveLogin() {
     showLoader();
     const currentUrl = encodeURIComponent(window.location.href);
@@ -1293,6 +1112,7 @@ function googleDriveLogout() {
         errorHandler("logging out from Google Drive", "/logout_from_google_drive", String(error.message))
     });
 }
+
 
 function checkLocalLLMServerStatus() {
     setServerStatusIndicator('Status Check In-Progress...');
