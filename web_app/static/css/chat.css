@@ -853,12 +853,12 @@ background-color: #282d33; /* Darker shade on hover */
     overflow-wrap: break-word;
 }
 
-#google_drive_files_tables {
+#google_drive_files_table {
     width: 100%;
     table-layout: fixed;
 }
 
-#google_drive_files_tables th, #google_drive_files_tables td {
+#google_drive_files_table th, #google_drive_files_table td {
     word-wrap: break-word;
     overflow-wrap: break-word;
     text-align: center;
@@ -866,7 +866,7 @@ background-color: #282d33; /* Darker shade on hover */
 
 /* Ensure tables create scrollbars when needed */
 #docs_loaded_details_table,
-#google_drive_files_tables {
+#google_drive_files_table {
     width: 100%;
     table-layout: fixed;    /*Prevents columns from changing width*/
     margin-bottom: 1rem;

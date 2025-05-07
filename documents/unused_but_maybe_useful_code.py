@@ -2417,7 +2417,7 @@ def setup_for_local_llm_response():
 
 
     function xdrp_populateGoogleDriveTable(gdrive_files) {
-    const gdriveTableBody = document.querySelector('#google_drive_files_tables tbody');
+    const gdriveTableBody = document.querySelector('#google_drive_files_table tbody');
 
     gdrive_files.forEach((file, index) => {
         const iconClass = getFileIconClass(file.type);
