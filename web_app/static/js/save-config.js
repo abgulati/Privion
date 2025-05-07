@@ -105,13 +105,13 @@ function getOcrConfig() {
 
     let config = {
         'ocr_service_choice': 'None',
-        'use_ocr': false,
+        'force_ocr': false,
         'force_extract_previously_extracted_text': force_extract_previously_extracted_text
     };
 
     if (window.getComputedStyle(azure_ocr_form).display != 'none') {
         config.ocr_service_choice = 'AzureVision';
-        config.use_ocr = true;
+        config.force_ocr = true;
         if (update_azure_vision_config) {
             config.azure_cv_free_tier = document.getElementById('is_azure_cv_free_tier').checked;
             config.azure_ocr_endpoint = document.getElementById("azure_vision_api_url").value;
@@ -119,20 +119,20 @@ function getOcrConfig() {
         }
     } else if (window.getComputedStyle(azure_doc_ai_form).display != 'none') {
         config.ocr_service_choice = 'AzureDocAi';
-        config.use_ocr = true;
+        config.force_ocr = true;
         if (update_azure_doc_ai_config) {
             config.azure_doc_ai_endpoint = document.getElementById("azure_doc_ai_api_url").value;
             config.azure_doc_ai_subscription_key = document.getElementById("azure_doc_ai_api_key").value;
         }
     } else if (window.getComputedStyle(local_vision_form).display != 'none') {
         config.ocr_service_choice = 'LocalVisionLLM';
-        config.use_ocr = true;
+        config.force_ocr = true;
         if (update_local_vision_config) {
             config.local_vision_endpoint = document.getElementById("local_vision_api_url").value;
         }
     } else if (window.getComputedStyle(kosmos_form).display != 'none') {
         config.ocr_service_choice = 'Kosmos';
-        config.use_ocr = true;
+        config.force_ocr = true;
         if (update_kosmos_url_config) {
             config.kosmos_local_url = document.getElementById("kosmos_api_url").value;
         }
