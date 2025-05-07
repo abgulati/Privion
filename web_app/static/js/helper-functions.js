@@ -822,7 +822,7 @@ function clearDocsLoadedTable() {
 
 
 function clearGoogleDriveTable() {
-    var table = document.getElementById('google_drive_files_tables');
+    var table = document.getElementById('google_drive_files_table');
     var tbody = table.querySelector('tbody');
     tbody.innerHTML = '';
     document.querySelectorAll('.sort-btn').forEach(button => {
@@ -950,7 +950,7 @@ function closeImageGalleryModal(modalId) {
 }
 
 function sortSelected() {
-    const tbody = document.querySelector('#google_drive_files_tables tbody');
+    const tbody = document.querySelector('#google_drive_files_table tbody');
     const rows = Array.from(tbody.querySelectorAll('tr'));
     rows.sort((a,b) => {    // JS's built-in sort() method for arrays takes a comparison function as an argument, determining the order for two rows in this case
         const aChecked = a.querySelector('input[type="checkbox"]').checked;
@@ -962,7 +962,7 @@ function sortSelected() {
 }
 
 function sortByColumn(button) {
-    const table = document.getElementById('google_drive_files_tables');
+    const table = document.getElementById('google_drive_files_table');
     const tbody = table.querySelector('tbody');
     const rows = Array.from(tbody.querySelectorAll('tr'));
     const column = button.dataset.sort;
@@ -1001,7 +1001,7 @@ function sortByColumn(button) {
 function filterByDocType(e) {
     const filterValue = e.target.value.toLowerCase();
     const searchWords = document.getElementById('gdrive-search-bar').value.toLowerCase();
-    const tbody = document.querySelector('#google_drive_files_tables tbody');
+    const tbody = document.querySelector('#google_drive_files_table tbody');
     const rows = Array.from(tbody.querySelectorAll('tr'));
     rows.forEach(row => {
         const type = row.cells[2].textContent.toLowerCase();    // cell 2 is column 3 which is the document type column
@@ -1014,7 +1014,7 @@ function filterByDocType(e) {
 
 
 function selectAll(e) {
-    const tbody = document.querySelector('#google_drive_files_tables tbody');
+    const tbody = document.querySelector('#google_drive_files_table tbody');
     const rows = Array.from(tbody.querySelectorAll('tr'));
     rows.forEach(row => {
         row.querySelector('input[type="checkbox"]').checked = e.target.checked; //`e.target` refers to the checkbox that triggered the event (the "Select All" checkbox) and `e.target.checked` is a boolean value indicating whether this checkbox is checked or not, basis which the checkbox for all other rows is set via the querySelector.
@@ -1032,7 +1032,7 @@ function initSortingAndFiltering() {
     // 1) Only two buttons, not a large number of elements
     // 2) Static elements in the header, not dynamically changing content
     // 3) Buttons themselves are not removed/added dynamically
-    // document.getElementById('google_drive_files_tables').addEventListener('click', function(e) {
+    // document.getElementById('google_drive_files_table').addEventListener('click', function(e) {
     //     const target = e.target;
     //     if (target.classList.contains('sort-btn')) {
     //         sortByColumn(target);
@@ -1040,7 +1040,7 @@ function initSortingAndFiltering() {
     // });
 
         // Approach 2 (Direct Attachment):
-    const table = document.getElementById('google_drive_files_tables');
+    const table = document.getElementById('google_drive_files_table');
     table.querySelectorAll('.sort-btn').forEach(button => {
         button.addEventListener('click', () => sortByColumn(button));
     });
@@ -1054,7 +1054,7 @@ function initSortingAndFiltering() {
 
 
 function populateGoogleDriveTable(gdrive_files) {
-    const gdriveTableBody = document.querySelector('#google_drive_files_tables tbody');
+    const gdriveTableBody = document.querySelector('#google_drive_files_table tbody');
     const filterSelect = document.getElementById('filterDocType');
     const docTypes = new Set();
 
@@ -1064,7 +1064,7 @@ function populateGoogleDriveTable(gdrive_files) {
     gdrive_files.forEach((file, index) => {
         const iconClass = getFileIconClass(file.type);
         const rowHTML = `
-            <tr data-gdrive-file-id="${file.id}" data-gdrive-mime-type="${file.mimeType}" id="gdrive_doc_row_${file.id}">
+            <tr data-gdrive-file-id="${file.id}" data-gdrive-file-name="${file.name}" data-gdrive-mime-type="${file.mimeType}" data-gdrive-mime-type-category="${file.type}" id="gdrive_doc_row_${file.id}">
                 <td class="checkbox-cell"><input type="checkbox" id="select-${parseInt(index)+1}"></td>
                 <td style="text-align:left" data-gdrive-row-id="${file.id}" class="gdrive_doc_name">${file.name}</td>
                 <td style="text-align:left">${file.type}</td>
@@ -1302,7 +1302,7 @@ function coreFilterGDriveRowsFunction(search_words, items, filterValue) {
 
 
 function filterGoogleDriveTable(search_words) {
-    const fullGdriveTable = document.getElementById('google_drive_files_tables');
+    const fullGdriveTable = document.getElementById('google_drive_files_table');
     const gdrive_doc_name_cells = fullGdriveTable.getElementsByClassName('gdrive_doc_name');
     const filterValue = document.getElementById('filterDocType').value.toLowerCase();
     coreFilterGDriveRowsFunction(search_words, gdrive_doc_name_cells, filterValue);
