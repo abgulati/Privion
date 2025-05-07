@@ -4484,3 +4484,374 @@ def get_references():
     #     ''')
     # except Exception as e:
     #     return handle_local_error("Could not create unique index for upload_staging table, encountered error: ", e)
+
+
+
+    '''
+    The following JS from upload-functions.js is a good example of how to handle a bulk request from the client to the server.
+    It's an alternative to the array.reduce approach, using a for loop to create an array of promises (stagingPromises[]) and then await Promise.all(stagingPromises) to wait for them all to finish.
+    
+    This fundamentally changes the behavior from sequential to parallel.
+    
+    Here's a breakdown of the differences, pros, and cons:
+    1. Sequential Processing (reduce or an async/await loop):
+    How it works: Starts the transfer for file 1. Waits for it to complete (success or caught failure). Then starts the transfer for file 2, waits, and so on.
+    Pros:
+        Lower Server Load: Sends only one request to /gdrive_file_transfer_to_staging at a time. This is gentler on the server.
+        Predictable Order: Files are processed strictly one after another.
+    Cons:
+        Slower: The total time is the sum of all individual transfer times. If you have 10 files taking 1 second each, it takes ~10 seconds.
+    
+    2. Parallel Processing (Promise.all):
+    How it works: The for loop starts all the file transfers almost simultaneously, pushing each resulting promise into stagingPromises[] & await Promise.all(stagingPromises[]) then waits for all of those 
+    concurrently running transfers to finish (either resolve successfully or have their errors caught by the .catch within the loop).
+    Pros:
+        Much Faster (Potentially): If the server and network can handle it, transfers happen concurrently. If 10 files take 1 second each but can run in parallel, the total time might be closer to just 1-2 seconds (plus overhead).
+        Simpler Loop: A standard for loop is often considered more straightforward than the reduce pattern for promises.
+    Cons:
+        Higher Server Load: Sends many requests to /gdrive_file_transfer_to_staging at roughly the same time. This could overload a server not designed for concurrency or hit API rate limits.
+        Order Not Guaranteed: Files might finish transferring in any order, not necessarily the order they were listed.
+    
+    Which is "Better" or "More Correct"?
+    Neither is inherently incorrect. Both are valid patterns for handling multiple asynchronous tasks.
+    The "better" choice depends on your specific needs and your server's capabilities:
+    If /gdrive_file_transfer_to_staging can efficiently handle many simultaneous requests and you want the fastest possible user experience for staging, the parallel (Promise.all) approach is usually preferred.
+    If that endpoint might struggle with load, or if there's a strict need to process files sequentially (which doesn't seem apparent here), the sequential (reduce or async/await loop) approach is safer.
+    Your current Promise.all implementation looks correct for achieving parallel transfers. It correctly initiates all fetches, waits for them all using Promise.all, and handles individual errors within the loop's 
+    .catch so that one failure doesn't stop Promise.all from waiting for the others.
+
+    The sequential approach might be better though, since the backend server needs to download the requested files off GDrive and making too many parallel download requests may be blocked or rejected by Google 
+    as there's a risk that it might think someone's Drive API is compromised.
+    
+    That's an excellent point and a very strong argument for using the sequential approach (reduce or an async/await loop) instead of the parallel Promise.all approach.
+    
+    You are right to be concerned about potential rate limiting or blocking from Google Drive's API. Even though the calls are from your server to Google Drive, if your server suddenly makes dozens of simultaneous download requests
+    for a single user's account, Google's systems might interpret that as unusual activity and could throttle or temporarily block the requests to protect the user's account or their own infrastructure.
+    
+    Pros of Sequential for GDrive:
+        Rate Limit Avoidance: Significantly reduces the chance of hitting Google's API rate limits.
+        Lower Risk of Blocking: Less likely to trigger Google's security heuristics for suspicious activity.
+        Predictable Server Load: Easier on your own server resources as it only handles one download/staging process at a time.
+    
+    Cons of Sequential for GDrive:
+        Slower Staging Phase: The staging step will take longer as files are downloaded one by one.
+    
+    Conclusion:
+    Given the interaction with an external API (Google Drive) that likely has rate limits and security monitoring, the sequential approach is technically safer and likely more robust for the /gdrive_file_transfer_to_staging step. 
+    The risk of failed transfers due to parallel requests outweighs the speed benefit in this context.
+    Therefore, reverting to the reduce pattern you had originally, or using the equivalent async/await loop pattern I suggested earlier, would be the recommended course of action.
+    
+    PARALLEL CODE:
+    
+    const allStagedFileInfo = [];
+    const stagingPromises = [];
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+        const userId = "default_user";
+        let formData = new FormData();
+        formData.append('file_id', selectedFiles[i].id);
+        formData.append('file_mimeType', selectedFiles[i].mimeType);
+        formData.append('user_id', userId);
+
+        const stagingPromise = fetch('/gdrive_file_transfer_to_staging', {
+            method: 'POST',
+            body: formData,
+            redirect: 'follow'
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw new Error(`Failed to transfer file ${selectedFiles[i].id} to Server. Encountered error: ${err.error}`)});
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                appendStreamInfo(`File ${selectedFiles[i].id} transferred to server successfully!`, 'success');
+                allStagedFileInfo.push(data.staged_file_info);
+            } else {
+                throw new Error(`File ${selectedFiles[i].id} not transfered to server correctly - server side error. Check server logs for more details`)
+            }
+        })
+        .catch(error => {
+            appendStreamInfo(`Error transferring file ${selectedFiles[i].id} to server, skipping. Check browser and server logs for more details`, 'failure');
+            console.log("Error transferring file to server: ", String(error.message));
+            updateUIForFile(selectedFiles[i].row, 'failure');
+        });
+        stagingPromises.push(stagingPromise);
+    }
+
+    try {
+        await Promise.all(stagingPromises); // Wait for all file transfers to staging area to complete (resolved either successfully or via the catch block)
+        appendStreamInfo("Files transferred to server successfully!", 'success');
+        console.log("GDrive staging phase complete. Collected info:", allStagedFileInfo);
+
+        if (allStagedFileInfo.length > 0) {
+            appendStreamInfo(`Beginning file processing for ${allStagedFileInfo.length} files...`, 'waiting');
+
+            let bulkUploadFormData = new FormData();
+            bulkUploadFormData.append('docs_to_upload', JSON.stringify(allStagedFileInfo));
+
+            const bulkResponse = await fetch('/bulk_upload_files', {
+                method: 'POST',
+                body: bulkUploadFormData,
+                redirect: 'follow'
+            })
+
+            if (!bulkResponse.ok) {
+                throw new Error('Failed to process transferred files');
+            }
+
+            const bulk_response_reader = bulkResponse.body.getReader();
+            await bulk_response_processChunk(bulk_response_reader);
+            
+            
+        } else {
+            appendStreamInfo("No files were transferred to the server. Please check the server logs for more details.", 'failure');
+        }
+
+    } catch (error) {
+        errorHandler("Processing uploaded files", "bulk_upload_files", String(error.message));
+        appendStreamInfo(String(error.message), 'failure');
+    } finally {
+        syncButton.disabled = false;
+        appendStreamInfo("Google Drive Synchronization Completed!", 'success');
+        populateDocsLoadedTable();
+        hideStreamSpinner();
+        for (let i = 0; i < selectedFiles.length; i++) {    // Update status of GDrive table rows to success
+            if (selectedFiles[i].row) { 
+                let selectedFilesRow = selectedFiles[i].row;    // But only if the status is not failure!
+                let statusCell = selectedFilesRow.cells[selectedFilesRow.cells.length - 1];
+                if (statusCell.innerHTML.includes("failure") || statusCell.innerHTML.includes("Failed")) {
+                    continue;
+                } else{
+                    updateUIForFile(selectedFiles[i].row, 'success');
+                }
+            }
+        }
+    }
+
+    '''
+
+
+
+@app.route('/google_drive_loader', methods=['POST'])
+def google_drive_loader():
+
+    try:
+        gdrive_file_id = str(request.form['file_id'])
+        gdrive_file_mimeType = str(request.form['file_mimeType'])
+    except Exception as e:
+        return handle_api_error("Server-side error reading Google Drive file details for download: ", e)
+    
+    try:
+        service = build("drive", "v3", credentials=GDRIVE_CREDS)
+    except Exception as e:
+        return handle_api_error("Could not create Google service handler, check credentials and re-try: ", e)
+
+    data_queue = queue.Queue()
+    stop_event = threading.Event()
+
+    def sync_task():
+
+        try:
+
+            try:
+                file_metadata = service.files().get(fileId=gdrive_file_id, fields='name, mimeType', supportsAllDrives=True).execute()   # includeItemsFromAllDrives=True not need here because it's a search and listing operation!
+                original_filename = file_metadata.get('name', 'untitled')
+                mime_type = file_metadata.get('mimeType', gdrive_file_mimeType)
+                mime_type_category = categorize_mimetype(mime_type)
+            except Exception as e:
+                data_queue.put(f"Error fetching metadata for '{original_filename}' | failure")
+                return handle_api_error(f"Could not read GoogleDrive file metadata for file: '{original_filename}', encountered error: ", e)
+            
+            data_queue.put(f"Fetched metadata for '{original_filename}', proceeding to download...")
+            
+            try:
+                filename_with_extension, file_content = gdrive_downloader(service, gdrive_file_id, original_filename, mime_type, mime_type_category, data_queue)
+            except Exception as e:
+                data_queue.put(f"Error downloading {original_filename} from Google Drive | failure")
+                return handle_api_error(f"Server-side error - could not download file: '{original_filename}' from Google Drive: ", e)
+
+            if file_content is not None:    # gdrive downloader method downloaded & returned a single file
+                try:
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(filename_with_extension))
+
+                    print(f"Saving {filename_with_extension} to {filepath}")
+                    with open(filepath, 'wb') as f:
+                        f.write(file_content)
+
+                    data_queue.put(f"Vector Embedding & Indexing Document: '{filename_with_extension}'")
+                    document_extractor_and_loader(filename_with_extension, filepath)
+                    data_queue.put(f"Document '{filename_with_extension}' processed & uploaded successfully! | success")
+
+                except Exception as e:
+                    data_queue.put(f"Server-side error - could not process file: '{original_filename}' from Google Drive | failure")
+                    return handle_api_error(f"Server-side error - could not process file: '{original_filename}' from Google Drive: ", e)
+        
+        finally:
+            data_queue.put(None)
+            print("\n\nGDrive-Sync stream done, breaking thread\n\n")
+    
+    def load_gdrive():
+
+        try:
+            thread = threading.Thread(target=sync_task)
+            thread.start()
+        except Exception as e:
+            data_queue.put(f"Could not start sync process for Google Drive | failure")
+            return handle_api_error("Could not start thread: ", e)
+
+        while True:
+            if stop_event.is_set(): #TODO: Add Cancel-Sync button to UI! Logic here will be simialr to STOP_GENERATION in hf_waitress.py
+                print("\n\nStopping GDrive-Sync stream as requested by stop_event\n\n")
+                thread.join()
+                break
+            output = data_queue.get()
+            if output is None:
+                print("\n\nNone read, breaking and stopping thread\n\n")
+                thread.join()
+                break
+            yield f"data: {json.dumps(output)}\n\n"
+        
+        yield f"event: END\ndata: \"null\"\n\n"
+    
+    print("\n\nGoogle Drive Sync Begins!\n\n")
+    return Response(load_gdrive(), content_type='text/event-stream')
+
+
+async function loadGoogleDriveDoc(file_id, file_mimeType) {
+    try {
+        let formData = new FormData();
+        formData.append('file_id', file_id);
+        formData.append('file_mimeType', file_mimeType);
+
+        const gdrive_loader_response = await fetch('/google_drive_loader', {
+            method: 'POST',
+            body: formData,
+            redirect: 'follow'
+        });
+
+        if (!gdrive_loader_response.ok) {
+            throw new Error('Failed to load document from Google Drive');
+        }
+
+        const gdrive_loader_reader = gdrive_loader_response.body.getReader();
+        await bulk_response_processChunk(gdrive_loader_reader);
+    } catch (error) {
+        console.error("Error loading document from Google Drive in method loadGoogleDriveDoc. Error details: ", String(error.message));
+    }
+}
+
+
+'''
+// Upload new files to VectorDB
+// document.getElementById('fileInput').addEventListener('change', function (event) {
+//     const confirmed = confirm('Make sure to verify that the following Settings pertaining to File Uploading are correct:\n\n- Text Extraction Method: ' 
+//         + (document.getElementById('ocr_yes_radio_button').checked ? 'OCR' : 'Non-OCR (Plain-Text Extraction)') 
+//         + '\n- OCR Service Choice: ' + (document.getElementById('ocr_yes_radio_button').checked ? document.getElementById('ocrApiDropdown').value : 'Not Applicable') 
+//         + '\n- Embedding Model: ' + document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent
+//         + '\n- Knowledge Domain: ' + document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent
+//         + '\n\nIf unsure, click Cancel to abort the file upload process.');
+
+//     if (!confirmed) {
+//         document.getElementById('fileInput').value = "";  // Clear the input value
+//         return;
+//     }
+    
+//     if (this.value) {    // Check if a file is selected
+    
+//         document.getElementById('overlay').style.display = 'block';
+        
+//         let newFile = document.getElementById('fileInput');
+//         let file = newFile.files[0]
+
+//         if (file) {
+//             let formData = new FormData();
+//             formData.append('file', file);
+
+//             // Make the AJAX request to the server
+//             fetch('/process_new_file', {
+//                 method: 'POST',
+//                 body: formData
+//             })
+//             .then(response => {
+//                 if (!response.ok) {
+//                     return response.json().then(err => { throw new Error(err.error)});
+//                 }
+//                 return response
+//             })
+//             .then(response => response.json())
+//             .then(data => {
+//                 if (data.success) {
+//                     populateDocsLoadedTable();
+//                     document.getElementById('overlay').style.display = 'none';
+//                     document.getElementById('fileInput').value = "";  // Clear the input value
+//                 } else {
+//                     throw new Error(`Internal Server Error: Check server-log and server command-line for more details.`);
+//                 }
+//             })
+//             .catch(error => {
+//                 errorHandler("processing file", "/process_new_file", String(error.message))
+//                 document.getElementById('overlay').style.display = 'none';
+//                 document.getElementById('fileInput').value = "";  // Clear the input value
+//             });
+//         }
+//     }    
+// });
+'''
+
+
+def document_extractor_and_loader(filename, filepath):
+
+    print("Document Extraction and Loading to RAG & Records Databases in progress for single file...")
+
+    try:
+        pdf_filepath = get_pdf_filepath_for_upload(filename, filepath)
+    except Exception as e:
+        return handle_local_error("Could not get PDF filepath for upload, encountered error: ", e)
+        
+    try:
+        txt_filepath = get_text_extract_from_pdf(pdf_filepath)
+    except Exception as e:
+        return handle_local_error("Failed to extract text from the PDF document, encountered error: ", e)
+    
+    try:
+        upload_to_rag_and_records_databases(filename, txt_filepath)
+    except Exception as e:
+        return handle_local_error("Failed to upload to RAG & Records databases, encountered error: ", e)
+
+    return True
+
+
+def save_file_to_upload_dir(input_file):
+    try:
+        filename = secure_filename(input_file.filename)
+        filename = filename.replace("PDF", "pdf") if "PDF" in filename else filename
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        input_file.save(filepath)
+        print(f"\nSaved file {filename} to {filepath} successfully.\n")
+        return filename, filepath
+    except Exception as e:
+        return handle_local_error("Could not save file to upload directory, encountered error: ", e)
+
+
+# Route to handle the submission of the second form (file loading)
+@app.route('/process_new_file', methods=['POST'])
+def process_new_file():
+
+    try:
+        input_file = request.files['file']
+    except Exception as e:
+        return handle_api_error("Server-side error recieving file: ", e)
+
+    try:
+        filename, filepath = save_file_to_upload_dir(input_file)
+    except Exception as e:
+        return handle_api_error("Failed to save document to app folder, encountered error: ", e)
+
+    try:
+        document_extractor_and_loader(filename, filepath)
+    except Exception as e:
+        return handle_api_error("Failed to upload new document, encountered error: ", e)
+
+    return jsonify(success=True)
