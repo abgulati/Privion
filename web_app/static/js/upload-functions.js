@@ -1,61 +1,5 @@
 
 
-// Upload new files to VectorDB
-// document.getElementById('fileInput').addEventListener('change', function (event) {
-//     const confirmed = confirm('Make sure to verify that the following Settings pertaining to File Uploading are correct:\n\n- Text Extraction Method: ' 
-//         + (document.getElementById('ocr_yes_radio_button').checked ? 'OCR' : 'Non-OCR (Plain-Text Extraction)') 
-//         + '\n- OCR Service Choice: ' + (document.getElementById('ocr_yes_radio_button').checked ? document.getElementById('ocrApiDropdown').value : 'Not Applicable') 
-//         + '\n- Embedding Model: ' + document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent
-//         + '\n- Knowledge Domain: ' + document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent
-//         + '\n\nIf unsure, click Cancel to abort the file upload process.');
-
-//     if (!confirmed) {
-//         document.getElementById('fileInput').value = "";  // Clear the input value
-//         return;
-//     }
-    
-//     if (this.value) {    // Check if a file is selected
-    
-//         document.getElementById('overlay').style.display = 'block';
-        
-//         let newFile = document.getElementById('fileInput');
-//         let file = newFile.files[0]
-
-//         if (file) {
-//             let formData = new FormData();
-//             formData.append('file', file);
-
-//             // Make the AJAX request to the server
-//             fetch('/process_new_file', {
-//                 method: 'POST',
-//                 body: formData
-//             })
-//             .then(response => {
-//                 if (!response.ok) {
-//                     return response.json().then(err => { throw new Error(err.error)});
-//                 }
-//                 return response
-//             })
-//             .then(response => response.json())
-//             .then(data => {
-//                 if (data.success) {
-//                     populateDocsLoadedTable();
-//                     document.getElementById('overlay').style.display = 'none';
-//                     document.getElementById('fileInput').value = "";  // Clear the input value
-//                 } else {
-//                     throw new Error(`Internal Server Error: Check server-log and server command-line for more details.`);
-//                 }
-//             })
-//             .catch(error => {
-//                 errorHandler("processing file", "/process_new_file", String(error.message))
-//                 document.getElementById('overlay').style.display = 'none';
-//                 document.getElementById('fileInput').value = "";  // Clear the input value
-//             });
-//         }
-//     }    
-// });
-
-
 async function bulk_response_processChunk(reader) {
     while (true) {
         const { done, value } = await reader.read();
@@ -75,6 +19,9 @@ async function bulk_response_processChunk(reader) {
                     if (dataObj != "") {
                         const string_and_status = dataObj.split('|');
                         appendStreamInfo(string_and_status[0].trim(), string_and_status[1] === undefined ? 'waiting' : string_and_status[1].trim());
+                        if (string_and_status[1].trim() == 'success') {
+                            populateDocsLoadedTable();
+                        }
                     }
                 } catch (error) {
                     console.error('Error parsing message: ', error);
@@ -115,7 +62,7 @@ async function handleFileOrFolderSelection(event) {
         const uploadInitiatedDatetime = new Date().toISOString();
         const selectedEmbeddingModel = document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent;
         const selectedKnowledgeDomain = document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent;
-        const selectedTextExtractionMethod = document.getElementById('ocr_yes_radio_button').checked ? document.getElementById('ocrApiDropdown').value : 'Non-OCR (Plain-Text Extraction)';
+        const selectedTextExtractionMethod = document.getElementById('ocr_yes_radio_button').checked ? document.getElementById('ocrApiDropdown').value : 'default';
         const source = "Local Drive";
 
         for (let i = 0; i < files.length; i++) {
@@ -205,66 +152,6 @@ async function handleFileOrFolderSelection(event) {
 }
 
 
-async function loadGoogleDriveDoc(file_id, file_mimeType) {
-    try {
-        let formData = new FormData();
-        formData.append('file_id', file_id);
-        formData.append('file_mimeType', file_mimeType);
-
-        const gdrive_loader_response = await fetch('/google_drive_loader', {
-            method: 'POST',
-            body: formData,
-            redirect: 'follow'
-        });
-
-        if (!gdrive_loader_response.ok) {
-            throw new Error('Failed to load document from Google Drive');
-        }
-
-        const gdrive_loader_reader = gdrive_loader_response.body.getReader();
-        let gdrive_loader_receivedComplete = false;
-
-        async function gdrive_loader_processChunk() {
-            while (true) {
-                const { done, value } = await gdrive_loader_reader.read();
-                if (done) {
-                    console.log("Google Drive Loader stream complete");
-                    break;
-                }
-                const textChunk = new TextDecoder("utf-8").decode(value);
-                const messages = textChunk.split('\n');
-
-                messages.forEach(message => {
-                    if (message.startsWith('data: ')) {
-                        const jsonStr = message.slice(7, -1);
-
-                        try {
-                            let dataObj = String(jsonStr);
-                            if (dataObj == "null") {
-                                dataObj = "";
-                            }
-
-                            if (dataObj != "") {
-                                string_and_status = dataObj.split('|');
-                                console.log(string_and_status);
-                                appendStreamInfo(string_and_status[0].trim(), string_and_status[1] === undefined ? 'waiting' : string_and_status[1].trim());
-                            }
-
-                        } catch (error) {
-                            console.error('Error parsing message: ', error);
-                        }
-                    }
-                });
-
-            }
-        }
-
-        await gdrive_loader_processChunk();
-    } catch (error) {
-        console.error("Error loading document from Google Drive in method loadGoogleDriveDoc(). Error details: ", String(error.message));
-    }
-}
-
 
 // Clicking the 'googleDriveSyncAction' button triggers the following click-event response (see chat.html & DOM-Loader.js):
 function triggerSyncGoogleDrive() {
@@ -279,7 +166,7 @@ function triggerSyncGoogleDrive() {
         return;
     }
 
-    const table = document.getElementById('google_drive_files_tables');
+    const table = document.getElementById('google_drive_files_table');
     const syncButton = document.getElementById('googleDriveSyncAction');
     const selectedFiles = [];
 
@@ -297,7 +184,9 @@ function triggerSyncGoogleDrive() {
         if (checkbox && checkbox.checked) {
             selectedFiles.push({
                 id: table.rows[i].getAttribute('data-gdrive-file-id'),
+                name: table.rows[i].getAttribute('data-gdrive-file-name'),
                 mimeType: table.rows[i].getAttribute('data-gdrive-mime-type'),
+                mimeTypeCategory: table.rows[i].getAttribute('data-gdrive-mime-type-category'),
                 row: table.rows[i]
             });
             // Add status cell if it doesn't exist
@@ -308,27 +197,122 @@ function triggerSyncGoogleDrive() {
         }
     }
 
-    // Process files sequentially
+    const allStagedFileInfo = [];
+    /*
+    Process files sequentially via array.reduce():
+
+    The syntax for array.reduce is: array.reduce(callback(accumulator, currentValue, currentIndex, array), initialValue)
+    'file' below is the currentValue, 'index' is the currentIndex, and 'selectedFiles' is the array.
+    'promise' is the accumulator, and is initialized to Promise.resolve(), which is the 'initialValue' of the accumulator.
+    The callback function is executed for each element in the array.
+    Each .then() adds a new promise to the chain so we can ensure that the chain is executed sequentially.
+    When you add a .then() to a promise (even a resolved one), it creates a new promise that waits for the callback inside .then() to complete.
+    This creates a sequential chain:
+        Promise.resolve()
+            .then(process file 1)
+            .then(process file 2)
+            .then(process file 3)
+        ...and so on
+    */
     selectedFiles.reduce((promise, file, index) => {
         return promise.then(() => {
             updateUIForFile(file.row, 'loading');
-            return loadGoogleDriveDoc(file.id, file.mimeType)
-                .then(() => {
-                    console.log(`File ${index + 1} loaded successfully`);
-                    clearDocsLoadedTable();
-                    populateDocsLoadedTable();
-                    updateUIForFile(file.row, 'success');
-                })
-                .catch(error => {
-                    console.error(`Error loading file ${index + 1}:`, error);
-                    updateUIForFile(file.row, 'failure');
-                });
+            const userId = "default_user";
+            const transfer_type = file.mimeTypeCategory == 'folder' ? 'Folder' : 'File';
+            const transfer_name = file.name;
+
+            let formData = new FormData();
+            formData.append('file_id', file.id);
+            formData.append('file_mimeType', file.mimeType);
+            formData.append('user_id', userId);
+    
+            return fetch('/gdrive_file_transfer_to_staging', {
+                method: 'POST',
+                body: formData,
+                redirect: 'follow'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw new Error(`Failed to download file ${file.id} from Google Drive to Server. Encountered error: ${err.error}`)});
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    appendStreamInfo(`${transfer_type} ${transfer_name} transferred to server successfully!`, 'success');
+                    if (data.staged_file_info_list) {
+                        if (Array.isArray(data.staged_file_info_list)) {
+                            for (let i = 0; i < data.staged_file_info_list.length; i++) {
+                                allStagedFileInfo.push(data.staged_file_info_list[i]);
+                            }
+                        } else {
+                            console.error("Server response 'staged_file_info_list' was not an array:", data.staged_file_info_list);
+                            throw new Error(`File ${transfer_name} not transfered to server correctly - server side error: invalid response format. Check server logs for more details`)
+                        }
+                    }
+                } else {
+                    throw new Error(`File ${transfer_name} not transfered to server correctly - server side error. Check server logs for more details`)
+                }
+            })
+            .catch(error => {
+                appendStreamInfo(`Error transferring ${transfer_type} ${transfer_name} to server, skipping. Check browser and server logs for more details`, 'failure');
+                console.log("Error transferring file to server: ", String(error.message));
+                updateUIForFile(file.row, 'failure');
+            });
         });
     }, Promise.resolve())
+    .then(() => {
+        appendStreamInfo("Files transferred to server successfully!", 'success');
+        console.log("GDrive staging phase complete. Collected info:", allStagedFileInfo);
+
+        if (allStagedFileInfo.length > 0) {
+            appendStreamInfo(`Beginning file processing for ${allStagedFileInfo.length} files...`, 'waiting');
+
+            let bulkUploadFormData = new FormData();
+            bulkUploadFormData.append('docs_to_upload', JSON.stringify(allStagedFileInfo));
+
+            return fetch('/bulk_upload_files', {
+                method: 'POST',
+                body: bulkUploadFormData,
+                redirect: 'follow'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to process transferred files');
+                }
+                return response.body.getReader();
+            })
+            .then(reader => bulk_response_processChunk(reader));
+            /*
+            Since bulk_response_processChunk is an async function and uses await reader.read(), the promise returned by 
+            .then(reader => bulk_response_processChunk(reader)) will resolve only after the entire stream has been read and 
+            processed by bulk_response_processChunk. This ensures that the subsequent .catch() and 
+            .finally() blocks wait for the stream processing to complete.
+            */
+        } else {
+            appendStreamInfo("No files were transferred to the server. Please check the server logs for more details.", 'failure');
+        }
+    })
+    .catch(error => {
+        errorHandler("Processing uploaded files", "bulk_upload_files", String(error.message));
+        appendStreamInfo(String(error.message), 'failure');
+    })
     .finally(() => {
         syncButton.disabled = false;
-        appendStreamInfo("Google Drive Synchronization Completed!", 'success');
+        appendStreamInfo("Google Drive Synchronization Completed", 'success');
+        populateDocsLoadedTable();
         hideStreamSpinner();
+        for (let i = 0; i < selectedFiles.length; i++) {    // Update status of GDrive table rows to success
+            if (selectedFiles[i].row) { 
+                let selectedFilesRow = selectedFiles[i].row;    // But only if the status is not failure!
+                let statusCell = selectedFilesRow.cells[selectedFilesRow.cells.length - 1];
+                if (statusCell.innerHTML.includes("failure") || statusCell.innerHTML.includes("Failed")) {
+                    continue;
+                } else {
+                    updateUIForFile(selectedFiles[i].row, 'success');
+                }
+            }
+        }
     });
 }
 

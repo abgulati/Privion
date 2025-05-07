@@ -7,6 +7,7 @@ from sentence_transformers import SentenceTransformer, util
 import torch
 
 from werkzeug.utils import secure_filename
+from werkzeug.datastructures import FileStorage
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -291,7 +292,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'azure_openai_api_version':'2023-05-15',
                 'azure_openai_max_tokens':4096,
                 'azure_openai_temperature':0.7,
-                'use_ocr':False,
+                'force_ocr':False,
                 'ocr_service_choice':'None',
                 'force_extract_previously_extracted_text':False,
                 'llm_filter_citations':True,
@@ -1500,7 +1501,7 @@ def record_doc_loaded_to_db(document_name, chunk_size, chunk_overlap):
         embedding_model = read_return['selected_embedding_model']
         knowledge_domain = read_return['selected_knowledge_domain']
     except Exception as e:
-        return handle_local_error("Could not determine use_ocr in config.json for process_new_file. Disabling OCR and proceeding. Error: ", e)
+        return handle_local_error("Could not determine embedding model and knowledge domain in config.json. Error: ", e)
 
     if is_doc_already_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
         print("Document already exists in records DB, skipping insertion.")
@@ -2004,7 +2005,7 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
     print(add_to_list_safe(3))  # Output: [3]
     '''
 
-    print(f"\nStoring entities(nodes) to {selected_knowledge_domain} graph DB\n")
+    # print(f"\nStoring entities(nodes) to {selected_knowledge_domain} graph DB\n")
 
     processed_nodes = {}    # Format: {(name, node_type): True}
     page_number = [] if page_number is None else page_number   
@@ -2017,7 +2018,7 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
             
             node_key = (name, node_type)
             if node_key in processed_nodes:
-                print(f"Skipping duplicate node {name} of type {node_type} in {selected_knowledge_domain} graph DB")
+                # print(f"Skipping duplicate node {name} of type {node_type} in {selected_knowledge_domain} graph DB")
                 continue
 
             node_name = sanitize_names(name)
@@ -2053,13 +2054,13 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
             # Mark node as processed:
             processed_nodes[node_key] = True
             
-            print(f"\nCreated node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB\n")
+            # print(f"\nCreated node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB\n")
         except Exception as e:
             handle_error_no_return(f"Could NOT create node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
 
 
 def add_relationships_to_graph(selected_knowledge_domain: str, relationships: list, graph: FalkorDB, source_document: str = '', page_number: list = None):
-    print(f"\nStoring relationships to {selected_knowledge_domain} graph DB\n")
+    # print(f"\nStoring relationships to {selected_knowledge_domain} graph DB\n")
 
     processed_relationships = {}    # Format: {(source, target, relationship): True}
     page_number = [] if page_number is None else page_number
@@ -2073,7 +2074,7 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
             
             relationship_key = (source, target, relationship_type)
             if relationship_key in processed_relationships:
-                print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) in {selected_knowledge_domain} graph DB")
+                # print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) in {selected_knowledge_domain} graph DB")
                 continue
 
             source = sanitize_names(source)
@@ -2122,7 +2123,7 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
             # Mark relationship as processed:
             processed_relationships[relationship_key] = True
             
-            print(f"\nCreated relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB\n")
+            # print(f"\nCreated relationship - source: {source}, target: {target}, relationship: {relationship} - in {selected_knowledge_domain} graph DB\n")
         except Exception as e:
             handle_error_no_return(f"Could NOT create relationship from data: {relationship} in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
 
@@ -2739,6 +2740,57 @@ def store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, 
     return formatted_datetime, chat_id
 
 
+# Route for loading all models from model dir
+@app.route('/load_local_models')
+def load_local_models():
+
+    try:
+        read_return = read_config(['model_dir'])
+        model_dir = read_return['model_dir']
+    except Exception as e:
+        return handle_api_error("Missing model_dir in config.json for method load_local_models. Error: ", e)
+    
+    try:
+        models = [f for f in os.listdir(model_dir) if os.path.isfile(os.path.join(model_dir, f))]
+    except Exception as e:
+        return handle_api_error("Could not load list of local models, encountered error: ", e)
+        
+    #print(f"locally available models: {models}")
+    return jsonify({'success': True, 'models': models})
+
+
+@app.route('/upload_new_llm', methods=['POST'])
+def upload_new_llm():
+    print("\n\nUploading new LLM\n\n")
+
+    try:
+        read_return = read_config(['model_dir'])
+        model_dir = read_return['model_dir']
+    except Exception as e:
+        return handle_api_error("Could not determine model_dir in upload_new_llm. Error: ", e)
+
+    try:
+        input_file = request.files['file']
+    except Exception as e:
+        return handle_api_error("Server-side error recieving LLM file: ", e)
+
+    # Ensure the filename is secure
+    filename = secure_filename(input_file.filename)
+
+    try:
+        filepath = os.path.join(model_dir, filename)
+
+        print("Loading new LLM - filename: ", filename)
+        print("Loading new LLM - filepath: ", filepath)
+
+        # Save the uploaded file to the specified path
+        input_file.save(filepath)
+    except Exception as e:
+        return handle_api_error("Failed to save LLM to model_dir, encountered error: ", e)
+
+    return jsonify(success=True)
+
+
 @app.route('/check_gdrive_auth')
 def check_gdrive_auth():
     global GDRIVE_CREDS
@@ -3111,73 +3163,49 @@ def fetch_file_list_from_google_drive():
     return jsonify({'success': True, 'gdrive_files': gdrive_files})
 
 
-def download_folder(service, folder_id, path, data_queue=None, folder_name=None, indent=''):
-
-    print(f"\n\nDownloading GoogleDrive Folder with id: {folder_id}\n\n")
-
+def stage_gdrive_file(filename_with_extension, file_content, mime_type, lars_user_id):
+    staging_info_record = {}
     try:
-        if not os.path.exists(path):
-            os.makedirs(path)
+        staging_info_record = prepare_basic_staging_info_record(filename_with_extension, lars_user_id, 'Google Drive')
     except Exception as e:
-        data_queue.put(f"Could not create local directory to save GDrive folder: '{folder_name}' | failure")
-        return handle_local_error("Server-side error - could not create nested directory in the download_folder() method: ", e)
-
-    query = f"'{folder_id}' in parents"
-    fields = "files(id, name, mimeType)"
+        return handle_local_error(f"Server-side error - could not prepare staging info record for Google Drive file: '{filename_with_extension}', encountered error: ", e)
     
-    gdrive_folder_contents = service.files().list(q=query, fields=fields).execute()
-    items = gdrive_folder_contents.get('files', [])
-
     try:
-        for item in items:
-            file_id = item['id']
-            filename = item['name']
-            mime_type = item['mimeType']
-            print(f"folder item mime_type f{mime_type}")
-
-            if "folder" in str(mime_type):
-                sub_folder_path = os.path.join(path, filename)    # in this case, filename will be the folder name
-
-                try:
-                    data_queue.put(f"Downloading nested folder: '{filename}'")
-                    download_folder(service, file_id, sub_folder_path, data_queue)  # in this case, file_or_folder_id will be the folder id
-                    data_queue.put(f"Folder '{filename}' downloaded successfully")
-                except Exception as e:
-                    data_queue.put(f"Could not download nested folder: '{filename}' | failure")
-                    handle_error_no_return("Could not download_folder in the download_folder() method, encountered error: ", e)
-            else:
-                try:
-                    data_queue.put(f"Downloading file: '{filename}'")
-                    filename_with_extension, file_content = download_gdrive_file(service, file_id, filename, mime_type)
-                    if filename_with_extension is None or file_content is None:
-                        raise Exception(f"Server-side error - Could not download {filename} from Google Drive folder {folder_name} in the download_folder() method")
-                    data_queue.put(f"File '{filename_with_extension}' downloaded successfully")
-                except Exception as e:
-                    data_queue.put(f"Could not download file: '{filename}' | failure")
-                    handle_error_no_return("Server-side error - could not get_file_content in the download_folder() method: ", e)
-
-                try:
-                    # filepath = os.path.join(path, secure_filename(filename_with_extension))
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(filename_with_extension))
-                    print(f"Saving {filename_with_extension} to {filepath}")
-                    with open(filepath, 'wb') as f:
-                        f.write(file_content)
-
-                    data_queue.put(f"Vector Embedding & Indexing Document: '{filename_with_extension}'")
-                    document_extractor_and_loader(filename_with_extension, filepath)
-                    data_queue.put(f"Document '{filename_with_extension}' processed & uploaded successfully! | success")
-
-                except Exception as e:
-                    data_queue.put(f"Server-side error - could not save file: '{filename}' downloaded from Google Drive | failure")
-                    handle_error_no_return(f"Server-side error - could not save Google Drive file: '{filename}' in the download_folder() method: ", e)
+        staged_file_info = check_if_file_already_staged(staging_info_record)
+        if staged_file_info is not None:
+            return staged_file_info
     except Exception as e:
-        data_queue.put(f"Error downloading Google Drive folder: '{folder_name}' | failure")
-        return handle_local_error(f"Error downloading Google Drive folder: '{folder_name}' in the download_folder() method, encountered error: ", e)
+        handle_error_no_return(f"Could not check if GDrive file '{filename_with_extension}' is already staged, proceeding afresh. Encountered error: ", e)
 
-    return True
+    # New file, proceed with fresh upload
+    try:    # convert file_content to FileStorage object and pass to save_file_to_staging_dir
+        file_to_stage = FileStorage(
+            stream=io.BytesIO(file_content),
+            filename=filename_with_extension,
+            content_type=mime_type
+        )
+    except Exception as e:
+        return handle_local_error("Server-side error recieving file: ", e)
+    
+    try:
+        staged_filename, staged_filepath = save_file_to_staging_dir(file_to_stage)
+    except Exception as e:
+        return handle_local_error("Server-side error, could not save file to staging area, encountered error: ", e)
+    
+    try:
+        staging_info_record['document_name_and_extension'] = staged_filename # secure_filename version of original filename
+        staging_info_record['staged_datetime'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        staging_info_record['staged_filepath'] = staged_filepath
+        staging_info_record['txt_filepath'] = ''
+        staging_info_record['status'] = 'Staged - File Saved to Staging Area'
+        insert_into_staging_db(staging_info_record, skip_check=True)  # `file_already_staged` check has already been performed, so this will insert directly into the DB barring some error.
+    except Exception as e:
+        return handle_local_error("Server-side error, could not insert file into staging DB, encountered error: ", e)
+    
+    return staging_info_record
 
 
-def download_gdrive_file(service, file_id, filename, mime_type):
+def download_gdrive_file(service, file_id, filename, mime_type, lars_user_id):
 
     print(f"\n\nDownloading GoogleDrive File with mime_type: {mime_type}\n\n")
 
@@ -3201,8 +3229,9 @@ def download_gdrive_file(service, file_id, filename, mime_type):
                 
                 print(f"Downloading google-apps file with mimeType {file_mime_category}")
                 gdrive_request = service.files().export_media(fileId=file_id, mimeType=export_mime_type)
-                if not filename.endswith(file_extension):
-                    filename_with_extension += file_extension
+                
+                base_filename, _ = os.path.splitext(filename) # Remove existing extension if any
+                filename_with_extension = base_filename + file_extension
             
             else:
                 # For non-Google formats, use get_media
@@ -3221,185 +3250,122 @@ def download_gdrive_file(service, file_id, filename, mime_type):
             print(f"Download {int(status.progress() * 100)}%.")
     
     except Exception as e:
-        handle_error_no_return("Error downloading file from Google Drive in the download_gdrive_file() method: ", e)
-        return None, None
+        return handle_local_error("Error downloading file from Google Drive: ", e)
     
     try:
         file_content = file.getvalue()
+        if file_content is None:
+            raise Exception("Server-side error - Could not download file from Google Drive")
     except Exception as e:
-        handle_error_no_return("Server-side error - could not getValue() for downloaded Google Drive file  in the download_gdrive_file() method: ", e)
-        return None, None
+        return handle_local_error("Server-side error downloading file from Google Drive: ", e)
+    
+    try:
+        return stage_gdrive_file(filename_with_extension, file_content, mime_type, lars_user_id)
+    except Exception as e:
+        return handle_local_error("Server-side error staging file from Google Drive: ", e)
 
-    return filename_with_extension, file_content
 
+def download_folder(service, folder_id, folder_name=None, lars_user_id=None):
+    print(f"\n\nDownloading GoogleDrive Folder: {folder_name}\n\n")
 
-def gdrive_downloader(service, file_or_folder_id, filename, mime_type, data_queue=None, path=app.config['UPLOAD_FOLDER']):
-    file_mime_category = categorize_mimetype(mime_type)
+    items = []
+    page_token = None
+    query = f"'{folder_id}' in parents"
+    fields = "nextPageToken, files(id, name, mimeType)"
+
+    while True:
+        response = service.files().list(
+            q=query, 
+            fields=fields, 
+            pageToken=page_token,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True
+        ).execute()
+        items.extend(response.get('files', []))
+        page_token = response.get('nextPageToken', None)
+        if not page_token:
+            break
+
+    staged_file_records = []
 
     try:
-        if file_mime_category == "folder":
-            download_path = os.path.join(path, secure_filename(filename))    # in this case, filename will be the folder name
-            data_queue.put(f"Downloading folder: '{filename}'")
-            download_folder(service, file_or_folder_id, download_path, data_queue, filename)
-            data_queue.put(f"Folder '{filename}' processed | success")
-            return filename, None    # Return None for file_content as it's a folder
-        else:
-            data_queue.put(f"Downloading file: '{filename}'")
-            filename_with_extension, file_content = download_gdrive_file(service, file_or_folder_id, filename, mime_type)
-            if file_content is None or filename_with_extension is None:
-                raise Exception("Server-side error - Could not download individual file from Google Drive in the gdrive_downloader() method")
-            data_queue.put(f"File '{filename_with_extension}' downloaded successfully")
-            return filename_with_extension, file_content
+        for item in items:
+            file_id = item['id']
+            filename = item['name']
+            mime_type = item['mimeType']
+            print(f"folder item mime_type f{mime_type}")
+
+            if "folder" in str(mime_type):
+                try:
+                    staged_file_records.extend(download_folder(service, file_id, filename, lars_user_id))  # in this case, file_or_folder_id will be the folder id
+                    print(f"\nNested GDrive Folder '{filename}' downloaded successfully\n")
+                except Exception as e:
+                    handle_error_no_return("Could not download nested folder from GDrive, encountered error: ", e)
+            else:
+                try:
+                    staged_file_records.append(download_gdrive_file(service, file_id, filename, mime_type, lars_user_id))
+                    print(f"\nGDrive File '{filename}' downloaded successfully\n")
+                except Exception as e:
+                    handle_error_no_return("Server-side error downloading GDrive file, encountered error: ", e)
+            
+        print(f"\n\nGDrive folder '{folder_name}' downloaded successfully\n\n")
     except Exception as e:
-        return handle_local_error("Error downloading file from Google Drive in the gdrive_downloader() method, encountered error: ", e)
+        return handle_local_error(f"Error downloading Google Drive folder: '{folder_name}' in the GDrive download folder method, encountered error: ", e)
+
+    return staged_file_records
 
 
-@app.route('/google_drive_loader', methods=['POST'])
-def google_drive_loader():
+def gdrive_downloader(service, file_or_folder_id, filename, mime_type, mime_type_category, lars_user_id):
+    try:
+        if mime_type_category == "folder":
+            return download_folder(service, file_or_folder_id, filename, lars_user_id)    # filename is the folder name in this case
+        else:
+            return download_gdrive_file(service, file_or_folder_id, filename, mime_type, lars_user_id)
+    except Exception as e:
+        return handle_local_error("Error downloading file from Google Drive in the gdrive-downloader() method, encountered error: ", e)
 
+
+@app.route('/gdrive_file_transfer_to_staging', methods=['POST'])
+def gdrive_file_transfer_to_staging():
     try:
         gdrive_file_id = str(request.form['file_id'])
         gdrive_file_mimeType = str(request.form['file_mimeType'])
+        lars_user_id = str(request.form['user_id'])
     except Exception as e:
-        return handle_api_error("Server-side error reading Google Drive file details for download in the google_drive_loader() method: ", e)
+        return handle_api_error("Server-side error reading Google Drive file details for download: ", e)
     
     try:
         service = build("drive", "v3", credentials=GDRIVE_CREDS)
     except Exception as e:
-        return handle_api_error("Could not create Google service handler in the google_drive_loader() method, check credentials and re-try: ", e)
-
-    data_queue = queue.Queue()
-    stop_event = threading.Event()
-
-    def sync_task():
-
-        try:
-
-            try:
-                file_metadata = service.files().get(fileId=gdrive_file_id, fields='name, mimeType', supportsAllDrives=True).execute()   # includeItemsFromAllDrives=True not need here because it's a search and listing operation!
-                original_filename = file_metadata.get('name', 'untitled')
-                mime_type = file_metadata.get('mimeType', gdrive_file_mimeType)
-            except Exception as e:
-                data_queue.put(f"Error fetching metadata for '{original_filename}' | failure")
-                return handle_api_error(f"Could not read GoogleDrive file metadata for file: '{original_filename}' in the google_drive_loader() method, encountered error: ", e)
-            
-            data_queue.put(f"Fetched metadata for '{original_filename}', proceeding to download...")
-            
-            try:
-                filename_with_extension, file_content = gdrive_downloader(service, gdrive_file_id, original_filename, mime_type, data_queue)
-            except Exception as e:
-                data_queue.put(f"Error downloading {original_filename} from Google Drive | failure")
-                return handle_api_error(f"Server-side error - could not download file: '{original_filename}' from Google Drive in the google_drive_loader() method: ", e)
-
-            if file_content is not None:    # gdrive_downloader downloaded & returned a single file
-                try:
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(filename_with_extension))
-
-                    print(f"Saving {filename_with_extension} to {filepath}")
-                    with open(filepath, 'wb') as f:
-                        f.write(file_content)
-
-                    data_queue.put(f"Vector Embedding & Indexing Document: '{filename_with_extension}'")
-                    document_extractor_and_loader(filename_with_extension, filepath)
-                    data_queue.put(f"Document '{filename_with_extension}' processed & uploaded successfully! | success")
-
-                except Exception as e:
-                    data_queue.put(f"Server-side error - could not process file: '{original_filename}' from Google Drive | failure")
-                    return handle_api_error(f"Server-side error - could not process file: '{original_filename}' from Google Drive in the google_drive_loader() method: ", e)
-        
-        finally:
-            data_queue.put(None)
-            print("\n\nGDrive-Sync stream done, breaking thread\n\n")
-    
-    def load_gdrive():
-
-        try:
-            thread = threading.Thread(target=sync_task)
-            thread.start()
-        except Exception as e:
-            data_queue.put(f"Could not start sync process for Google Drive | failure")
-            return handle_api_error("Could not start thread in the google_drive_loader() method, encountered error: ", e)
-
-        while True:
-            if stop_event.is_set(): #TODO: Add Cancel-Sync button to UI! Logic here will be simialr to STOP_GENERATION in hf_waitress.py
-                print("\n\nStopping GDrive-Sync stream as requested by stop_event\n\n")
-                thread.join()
-                break
-            output = data_queue.get()
-            if output is None:
-                print("\n\nNone read, breaking and stopping thread\n\n")
-                thread.join()
-                break
-            yield f"data: {json.dumps(output)}\n\n"
-        
-        yield f"event: END\ndata: \"null\"\n\n"
-    
-    print("\n\nGoogle Drive Sync Begins!\n\n")
-    return Response(load_gdrive(), content_type='text/event-stream')
-
-
-# Route for loading all models from model dir
-@app.route('/load_local_models')
-def load_local_models():
-
-    try:
-        read_return = read_config(['model_dir'])
-        model_dir = read_return['model_dir']
-    except Exception as e:
-        return handle_api_error("Missing model_dir in config.json for method load_local_models. Error: ", e)
+        return handle_api_error("Could not create Google service handler, check credentials and re-try: ", e)
     
     try:
-        models = [f for f in os.listdir(model_dir) if os.path.isfile(os.path.join(model_dir, f))]
+        file_metadata = service.files().get(fileId=gdrive_file_id, fields='name, mimeType', supportsAllDrives=True).execute()   # includeItemsFromAllDrives=True not needed here because it's a search and listing operation, whereas here we're retrieving a specific item by ID!
+        original_filename = file_metadata.get('name', 'untitled')
+        mime_type = file_metadata.get('mimeType', gdrive_file_mimeType)
+        mime_type_category = categorize_mimetype(mime_type)
     except Exception as e:
-        return handle_api_error("Could not load list of local models, encountered error: ", e)
-        
-    #print(f"locally available models: {models}")
-    return jsonify({'success': True, 'models': models})
-
-
-@app.route('/upload_new_llm', methods=['POST'])
-def upload_new_llm():
-    print("\n\nUploading new LLM\n\n")
+        return handle_api_error(f"Could not read GoogleDrive file metadata for file: '{original_filename}', encountered error: ", e)
 
     try:
-        read_return = read_config(['model_dir'])
-        model_dir = read_return['model_dir']
+        staged_info = gdrive_downloader(service, gdrive_file_id, original_filename, mime_type, mime_type_category, lars_user_id)
+        staged_file_info_list = staged_info if isinstance(staged_info, list) else [staged_info]
+        return jsonify(success=True, staged_file_info_list=staged_file_info_list)
     except Exception as e:
-        return handle_api_error("Could not determine model_dir in upload_new_llm. Error: ", e)
-
-    try:
-        input_file = request.files['file']
-    except Exception as e:
-        return handle_api_error("Server-side error recieving LLM file: ", e)
-
-    # Ensure the filename is secure
-    filename = secure_filename(input_file.filename)
-
-    try:
-        filepath = os.path.join(model_dir, filename)
-
-        print("Loading new LLM - filename: ", filename)
-        print("Loading new LLM - filepath: ", filepath)
-
-        # Save the uploaded file to the specified path
-        input_file.save(filepath)
-    except Exception as e:
-        return handle_api_error("Failed to save LLM to model_dir, encountered error: ", e)
-
-    return jsonify(success=True)
+        return handle_api_error(f"Server-side error - could not download file: '{original_filename}' from Google Drive: ", e)
 
 
 def get_text_extract_from_pdf(filepath):
     print("\nGetting text extract from PDF\n")
 
     try:
-        read_return = read_config(['use_ocr', 'ocr_service_choice'])
-        use_ocr = read_return.get('use_ocr', False)
+        read_return = read_config(['force_ocr', 'ocr_service_choice'])
+        force_ocr = read_return.get('force_ocr', False)
         ocr_service_choice = read_return.get('ocr_service_choice', None)
     except Exception as e:
-        return handle_local_error("Could not determine use_ocr in config.json for process_new_file. Disabling OCR and proceeding. Error: ", e)
+        return handle_local_error("Could not determine force_ocr in config.json. Disabling OCR and proceeding. Error: ", e)
     
-    if use_ocr:
+    if force_ocr:
         try:
             if ocr_service_choice == 'AzureVision':
                 txt_filepath = PDFtoAzureOCRTXT(filepath)
@@ -3496,60 +3462,52 @@ def upload_to_rag_and_records_databases(original_filename, txt_filepath):
     return True
 
 
-def document_extractor_and_loader(filename, filepath):
-    print("Document Extraction and Loading to RAG & Records Databases in progress for single file...")
+def prepare_basic_staging_info_record(filename_with_extension:str, user_id:str, source:str = 'Local Drive'):
+    '''
+    user_id: str
+    upload_id: str
+    staged_filepath: str
+    txt_filepath: str
+    document_name_and_extension: str
+    embedding_model: str
+    knowledge_domain: str
+    source: str
+    text_extraction_method: str
+    upload_initiated_datetime: str
+    staged_datetime: str
+    status: str
+    '''
+    try:
+        read_return = read_config(['selected_embedding_model', 'selected_knowledge_domain', 'force_ocr', 'ocr_service_choice'])
+        selected_embedding_model = read_return['selected_embedding_model']
+        selected_knowledge_domain = read_return['selected_knowledge_domain']
+        force_ocr = str(read_return['force_ocr']).lower() == 'true'
+        ocr_service_choice = str(read_return['ocr_service_choice'])
+    except Exception as e:
+        return handle_local_error("Could not read config when preparing basic staging info record, encountered error: ", e)
 
     try:
-        pdf_filepath = get_pdf_filepath_for_upload(filename, filepath)
+        upload_id = str(uuid.uuid4())
     except Exception as e:
-        return handle_local_error("Could not get PDF filepath for upload, encountered error: ", e)
-        
-    try:
-        txt_filepath = get_text_extract_from_pdf(pdf_filepath)
-    except Exception as e:
-        return handle_local_error("Failed to extract text from the PDF document, encountered error: ", e)
+        return handle_local_error("Could not generate unique ID for staging info record, encountered error: ", e)
     
     try:
-        upload_to_rag_and_records_databases(filename, txt_filepath)
+        staging_info_record = {
+            'user_id': user_id,
+            'upload_id': upload_id,
+            'document_name_and_extension': filename_with_extension,
+            'embedding_model': selected_embedding_model,
+            'knowledge_domain': selected_knowledge_domain,
+            'source': source,
+            'text_extraction_method': ocr_service_choice if force_ocr else 'default',
+            'upload_initiated_datetime': datetime.datetime.now().isoformat(),
+            'status': 'Basic Ticket Created'
+        }
     except Exception as e:
-        return handle_local_error("Failed to upload to RAG & Records databases, encountered error: ", e)
-
-    return True
-
-
-def save_file_to_upload_dir(input_file):
-    try:
-        filename = secure_filename(input_file.filename)
-        filename = filename.replace("PDF", "pdf") if "PDF" in filename else filename
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        input_file.save(filepath)
-        print(f"\nSaved file {filename} to {filepath} successfully.\n")
-        return filename, filepath
-    except Exception as e:
-        return handle_local_error("Could not save file to upload directory, encountered error: ", e)
-
-
-# Route to handle the submission of the second form (file loading)
-@app.route('/process_new_file', methods=['POST'])
-def process_new_file():
-
-    try:
-        input_file = request.files['file']
-    except Exception as e:
-        return handle_api_error("Server-side error recieving file: ", e)
-
-    try:
-        filename, filepath = save_file_to_upload_dir(input_file)
-    except Exception as e:
-        return handle_api_error("Failed to save document to app folder, encountered error: ", e)
-
-    try:
-        document_extractor_and_loader(filename, filepath)
-    except Exception as e:
-        return handle_api_error("Failed to upload new document, encountered error: ", e)
-
-    return jsonify(success=True)
-
+        return handle_local_error("Could not prepare basic staging info record, encountered error: ", e)
+    
+    return staging_info_record
+    
 
 def init_and_connect_to_upload_staging_db() -> tuple[sqlite3.Connection, sqlite3.Cursor]:
     try:
@@ -3629,7 +3587,7 @@ def update_existing_entry_in_staging_db(doc_info: dict, id: int):
     return True
 
 
-def check_if_file_already_staged(file_transfer_info: dict):
+def check_for_staged_file_info_in_staging_db(file_transfer_info: dict):
     try:
         conn, cursor = init_and_connect_to_upload_staging_db()
     except Exception as e:
@@ -3669,11 +3627,79 @@ def check_if_file_already_staged(file_transfer_info: dict):
         conn.close()
 
 
+def validate_file_transfer_info(file_transfer_info: dict):
+    try:
+        keys_to_validate = ['user_id', 'upload_id', 'document_name_and_extension', 'embedding_model', 'knowledge_domain', 'source', 'text_extraction_method', 'upload_initiated_datetime']
+        for key in keys_to_validate:
+            if key not in file_transfer_info:
+                raise Exception(f"Invalid request, missing key information for bulk download request: {key}")
+        return True
+    except Exception as e:
+        return handle_local_error("File transfer info validation failed, encountered error: ", e)
+
+
+def check_if_file_already_staged(file_transfer_info: dict):
+    try:
+        staged_file_info = check_for_staged_file_info_in_staging_db(file_transfer_info)
+        print(f"\n\nStaged file info: {staged_file_info}\n\n")
+        if staged_file_info is not None:
+            print(f"\n\nStaged file info is not None! Validating...\n\n")
+            try:    # validate file transfer data
+                validate_file_transfer_info(staged_file_info) # exception will be raised if invalid
+                print(f"\n\nStaged file info validated successfully!\n\n")
+                if os.path.exists(os.path.join(app.config['UPLOAD_STAGING_FOLDER'], staged_file_info['document_name_and_extension'])):  # `document_name_and_extension` key will exist because it passed validation
+                    print(f"\n\nStaged file info is valid and file exists in staging area!\n\n")
+                    staged_file_info.pop('id', None)    # 'id' primary key is for internal DB use only
+                    return staged_file_info
+                else:
+                    print(f"\n\nStaged file info is valid but file does not exist in staging area! Deleting entry and proceeding with fresh upload.\n\n")
+                    delete_entry_from_staging_db(None, staged_file_info['id'])  #TODO: Will likely cause an issue with the resume function, redo when resume is implemented
+                    return None
+            except Exception as e:
+                handle_error_no_return("File already staged for uploading but error validating staged file data. Deleting entry and proceeding with fresh upload. Error Log: ", e)
+                safe_delete_entry_from_staging_db(staged_file_info)
+        else:
+            print(f"\n\nFile not previously staged.\n\n")
+            return None
+    except Exception as e:
+        return handle_local_error("Could not check if file is already staged, encountered error: ", e)
+
+
+def delete_entry_from_staging_db(doc: dict, id: int = None):
+    try:
+        result = check_for_staged_file_info_in_staging_db(doc) if id is None else {'id': id}
+        if result is not None:
+            try:
+                conn, cursor = init_and_connect_to_upload_staging_db()
+                cursor.execute('''
+                    DELETE FROM upload_staging
+                    WHERE id = ?
+                    ''',
+                    (result['id'],)
+                )
+                conn.commit()
+            except Exception as e:
+                return handle_local_error("Could not delete entry from upload staging DB, encountered error: ", e)
+            finally:
+                cursor.close()
+                conn.close()
+        return True
+    except Exception as e:
+        handle_error_no_return("Error deleting entry from staging records DB. Encountered error: ", e)
+
+
+def safe_delete_entry_from_staging_db(doc: dict):
+    try:
+        delete_entry_from_staging_db(doc)
+    except Exception as e:
+        handle_error_no_return("Could not delete entry from staging records DB, skipping. Encountered error: ", e)
+
+
 def insert_into_staging_db(doc_info: dict, skip_check: bool = False):
     if not skip_check:
         try:
-            result = check_if_file_already_staged(doc_info)
-            if result is not None:  # this call is likely made by the bulk_text_extract_from_staging_area to update the txt_filepath!
+            result = check_for_staged_file_info_in_staging_db(doc_info)
+            if result is not None:  # this call is likely made by the bulk_text_extract method to update the txt_filepath!
                 try:
                     update_existing_entry_in_staging_db(doc_info, result['id'])
                     return True
@@ -3730,39 +3756,9 @@ def insert_into_staging_db(doc_info: dict, skip_check: bool = False):
     return True
 
 
-def delete_entry_from_staging_db(doc: dict):
-    try:
-        result = check_if_file_already_staged(doc)
-        if result is not None:
-            try:
-                conn, cursor = init_and_connect_to_upload_staging_db()
-                cursor.execute('''
-                    DELETE FROM upload_staging
-                    WHERE id = ?
-                    ''',
-                    (result['id'],)
-                )
-                conn.commit()
-            except Exception as e:
-                return handle_local_error("Could not delete entry from upload staging DB, encountered error: ", e)
-            finally:
-                cursor.close()
-                conn.close()
-        return True
-    except Exception as e:
-        handle_error_no_return("Error deleting entry from staging records DB. Encountered error: ", e)
-
-
-def safe_delete_entry_from_staging_db(doc: dict):
-    try:
-        delete_entry_from_staging_db(doc)
-    except Exception as e:
-        handle_error_no_return("Could not delete entry from staging records DB, skipping. Encountered error: ", e)
-
-
 def bulk_upload_files_to_rag_and_records_databases(docs_to_upload: list[dict], data_queue: queue.Queue = None):
     for count, doc in enumerate(docs_to_upload):
-        if data_queue is not None: data_queue.put(f"Uploading Document to RAG & Records Databases: {doc.get('document_name_and_extension', 'Unknown document name')} | waiting")
+        if data_queue is not None: data_queue.put(f"Performing Step 2 of 2 for document: {doc.get('document_name_and_extension', 'Unknown document name')} - Uploading Document to RAG & Records Databases. Progress: {count + 1} of {len(docs_to_upload)}... | waiting")
         try:
             doc['status'] = 'Processing - Uploading to RAG & Records Databases'
             insert_into_staging_db(doc)
@@ -3796,7 +3792,7 @@ def move_file_to_upload_dir(staged_filename: str, staged_filepath: str):
 
 def enable_kosmos_vram_offloading():
     try:
-        write_config({'kosmos_offload_vram': 'true'})
+        write_config({'kosmos_offload_vram': True})
         return True
     except Exception as e:
         handle_error_no_return("Could not enable Kosmos VRAM offloading, encountered error: ", e)
@@ -3805,7 +3801,7 @@ def enable_kosmos_vram_offloading():
 def disable_kosmos_vram_offloading():
     try:
         kosmos_offload_vram_enabled = str(read_config(['kosmos_offload_vram'])['kosmos_offload_vram']).lower() == 'true'
-        if kosmos_offload_vram_enabled: write_config({'kosmos_offload_vram': 'false'})
+        if kosmos_offload_vram_enabled: write_config({'kosmos_offload_vram': False})
         return kosmos_offload_vram_enabled
     except Exception as e:
         handle_error_no_return("Could not disable Kosmos VRAM offloading, encountered error: ", e)
@@ -3846,7 +3842,7 @@ def bulk_text_extract_from_staging_area(staged_docs_to_upload: list[dict], data_
     must_enable_kosmos_vram_offloading_after_bulk_upload_completes = disable_kosmos_vram_offloading()
 
     for count, doc in enumerate(staged_docs_to_upload):
-        if data_queue is not None: data_queue.put(f"Processing document {count + 1} of {len(staged_docs_to_upload)}... | waiting")
+        if data_queue is not None: data_queue.put(f"Performing Step 1 of 2 for document: {doc.get('document_name_and_extension', 'Unknown document name')} - Data Extraction. Progress: {count + 1} of {len(staged_docs_to_upload)}... | waiting")
         try:    # Move to upload dir
             filename, filepath = move_file_to_upload_dir(doc['document_name_and_extension'], doc['staged_filepath']) # will also delete from staging dir
         except Exception as e:
@@ -3869,7 +3865,6 @@ def bulk_text_extract_from_staging_area(staged_docs_to_upload: list[dict], data_
             continue
         
         try:    # Get text from PDF
-            if data_queue is not None: data_queue.put(f"Extracting text from document: {doc.get('document_name_and_extension', 'Unknown document name')} | waiting")
             txt_filepath = get_text_extract_from_pdf(pdf_filepath)
             if data_queue is not None: data_queue.put(f"Successfully extracted text from document: {doc.get('document_name_and_extension', 'Unknown document name')} | success")
         except Exception as e:
@@ -3885,9 +3880,13 @@ def bulk_text_extract_from_staging_area(staged_docs_to_upload: list[dict], data_
             if data_queue is not None: data_queue.put(f"Error processing file - Could not save text extract | failure")
             handle_error_no_return(f"Could not update the `txt_filepath` key in the staging DB. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
     
-    if must_enable_kosmos_vram_offloading_after_bulk_upload_completes: 
-        enable_kosmos_vram_offloading()
-        invoke_offload_kosmos_vram_endpoint()
+    try:
+        if must_enable_kosmos_vram_offloading_after_bulk_upload_completes: 
+            enable_kosmos_vram_offloading()
+            invoke_offload_kosmos_vram_endpoint()
+    except Exception as e:
+        handle_error_no_return("Could not enable Kosmos VRAM offloading after bulk upload completes, skipping. Encountered error: ", e)
+
     return True
 
 
@@ -3978,17 +3977,6 @@ def save_file_to_staging_dir(input_file):   # input_file is a Request.files obje
         return handle_local_error("Could not save file to staging directory, encountered error: ", e)
 
 
-def validate_file_transfer_info(file_transfer_info: dict):
-    try:
-        keys_to_validate = ['user_id', 'upload_id', 'document_name_and_extension', 'embedding_model', 'knowledge_domain', 'source', 'text_extraction_method', 'upload_initiated_datetime']
-        for key in keys_to_validate:
-            if key not in file_transfer_info:
-                raise Exception(f"Invalid request, missing key information for bulk download request: {key}")
-        return True
-    except Exception as e:
-        return handle_local_error("File transfer info validation failed, encountered error: ", e)
-
-
 @app.route('/file_transfer_to_staging', methods=['POST'])
 def file_transfer_to_staging():
     '''
@@ -4015,7 +4003,7 @@ def file_transfer_to_staging():
     Will save the file to the staging area, and add the following keys to the `file_transfer_info` dictionary and return it:
         staged_datetime: str
         staged_filepath: str
-        txt_filepath: str   # will be left blank for now and updated after text extraction by the bulk_text_extract_from_staging_area method
+        txt_filepath: str   # will be left blank for now and updated after text extraction by the bulk_text_extract method
         status: str
 
     Additionally, the `document_name_and_extension` key will be updated to the secure_filename version of the original filename.
@@ -4038,19 +4026,8 @@ def file_transfer_to_staging():
 
     try:
         staged_file_info = check_if_file_already_staged(file_transfer_info)
-        print(f"\n\nStaged file info: {staged_file_info}\n\n")
         if staged_file_info is not None:
-            print(f"\n\nStaged file info is not None!\n\n")
-            try:    # validate file transfer data
-                validate_file_transfer_info(staged_file_info) # exception will be raised if invalid
-                print(f"\n\nStaged file info validated successfully!\n\n")
-                if os.path.exists(os.path.join(app.config['UPLOAD_STAGING_FOLDER'], staged_file_info['document_name_and_extension'])):
-                    print(f"\n\nStaged file info is valid and file exists in staging area!\n\n")
-                    staged_file_info.pop('id', None)    # 'id' primary key is for internal DB use only
-                    return jsonify(success=True, file_previously_staged=True, staged_file_info=staged_file_info)
-            except Exception as e:
-                handle_error_no_return("File already staged for uploading but error validating staged file data. Deleting entry and proceeding with fresh upload. Error Log: ", e)
-                safe_delete_entry_from_staging_db(staged_file_info)
+            return jsonify(success=True, file_previously_staged=True, staged_file_info=staged_file_info)
     except Exception as e:
         handle_error_no_return("Server-side error, could not check if files are already staged, proceeding with upload. Encountered error: ", e)
     
@@ -4070,7 +4047,7 @@ def file_transfer_to_staging():
         file_transfer_info['staged_filepath'] = staged_filepath
         file_transfer_info['txt_filepath'] = ''
         file_transfer_info['status'] = 'Staged - File Saved to Staging Area'
-        insert_into_staging_db(file_transfer_info, skip_check=True)  # `check_if_file_already_staged` has already been performed, so this will insert directly into the DB barring some error.
+        insert_into_staging_db(file_transfer_info, skip_check=True)  # `file_already_staged` check has already been performed, so this will insert directly into the DB barring some error.
     except Exception as e:
         return handle_api_error("Server-side error, could not insert file into staging DB, encountered error: ", e)
     
