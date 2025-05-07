@@ -91,7 +91,7 @@ function loadCoreLarsConfig() {
         'selected_embedding_model',
         'knowledge_domain_list',
         'selected_knowledge_domain',
-        'use_ocr',
+        'force_ocr',
         'ocr_service_choice',
         'local_llm_chat_template_format',
         'exl2_prompt_template_format',
@@ -993,11 +993,11 @@ function initializeRAGTabComponents(values) {
 }
 
 
-function initializeOCRTabRadios(use_ocr, ocr_service_choice, azure_cv_free_tier) {
+function initializeOCRTabRadios(force_ocr, ocr_service_choice, azure_cv_free_tier) {
     var useOcr = document.getElementById('ocr_yes_radio_button');
     var usePypdf = document.getElementById('ocr_no_radio_button');
 
-    if (use_ocr) {
+    if (force_ocr) {
         useOcr.checked = true;
 
         // select API service from dropwdown
@@ -1090,7 +1090,7 @@ function initializeOCRTabListeners() {
 
 
 function initializeOCRTabComponents(values) {
-    initializeOCRTabRadios(values.use_ocr, values.ocr_service_choice, values.azure_cv_free_tier);
+    initializeOCRTabRadios(values.force_ocr, values.ocr_service_choice, values.azure_cv_free_tier);
     initializeOCRTabListeners();
     if (values.force_extract_previously_extracted_text) { document.getElementById('force_extract_previously_extracted_text_checkbox').checked = true; }
     if (values.kosmos_local_url) { document.getElementById('kosmos_api_url').value = values.kosmos_local_url; }
