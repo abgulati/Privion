@@ -39,14 +39,12 @@ import queue
 import uuid
 import json
 import time
-import nltk
 import ast
 import os
 import io
 import re
 import gc
 from logging.handlers import RotatingFileHandler
-from nltk.corpus import stopwords
 
 from whoosh.index import create_in, open_dir
 from whoosh.fields import Schema, TEXT, ID
@@ -272,6 +270,8 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'kosmos_task':'ocr',
                 'kosmos_threshold':30,
                 'kosmos_offload_vram':True,
+                'kosmos_container_name':'kosmos-2.5',
+                'min_char_threshold_for_backup_ocr':1000,
                 'lars_host':'0.0.0.0',
                 'lars_port':5000,
                 'hf_waitress_serving_url':'0.0.0.0',
@@ -1225,6 +1225,70 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
     return output_text_file_path
 
 
+def get_container_id_by_container_name(container_name):
+    print(f"\nChecking if container {container_name} is running...\n")
+    try:
+        result = subprocess.run(
+            ['docker', 'ps', '--filter', f'name={container_name}' , '--format', '{{.ID}}'], # get container ID
+            capture_output=True,    # captures the command's output and error, while suppressing the print to the terminal
+            text=True,  # Get output as string and not bytes
+            check=True
+        )
+        return result.stdout.strip()    # Will return the container ID if the container is running, otherwise will return an empty string!
+    except Exception as e:
+        return handle_local_error(f"Could not check if {container_name} Docker container is running, encountered error: ", e)
+    
+
+def check_if_container_is_running(container_name):
+    try:
+        container_id = get_container_id_by_container_name(container_name)
+        return container_id is not None and container_id != ""
+    except Exception as e:
+        handle_error_no_return(f"Could not check if {container_name} Docker container is running, encountered error: ", e)
+        return False
+
+
+def start_kosmos_container():
+    try:
+        read_return = read_config(['kosmos_container_name'])
+        kosmos_container_name = read_return['kosmos_container_name']
+    except Exception as e:
+        return handle_local_error("Could not read Kosmos container name from config.json, encountered error: ", e)
+
+    # Check if Docker Engine is running
+    try:
+        subprocess.run(['docker', 'info'], capture_output=True, check=True)  # check=True will raise an exception if the command returns a non-zero exit code
+    except Exception as e:
+        return handle_local_error("Docker Engine is not running, encountered error: ", e)
+
+    print("\nDocker Engine is running, proceeding with FalkorDB Docker container launch...\n")
+
+    if check_if_container_is_running(kosmos_container_name):
+        print("\nKosmos Docker container is already running, skipping launch...\n")
+        return True
+
+    command = ['docker', 'start', f'{kosmos_container_name}']
+
+    try:
+        subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE) if platform.system() == 'Windows' else subprocess.Popen(command, shell=True)
+        # Check if the container is running
+        timeout = 5
+        attempts = 50
+        for _ in range(attempts):
+            if check_if_container_is_running(kosmos_container_name):
+                print(f"\nKosmos Docker container launched successfully! Returning in {timeout} seconds...\n")
+                time.sleep(timeout) # small delay to ensure the container is fully started
+                return True
+            else:
+                print(f"Kosmos Docker container not yet running, waiting {timeout} seconds before retrying...")
+                time.sleep(timeout)
+
+    except Exception as e:
+        return handle_local_error("Could not launch Kosmos Docker container, encountered error: ", e)
+
+    return True
+
+
 def get_kosmos_request_params():
     try:
         read_return = read_config(['kosmos_local_url', 'kosmos_task', 'kosmos_threshold', 'kosmos_offload_vram'])
@@ -1246,8 +1310,77 @@ def get_kosmos_request_params():
     return kosmos_local_url, payload, headers
 
 
-def PDFtoKosmosOCRTXT(input_filepath):
+def kosmos_ocr_page(page_as_pil_image_object, retry_count=0):
+    print(f"\n\nProcessing Page - Kosmos OCR\n\n")
+    try:
+        kosmos_local_url, payload, headers = get_kosmos_request_params()
+    except Exception as e:
+        return handle_local_error("Could not get Kosmos request parameters, encountered error: ", e)
+    
+    try:
+        print("\n\nConverting PIL-image object to Byte-Stream\n\n")
+        img_stream = io.BytesIO()
+        page_as_pil_image_object.save(img_stream, format='PNG')
+        img_stream.seek(0)
+    except Exception as e:
+        return handle_local_error("Could not convert PIL-image object to Byte-Stream, encountered error: ", e)
+    
+    try:
+        print("Preparing file payload for Kosmos\n")
+        file_payload = [
+            ('file', ('page-image.png', img_stream, 'image/png'))
+        ]
+    except Exception as e:
+        return handle_local_error("Could not prepare file payload for Kosmos, encountered error: ", e)
+    
+    try:
+        start_kosmos_container()    # Will do nothing if the container is already running!
+    except Exception as e:
+        return handle_local_error("Could not start Kosmos Docker container, encountered error: ", e)
+    
+    try:
+        print("\nSending request to Kosmos\n")
+        '''
+        # 100 seconds is more than enough for Kosmos to be loaded and process the request! 
+        # NOTE: Does NOT account for model download time! Ensure the service has been previously run so the models have been downloaded.
+        '''
+        with requests.post(kosmos_local_url, headers=headers, data=payload, files=file_payload, stream=True, timeout=100) as response:
+            response.raise_for_status() # Raise an exception for bad 4xx or 5xx status codes
 
+            print("\nReceiving event-streaming response from Kosmos\n")
+            for event in response.iter_lines(decode_unicode=True):
+                if event:
+                    if event.startswith('data:'):
+                        event_data = event[5:].strip()
+                        try:
+                            json_data = json.loads(event_data)
+                            if 'full_parsed_text' in json_data:
+                                return json_data['full_parsed_text']
+                            else:
+                                print(f"\n\nReceived plain-text event from Kosmos: {event_data}\n\n")
+                        except json.JSONDecodeError as e:
+                            print(f"\n\nCould not parse event from Kosmos as JSON dictionary, encountered error: {e}\n\n")
+                            print(f"\n\nReceived plain-text event from Kosmos: {event}\n\n")
+                        except Exception as e:
+                            return handle_local_error("Could not process event from Kosmos, encountered error: ", e)
+    except requests.exceptions.RequestException as e:
+        handle_error_no_return(f"Could not send request to Kosmos, checking if Kosmos is running and attempting to start the service if not. Retry attempt {retry_count+1} of 3. Encountered error: ", e)
+        if retry_count >= 3:
+            return handle_local_error("Failed to receive a proper response from the Kosmos OCR service even after 3 retries, stopping execution. Encountered error: ", e)
+        else:
+            try:
+                start_kosmos_container()    # Will do nothing if the container is already running!
+                return kosmos_ocr_page(page_as_pil_image_object, retry_count=retry_count+1)
+            except Exception as e:
+                return handle_local_error("Could not start Kosmos Docker container, encountered error: ", e)
+    except Exception as e:
+        return handle_local_error("Could not receive a complete response from the Kosmos OCR service, encountered error: ", e)
+    finally:
+        if 'img_stream' in locals() and img_stream:
+            img_stream.close()  # io.BytesIO objects are in-memory streams, and while the GC will eventually close them, it's best to do it explicitly here.
+
+
+def PDFtoKosmosOCRTXT(input_pdf_filepath):
     print("\n\nProcessing Document - PDF to Kosmos OCR TXT\n\n")
 
     try:
@@ -1255,12 +1388,12 @@ def PDFtoKosmosOCRTXT(input_filepath):
         ocr_pdfs = read_return['ocr_pdfs']
         force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Missing OCR PDFs directory for PDFtoKosmosOCRTXT, please provide required API config. Error: ", e)
+        return handle_local_error("Missing OCR PDFs directory for PDFtoKosmosOCRTXT, please provide required API config. Error: ", e)
 
     try:
-        source_filename = os.path.basename(input_filepath)
+        source_filename = os.path.basename(input_pdf_filepath)
     except Exception as e:
-        handle_local_error("Could not extract filename, encountered error: ", e)
+        return handle_local_error("Could not extract filename, encountered error: ", e)
 
     # Set output path
     output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
@@ -1272,135 +1405,127 @@ def PDFtoKosmosOCRTXT(input_filepath):
             return output_text_file_path
         else:
             print("Kosmos OCR'ed doc already exists but is empty! Overwriting with new OCR'ed file.")
+
+    # Convert PDF to  a list of images
+    pil_image_object_list = []
+    try:
+        print("\n\nConverting PDF to a list of Images\n\n")
+        pil_image_object_list = convert_from_path(input_pdf_filepath, 300) # The convert_from_path() function from pdf2image lib intertnally uses Poppler to convert PDF pages to images, and then creates PIP Image objects from them. 300dpi - good balance between quality and performance
+    except Exception as e:
+        return handle_local_error("Could not image PDF file, encountered error: ", e)
     
     # Initialize text output
     try:
         output_text_file = open(output_text_file_path, 'w', encoding='utf-8')
     except Exception as e:
-        handle_local_error("Could not initialize/access output text file, encountered error: ", e)
+        return handle_local_error("Could not initialize/access output text file, encountered error: ", e)
 
-    try:
-        kosmos_local_url, payload, headers = get_kosmos_request_params()
-    except Exception as e:
-        return handle_local_error("Could not get Kosmos request parameters, encountered error: ", e)
-
-    try:
-        print("\nPreparing file payload for Kosmos\n")
-        file_payload = [
-            ('file', (source_filename, open(input_filepath,'rb'),'application/pdf'))
-        ]
-    except Exception as e:
-        handle_error_no_return("Could not prepare file payload for Kosmos, encountered error: ", e)
-
-    # Send request to Kosmos and open an event stream to receive the response
+    # Initialize page number
     page_number = 0
-    try:
-        print("\nSending request to Kosmos\n")
-        with requests.post(kosmos_local_url, headers=headers, data=payload, files=file_payload, stream=True) as response:
-            response.raise_for_status() # Raise an exception for bad 4xx or 5xx status codes
-
-            print("\nReceiving event-streaming response from Kosmos\n")
-            for event in response.iter_lines(decode_unicode=True):
-                if event:
-                    if event.startswith('data:'):
-                        event_data = event[5:].strip()
-                        try:
-                            json_data = json.loads(event_data)
-                            if 'full_parsed_text' in json_data:
-                                page_number += 1
-                                full_parsed_text = json_data['full_parsed_text']
-                                print(f"\n\nWriting full_parsed_text to output text file: {full_parsed_text}\n\n")
-                                output_text_file.write(f"[PAGE:{page_number}]\n{full_parsed_text}\n")
-                            else:
-                                print(f"\n\nReceived plain-text event from Kosmos: {event_data}\n\n")
-                        except json.JSONDecodeError as e:
-                            print(f"\n\nCould not parse event from Kosmos as JSON dictionary, encountered error: {e}\n\n")
-                            print(f"\n\nReceived plain-text event from Kosmos: {event}\n\n")
-                        except Exception as e:
-                            handle_error_no_return("Could not process event from Kosmos, encountered error: ", e)
+    for count, image in enumerate(pil_image_object_list, start=1):
+        try:
+            page_number = count
+            full_parsed_text = kosmos_ocr_page(image)
+            output_text_file.write(f"[PAGE:{page_number}]\n{full_parsed_text}\n")
+        except Exception as e:
+            handle_error_no_return("Could not process page, encountered error: ", e)
+            continue
     
-    except requests.exceptions.RequestException as e:
-        handle_local_error("Could not send request to Kosmos, encountered error: ", e)
-    except Exception as e:
-        handle_error_no_return("Could not send request to Kosmos, encountered error: ", e)
-
-    # Close all files
+    # Close & return
     output_text_file.close()
-
     return output_text_file_path
 
 
-def PDFtoTXT(input_file):
+def PDFtoTXT(input_pdf_filepath):
 
     print("\n\nProcessing Document - PDF to TXT\n\n")
 
     try:
-        read_return = read_config(['pdfs_to_txts', 'force_extract_previously_extracted_text'])
+        read_return = read_config(['pdfs_to_txts', 'force_extract_previously_extracted_text', 'ocr_pdfs', 'min_char_threshold_for_backup_ocr'])
         pdfs_to_txts = read_return['pdfs_to_txts']
+        ocr_pdfs = read_return['ocr_pdfs']
         force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
+        min_char_threshold_for_backup_ocr = int(read_return['min_char_threshold_for_backup_ocr'])
     except Exception as e:
-        handle_local_error("Missing pdfs_to_txts directory for PDFtoTXT in config.json, encountered error: ", e)
+        return handle_local_error("Could not read required values from config.json when attempting to convert PDF to TXT, encountered error: ", e)
+
+    try:
+        source_filename = os.path.basename(input_pdf_filepath)
+
+        # Set output path
+        output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
+        output_text_file_path = os.path.join(pdfs_to_txts, output_text_file_name)
+        ocr_pdf_file_path = os.path.join(ocr_pdfs, output_text_file_name)
+
+        if not force_extract_previously_extracted_text:
+            if os.path.exists(output_text_file_path) and os.path.getsize(output_text_file_path) > 0:
+                print("PyPDF2-extracted .txt already exists and is not empty! Returning existing file.")
+                return output_text_file_path
+            elif os.path.exists(ocr_pdf_file_path) and os.path.getsize(ocr_pdf_file_path) > 0:
+                print("Kosmos OCR'ed .txt already exists and is not empty! Returning existing file.")
+                return ocr_pdf_file_path
+            else:
+                print("PyPDF2-extracted .txt already exists but is empty! Overwriting with new .txt file.")
     
-    # Initialize PDF file reader
-    try:
-        pdf_file = open(input_file, 'rb')
     except Exception as e:
-        handle_local_error("Could not open PDF file, encountered error: ", e)
-
+        return handle_local_error("Could not complete necessary file system operations when attempting to convert PDF to TXT, encountered error: ", e)
+    
     try:
-        source_filename = os.path.basename(input_file)
+        with open(input_pdf_filepath, 'rb') as pdf_file_obj:
+            pdf_reader = PyPDF2.PdfReader(pdf_file_obj)
+            num_pages = len(pdf_reader.pages)
+
+            with open(output_text_file_path, 'w', encoding='utf-8') as output_text_file:
+
+                # Loop through all the pages and extract text
+                for page_num in range(num_pages):
+                    print(f"Processing page {page_num+1} of {num_pages}")
+                    current_page_num = int(page_num) + 1
+                    use_backup_ocr = False
+                    pypdf2_text = ""
+                    ocr_text = ""
+                    
+                    try:
+                        page = pdf_reader.pages[page_num]
+                        pypdf2_text = page.extract_text()
+                    except Exception as e:
+                        handle_error_no_return("Could not extract text from page, attempting to OCR. Encountered error: ", e)
+                        use_backup_ocr = True
+                        pypdf2_text = ""
+
+                    if use_backup_ocr or pypdf2_text is None or len(pypdf2_text) < min_char_threshold_for_backup_ocr:
+                        print(f"OCR Necessary - Attempting to OCR page {current_page_num} of {num_pages} using backup OCR method.")
+                        try:
+                            current_page_as_pil_image_object = convert_from_path(
+                                input_pdf_filepath,
+                                dpi=300,
+                                first_page=current_page_num,
+                                last_page=current_page_num
+                            )[0]
+                        except Exception as e:
+                            handle_error_no_return("Could not convert page to PIL image object, skipping. Encountered error: ", e)
+                            current_page_as_pil_image_object = None
+                        
+                        try:
+                            if current_page_as_pil_image_object:
+                                ocr_result = kosmos_ocr_page(current_page_as_pil_image_object)
+                                if ocr_result is not None:
+                                    ocr_text = ocr_result
+                            else:
+                                raise Exception(f"Imaged page is empty. Skipping page {current_page_num}.")
+                        except Exception as e:
+                            handle_error_no_return("Could not OCR page, skipping. Encountered error: ", e)
+                            ocr_text = ""
+                        
+                    try:
+                        #clean_text = clean_text_string(text)
+                        text_to_write = pypdf2_text if len(pypdf2_text) >= len(ocr_text) else ocr_text
+                        output_text_file.write(f"[PAGE:{current_page_num}]\n{text_to_write}\n")
+                    except Exception as e:
+                        handle_error_no_return("Could not write to output text file, encountered error: ", e)
+                        continue
     except Exception as e:
-        handle_local_error("Could not open PDF file, encountered error: ", e)
-
-    # Initialize PDF reader
-    try:
-        pdf_reader = PyPDF2.PdfReader(pdf_file)
-    except Exception as e:
-        handle_local_error("Could not initialize PDF reader, encountered error: ", e)
-
-    # Set output path
-    output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
-    output_text_file_path = os.path.join(pdfs_to_txts, output_text_file_name).replace("\\","/")
-
-    if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
-        if os.path.getsize(output_text_file_path) > 0:
-            print("PyPDF2-extracted .txt already exists and is not empty! Returning existing file.")
-            return output_text_file_path
-        else:
-            print("PyPDF2-extracted .txt already exists but is empty! Overwriting with new .txt file.")
-
-    # Initialize text output
-    try:
-        output_text_file = open(output_text_file_path, 'w', encoding='utf-8')
-    except Exception as e:
-        handle_local_error("Could not initialize/access output text file, encountered error: ", e)
-
-    # Loop through all the pages and extract text
-    for page_num in range(len(pdf_reader.pages)):
-        
-        try:
-            page = pdf_reader.pages[page_num]
-            text = page.extract_text()
-        except Exception as e:
-            handle_error_no_return("Could not extract text from page, encountered error: ", e)
-
-        #clean_text = text
-        # Clean text
-        clean_text = clean_text_string(text)
-        page_number = int(page_num) + 1
-        
-        # Optionally, you can include page numbers in the text file
-        # output_text_file.write(f'\n\n--- Page {page_num + 1} ---\n\n')
-        
-        # Write the extracted text to the file
-        try:
-            output_text_file.write(f"[PAGE:{page_number}]\n{clean_text}\n")
-        except Exception as e:
-            handle_local_error("Could not write to output text file, encountered error: ", e)
-
-    # Close all files
-    pdf_file.close()
-    output_text_file.close()
+        return handle_local_error("Could not process PDF file, encountered error: ", e)
 
     return output_text_file_path
 
@@ -2182,31 +2307,16 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
     return True
 
 
-def graph_db_docker_container_is_running(container_name):
-    print("\nChecking if FalkorDB Docker container is running...\n")
-
-    try:
-        result = subprocess.run(
-            ['docker', 'ps', '--filter', f'name={container_name}' , '--format', '{{.ID}}'], # get container ID
-            capture_output=True,    # captures the command's output and error, while suppressing the print to the terminal
-            text=True,  # Get output as string and not bytes
-            check=True
-        )
-        container_id = result.stdout.strip()
-        print(f"\n{container_name} Docker container ID: {container_id}\n")
-        return container_id is not None and container_id != ""
-    except Exception as e:
-        handle_error_no_return(f"Could not check if {container_name} Docker container is running, encountered error: ", e)
-        return False
-
-
 def bring_graph_db_online():    # launch FalkorDB Docker container
     print(f"\nLaunching FalkorDB Docker container...\n")
 
-    read_return = read_config(['launch_graph_db_with_ui', 'assign_host_port_to_graph_db_server', 'assign_host_port_to_graph_db_ui'])
-    launch_graph_db_with_ui = read_return['launch_graph_db_with_ui']
-    assign_host_port_to_graph_db_server = read_return['assign_host_port_to_graph_db_server']
-    assign_host_port_to_graph_db_ui = read_return['assign_host_port_to_graph_db_ui']
+    try:
+        read_return = read_config(['launch_graph_db_with_ui', 'assign_host_port_to_graph_db_server', 'assign_host_port_to_graph_db_ui'])
+        launch_graph_db_with_ui = read_return['launch_graph_db_with_ui']
+        assign_host_port_to_graph_db_server = read_return['assign_host_port_to_graph_db_server']
+        assign_host_port_to_graph_db_ui = read_return['assign_host_port_to_graph_db_ui']
+    except Exception as e:
+        return handle_local_error("Could not read graph DB config when attempting to bring FalkorDB online, encountered error: ", e)
 
     # Check if Docker Engine is running
     try:
@@ -2216,7 +2326,7 @@ def bring_graph_db_online():    # launch FalkorDB Docker container
 
     print("\nDocker Engine is running, proceeding with FalkorDB Docker container launch...\n")
 
-    if graph_db_docker_container_is_running('falkor-db'):
+    if check_if_container_is_running('falkor-db'):
         print("\nFalkorDB Docker container is already running, skipping launch...\n")
         return True
 
@@ -2234,7 +2344,7 @@ def bring_graph_db_online():    # launch FalkorDB Docker container
         timeout = 2
         attempts = 50
         for _ in range(attempts):
-            if graph_db_docker_container_is_running(container_name):
+            if check_if_container_is_running(container_name):
                 print(f"\nFalkorDB Docker container launched successfully!\n")
                 return True
             else:
@@ -3297,7 +3407,7 @@ def download_folder(service, folder_id, folder_name=None, lars_user_id=None):
 
             if "folder" in str(mime_type):
                 try:
-                    staged_file_records.extend(download_folder(service, file_id, filename, lars_user_id))  # in this case, file_or_folder_id will be the folder id
+                    staged_file_records.extend(download_folder(service, file_id, filename, lars_user_id))  # in this case, file_id will be the folder id!
                     print(f"\nNested GDrive Folder '{filename}' downloaded successfully\n")
                 except Exception as e:
                     handle_error_no_return("Could not download nested folder from GDrive, encountered error: ", e)
@@ -3355,7 +3465,7 @@ def gdrive_file_transfer_to_staging():
         return handle_api_error(f"Server-side error - could not download file: '{original_filename}' from Google Drive: ", e)
 
 
-def get_text_extract_from_pdf(filepath):
+def get_text_extract_from_pdf(pdf_filepath):
     print("\nGetting text extract from PDF\n")
 
     try:
@@ -3368,24 +3478,24 @@ def get_text_extract_from_pdf(filepath):
     if force_ocr:
         try:
             if ocr_service_choice == 'AzureVision':
-                txt_filepath = PDFtoAzureOCRTXT(filepath)
+                txt_filepath = PDFtoAzureOCRTXT(pdf_filepath)
             elif ocr_service_choice == 'AzureDocAi':
-                txt_filepath = PDFtoAzureDocAiTXT(filepath)
+                txt_filepath = PDFtoAzureDocAiTXT(pdf_filepath)
             elif ocr_service_choice == 'LocalVisionLLM':
-                txt_filepath = PDFtoVisionLLMOCRTXT(filepath)
+                txt_filepath = PDFtoVisionLLMOCRTXT(pdf_filepath)
             elif ocr_service_choice == 'Kosmos':
-                txt_filepath = PDFtoKosmosOCRTXT(filepath)
+                txt_filepath = PDFtoKosmosOCRTXT(pdf_filepath)
             else:
                 raise Exception(f"Invalid OCR service choice: {ocr_service_choice}")
         except Exception as e:
             handle_error_no_return("Failed to OCR text from PDF. Will now attempt to extract text via PyPDF2. Encountered error: ", e)
             try:
-                txt_filepath = PDFtoTXT(filepath)
+                txt_filepath = PDFtoTXT(pdf_filepath)
             except Exception as e:
                 return handle_local_error("Failed to extract text from the PDF document, even via fallback PyPDF2, encountered error: ", e)
     else:
         try:
-            txt_filepath = PDFtoTXT(filepath)
+            txt_filepath = PDFtoTXT(pdf_filepath)
         except Exception as e:
             return handle_local_error("Failed to extract text from the PDF document via PyPDF2, encountered error: ", e)
     
@@ -4735,7 +4845,7 @@ def delete_knowledge_domain_graph(knowledge_domain):
     print(f"Deleting knowledge domain graph for: {knowledge_domain}")
 
     try:
-        if not graph_db_docker_container_is_running('falkor-db'):
+        if not check_if_container_is_running('falkor-db'):
             bring_graph_db_online()
             time.sleep(5)   # While the bring_graph_db_online() method waits for the container to start, loading the datasets takes a bit longer so we wait 5 seconds before proceeding.
     except Exception as e:
@@ -5239,89 +5349,6 @@ def update_llm_response_in_history_db(chat_id: int, stream_session_id: str, user
     return formatted_datetime, chat_id
 
 
-def extract_significant_phrases(query):
-    print("Extracting significant phrases")
-
-    if not query:
-        print("No query to extract significant phrases from")
-        return []
-
-    try:
-        nltk.download('stopwords')
-        stop_words = set(stopwords.words('english'))
-        custom_stop_words = {"you", "me", "anything", "tell", "can", "could", "would", "should", "write", "writes", "wrote", "written", "read", "reads", "hi", "hello", "hey"}
-        stop_words.update(custom_stop_words)
-    except Exception as e:
-        handle_error_no_return("Failed to download & set stopwords, encountered error: ", e)
-    
-    try:
-        tokens = [token for token in query.lower().split() if token.isalnum() and token not in stop_words]  # isalnum() to remove punctuation and non-alphanumeric characters
-    except Exception as e:
-        handle_local_error("Could not extract significant tokens, encountered error: ", e)
-
-    print(f"\nReturning tokens: {tokens}\n")
-    return tokens
-
-
-def calculate_relevance_score(phrases, document_content):
-    #print("calculating relevance score")
-    
-    try:
-        content_lower = document_content.lower()
-    except Exception as e:
-        handle_local_error("Could not read document_content in calculate_relevance_score(), encountered error: ", e)
-    
-    #print(f"document content: {content_lower}")
-    
-    #score = sum(1 for phrase in phrases if phrase in content_lower)
-    
-    score = 0
-    try:
-        for phrase in phrases:
-            if phrase in content_lower:
-                print(f"Match found to enable RAG: {phrase}")
-                score += 1
-    except Exception as e:
-        handle_local_error("Could not compare phrases in calculate_relevance_score(), encountered error: ", e)
-    
-    return score
-
-
-def filter_relevant_documents(query, search_results, threshold=1):
-
-    print("Checking relevant docs to determin if RAG is required")
-
-    do_rag = False
-    page_contents = []
-
-    try:
-        significant_phrases = extract_significant_phrases(query)
-    except Exception as e:
-        handle_local_error("Could not extract significant phrases, encountered error: ", e)
-    
-    print(f"significant tokens: {significant_phrases}")
-    #relevant_documents = []
-
-    try:
-        for document in search_results:
-            # check for non-empty source field
-            if document.page_content:
-                page_contents.append(document.page_content)
-
-            if not do_rag:  # if do_rag has already been set to true, why look?
-                if document.metadata.get('source'):
-                    score = calculate_relevance_score(significant_phrases, document.page_content)
-                    if score >= threshold:
-                        #relevant_documents.append(document)
-                        print("Must do RAG!")
-                        do_rag = True
-    except Exception as e:
-        handle_local_error("Could not read calculate relevance score, encountered error: ", e)
-
-    #return relevant_documents
-    return page_contents, do_rag
-
-
 def rerank_results_ml(query, documents, top_n=5):
     print("\n\nReranking Invoked\n\n")
 
@@ -5390,33 +5417,6 @@ def rerank_results_ml(query, documents, top_n=5):
     except Exception as e:
         handle_local_error("Could not reorder documents, encountered error: ", e)
         return [doc.page_content for doc in documents]
-    
-
-def determine_do_rag(query, docs, force_enable_rag, force_disable_rag):
-
-    print("\n\nDetermining do_rag \n\n")
-
-    do_rag = False
-    
-    # We do not modify the force_enable_rag or force_disable_rag flags in this method, we simply respond to them here. UI updates should handle those flags.
-    if force_enable_rag:
-        print("\n\nFORCE_ENABLE_RAG True, force enabling RAG and returning\n\n")
-        try:
-            do_rag = True
-        except Exception as e:
-            do_rag = False
-            handle_error_no_return("Error force-enabling RAG, disabling RAG and continuing: could not filter_relevant_documents during setup_for_streaming_response, encountered error: ", e)
-    elif force_disable_rag:
-        print("\n\nFORCE_DISABLE_RAG True, force disabling RAG and returning\n\n")
-        do_rag = False
-    else:
-        try:
-            _, do_rag = filter_relevant_documents(query, docs)
-        except Exception as e:
-            do_rag = True
-            handle_error_no_return("Error determining if RAG is required, default enabling RAG and continuing: could not filter_relevant_documents during setup_for_streaming_response, encountered error: ", e)
-
-    return do_rag
 
 
 def get_formatted_prompt_from_history_db(chat_id, sequence_id):
