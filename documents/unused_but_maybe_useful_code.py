@@ -4855,3 +4855,129 @@ def process_new_file():
         return handle_api_error("Failed to upload new document, encountered error: ", e)
 
     return jsonify(success=True)
+
+
+# ===================================
+# OLD DO_RAG LOGIC-------------------
+# ===================================
+
+def extract_significant_phrases(query):
+    print("Extracting significant phrases")
+
+    if not query:
+        print("No query to extract significant phrases from")
+        return []
+
+    try:
+        nltk.download('stopwords')
+        stop_words = set(stopwords.words('english'))
+        custom_stop_words = {"you", "me", "anything", "tell", "can", "could", "would", "should", "write", "writes", "wrote", "written", "read", "reads", "hi", "hello", "hey"}
+        stop_words.update(custom_stop_words)
+    except Exception as e:
+        handle_error_no_return("Failed to download & set stopwords, encountered error: ", e)
+    
+    try:
+        tokens = [token for token in query.lower().split() if token.isalnum() and token not in stop_words]  # isalnum() to remove punctuation and non-alphanumeric characters
+    except Exception as e:
+        handle_local_error("Could not extract significant tokens, encountered error: ", e)
+
+    print(f"\nReturning tokens: {tokens}\n")
+    return tokens
+
+
+def calculate_relevance_score(phrases, document_content):
+    #print("calculating relevance score")
+    
+    try:
+        content_lower = document_content.lower()
+    except Exception as e:
+        handle_local_error("Could not read document_content in calculate relevance score, encountered error: ", e)
+    
+    #print(f"document content: {content_lower}")
+    
+    #score = sum(1 for phrase in phrases if phrase in content_lower)
+    
+    score = 0
+    try:
+        for phrase in phrases:
+            if phrase in content_lower:
+                print(f"Match found to enable RAG: {phrase}")
+                score += 1
+    except Exception as e:
+        handle_local_error("Could not compare phrases in calculate relevance score, encountered error: ", e)
+    
+    return score
+
+
+def filter_relevant_documents(query, search_results, threshold=1):
+
+    print("Checking relevant docs to determin if RAG is required")
+
+    do_rag = False
+    page_contents = []
+
+    try:
+        significant_phrases = extract_significant_phrases(query)
+    except Exception as e:
+        handle_local_error("Could not extract significant phrases, encountered error: ", e)
+    
+    print(f"significant tokens: {significant_phrases}")
+    #relevant_documents = []
+
+    try:
+        for document in search_results:
+            # check for non-empty source field
+            if document.page_content:
+                page_contents.append(document.page_content)
+
+            if not do_rag:  # if do_rag has already been set to true, why look?
+                if document.metadata.get('source'):
+                    score = calculate_relevance_score(significant_phrases, document.page_content)
+                    if score >= threshold:
+                        #relevant_documents.append(document)
+                        print("Must do RAG!")
+                        do_rag = True
+    except Exception as e:
+        handle_local_error("Could not read calculate relevance score, encountered error: ", e)
+
+    #return relevant_documents
+    return page_contents, do_rag
+
+
+def determine_do_rag(query, docs, force_enable_rag, force_disable_rag):
+
+    print("\n\nDetermining do_rag \n\n")
+
+    do_rag = False
+    
+    # We do not modify the force_enable_rag or force_disable_rag flags in this method, we simply respond to them here. UI updates should handle those flags.
+    if force_enable_rag:
+        print("\n\nFORCE_ENABLE_RAG True, force enabling RAG and returning\n\n")
+        try:
+            do_rag = True
+        except Exception as e:
+            do_rag = False
+            handle_error_no_return("Error force-enabling RAG, disabling RAG and continuing: could not filter relevant documents during determine do rag, encountered error: ", e)
+    elif force_disable_rag:
+        print("\n\nFORCE_DISABLE_RAG True, force disabling RAG and returning\n\n")
+        do_rag = False
+    else:
+        try:
+            _, do_rag = filter_relevant_documents(query, docs)
+        except Exception as e:
+            do_rag = True
+            handle_error_no_return("Error determining if RAG is required, defaulting to enabling RAG and continuing: could not filter relevant documents during determine do rag, encountered error: ", e)
+
+    return do_rag
+
+
+'''
+do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
+
+Was called in search_knowledge_base() after `rerank_results_ml` and before `perform_graph_rag = read_config(['perform_graph_rag'])['perform_graph_rag']`
+'''
+
+# ===================================
+# END OF OLD DO_RAG LOGIC-------------
+# ===================================
+
