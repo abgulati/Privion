@@ -171,6 +171,8 @@ def handle_error_no_return(message, exception=None):
 
 
 
+############################------------configuration manager-------------###############################
+
 if not os.path.exists('config.json'):
     try:
         with open('config.json', 'w') as file:
@@ -489,6 +491,7 @@ def config_writer_api():
     
     return jsonify({"success": write_return['success'], "restart_required": write_return['restart_required']})
 
+############################----------------------------------------------###############################
 
 
 #########################------------Setup Directories-------------###############################
@@ -623,6 +626,11 @@ def clean_text_string(text_to_be_cleaned):
 
     return clean_text
 
+############################----------------------------------------------###############################
+
+
+
+############################------------File & Folder Management-------------###############################
 
 def load_json_file(file_path):
     if os.path.exists(file_path):
@@ -635,7 +643,26 @@ def load_json_file(file_path):
         return None   # NOTE: isinstance({}, dict) will return True so better to return None!
 
 
-def save_json_file(data, file_path):
+def update_and_save_json_file(data, file_path):
+    current_cache = {}
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r') as file:
+                current_cache = json.load(file)
+        except Exception as e:
+            return handle_local_error("Could not save JSON file, encountered error: ", e)
+    
+    try:
+        current_cache.update(data)
+        with open(file_path, 'w') as file:
+            json.dump(current_cache, file, indent=4)
+    except Exception as e:
+        return handle_local_error("Could not save JSON file, encountered error: ", e)
+
+    return True
+
+
+def overwrite_json_file(data, file_path):
     try:
         with open(file_path, 'w') as file:
             json.dump(data, file, indent=4)
@@ -660,6 +687,23 @@ def safe_remove_file_from_filepath(filepath):
     except Exception as e:
         handle_error_no_return(f"Could not remove file from filepath: {filepath}, encountered error: ", e)
 
+
+def remove_folder_from_filepath(folderpath):
+    print(f"\n\nRemoving folder from filepath: {folderpath}\n\n")
+    try:
+        shutil.rmtree(folderpath)
+        print(f"Successfully deleted folder: {folderpath}")
+    except Exception as e:
+        return handle_local_error(f"Could not remove folder from filepath: {folderpath}, encountered error: ", e)
+    
+
+def safe_remove_folder_from_filepath(folderpath):
+    try:
+        remove_folder_from_filepath(folderpath)
+    except Exception as e:
+        handle_error_no_return(f"Could not remove folder from filepath: {folderpath}, encountered error: ", e)
+
+############################----------------------------------------------###############################
 
 def get_path_to_knowledge_domain():
     print("Getting path to knowledge domain")
@@ -2071,7 +2115,7 @@ def get_request_params_for_local_llm_server(formatted_prompt=""):
 
 
 def summary_generator(chunk_entities=None):
-    print("\nGenerating summary...\n")
+    print("\nGenerating summaries...\n")
 
     if chunk_entities is None:
         return handle_local_error("Chunk entities are required to generate summaries")
@@ -2273,8 +2317,6 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
         2. Stores the nodes and relationships in the graph DB.
     '''
 
-    print(f"\nStoring entities and relationships in {selected_knowledge_domain} graph DB\n")
-
     try:
         # First, Get/Generate summaries for each node and relationship if applicable:
         if not skip_summary_generation:
@@ -2282,7 +2324,7 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
             try:
                 chunks = summary_generator(chunk_entities=chunk_entities)
                 try:
-                    save_json_file(chunks, summaries_filepath)
+                    overwrite_json_file(chunks, summaries_filepath)
                 except Exception as e:
                     handle_error_no_return(f"Error saving summaries to file, they will have to be re-generated in the future if this document is re-processed. Encountered error: ", e)
             except Exception as e:
@@ -2294,6 +2336,7 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
             chunks = chunk_entities
 
         # Store the nodes and relationships in the graph DB
+        print(f"\nStoring entities and relationships in {selected_knowledge_domain} graph DB\n")
         for chunk_number, chunk_data in chunks.items():
             try:
                 add_nodes_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['nodes'], graph, chunk_data['source_doc_name'], chunk_data['page_number'])
@@ -2676,7 +2719,7 @@ def graph_generator(chunks, input_file):
         try:
             complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities)
             try:
-                save_json_file(complete_chunk_entities, entities_and_relationships_filepath)
+                overwrite_json_file(complete_chunk_entities, entities_and_relationships_filepath)
             except Exception as e:
                 handle_error_no_return("Could not save entities and relationships to file, encountered error: ", e)
         except Exception as e:
@@ -5460,7 +5503,7 @@ def read_config_for_hf_waitress_prompt_formatting() -> tuple[bool, str, bool, bo
         handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
 
 
-def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_sequence_id:int, base_template:str, skip_system_prompt:bool) -> str:
+def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_sequence_id:int, system_prompt:str, skip_system_prompt:bool) -> str:
 
     print("\n\nFormatting prompt for hf-waitress\n\n")
 
@@ -5470,7 +5513,7 @@ def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_
         handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
 
     if exl2:
-        return(prompt_formatting_module.manually_format_prompt_with_prompt_template(formatted_prompt, user_query, current_sequence_id, base_template, exl2_prompt_template_format, skip_system_prompt))
+        return(prompt_formatting_module.manually_format_prompt_with_prompt_template(formatted_prompt, user_query, current_sequence_id, system_prompt, exl2_prompt_template_format, skip_system_prompt))
 
     try:
     
@@ -5520,7 +5563,7 @@ def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_
                         first_prompt_json = f'''
                         {{
                                 "messages": [
-                                    {{"role": "system", "content": {json.dumps(base_template)}}},
+                                    {{"role": "system", "content": {json.dumps(system_prompt)}}},
                                     {{"role": "user", "content": {json.dumps(user_query)}}}
                                 ]
                             }}
@@ -5636,7 +5679,7 @@ def prepare_special_model_response(formatted_prompt:str, user_query:str, current
             formatted_prompt="" if is_diffusers else formatted_prompt, 
             user_query=user_query, 
             current_sequence_id=0 if is_diffusers else current_sequence_id, 
-            base_template="",  
+            system_prompt="",  
             skip_system_prompt=True
         )
         return {
@@ -5950,7 +5993,7 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
 
 
 def get_summary_and_source_documents_for_node(graph, name, node_type):
-    print(f"\nChecking if summary for node {name} of type {node_type} exists in graph\n")
+    # print(f"\nChecking if summary for node {name} of type {node_type} exists in graph\n")
 
     try:
         node_name = sanitize_names(name)
@@ -5981,7 +6024,7 @@ def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str 
     processed_nodes = {}    # Will de-duplicate nodes!
 
     for count, node in enumerate(nodes):
-        print(f"Checking for existing summary for node {count+1} of {len(nodes)} {print_string}...")
+        # print(f"Checking for existing summary for node {count+1} of {len(nodes)} {print_string}...")
         try:
             name = str(node['name'])
             node_type = str(node['type'])
@@ -5989,7 +6032,7 @@ def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str 
             node_key = (name, node_type)
 
             if node_key in processed_nodes:
-                print(f"Skipping duplicate node {name} of type {node_type} when checking for existing summaries in graph DB")
+                # print(f"Skipping duplicate node {name} of type {node_type} when checking for existing summaries in graph DB")
                 continue
 
             try:
@@ -6023,7 +6066,7 @@ def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str 
 
 
 def get_summary_and_source_documents_for_relationship(graph, source, target, relationship_type):
-    print(f"\nChecking if summary for relationship {source} -> {target} ({relationship_type}) exists in graph\n")
+    # print(f"\nChecking if summary for relationship {source} -> {target} ({relationship_type}) exists in graph\n")
 
     source_label = sanitize_names(source)
     target_label = sanitize_names(target)
@@ -6055,7 +6098,7 @@ def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, pr
     processed_relationships = {}    # Will de-duplicate relationships!
 
     for count, relationship in enumerate(relationships):
-        print(f"Checking for existing summary for relationship {count+1} of {len(relationships)} {print_string}...")
+        # print(f"Checking for existing summary for relationship {count+1} of {len(relationships)} {print_string}...")
         try:
             source = str(relationship['source'])
             target = str(relationship['target'])
@@ -6064,7 +6107,7 @@ def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, pr
             relationship_key = (source, target, relationship_type)
 
             if relationship_key in processed_relationships:
-                print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) when checking for existing summaries in graph DB")
+                # print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) when checking for existing summaries in graph DB")
                 continue
 
             try:
@@ -6358,7 +6401,7 @@ def hf_waitress_streaming_request_response_handler(endpoint_url, headers, payloa
         return full_response
         
     except Exception as e:
-        return handle_local_error("Failed request to /exl2_stream or /exl2_grapher APIs, encountered error: ", e)
+        return handle_local_error(f"Failed request to HF-Waitress {endpoint_url} API, encountered error: ", e)
 
 
 def get_request_params_for_generic_hf_waitress_request():
@@ -6392,7 +6435,7 @@ def make_request_to_hf_waitress(user_query:str):
         return handle_local_error("Could not get request params for generic HF-Waitress request, encountered error: ", e)
 
     try:
-        payload = format_prompt_for_hf_waitress(formatted_prompt="", user_query=user_query, current_sequence_id=0, base_template="", skip_system_prompt=True)
+        payload = format_prompt_for_hf_waitress(formatted_prompt="", user_query=user_query, current_sequence_id=0, system_prompt="", skip_system_prompt=True)
         json_payload = json.dumps(payload)
     except Exception as e:
         return handle_local_error("Could not format prompt for generic HF-Waitress request, encountered error: ", e)
@@ -6400,7 +6443,7 @@ def make_request_to_hf_waitress(user_query:str):
     try:
         return hf_waitress_streaming_request_response_handler(waitress_url, headers, json_payload)
     except Exception as e:
-        return handle_local_error("Failed /exl2_stream request to extract entities and relationships from chunk, encountered error: ", e)
+        return handle_local_error("Error making request to HF-Waitress, encountered error: ", e)
 
 
 def parse_service_response(response:str):

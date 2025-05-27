@@ -39,6 +39,7 @@ import platform
 import datetime
 import logging
 import base64
+import shutil   # Shell Utilities is part of Python's standard library and is used for file operations
 import queue
 import time
 import json
@@ -58,6 +59,26 @@ from waitress import serve
 app = Flask(__name__)
 CORS(app)
 
+
+@app.route('/serve_generated_image/<path:filename>')
+def serve_generated_image(filename):
+    print(f"\n\nserving generated image: {filename}\n\n")
+    generated_images_folder = "generated_images"
+    try:
+        generated_images_folder = read_config(['generated_images_folder'])['generated_images_folder']
+    except Exception as e:
+        handle_error_no_return("Could not read generated_images_folder from hf_config.json, using default: generated_images in the current working directory. Encountered error: ", e)
+
+    return send_from_directory(generated_images_folder, filename)
+
+@app.route('/serve_uploaded_file/<path:filename>')
+def serve_uploaded_file(filename):
+    print(f"\n\nserving uploaded file: {filename}\n\n")
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+
+#########################------------------GLOBALS!----------------------###############################
 PIPE = None
 MODEL = None
 EXL2_TOKENIZER = None
@@ -68,6 +89,13 @@ llm_semaphore = threading.Semaphore(1)
 config_writer_semaphore = threading.Semaphore(1)
 error_logging_semaphore = threading.Semaphore(1)
 reader_semaphore = threading.Semaphore(3)
+
+# os.environ['HUGGINGFACE_HUB_CACHE'] = transformer_models_folder
+# os.environ['TRANSFORMERS_CACHE'] = transformer_models_folder
+# os.environ['HF_HOME'] = transformer_models_folder
+
+#########################------------------------------------------------###############################
+
 
 
 #########################------------Setup & Handle Logging-------------###############################
@@ -91,7 +119,6 @@ try:
     # Logger ready! Usage: logger.error(f"This is an error message with error {e}")
 except Exception as e:
     print(f"\n\nCould not establish logger, encountered error: {e}")
-
 
 
 def central_error_logging(message, exception=None):
@@ -140,8 +167,6 @@ def handle_model_loading_error(message, exception=None, target="local"):
         return handle_local_error(message, exception)
     elif target == "api":
         return handle_api_error(message, exception)
-
-
 
 ############################----------------------------------------------###############################
 
@@ -391,8 +416,8 @@ def hf_config_writer_api():
     
     return jsonify({"success": write_return['success'], "restart_required": write_return['restart_required'], "hard_reboot_required": write_return['hard_reboot_required']})
 
-
 ############################----------------------------------------------###############################
+
 
 
 #########################------------Setup Directories-------------###############################
@@ -474,9 +499,11 @@ except Exception as e:
 
 app.config['UPLOAD_FOLDER'] = upload_folder
 
-# os.environ['HUGGINGFACE_HUB_CACHE'] = transformer_models_folder
-# os.environ['TRANSFORMERS_CACHE'] = transformer_models_folder
-# os.environ['HF_HOME'] = transformer_models_folder
+############################----------------------------------------------###############################
+
+
+
+############################------------File & Folder Management-------------###############################
 
 def load_json_file(file_path):
     if os.path.exists(file_path):
@@ -489,7 +516,7 @@ def load_json_file(file_path):
         return None   # NOTE: isinstance({}, dict) will return True so better to return None!
 
 
-def save_json_file(data, file_path):
+def update_and_save_json_file(data, file_path):
     current_cache = {}
     if os.path.exists(file_path):
         try:
@@ -507,25 +534,50 @@ def save_json_file(data, file_path):
 
     return True
 
+
+def overwrite_json_file(data, file_path):
+    try:
+        with open(file_path, 'w') as file:
+            json.dump(data, file, indent=4)
+    except Exception as e:
+        return handle_local_error("Could not save JSON file, encountered error: ", e)
+
+    return True
+
+
+def remove_file_from_filepath(filepath):
+    print(f"\n\nRemoving file from filepath: {filepath}\n\n")
+    try:
+        os.remove(filepath)
+        print(f"Successfully deleted file: {filepath}")
+    except Exception as e:
+        return handle_local_error(f"Could not remove file from filepath: {filepath}, encountered error: ", e)
+
+
+def safe_remove_file_from_filepath(filepath):
+    try:
+        remove_file_from_filepath(filepath)
+    except Exception as e:
+        handle_error_no_return(f"Could not remove file from filepath: {filepath}, encountered error: ", e)
+
+
+def remove_folder_from_filepath(folderpath):
+    print(f"\n\nRemoving folder from filepath: {folderpath}\n\n")
+    try:
+        shutil.rmtree(folderpath)
+        print(f"Successfully deleted folder: {folderpath}")
+    except Exception as e:
+        return handle_local_error(f"Could not remove folder from filepath: {folderpath}, encountered error: ", e)
+    
+
+def safe_remove_folder_from_filepath(folderpath):
+    try:
+        remove_folder_from_filepath(folderpath)
+    except Exception as e:
+        handle_error_no_return(f"Could not remove folder from filepath: {folderpath}, encountered error: ", e)
+
 ############################----------------------------------------------###############################
 
-
-@app.route('/serve_generated_image/<path:filename>')
-def serve_generated_image(filename):
-    print(f"\n\nserving generated image: {filename}\n\n")
-    generated_images_folder = "generated_images"
-    try:
-        generated_images_folder = read_config(['generated_images_folder'])['generated_images_folder']
-    except Exception as e:
-        handle_error_no_return("Could not read generated_images_folder from hf_config.json, using default: generated_images in the current working directory. Encountered error: ", e)
-
-    return send_from_directory(generated_images_folder, filename)
-
-
-@app.route('/serve_uploaded_file/<path:filename>')
-def serve_uploaded_file(filename):
-    print(f"\n\nserving uploaded file: {filename}\n\n")
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
 ############################---------------Shutdown Methods----------------###############################
@@ -1019,7 +1071,7 @@ def get_model_params():
         pipeline_task = str(read_return['pipeline_task'])
         vision = str(read_return['vision']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when trying to get_model_params(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when trying to get model_params, encountered error: ", e)
 
     if gguf:
         print(gguf)
@@ -1144,7 +1196,7 @@ def get_model_params():
                     quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size)
                     model_params["quantization_config"] = quantization_config
         except Exception as e:
-            handle_local_error("Could not create quantization_config when attempting to get_model_params(), encountered error: ", e)
+            handle_local_error("Could not create quantization_config when attempting to get model_params, encountered error: ", e)
 
     return model_params
 
@@ -1325,7 +1377,9 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
         print(f"\nRunning ExLlamaV2 bpw quantizer for {model_id}...\n")
         subprocess.run(command, check=True) # check=True ensures that the command will raise an exception if it fails
         print(f"\nExLlamaV2 Conversion of {model_id} to {exl2_bpw}bpw completed successfully!\n")
+        safe_remove_folder_from_filepath(temp_dir)  # to free space and prevent Permission Errors!
     except Exception as e:
+        safe_remove_folder_from_filepath(temp_dir)  # to prevent Permission Errors!
         return handle_local_error("Could not run ExLlamaV2 bpw quantizer, encountered error: ", e)
 
     return quantized_model_path
@@ -2121,6 +2175,8 @@ def completions_stream():
 
     try:
         data = request.json
+        if isinstance(data, str):   # should be a list
+            data = json.loads(data)
         messages = data.get('messages', [])
     except Exception as e:
         llm_semaphore.release()
@@ -2151,7 +2207,8 @@ def completions_stream():
             "min_p": float(request.headers.get('X-Min-P', str(min_p)))
         }
     except Exception as e:
-        handle_error_no_return("Could not set generation-arguments for /completions_stream, proceeding without them. Encountered error: ", e)
+        llm_semaphore.release()
+        return handle_api_error("Could not set generation-arguments for /completions_stream, proceeding without them. Encountered error: ", e)
 
     try:
         print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
@@ -2160,19 +2217,18 @@ def completions_stream():
         # type(inputs): <class 'transformers.tokenization_utils_base.BatchEncoding'>
         # type(inputs['input_ids']): <class 'torch.Tensor'>
     except Exception as e:
-        handle_error_no_return("Could not apply chat template, encountered error: ", e)
-        return False
+        llm_semaphore.release()
+        return handle_api_error("Could not apply chat template, encountered error: ", e)
 
     try:
         # Slice the tensor and decode only the input!
         decoded_inputs = PIPE.tokenizer.decode(inputs['input_ids'][0].tolist(), skip_special_tokens=False)    # Setting skip_special_tokens=False to keep: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
         print(f"\n\ndecoded_inputs: {decoded_inputs}\n\n")
     except Exception as e:
-        handle_error_no_return("Could not decode inputs, encountered error: ", e)
-
+        llm_semaphore.release()
+        return handle_api_error("Could not decode inputs, encountered error: ", e)
 
     stop_event = threading.Event()
-
     data_queue = queue.Queue()
 
     def callback(data):
@@ -2586,7 +2642,7 @@ def exl2_grapher():
 
                     if not rag_response_mode:
                         try:
-                            save_json_file({chunk_number: chunk_entities[chunk_number]}, extraction_cache_file_path)
+                            update_and_save_json_file({chunk_number: chunk_entities[chunk_number]}, extraction_cache_file_path)
                             cache_data_map[source_doc_name]['data'][chunk_number] = chunk_entities[chunk_number]    # update in-memory cache as well to help with de-duplication
                             print(f"\nSaved nodes and relationships extraction to cache file {extraction_cache_file_path} for chunk {chunk_number}\n")
                         except Exception as e:
@@ -2653,7 +2709,7 @@ def exl2_grapher():
                     output_queue.put(chunk_entities[chunk_number])
 
                     try:
-                        save_json_file({chunk_number: chunk_entities[chunk_number]}, summary_cache_file_path)
+                        update_and_save_json_file({chunk_number: chunk_entities[chunk_number]}, summary_cache_file_path)
                         cache_data_map[source_doc_name]['data'][chunk_number] = chunk_entities[chunk_number]    # update in-memory cache as well to help with de-duplication
                         print(f"\nSaved summary to cache file {summary_cache_file_path} for chunk {chunk_number}\n")
                     except Exception as e:
