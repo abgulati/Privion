@@ -101,8 +101,8 @@ reader_semaphore = threading.Semaphore(3)
 #########################------------Setup & Handle Logging-------------###############################
 try:
     # 1 - Create a logger
-    logger = logging.getLogger('my_logger')
-    logger.setLevel(logging.ERROR)
+    LOGGER = logging.getLogger('my_logger')
+    LOGGER.setLevel(logging.ERROR)
 
     # 2 - Create a RotatingFileHandler
     # maxBytes: max file size of log file after which a new file is created; set to 1024 * 1024 * 5 for 5MB: 1024x1024 is 1MB, then a multiplyer for the number of MB
@@ -115,7 +115,7 @@ try:
     handler.setFormatter(formatter)
 
     # 4 - Add the handler to the logger
-    logger.addHandler(handler)
+    LOGGER.addHandler(handler)
     # Logger ready! Usage: logger.error(f"This is an error message with error {e}")
 except Exception as e:
     print(f"\n\nCould not establish logger, encountered error: {e}")
@@ -127,8 +127,8 @@ def central_error_logging(message, exception=None):
         traceback_details = traceback.format_exc()
         full_message = f"\n\n{error_message}\n\nTraceback: {traceback_details}\n\n"
 
-        if logger:
-            logger.error(full_message)
+        if LOGGER:
+            LOGGER.error(full_message)
             print(error_message)
         else:
             print(error_message)
@@ -417,6 +417,171 @@ def hf_config_writer_api():
     return jsonify({"success": write_return['success'], "restart_required": write_return['restart_required'], "hard_reboot_required": write_return['hard_reboot_required']})
 
 ############################----------------------------------------------###############################
+
+
+
+############################------------Security Config Manager-------------###############################
+SECURITY_CONFIG_FILE = 'security_config.json'
+
+def read_security_config():
+    try:    # Create with defaults if absent
+        if not os.path.exists(SECURITY_CONFIG_FILE):
+            default_security_config = {
+                'shutdown_allowed_ips': ['127.0.0.1', '::1'],   # IPv4 and IPv6 localhost
+                '_comment': 'Edit this file manually to add IPs. No APIs exist to modify this config for security.'
+            }
+
+            with open(SECURITY_CONFIG_FILE, 'w') as file:
+                json.dump(default_security_config, file, indent=4)
+
+            print(f"\n🔐 Security config created: {SECURITY_CONFIG_FILE}")
+            print(f"   📝 Edit manually to add IPs - no API access for security\n")
+
+            return default_security_config
+    except Exception as e:
+        handle_error_no_return("Could not create security_config.json, returning localhost IPs. Encountered error: ", e)
+        return {'shutdown_allowed_ips': ['127.0.0.1', '::1']}
+
+    try:    # Read and return, updating if necessary
+        config = {}
+        with open(SECURITY_CONFIG_FILE, 'r') as file:
+            config = json.load(file)
+
+        if 'shutdown_allowed_ips' not in config:
+            config['shutdown_allowed_ips'] = ['127.0.0.1', '::1']
+            # Only writing if modified
+            with open(SECURITY_CONFIG_FILE, 'w') as file:
+                json.dump(config, file, indent=4)
+            print(f"🔐 'shutdown_allowed_ips' added to {SECURITY_CONFIG_FILE}")
+
+        return config
+
+    except Exception as e:
+        handle_error_no_return("Could not read security_config.json, returning localhost IPs. Encountered error: ", e)
+        return {'shutdown_allowed_ips': ['127.0.0.1', '::1']}
+
+
+def get_client_ip(request):
+    '''
+    Get the requesting client's IP address from the request headers.
+
+    1. X-Forwarded-For:
+        - For reverse proxies, they'll add a forwarded-for header. Without this you'll get the proxies address instead of the actual requesting client!
+        - 'X-Forwarded-For' might be a comma-separated list of IPs (e.g., client_ip, proxy1_ip, proxy2_ip)
+        - Typically we'll want the leftmost IP address in the X-Forwarded-For list, as this is usually the original client. 
+        - However, this relies on trusting your immediate upstream proxy not to allow spoofing of this header or to correctly set/append to it!
+    2. X-Real-IP:
+        - Some proxies (like Nginx) might also set this header, typically with just the original client's IP.
+    3. REMOTE_ADDR:
+        - The WSGI server (like Gunicorn, uWSGI, or Flask's built-in dev server) populates the environ dictionary with various details about the incoming HTTP request. 
+        - This is a safe way to access the dict.
+    '''
+    try:
+        if 'X-Forwarded-For' in request.headers:
+            return request.headers['X-Forwarded-For'].split(',')[0].strip() 
+        elif 'X-Real-IP' in request.headers:
+            return request.headers['X-Real-IP'] 
+        else:
+            return request.environ.get('REMOTE_ADDR', 'unknown')
+    except Exception as e:
+        handle_error_no_return("Could not get client IP, checking for REMOTE_ADDR or returning 'unknown'. Encountered error: ", e)
+        return request.environ.get('REMOTE_ADDR', 'unknown')
+
+
+def is_shutdown_allowed(client_ip):
+    security_config = read_security_config()
+    allowed_ips = security_config.get('shutdown_allowed_ips', ['127.0.0.1', '::1'])
+    return client_ip in allowed_ips
+
+
+'''
+The /shutdown_hf_waitress API below is deliberately a POST request even though no data is being sent. 
+This is for security purposes and as per standard best practices:
+
+1. Semantic Correctness - Shutdown is a state-changing operation (not idempotent), which makes POST more appropriate than GET according to HTTP semantics
+
+2. Security Best Practice - GET requests:
+    - Are logged in web server access logs (with full URL)
+    - Can be cached by browsers/proxies
+    - Might be prefetched by browsers
+    - Could be triggered accidentally by bots/crawlers
+
+3. CSRF Protection - POST requests are harder to trigger accidentally via cross-site requests
+
+4. Industry Standard - Most shutdown/restart APIs use POST (Docker, Kubernetes, etc.)
+
+5. You Could Use GET, but this could be dangerous because:
+    - A simple curl http://localhost:9069/shutdown_hf_waitress would shut down the server
+    - Browser prefetching could accidentally trigger it
+    - Web crawlers might hit it
+
+6. The POST requirement adds a small layer of protection against accidental shutdowns, which is valuable for a destructive operation like server shutdown.
+'''
+@app.route('/shutdown_hf_waitress', methods=['POST'])
+def shutdown_hf_waitress():
+    try:
+    
+        try:
+            client_ip = get_client_ip(request)
+        except Exception as e:
+            return handle_api_error("Server-side error - could not get client IP for shutdown_hf_waitress request. Encountered error: ", e)
+
+        if not is_shutdown_allowed(client_ip):
+            return jsonify(success=False, error="Shutdown not allowed for this IP.")
+        
+        shutdown_message = f"\n\n🔓 SHUTDOWN AUTHORIZED from IP {client_ip}\n🕐 Shutdown time: {datetime.datetime.now()}\n\n"
+        print(shutdown_message)
+        if LOGGER:
+            try:
+                LOGGER.log(shutdown_message)
+            except Exception as e:
+                handle_error_no_return("Could not log shutdown message to logger, skipping. Encountered error: ", e)
+
+        with llm_semaphore:
+            with config_writer_semaphore:
+                with error_logging_semaphore:
+                    print("🔒 All semaphores acquired, proceeding with shutdown...")
+
+                    def cleanup():
+                        try:
+                            shutdown_model()
+                            shutdown_pipe()
+                            shutdown_exl2()
+
+                            print("✅ All models, pipes, and exl2 caches shut down, proceeding with final cleanup...")
+                            
+                            global PIPE, MODEL, EXL2_CACHE, EXL2_TOKENIZER
+                            PIPE, MODEL, EXL2_CACHE, EXL2_TOKENIZER = None, None, None, None
+                            safe_empty_cuda_cache()
+                            print("✅ Graceful shutdown completed")
+                        except Exception as e:
+                            handle_error_no_return("Could not shutdown model, pipe, or exl2, proceeding to force-kill. Encountered error: ", e)
+
+                    cleanup_thread = threading.Thread(target=cleanup)
+                    cleanup_thread.start()
+
+                    print("⏰ Starting cleanup with 5-second timeout...")
+                    cleanup_thread.join(timeout=5.0)    # Wait max 5 seconds
+
+                    if cleanup_thread.is_alive():
+                        print("⚠️  Cleanup timeout reached (5 seconds) - proceeding with force shutdown")
+                    else:
+                        print("✅ Cleanup completed successfully")
+
+                    response = jsonify(success=True, message="Server shutting down gracefully...")
+
+                    def delayed_shutdown():
+                        time.sleep(1)   # Giving a chance for the HTTP response to be sent to the client!
+                        print("🔚 Terminating server process...")
+                        os._exit(0) # os._exit() will terminate the Server process.
+
+                    threading.Thread(target=delayed_shutdown, daemon=True).start()  # Daemon ensures that the thread will terminate when the main process terminates, as a daemon is a child process of the main process.
+                    return response
+    
+    except Exception as e:
+        return handle_api_error("Shutdown error: ", e)
+
+############################----------------------------------------------################################
 
 
 
