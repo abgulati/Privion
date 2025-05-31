@@ -302,6 +302,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'exl2_cache_type':"ExLlamaV2Cache",
                     'exl2_max_seq_len':2048,
                     'exl2_force_regenerate_measurement':False,
+                    'exl2_no_flash_attn':False,
                     'gguf':False,
                     'awq':False,
                     'flux_diffusers':False,
@@ -943,6 +944,12 @@ def parse_arguments():
 
     # Even if a parser object could not be created, a read_request will write & return defaults 
     try:
+        '''
+        Reading values from the config will ensure defaults are set
+        However we are only read_return-ing those values which we wish to remember the previous settings for, and using them as the `default` parameter for the parser.add_argument() below.
+        For flags such as 'exl2', 'exl2_no_flash_attn', etc. we are not read_return-ing the values, as we do not wish to remember the previous settings for these flags and instead require the
+        user to explicitly set them at launch, defaulting to False/None in parser otherwise.
+        '''
         read_return = read_config([
             'access_gated',
             'access_token',
@@ -952,6 +959,7 @@ def parse_arguments():
             'exl2_cache_type',
             'exl2_max_seq_len',
             'exl2_force_regenerate_measurement',
+            'exl2_no_flash_attn',
             'gguf',
             'awq',
             'flux_diffusers',
@@ -1051,6 +1059,7 @@ def parse_arguments():
         parser.add_argument("--exl2_force_regenerate_measurement", action="store_true", default=False, help="Add this flag required to re-generate the measurement file for ExLlamaV2 models. Defaults to False.")
         parser.add_argument("--exl2_cache_type", type=str, default=exl2_cache_type, help="Specify the cache type to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to full ExLlamaV2Cache as the default.")
         parser.add_argument("--exl2_max_seq_len", type=int, default=exl2_max_seq_len, help="Specify the max sequence length (context size) to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to 2048 as the default.")
+        parser.add_argument("--exl2_no_flash_attn", action="store_true", default=False, help="Use this flag to disable Flash Attention 2 for ExLlamaV2 models. Defaults to False.")
         
         args = parser.parse_args()
         print(f"\n\nparser.parse_args():\n\n{args}\n\n")
@@ -1074,6 +1083,7 @@ def parse_arguments():
                     'exl2_cache_type',
                     'exl2_max_seq_len',
                     'exl2_force_regenerate_measurement',
+                    'exl2_no_flash_attn',
                     'gguf',
                     'awq',
                     'flux_diffusers',
@@ -1137,6 +1147,7 @@ def parse_arguments():
                     'exl2_force_regenerate_measurement':args.exl2_force_regenerate_measurement,
                     'exl2_cache_type':args.exl2_cache_type,
                     'exl2_max_seq_len':args.exl2_max_seq_len,
+                    'exl2_no_flash_attn':args.exl2_no_flash_attn,
                     'gguf':args.gguf,
                     'awq':args.awq,
                     'gguf_model_id':args.gguf_model_id,
@@ -1567,11 +1578,16 @@ def get_exl2_cache_type(exl2_cache_type: str):  #  -> ExLlamaV2Cache; commenting
         return handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
 
 
-def define_exllama_generator(quantized_model_path: os.PathLike):    # -> ExLlamaV2DynamicGenerator: commenting out as it will cause the server to error out if ExLlamaV2 is not installed!
+def define_exllama_generator(quantized_model_path: os.PathLike, exl2_no_flash_attn: bool):    # -> ExLlamaV2DynamicGenerator: commenting out as it will cause the server to error out if ExLlamaV2 is not installed!
     print(f"\n\nAttempting to define ExLlamaV2 generator for model {quantized_model_path}...\n\n")
 
     try:
-        config = ExLlamaV2Config(quantized_model_path)
+        if exl2_no_flash_attn:
+            config = ExLlamaV2Config()
+            config.model_dir = quantized_model_path
+            config.no_flash_attn = True # From ExLlamaV2 model_init.py, line 111
+        else:
+            config = ExLlamaV2Config(quantized_model_path)
         print("\nConfig defined successfully\n")
     except Exception as e:
         return handle_local_error("Could not define ExLlamaV2 config, encountered error: ", e)
@@ -1628,9 +1644,10 @@ def load_exllama_pipeline(pipeline):
     print("\n\nLoading ExLlamaV2 Pipeline\n\n")
     
     try:
-        read_return = read_config(['model_id', 'exl2_bpw'])
+        read_return = read_config(['model_id', 'exl2_bpw', 'exl2_no_flash_attn'])
         model_id = str(read_return['model_id'])
         exl2_bpw = float(read_return['exl2_bpw'])
+        exl2_no_flash_attn = str(read_return['exl2_no_flash_attn']).lower() == 'true'
     except Exception as e:
         return handle_local_error("Could not read values from hf_config.json when attempting to load_exllama_pipeline(), encountered error: ", e)
 
@@ -1659,7 +1676,7 @@ def load_exllama_pipeline(pipeline):
         return handle_local_error(f"Error ExLlamaV2 quantizing {model_id} to {exl2_bpw} bits per word. Encountered error: ", e)
 
     try:
-        pipeline = define_exllama_generator(quantized_model_path)
+        pipeline = define_exllama_generator(quantized_model_path, exl2_no_flash_attn)
     except Exception as e:
         return handle_local_error(f"Error loading ExLlamaV2 quantized model from {quantized_model_path}. Encountered error: ", e)
 
