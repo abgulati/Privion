@@ -124,7 +124,16 @@ except Exception as e:
 def central_error_logging(message, exception=None):
     with error_logging_semaphore:
         error_message = f"\n\n{message} {str(exception) if exception else '; No exception info.'}\n\n"
-        traceback_details = traceback.format_exc()
+        
+        # traceback.format_exc() is most reliable when called directly from within an except block. If passing an exception object, it's best to handle it more explicitly!
+        if exception:
+            # To get the traceback of the passed 'exception' object
+            traceback_details = "".join(traceback.format_exception(type(exception), exception, exception.__traceback__))
+        else:
+            # If no specific exception, format_exc() might give current stack if in an except block, or minimal info
+            traceback_details = traceback.format_exc() if sys.exc_info()[0] else "No active exception."
+        
+        
         full_message = f"\n\n{error_message}\n\nTraceback: {traceback_details}\n\n"
 
         if LOGGER:
@@ -303,6 +312,7 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'exl2_max_seq_len':2048,
                     'exl2_force_regenerate_measurement':False,
                     'exl2_no_flash_attn':False,
+                    'exl2_grapher_skip_cache_reuse':False,
                     'gguf':False,
                     'awq':False,
                     'flux_diffusers':False,
@@ -2614,27 +2624,65 @@ def get_request_payload_for_graph_entity_extraction(chunk_text: str):
     return full_payload
 
 
-def validate_entity_extraction_response(extraction_response: dict):
+def core_dict_validation_logic_for_entity_extraction(extracted_dict: dict):
+    try:
+        # Check for required keys
+        if 'nodes' not in extracted_dict or 'relationships' not in extracted_dict:
+            raise ValueError("Missing required keys in extraction response: 'nodes' and/or 'relationships'")
+        
+        # Check if keys are of the correct type
+        if not isinstance(extracted_dict['nodes'], list) or not isinstance(extracted_dict['relationships'], list):
+            raise ValueError(f"Expected 'nodes' and 'relationships' to be lists, got {type(extracted_dict['nodes']).__name__} and {type(extracted_dict['relationships']).__name__}")
+        
+        # Check if nodes and relationships are lists of dicts - Consider using a JSON schema validation library (like jsonschema) if the expected structure becomes more complex.
+        if not all(isinstance(node, dict) for node in extracted_dict['nodes']):
+            raise ValueError("Expected all elements in 'nodes' list to be dicts.")
+        if not all(isinstance(relationship, dict) for relationship in extracted_dict['relationships']):
+            raise ValueError("Expected all elements in 'relationships' list to be dicts.")
+        
+        return extracted_dict
+
+    except Exception as e:
+        handle_error_no_return(f"Could not validate entity extraction response, encountered error: ", e)
+        return None
+
+
+def validate_entity_extraction_response(extraction_response: str):
     '''
     This function attempts to validate the response from the entity extraction task.
-    It first attempts to evaluate the response as a dict, which is the expected format.
+    It first attempts to evaluate the response thoroughly for both type and structure.
     If this fails, it attempts to trim the response and then evaluate again.
-    If this also fails, it attempts to trim the response again with simpler conditions and then evaluate again.
     If this also fails, it returns the unchanged response and a flag indicating that the response is invalid.
+    This is a very robust validation logic, and is designed to handle a wide range of edge cases.
     '''
-    try:
-        extraction_response = ast.literal_eval(extraction_response) # Sometimes additional text may be present and need to be stripped, which we can test for by trying to evaluate the response as a dict
-        return {'validated_response': extraction_response, 'is_valid': True}
-    except Exception as e:
-        print(f"Response invalid, attempting to trim. Encountered error: ", e)
-        extraction_response = prompt_formatting_module.trim_response(extraction_response, '{"nodes":', '"}]}', include_start_substring=True, include_end_substring=True)
+    def try_validation(response_str):
         try:
-            extraction_response = ast.literal_eval(extraction_response)
-            print("Success! Proceeding...")
-            return {'validated_response': extraction_response, 'is_valid': True}
+            response_dict = ast.literal_eval(response_str)
+
+            # Check if it's a dict - ast.literal_eval can return other Python objects such as lists, strings, etc., so we need to check for that!
+            if not isinstance(response_dict, dict):
+                raise ValueError(f"Expected a dict, got {type(response_dict).__name__}")
+            
+            validated_response = core_dict_validation_logic_for_entity_extraction(response_dict)
+            if validated_response is not None:
+                return {'validated_response': validated_response, 'is_valid': True}
+            return None
         except Exception as e:
-            print(f"Response still invalid, returning unchanged response. Encountered error: ", e)
-            return {'validated_response': extraction_response, 'is_valid': False}
+            handle_error_no_return(f"Could not validate entity extraction response, encountered error: ", e)
+            return None
+    
+    # Try direct response
+    result = try_validation(extraction_response)
+    if result is not None:
+        return result
+    
+    # Try with trimming
+    trimmed_response = prompt_formatting_module.trim_response(extraction_response, '{"nodes":', '"}]}', include_start_substring=True, include_end_substring=True)
+    result = try_validation(trimmed_response)
+    if result is not None:
+        return result
+    
+    return {'validated_response': extraction_response, 'is_valid': False}
 
 
 def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: str, source_doc_name: str, page_number_list: list, exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
@@ -2754,8 +2802,8 @@ def exl2_grapher():
         summary_generation_mode = request.json.get('summary_generation_mode', False)
         rag_response_mode = request.json.get('rag_response_mode', False)
         exl2_prompt_template_format = request.json.get('exl2_prompt_template_format', None)
-        chunk_overlap = int(request.headers.get('X-Chunk-Overlap', 0))
         gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
+        exl2_grapher_skip_cache_reuse = read_config(['exl2_grapher_skip_cache_reuse'])['exl2_grapher_skip_cache_reuse'].lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
         llm_semaphore.release()
@@ -2774,7 +2822,7 @@ def exl2_grapher():
             for chunk_number, chunk_data in chunk_entities.items():
                 print(f"\nExtracting entities and relationships for chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
 
-                if not rag_response_mode:
+                if not rag_response_mode and not exl2_grapher_skip_cache_reuse:   # When responding to a query, we don't want to use the cache which is meant only for the file-processing step!
                     print(f"\nNon-response mode: Checking for existing cache of previously extracted nodes and relationships for chunk {chunk_number}...\n")
                     source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
                     extraction_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_extraction_cache.json")
@@ -2789,13 +2837,17 @@ def exl2_grapher():
                             handle_error_no_return(f"Could not load nodes and relationships from cache file {extraction_cache_file_path}, proceeding to extract afresh. Encountered error: ", e)
                     
                     cache_entry = cache_data_map.get(source_doc_name)
-                    if (cache_entry and cache_entry['data'] and chunk_number in cache_entry['data'] and
-                        cache_entry['data'][chunk_number]['entities_and_relationships'] is not None):
+                    cached_chunk_data = cache_entry.get('data', {}).get(chunk_number, {})
+                    if cached_chunk_data.get('entities_and_relationships') is not None:
 
-                        chunk_entities[chunk_number]['entities_and_relationships'] = cache_entry['data'][chunk_number]['entities_and_relationships']    # NOTE: Only the 'entities_and_relationships' key is updated in the chunk_entities dict received in the POST request!
-                        output_queue.put(chunk_entities[chunk_number])
-                        print(f"\nFound existing cache of previously extracted nodes and relationships for chunk {chunk_number}, returning cached data...\n")
-                        continue
+                        cached_entry_validation_result = core_dict_validation_logic_for_entity_extraction(cached_chunk_data['entities_and_relationships'])
+                        if cached_entry_validation_result is not None:
+                            chunk_entities[chunk_number]['entities_and_relationships'] = cached_chunk_data['entities_and_relationships']    # NOTE: Only the 'entities_and_relationships' key is updated in the chunk_entities dict received in the POST request!
+                            output_queue.put(chunk_entities[chunk_number])
+                            print(f"\nFound existing cache of previously extracted nodes and relationships for chunk {chunk_number}, returning cached data...\n")
+                            continue
+                        else:
+                            print(f"\nCached data for chunk {chunk_number} failed validation, proceeding to extract afresh...\n")
                     
                 try:
                     full_payload = get_request_payload_for_graph_entity_extraction(chunk_data['chunk_text'])
@@ -2805,24 +2857,64 @@ def exl2_grapher():
                     if response_validation_result['is_valid']:
                         full_response = response_validation_result['validated_response']
                     else:
-                        # Chunk may have been too large and overwhelmed the model, offset the overlap and re-try
-                        try:
-                            print(f"Trimming response failed, offsetting chunk text by removing leading and trailing overlap of {chunk_overlap} chars and re-attempting entity extraction...")
-                            offset_chunk_text = chunk_data['chunk_text'][chunk_overlap:-chunk_overlap]     # For example if the chunk overlap is 300, we remove the first 300 chars (from the last chunk) and the last 300 chars (will be the first 300 chars of the next chunk)
-                            offset_payload = get_request_payload_for_graph_entity_extraction(offset_chunk_text)
-                            extraction_response_second_attempt = create_and_execute_exl2_job(payload=offset_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-                            retried_response_validation_result = validate_entity_extraction_response(extraction_response_second_attempt)
-                            print("Response valid, proceeding") if retried_response_validation_result['is_valid'] else print("Response still invalid, saving as blank and proceeding...")
-                            full_response = retried_response_validation_result['validated_response'] if retried_response_validation_result['is_valid'] else {}
+                        print("Chunk is too large, attempting to split and retry entity extraction...")
+
+                        '''
+                        Split the chunk into two halves and retry entity extraction for each half.
+                        Recursively repeat until valid responses are obtained.
+                        The reason for this design is that the model may have been overwhelmed by the chunk size, and relying on the overlap is not robust enough for two reasons:
+                            1. It may not be a big enough overlap for offsetting to help.
+                            2. By trimming both the leading and trailing overlap, imagine the scenario for consecutive chunks that fail to process:
+                                Say a chunk fails so you remove the overlap, which includes the last 300 chars as those are expected to be the first 300 chars of the next chunk anyways.
+                                Now if the next chunk also fails, and you remove the leading and trailing overlap, you have outright lost those 300 chars and never even processed them!
+                        The best way to mitigate this is via clever recursion!
+                        '''
+
+                        def retry_entity_extraction(chunk_text, max_depth=5, current_depth=0):
+                            # Prevent infinite recursion
+                            if current_depth >= max_depth:
+                                print("Max depth reached, returning empty response")
+                                return {'nodes': [], 'relationships': []}
+                            
+                            # Prevent splitting text that's too small to be meaningful
+                            if len(chunk_text.strip()) < 100:
+                                print("Chunk text too small, returning empty response")
+                                return {'nodes': [], 'relationships': []}
+                            
+                            payload = get_request_payload_for_graph_entity_extraction(chunk_text)
+                            response = create_and_execute_exl2_job(payload=payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+                            response_validation_result = validate_entity_extraction_response(response)
+                            
+                            if response_validation_result['is_valid']:
+                                return response_validation_result['validated_response']
+                            else:
+                                # Split and recurse
+                                mid_point = len(chunk_text)//2
+                                recursive_response_1 = retry_entity_extraction(chunk_text[:mid_point], max_depth, current_depth + 1)
+                                recursive_response_2 = retry_entity_extraction(chunk_text[mid_point:], max_depth, current_depth + 1)
+
+                                # Properly merge the lists within the dictionaries
+                                merged_response = {
+                                    'nodes': recursive_response_1.get('nodes', []) + recursive_response_2.get('nodes', []),
+                                    'relationships': recursive_response_1.get('relationships', []) + recursive_response_2.get('relationships', [])
+                                }
+                                return merged_response
+
+                        # Split and recurse
+                        large_chunk_text = chunk_data['chunk_text']
+                        mid_point = len(large_chunk_text)//2
+                        response_1 = retry_entity_extraction(large_chunk_text[:mid_point])   # Floor division will round down to the nearest integer, thus handling odd-length chunks
+                        response_2 = retry_entity_extraction(large_chunk_text[mid_point:])
                         
-                        except Exception as e:
-                            handle_error_no_return(f"Could not re-attempt entity extraction for chunk {chunk_number}, saving as blank and proceeding. Encountered error: ", e)
-                            full_response = {}
+                        full_response = {
+                            'nodes': response_1.get('nodes', []) + response_2.get('nodes', []),
+                            'relationships': response_1.get('relationships', []) + response_2.get('relationships', [])
+                        }
 
                     chunk_entities[chunk_number]['entities_and_relationships'] = full_response
                     output_queue.put(chunk_entities[chunk_number])
 
-                    if not rag_response_mode:
+                    if not rag_response_mode:   # save on-disk cache only for file-processing mode!
                         try:
                             update_and_save_json_file({chunk_number: chunk_entities[chunk_number]}, extraction_cache_file_path)
                             cache_data_map[source_doc_name]['data'][chunk_number] = chunk_entities[chunk_number]    # update in-memory cache as well to help with de-duplication
@@ -2832,7 +2924,8 @@ def exl2_grapher():
                 
                 except Exception as e:
                     handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number}, skipping. Encountered error: ", e)
-                    chunk_entities[chunk_number]['entities_and_relationships'] = {}     # Set empty or default value in case of complete failure
+                    chunk_entities[chunk_number]['entities_and_relationships'] = {'nodes': [], 'relationships': []}     # Set empty or default value in case of complete failure
+                    output_queue.put(chunk_entities[chunk_number])
 
         except Exception as e:
             handle_error_no_return(f"Could not extract entities and relationships, encountered error: ", e)
