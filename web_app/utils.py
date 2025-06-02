@@ -1,0 +1,179 @@
+import requests
+import platform
+import signal
+import subprocess
+import math
+
+from pynvml import *
+
+
+def is_local_server_online(server_base_url):
+    server_health_url = server_base_url + '/health'
+    print(f"\n\nChecking server status at URL: {server_health_url}\n\n")
+
+    try:
+        response = requests.get(server_health_url)
+        
+        if response.status_code == 200:
+            data = response.json()  # parse the JSON response to determine the server status
+            if data['status'] == 'ok':
+                print(f"LLM Server ready and online at URL: {server_health_url}")
+                return {"server_available":True, "loading_model":False, "status_code":200}
+            elif data['status'] == 'no slot available':
+                print("No slots available. Server is running but cannot handle more requests.")
+                return {"server_available":False, "loading_model":False, "status_code":200}
+            
+        elif response.status_code == 503:   # model still loading or no slots
+            data = response.json()
+            if data['status'] == 'loading model':
+                print("Server is loading the selected LLM, please wait")
+                return {"server_available":False, "loading_model":True, "status_code":503}
+            else:
+                print("No slots available. Server is running but cannot handle more requests.")
+                return {"server_available":False, "loading_model":False, "status_code":503}
+        
+        elif response.status_code == 500:
+            print("Server error: Failed to load LLM.")
+            return {"server_available":False, "loading_model":False, "status_code":500}
+        
+        else:
+            return {"server_available":False, "loading_model":False, "status_code":500}
+    
+    except requests.exceptions.ConnectionError as e:
+        print("\n\nECONNREFUSED event\n\n")
+        return {"server_available":False, "loading_model":True, "status_code":500}
+    except Exception as e:
+        print(f"\n\nCould not check local LLM Server health, encountered error: {e}\n\n")
+        return {"server_available":False, "loading_model":False, "status_code":500}
+
+
+def shutdown_waitress_server(base_url = 'http://0.0.0.0:9069'):
+    try:
+        print(f"\n\nShutting down HF-Waitress server at: {base_url}\n\n")
+
+        if is_local_server_online(base_url)['server_available']:
+            url = f"{base_url}/shutdown_hf_waitress"
+            payload = ""
+            headers = {}
+            response = requests.post(url, data=payload, headers=headers)
+            return {"success":True, "message":response.json()}
+        else:
+            return {"success":True, "message":"HF-Waitress server is already offline at the specified URL."}
+    except Exception as e:
+        return {"success":False, "message":f"Could not shutdown HF-Waitress server, encountered error: {e}"}
+    
+
+def send_ctrl_c_to_process(process):
+    if process.poll() is None:  # check if process is still running via poll(), which returns None if a process is still running 
+        if platform.system() == 'Windows':
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            process.send_signal(signal.SIGINT)
+        try:
+            # Wait a bit for the process to terminate gracefully:
+            process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            print("\n\nProcess did not terminate within timeout, will be force-killed.\n\n")
+            process.kill()  # Sends 'SIGKILL' on Unix-like to force-kill immediately / 'TerminateProcess' on Windows which still allows for graceful termination
+            process.wait()
+            if process.poll() is not None:
+                print("\n\nProcess has been killed successfully.\n\n")
+            else:
+                print("\n\nProcess still running after force kill attempt.\n\n")
+
+
+def terminate_local_llm_server_process(process):
+    try:
+        # process.terminate() sends 'SIGTERM' on Unix-like systems / 'TerminateProcess' on Windows, allows for graceful termination
+        # process.wait()
+        send_ctrl_c_to_process(process)
+        if process.poll() is not None:  # process has indeed terminated
+            print("\n\nProcess terminated gracefully.\n\n")
+    except Exception as e:
+        return Exception("Failed to terminate local LLM server process, encountered error: ", e)
+
+
+def get_nvidia_gpu_info():
+    """
+    Gets memory & other information for all available NVIDIA GPUs.
+
+    Returns:
+        tuple: A tuple containing:
+            
+            1. list: A list of dictionaries, where each dictionary contains:
+                  'id': GPU ID (int)
+                  'name': GPU name (str)
+                  'total_memory_mib': Total memory in MiB (float)
+                  'used_memory_mib': Used memory in MiB (float)
+              'free_memory_mib': Free memory in MiB (float)
+              If NVML fails to initialize, returns an empty list and prints an error.
+
+            2. int: Total free memory in MiB
+    """
+    print("\n\nGetting NVIDIA GPU info...\n\n")
+
+    gpu_info_list = []
+    total_free_memory_mib = 0.0
+    try:
+        nvmlInit()  # Initialize NVML
+
+        device_count = nvmlDeviceGetCount()
+        print(f"Found {device_count} NVIDIA GPU(s) on this machine.")
+
+        for i in range(device_count):
+            handle = nvmlDeviceGetHandleByIndex(i)
+
+            # Get GPU name:
+            name = nvmlDeviceGetName(handle)
+            if isinstance(name, bytes):
+                name = name.decode('utf-8')
+
+            # Get memory info:
+            mem_info = nvmlDeviceGetMemoryInfo(handle)
+
+            # Convert bytes to MiB
+            total_memory_mib = mem_info.total / (1024**2)   # Exponentiation operation equivalent to mem_info.total * 1024 * 1024, required here for converting bytes to megabytes
+            used_memory_mib = mem_info.used / (1024**2)
+            free_memory_mib = mem_info.free / (1024**2)
+
+            gpu_info = {
+                'id': i,
+                'name': name,
+                'total_memory_mib': total_memory_mib,
+                'used_memory_mib': used_memory_mib,
+                'free_memory_mib': free_memory_mib
+            }
+
+            gpu_info_list.append(gpu_info)
+            total_free_memory_mib += free_memory_mib
+
+    except Exception as e:
+        print(f"Error initializing NVML or getting GPU info: {e}")
+        return []
+    finally:
+        # Shutdown NVML (important!)
+        try:
+            nvmlShutdown()
+        except Exception:
+            # This can happen if nvmlInit() failed
+            pass
+
+    return gpu_info_list, math.ceil(total_free_memory_mib)
+
+
+def ensure_minimum_free_vram(vram_amount_mib, shutdown_server_at_url_to_make_room):
+    # Get free GPU memory and shutdown the main Waitress LLM chat server if necessary:
+    try:
+        _, total_free_memory_mib = get_nvidia_gpu_info()
+        if total_free_memory_mib < vram_amount_mib:
+            print(f"\nTotal free GPU memory is less than {vram_amount_mib}MB, shutting down main Waitress LLM chat server...\n")
+            try:
+                shutdown_waitress_server(shutdown_server_at_url_to_make_room)
+                _, total_free_memory_mib = get_nvidia_gpu_info()
+                if total_free_memory_mib < vram_amount_mib:
+                    raise Exception(f"Insufficient GPU memory even after shutting down the chat server at URL {shutdown_server_at_url_to_make_room}.")
+            except Exception as e:
+                raise Exception(f"Insufficient GPU memory, encountered error: {e}")
+    except Exception as e:
+        raise Exception(f"Could not check GPU memory, encountered error: {e}")
+
