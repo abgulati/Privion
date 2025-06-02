@@ -2440,12 +2440,11 @@ def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with k
             'minimum_free_vram_for_graph_extraction_model'
         ])
         hf_waitress_kb_generator_server_path = os.path.normpath(os.path.join(os.getcwd(), config_data['graph_models_base_directory_name'], config_data['graph_extraction_model_directory_name']))    # normpath() is used to "normalize" i.e. convert to a path that is appropriate for the current OS
-        os.makedirs(hf_waitress_kb_generator_server_path, exist_ok=True)
         print(f"\nLaunching HF-Waitress instance with kb-generator model at path: {hf_waitress_kb_generator_server_path}\n")
     except Exception as e:
         return handle_local_error("Could not read graph model config, encountered error: ", e)
 
-    if utils.is_local_server_online(f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"):
+    if utils.is_local_server_online(f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}")['server_available']:
         print("\nGraphing model server is already online, skipping launch...\n")
         return True
     
@@ -2485,7 +2484,7 @@ def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with k
         timeout = 5
         attempts = 25
         for _ in range(attempts):
-            if utils.is_local_server_online(f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"):
+            if utils.is_local_server_online(f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}")['server_available']:
                 print(f"\nKB-Generator model launched successfully!\n")
                 return True
             else:
@@ -4435,7 +4434,7 @@ def llama_cpp_server_starter():
             except Exception as e:
                 LLM_LOADED_UP = True    # We know the HF-Waitress server is running, which means `hf_waitress.py` is available, so we set LLM_LOADED_UP to True
                 other_server_running = True # Set to True as we've determined the other server is running and we failed to terminate it
-                handle_error_no_return("Could not terminate running HF-Waitress process before hard-reboot. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator to whitelist your IP. Additional technical details follow: ", e)
+                handle_error_no_return("Could not terminate running HF-Waitress process before launching llama.cpp. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator to whitelist your IP. Additional technical details follow: ", e)
     except Exception as e:
         handle_error_no_return("Warning: Could not check if HF-Waitress server is running. Proceeding to launch llama.cpp server. Encountered error: ", e)   
 
