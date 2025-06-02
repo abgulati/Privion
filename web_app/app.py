@@ -64,6 +64,11 @@ try:
 except ImportError:
     print("WARNING: Prompt Formatter module `prompt_formatting.py` is not present. Skipping import. Exl2 and llama.cpp will not work!")
 
+try:
+    import utils
+except ImportError:
+    print("WARNING: utils.py is not present. Skipping import.")
+
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Allow insecure traffic - Needed to bypass HTTPS requirement for Google Drive OAuth. FOR DEV USE ONLY! SWITCH TO SELF-SIGNED CERTIFICATES & HTTPS FOR PRODUCTION!
 
 app = Flask(__name__)
@@ -97,7 +102,6 @@ def pdf_viewer(filename):
 
 #########################------------------GLOBALS!----------------------###############################
 LLAMA_CPP_PROCESS = None
-HF_WAITRESS_PROCESS = None
 LLM = None
 LOADED_UP = False
 LLM_LOADED_UP = False
@@ -120,8 +124,8 @@ GDRIVE_CREDS = None
 #########################------------Setup & Handle Logging-------------###############################
 try:
     # 1 - Create a logger
-    logger = logging.getLogger('my_logger')
-    logger.setLevel(logging.ERROR)
+    LOGGER = logging.getLogger('my_logger')
+    LOGGER.setLevel(logging.ERROR)
 
     # 2 - Create a RotatingFileHandler
     # maxBytes: max file size of log file after which a new file is created; set to 1024 * 1024 * 5 for 5MB: 1024x1024 is 1MB, then a multiplyer for the number of MB
@@ -134,7 +138,7 @@ try:
     handler.setFormatter(formatter)
 
     # 4 - Add the handler to the logger
-    logger.addHandler(handler)
+    LOGGER.addHandler(handler)
     # Logger ready! Usage: logger.error(f"This is an error message with error {e}")
 except Exception as e:
     print(f"\n\nCould not establish logger, encountered error: {e}")
@@ -145,8 +149,8 @@ def central_error_logging(message, exception=None):
     #traceback_details = traceback.format_exc()
     #full_message = f"\n\n{error_message}\n\nTraceback: {traceback_details}\n\n"
     full_message = f"\n\n{error_message}\n\n"
-    if logger:
-        logger.error(full_message)
+    if LOGGER:
+        LOGGER.error(full_message)
         print(full_message)
     else:
         print(full_message)
@@ -265,6 +269,9 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'docs_to_knowledge_graph_dir': base_directory + '/docs_to_knowledge_graph',
                 'upload_staging_folder':base_directory + '/upload_staging',
                 'upload_staging_db':base_directory + '/upload_staging.db',
+                'graph_models_base_directory_name': 'graph-model-servers',
+                'graph_extraction_model_directory_name': 'graph-extraction-model-server',
+                'graph_summary_generator_directory_name': 'graph-summary-generator-server',
                 'local_llm_server':'hf-waitress',
                 'model_choice':'Meta-Llama-3-8B-Instruct.f16.gguf',
                 'vision_llm_local_url':"http://localhost:9069/completions",
@@ -274,10 +281,11 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'kosmos_offload_vram':True,
                 'kosmos_container_name':'kosmos-2.5',
                 'min_char_threshold_for_backup_ocr':1000,
+                'minimum_free_vram_for_kosmos_ocr':10240,
                 'lars_host':'0.0.0.0',
                 'lars_port':5000,
-                'hf_waitress_serving_url':'0.0.0.0',
-                'hf_waitress_access_url':'localhost',
+                'hf_waitress_serving_url':'0.0.0.0',    # the serving URL is where the HF-Waitress server is listening for requests, and is specified in the serve() launch command of the Flask/Waitress WSGI server. 0.0.0.0 means all interfaces.
+                'hf_waitress_access_url':'localhost',   # the access URL is the URL that the HF-Waitress server is accessible to clients for API calls, localhost means only from the local machine.
                 'hf_waitress_server_port':9069,
                 'llama_cpp_serving_url':'0.0.0.0',
                 'llama_cpp_access_url':'localhost',
@@ -343,6 +351,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'graph_model_top_k':40,
                 'graph_model_top_p':0.95,
                 'graph_model_min_p':0.05,
+                'minimum_free_vram_for_graph_extraction_model':7168,
                 'skip_summary_generation':False,
                 'reuse_previously_extracted_graph_entities_and_relationships':True,
                 'reuse_previously_generated_graph_summaries':True,
@@ -1170,7 +1179,8 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
 
     try:
         print("\n\nChecking if HF-Waitress Server is Online\n\n")
-        if not is_local_server_online('hf-waitress')['server_available']:
+        hf_waitress_base_url = get_url_for_server('hf-waitress')
+        if not utils.is_local_server_online(hf_waitress_base_url)['server_available']:
             return handle_local_error("HF-Waitress Server is Offline! Please start the HF-Waitress Server and try again.")
         else:
             print("\n\nHF-Waitress Server is Online\n\n")
@@ -1294,10 +1304,17 @@ def check_if_container_is_running(container_name):
 
 def start_kosmos_container():
     try:
-        read_return = read_config(['kosmos_container_name'])
+        read_return = read_config(['kosmos_container_name', 'minimum_free_vram_for_kosmos_ocr'])
         kosmos_container_name = read_return['kosmos_container_name']
+        minimum_free_vram_for_kosmos_ocr = read_return['minimum_free_vram_for_kosmos_ocr']
     except Exception as e:
         return handle_local_error("Could not read Kosmos container name from config.json, encountered error: ", e)
+    
+    try:
+        hf_waitress_base_url = get_url_for_server('hf-waitress')
+        utils.ensure_minimum_free_vram(minimum_free_vram_for_kosmos_ocr, hf_waitress_base_url)
+    except Exception as e:
+        return handle_local_error(f"Could not ensure minimum free GPU memory ({minimum_free_vram_for_kosmos_ocr}MB) required for Kosmos OCR, encountered error: ", e)
 
     # Check if Docker Engine is running
     try:
@@ -2410,31 +2427,34 @@ def start_falkordb():
         return handle_api_error("Could not start FalkorDB Docker container, encountered error: ", e)
 
 
-def graphing_model_server_is_online(graph_model_access_url, graph_model_server_port):
-    print("\nChecking if graphing model server is online...\n")
+def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with kb-generator model
 
     try:
-        response = requests.get(f"http://{graph_model_access_url}:{graph_model_server_port}/health")
-        if response:
-            print(f"\nKB-Generator model launched successfully!\n")
-            return True
-    except Exception as e:
-        handle_error_no_return(f"KB-Generator model is not online, status: ", e)
-        return False
-
-
-def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-generator model
-
-    try:
-        config_data = read_config(['graph_model_access_url', 'graph_model_server_port', 'quantize_graph_model', 'quantize_graph_model_bits', 'graph_generator_model', 'exl2_quantize_graph_model', 'exl2_quantize_graph_model_bpw', 'graph_model_max_new_tokens', 'graph_model_max_seq_len'])
-        hf_waitress_kb_generator_server_path = os.path.normpath(os.path.join(os.getcwd(), "knowledge-graph-model-server"))    # normpath() is used to "normalize" i.e. convert to a path that is appropriate for the current OS
+        config_data = read_config([
+            'graph_model_access_url', 'graph_model_server_port',
+            'quantize_graph_model', 'quantize_graph_model_bits',
+            'graph_generator_model', 'exl2_quantize_graph_model',
+            'exl2_quantize_graph_model_bpw', 'graph_model_max_new_tokens',
+            'graph_model_max_seq_len', 'graph_models_base_directory_name',
+            'graph_extraction_model_directory_name', 'graph_summary_generator_directory_name',
+            'minimum_free_vram_for_graph_extraction_model'
+        ])
+        hf_waitress_kb_generator_server_path = os.path.normpath(os.path.join(os.getcwd(), config_data['graph_models_base_directory_name'], config_data['graph_extraction_model_directory_name']))    # normpath() is used to "normalize" i.e. convert to a path that is appropriate for the current OS
+        os.makedirs(hf_waitress_kb_generator_server_path, exist_ok=True)
         print(f"\nLaunching HF-Waitress instance with kb-generator model at path: {hf_waitress_kb_generator_server_path}\n")
     except Exception as e:
         return handle_local_error("Could not read graph model config, encountered error: ", e)
 
-    if graphing_model_server_is_online(config_data['graph_model_access_url'], config_data['graph_model_server_port']):
+    if utils.is_local_server_online(f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"):
         print("\nGraphing model server is already online, skipping launch...\n")
         return True
+    
+    # Get free GPU memory and shutdown the main Waitress LLM chat server if necessary:
+    try:
+        hf_waitress_base_url = get_url_for_server('hf-waitress')
+        utils.ensure_minimum_free_vram(config_data['minimum_free_vram_for_graph_extraction_model'], hf_waitress_base_url)
+    except Exception as e:
+        return handle_local_error(f"Could not reserve minimum GPU memory ({config_data['minimum_free_vram_for_graph_extraction_model']}MB) required for Graph-Extraction model, encountered error: ", e)
 
     # Need to format this way because the f"""<>""" multiline way will maintain newlines in the command, which will cause the command to fail!
     # Also cannot format this as we have in hf_waitress.py's exllama_bpw_quantize_model() because of the command seperators (&& and ;), which would be incorrectly treated as parameters to the cd command in that list format!
@@ -2465,7 +2485,7 @@ def bring_graphing_model_online():  # Launch HF-Waitress instance with kb-genera
         timeout = 5
         attempts = 25
         for _ in range(attempts):
-            if graphing_model_server_is_online(config_data['graph_model_access_url'], config_data['graph_model_server_port']):
+            if utils.is_local_server_online(f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"):
                 print(f"\nKB-Generator model launched successfully!\n")
                 return True
             else:
@@ -2707,7 +2727,7 @@ def graph_generator(chunks, input_file):
     
     if not reuse_previous_extract:
         try:
-            bring_graphing_model_online()
+            bring_graph_extraction_model_online()
         except Exception as e:
             return handle_local_error("Could not bring graphing model online, encountered error: ", e)
 
@@ -4380,101 +4400,17 @@ def get_url_for_server(server_to_check):
             read_return = read_config(['llama_cpp_access_url', 'llama_cpp_server_port'])
             return f'http://{read_return["llama_cpp_access_url"]}:{read_return["llama_cpp_server_port"]}'
         except Exception as e:
-            handle_error_no_return("Could not read llama_cpp_access_url and llama_cpp_server_port from config.json in method is_local_server_online(), using default localhost:8080 instead. Encountered error: ", e)
+            handle_error_no_return("Could not read llama_cpp_access_url and llama_cpp_server_port from config.json, using default localhost:8080 instead. Encountered error: ", e)
             return 'http://localhost:8080'
     elif server_to_check == 'hf-waitress':
         try:
             read_return = read_config(['hf_waitress_access_url', 'hf_waitress_server_port'])
             return f'http://{read_return["hf_waitress_access_url"]}:{read_return["hf_waitress_server_port"]}'
         except Exception as e:
-            handle_error_no_return("Could not read hf_waitress_access_url and hf_waitress_server_port from config.json in method is_local_server_online(), using default localhost:9069 instead. Encountered error: ", e)
+            handle_error_no_return("Could not read hf_waitress_access_url and hf_waitress_server_port from config.json, using default localhost:9069 instead. Encountered error: ", e)
             return 'http://localhost:9069'
     else:
         return handle_api_error("Invalid server_to_check in method get_url_for_server, encountered error: ", e)
-
-
-def is_local_server_online(server_to_check):
-    server_health_url = get_url_for_server(server_to_check) + '/health'
-    print(f"\n\nChecking {server_to_check} server status - URL: {server_health_url}\n\n")
-
-    try:
-        response = requests.get(server_health_url)
-        
-        if response.status_code == 200:
-            data = response.json()  # parse the JSON response to determine the server status
-            if data['status'] == 'ok' and server_to_check == 'llama-cpp':
-                print(f"llama.cpp Server ready and online.")
-                return {"server_available":True, "loading_model":False, "status_code":200}
-            elif data['status'] == 'ok' and server_to_check == 'hf-waitress':
-                print(f"hf-waitress Server ready and online")
-                return {"server_available":True, "loading_model":False, "status_code":200}
-            elif data['status'] == 'no slot available':
-                print("No slots available. Server is running but cannot handle more requests.")
-                return {"server_available":False, "loading_model":False, "status_code":200}
-            
-        elif response.status_code == 503:   # model still loading or no slots
-            data = response.json()
-            if data['status'] == 'loading model':
-                print("Server is loading the selected LLM, please wait")
-                return {"server_available":False, "loading_model":True, "status_code":503}
-            else:
-                print("No slots available. Server is running but cannot handle more requests.")
-                return {"server_available":False, "loading_model":False, "status_code":503}
-        
-        elif response.status_code == 500:
-            print("Server error: Failed to load LLM.")
-            logger.error("Local LLM Server - 500 event")
-            return {"server_available":False, "loading_model":False, "status_code":500}
-        
-        else:
-            return {"server_available":False, "loading_model":False, "status_code":500}
-    
-    except requests.exceptions.ConnectionError as e:
-        error_message = "\n\nECONNREFUSED event\n\n"
-        if logger:
-            logger.error(error_message)
-            print(error_message)
-        else:
-            print(error_message)
-        return {"server_available":False, "loading_model":True, "status_code":500}
-    except Exception as e:
-        error_message = f"\n\nCould not check local LLM Server health, encountered error: {e}\n\n"
-        if logger:
-            logger.error(error_message)
-            print(error_message)
-        else:
-            print(error_message)
-        return {"server_available":False, "loading_model":False, "status_code":500}
-    
-
-def send_ctrl_c_to_process(process):
-    if process.poll() is None:  # check if process is still running via poll(), which returns None if a process is still running 
-        if platform.system() == 'Windows':
-            process.send_signal(signal.CTRL_BREAK_EVENT)
-        else:
-            process.send_signal(signal.SIGINT)
-        try:
-            # Wait a bit for the process to terminate gracefully:
-            process.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            print("\n\nProcess did not terminate within timeout, will be force-killed.\n\n")
-            process.kill()  # Sends 'SIGKILL' on Unix-like to force-kill immediately / 'TerminateProcess' on Windows which still allows for graceful termination
-            process.wait()
-            if process.poll() is not None:
-                print("\n\nProcess has been killed successfully.\n\n")
-            else:
-                print("\n\nProcess still running after force kill attempt.\n\n")
-
-
-def terminate_local_llm_server_process(process):
-    try:
-        # process.terminate() sends 'SIGTERM' on Unix-like systems / 'TerminateProcess' on Windows, allows for graceful termination
-        # process.wait()
-        send_ctrl_c_to_process(process)
-        if process.poll() is not None:  # process has indeed terminated
-            print("\n\nProcess terminated gracefully.\n\n")
-    except Exception as e:
-        handle_local_error("Failed to terminate local LLM server process, encountered error: ", e)
 
 
 @app.route('/llama_cpp_server_starter')
@@ -4483,29 +4419,29 @@ def llama_cpp_server_starter():
 
     global LLM_CHANGE_RELOAD_TRIGGER_SET
     global LLAMA_CPP_PROCESS
-    global HF_WAITRESS_PROCESS
     global LLM_LOADED_UP
 
     other_server_running = False
+    hf_waitress_base_url = get_url_for_server('hf-waitress')
+    llama_cpp_base_url = get_url_for_server('llama-cpp')
 
     # Before attempting to start the llama.cpp server, check if HF-Waitress is running and if so, shut it down:
     try:
-        if HF_WAITRESS_PROCESS is not None and is_local_server_online('hf-waitress')['server_available']:
+        if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
             print("\n\nThe HF-Waitress server is running. Attempting to shut it down before starting the llama.cpp server.\n\n")
             try:
-                terminate_local_llm_server_process(HF_WAITRESS_PROCESS)
-                HF_WAITRESS_PROCESS = None
+                utils.shutdown_waitress_server(hf_waitress_base_url)
                 LLM_LOADED_UP = False
             except Exception as e:
                 LLM_LOADED_UP = True    # We know the HF-Waitress server is running, which means `hf_waitress.py` is available, so we set LLM_LOADED_UP to True
                 other_server_running = True # Set to True as we've determined the other server is running and we failed to terminate it
-                handle_error_no_return("Warning: Failed to terminate running HF-Waitress process before launching llama.cpp. It was likely launched by a previous session or external process. Consider manually shutting down this server to conserve memory. Technical error-details follow: ", e)
+                handle_error_no_return("Could not terminate running HF-Waitress process before hard-reboot. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator to whitelist your IP. Additional technical details follow: ", e)
     except Exception as e:
         handle_error_no_return("Warning: Could not check if HF-Waitress server is running. Proceeding to launch llama.cpp server. Encountered error: ", e)   
 
     is_llama_cpp_running = False
     try:
-        is_llama_cpp_running = is_local_server_online('llama-cpp')['server_available']
+        is_llama_cpp_running = utils.is_local_server_online(llama_cpp_base_url)['server_available']
     except Exception as e:
         handle_error_no_return("Warning: Could not check if llama.cpp server is running. Proceeding to launch llama.cpp server. Encountered error: ", e)
 
@@ -4524,7 +4460,7 @@ def llama_cpp_server_starter():
     elif is_llama_cpp_running and LLM_CHANGE_RELOAD_TRIGGER_SET:
         print("\n\nllama.cpp server online and LLM_CHANGE_RELOAD_TRIGGER_SET is set. Attempting to terminate and reload from config.json\n\n")
         try:
-            terminate_local_llm_server_process(LLAMA_CPP_PROCESS)
+            utils.terminate_local_llm_server_process(LLAMA_CPP_PROCESS)
             LLAMA_CPP_PROCESS = None
             LLM_CHANGE_RELOAD_TRIGGER_SET = False
         except Exception as e:
@@ -4579,7 +4515,7 @@ def llama_cpp_server_starter():
 
     try:
         for _ in range(attempts):
-            if is_local_server_online('llama-cpp')['server_available']:
+            if utils.is_local_server_online(llama_cpp_base_url)['server_available']:
                 print("\n\nllama.cpp server launched succesfully! Returning.\n\n")
                 LLM_LOADED_UP = True
                 return jsonify({'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running})
@@ -4595,7 +4531,7 @@ def get_hf_waitress_serving_host_and_port():
         read_return = read_config(['hf_waitress_serving_url', 'hf_waitress_server_port'])
         return read_return['hf_waitress_serving_url'], read_return['hf_waitress_server_port']
     except Exception as e:
-        handle_error_no_return("Could not read hf_waitress_serving_url and hf_waitress_server_port from config.json in method get_hf_waitress_serving_host_and_port(), using default localhost:9069 instead. Encountered error: ", e)
+        handle_error_no_return("Could not read url & port data for HF-Waitress from config.json, using default localhost:9069 instead. Encountered error: ", e)
         return '0.0.0.0', 9069
 
 
@@ -4604,31 +4540,32 @@ def hf_waitress_server_starter(hard_reboot_required = False):
 
     global LLM_CHANGE_RELOAD_TRIGGER_SET    # This is only set by LARS basis llama.cpp, so we simply handle it here!
     global LLM_LOADED_UP
-    global HF_WAITRESS_PROCESS
     global LLAMA_CPP_PROCESS
 
     other_server_running = False
+    hf_waitress_base_url = get_url_for_server('hf-waitress')
+    llama_cpp_base_url = get_url_for_server('llama-cpp')
+
     if hard_reboot_required:
         print("\nHard-Reboot of HF-Waitress server requested.\n")
-        if is_local_server_online('hf-waitress')['server_available']:
+        if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
             print("\nHF-Waitress server is running, terminating it before hard-reboot.\n")
             try:
-                terminate_local_llm_server_process(HF_WAITRESS_PROCESS)
+                utils.shutdown_waitress_server(hf_waitress_base_url)
             except Exception as e:
                 other_server_running = True
-                handle_error_no_return("Could not terminate running HF-Waitress process before hard-reboot. It was likely launched by a previous session or external process. Consider manually shutting down this server to conserve memory. Technical error-details follow: ", e)
+                handle_error_no_return("Could not terminate running HF-Waitress process before hard-reboot. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator to whitelist your IP. Additional technical details follow: ", e)
             finally:
-                HF_WAITRESS_PROCESS = None
                 LLM_LOADED_UP = False
         else:
             print("\nHF-Waitress server is not running, proceeding to hard-reboot.\n")
 
     # Before attempting to start the HF-Waitress server, check if llama.cpp is running and if so, shut it down:
     try:
-        if LLAMA_CPP_PROCESS is not None and is_local_server_online('llama-cpp')['server_available']:
+        if LLAMA_CPP_PROCESS is not None and utils.is_local_server_online(llama_cpp_base_url)['server_available']:
             print("\n\nThe llama.cpp server is running. Attempting to shut it down before starting the HF-Waitress server.\n\n")
             try:
-                terminate_local_llm_server_process(LLAMA_CPP_PROCESS)
+                utils.terminate_local_llm_server_process(LLAMA_CPP_PROCESS)
                 LLAMA_CPP_PROCESS = None
                 LLM_LOADED_UP = False
             except Exception as e:
@@ -4650,9 +4587,9 @@ def hf_waitress_server_starter(hard_reboot_required = False):
         vision = str(hf_read_return['vision']).lower() == 'true'
         exl2 = str(hf_read_return['exl2']).lower() == 'true'
     except Exception as e:
-        return handle_api_error("Could not read hf_config.json in method hf_waitress_server_starter, encountered error: ", e)
+        return handle_api_error("Could not read hf_config.json, encountered error: ", e)
 
-    if is_local_server_online('hf-waitress')['server_available']:
+    if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
         print("\n\nHF-Waitress server already running. Resetting LLM_CHANGE_RELOAD_TRIGGER_SET and simply returning!\n\n")
         LLM_LOADED_UP = True
         LLM_CHANGE_RELOAD_TRIGGER_SET = False   # The only instance where we're in this method and LLM_CHANGE_RELOAD_TRIGGER_SET is set while the HF-Waitress server is running is when we're trying to switch back to it after running llama.cpp. So we simply reset the flag and return.
@@ -4686,7 +4623,7 @@ def hf_waitress_server_starter(hard_reboot_required = False):
 
     try:
         if platform.system() == 'Windows':
-            HF_WAITRESS_PROCESS = subprocess.Popen(full_command, creationflags=subprocess.CREATE_NEW_CONSOLE)   #Popen is non-blocking, so the server will keep running in the background
+            subprocess.Popen(full_command, creationflags=subprocess.CREATE_NEW_CONSOLE)   #Popen is non-blocking, so the server will keep running in the background
         else:
             # Platform & container agnostic - On Linux/Unix, you need to explicitly provide the arguments as a list to avoid shell interpretation issues:
             command_list = [base_command]  # 'python3'
@@ -4697,8 +4634,7 @@ def hf_waitress_server_starter(hard_reboot_required = False):
                 command_list.extend(launch_args.split())
             
             with open('hf_waitress_output_log.txt', 'w') as f:
-                # HF_WAITRESS_PROCESS = subprocess.Popen(command_list, stdout=f, stderr=subprocess.STDOUT, text=True)
-                HF_WAITRESS_PROCESS = subprocess.Popen(command_list)
+                subprocess.Popen(command_list)
 
     except Exception as e:
         return handle_api_error(f"Could not launch HF-Waitress process in directory: {os.getcwd()}, encountered error: ", e)
@@ -4708,7 +4644,7 @@ def hf_waitress_server_starter(hard_reboot_required = False):
 
     try:
         for _ in range(attempts):
-            if is_local_server_online('hf-waitress')['server_available']:
+            if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
                 print("\n\nHF-Waitress server launched succesfully! Returning.\n\n")
                 LLM_LOADED_UP = True
                 return jsonify({'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running})
@@ -4727,12 +4663,12 @@ def hf_waitress_server_starter_endpoint():
         hard_reboot_required = data.get('hard_reboot_required', 'false')
         print(f"\n\nhard_reboot_required: {hard_reboot_required}\n\n")
     except Exception as e:
-        return handle_api_error("Could not read hard_reboot_required from the POST request in method hf_waitress_server_starter_endpoint, encountered error: ", e)
+        return handle_api_error("Could not read request, encountered error: ", e)
 
     try:
         return hf_waitress_server_starter(hard_reboot_required)
     except Exception as e:
-        return handle_api_error("Could not start HF-Waitress server in method hf_waitress_server_starter_endpoint, encountered error: ", e)
+        return handle_api_error("Could not start HF-Waitress server, encountered error: ", e)
 
 
 @app.route('/check_local_llm_server_status', methods=['POST'])
@@ -4746,7 +4682,8 @@ def check_local_llm_server_status():
         return handle_api_error("Server-side error, could not read server_to_check from the POST request in method check_local_llm_server_status, encountered error: ", e)
     
     try:
-        server_online = is_local_server_online(server_to_check)['server_available']
+        server_url = get_url_for_server(server_to_check)
+        server_online = utils.is_local_server_online(server_url)['server_available']
     except Exception as e:
         return handle_api_error(f"Error checking {server_to_check} server status in method check_local_llm_server_status, encountered error: ", e)
 
@@ -6332,7 +6269,7 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
 
     try:
         bring_graph_db_online()
-        bring_graphing_model_online()
+        bring_graph_extraction_model_online()
     except Exception as e:
         return handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
 
