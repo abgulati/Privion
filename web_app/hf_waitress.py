@@ -133,7 +133,6 @@ def central_error_logging(message, exception=None):
             # If no specific exception, format_exc() might give current stack if in an except block, or minimal info
             traceback_details = traceback.format_exc() if sys.exc_info()[0] else "No active exception."
         
-        
         full_message = f"\n\n{error_message}\n\nTraceback: {traceback_details}\n\n"
 
         if LOGGER:
