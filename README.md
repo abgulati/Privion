@@ -240,18 +240,18 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
 
     - To install:
 
-        0. Disable filename length limit - Git has a limit of 4096 chars for a filename which can lead to "Filename too long" errors when compiling FA2. To mitigate this, open an Admin command-prompt and run:
+        1. Disable filename length limit - Git has a limit of 4096 chars for a filename which can lead to "Filename too long" errors when compiling FA2. To mitigate this, open an Admin command-prompt and run:
             ```
             git config --system core.longpaths true
             ```
 
-        1. Clone the latest stable release (v2.7.4.post1 as of this writing, update as necessary) from the official repository:
+        2. Clone the latest stable release (v2.7.4.post1 as of this writing, update as necessary) from the official repository:
             ```
             git clone -b v2.7.4.post1 https://github.com/Dao-AILab/flash-attention.git
             cd flash-attention
             ```
 
-        2. Open the `setup.py` file and uncomment (or add) the following lines to the `extra_compile_args` on line 287 or thereabouts:
+        3. Open the `setup.py` file and uncomment (or add) the following lines to the `extra_compile_args` on line 287 or thereabouts:
             ```                        
             "-DFLASHATTENTION_DISABLE_BACKWARD",
             "-DFLASHATTENTION_DISABLE_DROPOUT",
@@ -261,7 +261,7 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
             ```
             This is as per an [official comment on how to reduce compilation times](https://github.com/Dao-AILab/flash-attention/pull/1025#issuecomment-2207077088)
         
-        3. Set MAX_JOBS (as per CPU thread-count) and run `pip install` to build (make sure Ninja is correctly installed as noted above):
+        4. Set MAX_JOBS (as per CPU thread-count) and run `pip install` to build (make sure Ninja is correctly installed as noted above):
             - On Windows:
                 ```
                 set MAX_JOBS=20
