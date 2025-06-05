@@ -1493,11 +1493,13 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
 
     try:
         temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
+        safe_remove_folder_from_filepath(temp_dir)  # remove previous temp-converter-files to prevent Permission Errors!
         os.makedirs(temp_dir, exist_ok=True)
 
         measurement_file_path = os.path.join(transformer_models_folder, model_id, "exllama-measurements-file", "measurement.json")
         os.makedirs(os.path.dirname(measurement_file_path), exist_ok=True)
     except Exception as e:
+        safe_remove_folder_from_filepath(temp_dir)
         return handle_local_error("Could not create measurement file directory when attempting to generate_exllama_measurement_file_for_model(), encountered error: ", e)
     
     if os.path.exists(measurement_file_path) and not exl2_force_regenerate_measurement:
@@ -1518,7 +1520,9 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
         print(f"\nRunning ExLlamaV2 measurement file generator for {model_id}...\n")
         subprocess.run(command, check=True) # check=True ensures that the command will raise an exception if it fails
         print(f"\nExLlamaV2 measurement file generator for {model_id} completed successfully!\n")
+        safe_remove_folder_from_filepath(temp_dir)
     except Exception as e:
+        safe_remove_folder_from_filepath(temp_dir)
         return handle_local_error("Could not run ExLlamaV2 measurement file generator, encountered error: ", e)
 
     return measurement_file_path
@@ -1535,11 +1539,13 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
 
     try:
         temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
+        safe_remove_folder_from_filepath(temp_dir)  # remove previous temp-converter-files to prevent Permission Errors!
         os.makedirs(temp_dir, exist_ok=True)
 
         quantized_model_path = os.path.join(transformer_models_folder, model_id, "exl2-qaunts", f"{exl2_bpw}bpw")
         os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)   # Create parent directory structure - final `{exl2_bpw}bpw` directory will be created by ExLlamaV2 converter
     except Exception as e:
+        safe_remove_folder_from_filepath(temp_dir)
         return handle_local_error("Could not create directory to store quantized model when attempting to exllama_bpw_quantize_model(), encountered error: ", e)
 
     if os.path.exists(quantized_model_path):
@@ -2684,7 +2690,7 @@ def validate_entity_extraction_response(extraction_response: str):
     return {'validated_response': extraction_response, 'is_valid': False}
 
 
-def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: str, source_doc_name: str, page_number_list: list, exl2_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
+def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: str, source_doc_name: str, page_number_list: list, graph_summarizer_model_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
     '''
     This function takes a dictionary containing nodes and relationships, and a chunk of text.
     It generates a comprehensive summary for the chunk covering all nodes and relationships, and saves the summary to every node and relationship.
@@ -2699,7 +2705,7 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
                 user_query=comprehensive_summary_request_prompt,
                 current_sequence_id=0,
                 base_template="",
-                local_llm_chat_template_format=exl2_prompt_template_format,
+                local_llm_chat_template_format=graph_summarizer_model_prompt_template_format,
                 skip_system_prompt=True
             )
             full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
@@ -2800,7 +2806,7 @@ def exl2_grapher():
         extraction_mode = request.json.get('extraction_mode', False)
         summary_generation_mode = request.json.get('summary_generation_mode', False)
         rag_response_mode = request.json.get('rag_response_mode', False)
-        exl2_prompt_template_format = request.json.get('exl2_prompt_template_format', None)
+        graph_summarizer_model_prompt_template_format = request.json.get('graph_summarizer_model_prompt_template_format', None)
         gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
         exl2_grapher_skip_cache_reuse = read_config(['exl2_grapher_skip_cache_reuse'])['exl2_grapher_skip_cache_reuse'].lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
@@ -2975,7 +2981,7 @@ def exl2_grapher():
                         chunk_text=chunk_data['chunk_text'],
                         source_doc_name=source_doc_name,
                         page_number_list=chunk_data['page_number'],
-                        exl2_prompt_template_format=exl2_prompt_template_format,
+                        graph_summarizer_model_prompt_template_format=graph_summarizer_model_prompt_template_format,
                         requested_max_new_tokens=requested_max_new_tokens,
                         gen_settings=gen_settings
                     )
