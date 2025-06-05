@@ -335,10 +335,18 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'graph_generator_model':'Metin/Gemma-2-2B-TR-Knowledge-Graph',
                 'graph_model_server_port':9070,
                 'graph_model_access_url':'localhost',
-                'quantize_graph_model':'quanto',
+                'quantize_graph_model':'n',
                 'quantize_graph_model_bits':'int8',
                 'exl2_quantize_graph_model':True,
                 'exl2_quantize_graph_model_bpw':8.0,
+                'graph_summarizer_model':'google/gemma-2-2b-it',
+                'graph_summarizer_model_prompt_template_format':'gemma2',
+                'graph_summarizer_server_port':9071,
+                'graph_summarizer_access_url':'localhost',
+                'quantize_graph_summarizer_model':'n',
+                'quantize_graph_summarizer_model_bits':'int8',
+                'exl2_quantize_graph_summarizer_model':True,
+                'exl2_quantize_graph_summarizer_model_bpw':8.0,
                 'graph_db_server_host':'localhost',
                 'assign_host_port_to_graph_db_server':6379,
                 'assign_host_port_to_graph_db_ui':3000,
@@ -352,6 +360,14 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'graph_model_top_p':0.95,
                 'graph_model_min_p':0.05,
                 'minimum_free_vram_for_graph_extraction_model':7168,
+                'graph_summarizer_max_new_tokens':8192,
+                'graph_summarizer_max_seq_len':15360,
+                'graph_summarizer_temperature':0.15,
+                'graph_summarizer_do_sample':True,
+                'graph_summarizer_top_k':40,
+                'graph_summarizer_top_p':0.95,
+                'graph_summarizer_min_p':0.05,
+                'minimum_free_vram_for_graph_summarizer_model':7168,
                 'skip_summary_generation':False,
                 'reuse_previously_extracted_graph_entities_and_relationships':True,
                 'reuse_previously_generated_graph_summaries':True,
@@ -1312,7 +1328,11 @@ def start_kosmos_container():
     
     try:
         hf_waitress_base_url = get_url_for_server('hf-waitress')
-        utils.ensure_minimum_free_vram(minimum_free_vram_for_kosmos_ocr, hf_waitress_base_url)
+        url_config = read_config(['graph_model_access_url', 'graph_model_server_port', 'graph_summarizer_access_url', 'graph_summarizer_server_port'])
+        graph_model_base_url = f"http://{url_config['graph_model_access_url']}:{url_config['graph_model_server_port']}"
+        graph_summarizer_base_url = f"http://{url_config['graph_summarizer_access_url']}:{url_config['graph_summarizer_server_port']}"
+        utils.ensure_minimum_free_vram(minimum_free_vram_for_kosmos_ocr, [graph_summarizer_base_url, graph_model_base_url, hf_waitress_base_url])   
+        # Graph-Extraction model is used for GraphRAG responses, so we try shutting down the summarizer model first!
     except Exception as e:
         return handle_local_error(f"Could not ensure minimum free GPU memory ({minimum_free_vram_for_kosmos_ocr}MB) required for Kosmos OCR, encountered error: ", e)
 
@@ -1877,9 +1897,14 @@ def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
     return True
 
 
-def get_graphing_request_params(rag_response_mode: bool = False):
+def get_request_params_for_graph_entity_extraction_model(rag_response_mode: bool = False):
     try:
-        config_data = read_config(['exl2_quantize_graph_model', 'graph_model_access_url', 'graph_model_server_port', 'graph_model_max_new_tokens', 'graph_model_temperature', 'graph_model_do_sample', 'graph_model_top_k', 'graph_model_top_p', 'graph_model_min_p', 'graph_chunk_overlap'])
+        config_data = read_config([
+            'exl2_quantize_graph_model', 'graph_model_access_url',
+            'graph_model_server_port', 'graph_model_max_new_tokens',
+            'graph_model_temperature', 'graph_model_do_sample', 'graph_model_top_k',
+            'graph_model_top_p', 'graph_model_min_p', 'graph_chunk_overlap'
+        ])
         exl2_quantize_graph_model = str(config_data['exl2_quantize_graph_model']).lower() == 'true'
     except Exception as e:
         return handle_local_error("Could not get graphing request params, encountered error: ", e)
@@ -2018,7 +2043,7 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
     print("\nExtracting all entities and relationships for the entire document\n")
 
     try:
-        grapher_url, headers, exl2_quantize_graph_model = get_graphing_request_params(rag_response_mode=rag_response_mode)
+        grapher_url, headers, exl2_quantize_graph_model = get_request_params_for_graph_entity_extraction_model(rag_response_mode=rag_response_mode)
     except Exception as e:
         return handle_local_error("Could not get graphing request params, encountered error: ", e)
 
@@ -2080,9 +2105,14 @@ def sanitize_names(name):
     return sanitized
 
 
+# For general purpose use with HF-Waitress or llama.cpp LLMs:
 def get_request_params_for_local_llm_server(formatted_prompt=""):
     try:
-        read_return = read_config(['local_llm_server', 'hf_waitress_access_url', 'hf_waitress_server_port', 'llama_cpp_access_url', 'llama_cpp_server_port', 'local_llm_temperature', 'local_llm_top_k', 'local_llm_top_p', 'local_llm_min_p', 'graph_chunk_overlap'])
+        read_return = read_config([
+            'local_llm_server', 'hf_waitress_access_url', 'hf_waitress_server_port', 
+            'llama_cpp_access_url', 'llama_cpp_server_port', 'local_llm_temperature', 
+            'local_llm_top_k', 'local_llm_top_p', 'local_llm_min_p', 'graph_chunk_overlap'
+        ])
     except Exception as e:
         return handle_local_error("Could not read request params from config.json, encountered error: ", e)
 
@@ -2090,25 +2120,23 @@ def get_request_params_for_local_llm_server(formatted_prompt=""):
 
     if read_return['local_llm_server'] == 'hf-waitress':
 
+        payload = formatted_prompt
+        base_url = f"http://{read_return['hf_waitress_access_url']}:{read_return['hf_waitress_server_port']}"
+
         try:
             read_hf_return = read_hf_config(['exl2', 'max_new_tokens', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p'])
+            exl2 = str(read_hf_return['exl2']).lower() == 'true'
         except Exception as e:
             return handle_local_error("Could not read hf-waitress config, encountered error: ", e)
-
-        exl2 = str(read_hf_return['exl2']).lower() == 'true'
         
         headers['X-Max-New-Tokens'] = str(read_hf_return['max_new_tokens'])
         headers['X-Temperature'] = str(read_hf_return['temperature'])
         headers['X-Top-K'] = str(read_hf_return['top_k'])
         headers['X-Top-P'] = str(read_hf_return['top_p'])
-        headers['X-Min-P'] = str(read_hf_return['min_p'])
-        
-        base_url = f"http://{read_return['hf_waitress_access_url']}:{read_return['hf_waitress_server_port']}"
-        
-        payload = formatted_prompt
         
         if not exl2:
             headers['X-Return-Full-Text'] = 'False'
+            headers['X-Min-P'] = str(read_hf_return['min_p'])
             headers['X-Do-Sample'] = str(read_hf_return['do_sample'])
             endpoint_url = f"{base_url}/completions"
         else:
@@ -2116,7 +2144,7 @@ def get_request_params_for_local_llm_server(formatted_prompt=""):
             headers['Connection'] = 'keep-alive'
             endpoint_url = f"{base_url}/exl2_grapher"
     
-    else:
+    else:   # llama.cpp LLMs
         payload = {
             'prompt': formatted_prompt,
             'temperature': read_return['local_llm_temperature'],
@@ -2131,35 +2159,155 @@ def get_request_params_for_local_llm_server(formatted_prompt=""):
     return endpoint_url, headers, payload, exl2
 
 
+def get_request_params_for_graph_summarizer_model():
+    try:
+        config_data = read_config([
+            'exl2_quantize_graph_summarizer_model', 'graph_summarizer_access_url',
+            'graph_summarizer_server_port', 'graph_summarizer_max_new_tokens',
+            'graph_summarizer_temperature', 'graph_summarizer_do_sample', 'graph_summarizer_top_k',
+            'graph_summarizer_top_p', 'graph_summarizer_min_p'
+        ])
+        exl2_quantize_graph_summarizer_model = str(config_data['exl2_quantize_graph_summarizer_model']).lower() == 'true'
+    except Exception as e:
+        return handle_local_error("Could not get graphing request params, encountered error: ", e)
+
+    graph_summarizer_url = f"http://{config_data['graph_summarizer_access_url']}:{config_data['graph_summarizer_server_port']}"
+
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Max-New-Tokens': str(config_data['graph_summarizer_max_new_tokens']),
+        'X-Temperature': str(config_data['graph_summarizer_temperature']),
+        'X-Top-K': str(config_data['graph_summarizer_top_k']),
+        'X-Top-P': str(config_data['graph_summarizer_top_p'])
+    }
+
+    if not exl2_quantize_graph_summarizer_model:
+        headers['X-Return-Full-Text'] = 'False'
+        headers['X-Min-P'] = str(config_data['graph_summarizer_min_p'])
+        headers['X-Do-Sample'] = str(config_data['graph_summarizer_do_sample'])
+        graph_summarizer_url += "/completions"
+    else:
+        headers['Connection'] = 'keep-alive'
+        graph_summarizer_url += "/exl2_grapher"
+
+    return graph_summarizer_url, headers, exl2_quantize_graph_summarizer_model
+
+
+def bring_graph_summarizer_model_online():  # Launch HF-Waitress instance with graph summarizer model
+    try:
+        config_data = read_config([
+            'graph_summarizer_model', 'graph_summarizer_access_url', 'graph_summarizer_server_port',
+            'quantize_graph_summarizer_model', 'quantize_graph_summarizer_model_bits',
+            'exl2_quantize_graph_summarizer_model', 'exl2_quantize_graph_summarizer_model_bpw',
+            'graph_summarizer_max_new_tokens', 'graph_summarizer_max_seq_len', 
+            'graph_models_base_directory_name', 'graph_summary_generator_directory_name',
+            'minimum_free_vram_for_graph_summarizer_model', 'graph_model_access_url', 'graph_model_server_port'
+        ])
+        hf_waitress_graph_summarizer_server_path = os.path.normpath(os.path.join(os.getcwd(), config_data['graph_models_base_directory_name'], config_data['graph_summary_generator_directory_name']))    # normpath() is used to "normalize" i.e. convert to a path that is appropriate for the current OS
+        print(f"\nLaunching HF-Waitress instance with graph summarizer model at path: {hf_waitress_graph_summarizer_server_path}\n")
+    except Exception as e:
+        return handle_local_error("Could not read graph model config, encountered error: ", e)
+
+    if utils.is_local_server_online(f"http://{config_data['graph_summarizer_access_url']}:{config_data['graph_summarizer_server_port']}")['server_online']:
+        print("\nGraph summarizer model server is already online, skipping launch...\n")
+        return True
+    
+    # Get free GPU memory and shutdown the main Waitress LLM chat server if necessary:
+    try:
+        hf_waitress_base_url = get_url_for_server('hf-waitress')    # shutdown general-chat LLM server at this URL in case free VRAM is insufficient
+        graph_model_base_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
+        utils.ensure_minimum_free_vram(config_data['minimum_free_vram_for_graph_summarizer_model'], [graph_model_base_url, hf_waitress_base_url])
+    except Exception as e:
+        return handle_local_error(f"Could not reserve minimum GPU memory ({config_data['minimum_free_vram_for_graph_summarizer_model']}MB) required for Graph-Summarizer model, encountered error: ", e)
+
+    # Need to format this way because the f"""<>""" multiline way will maintain newlines in the command, which will cause the command to fail!
+    # Also cannot format this as we have in hf_waitress.py's exllama_bpw_quantize_model() because of the command seperators (&& and ;), which would be incorrectly treated as parameters to the cd command in that list format!
+    # We cd first because the command should execute from within that directory otherwise the main hf_config.json gets incorrectly modified! 
+    command = (
+        f"cd {hf_waitress_graph_summarizer_server_path} "
+        f"{'&&' if platform.system() == 'Windows' else ';'} "
+        f"{'python' if platform.system() == 'Windows' else 'python3'} hf_waitress.py "
+        f"--port {str(config_data['graph_summarizer_server_port'])} "
+        f"--model_id {str(config_data['graph_summarizer_model'])} "
+        f"--max_new_tokens {str(config_data['graph_summarizer_max_new_tokens'])} "
+    )
+    if config_data['exl2_quantize_graph_summarizer_model']:
+        command += f" --exl2 --exl2_bpw {str(config_data['exl2_quantize_graph_summarizer_model_bpw'])} --exl2_max_seq_len {str(config_data['graph_summarizer_max_seq_len'])}"
+    else:
+        command += f" --quantize {str(config_data['quantize_graph_summarizer_model'])} --quant_level {str(config_data['quantize_graph_summarizer_model_bits'])}"
+
+    try:
+        if platform.system() == 'Windows':
+            windows_command = f'start cmd /k "{command}"'   # /k tells cmd to keep the window open even after the command has finished, which is useful for debugging, versus /c which closes the window after the command has finished.
+            subprocess.Popen(windows_command, shell=True)   # Popen is used to launch the command in a new process in a new terminal, while subprocess.run() is used to simply run the command and wait for it to finish.
+            # Using `start` in this manner explicitly instructs Windows to start a new command window to run the command, while CREATE_NEW_CONSOLE combined with shell=True might not work correctly as the shell itself might capture the console!
+        else:
+            subprocess.Popen(command, shell=True)
+        # The shell=True lets the system's shell interpret the command string, including special operators like && (Windows) or ; (Unix) that chain commands together.
+        # This is exactly what you need when you want to change directory before running a script!
+
+        timeout = 5
+        attempts = 25
+        for _ in range(attempts):
+            if utils.is_local_server_online(f"http://{config_data['graph_summarizer_access_url']}:{config_data['graph_summarizer_server_port']}")['server_online']:
+                print(f"\nGraph summarizer model launched successfully!\n")
+                return True
+            else:
+                print(f"Graph summarizer model not yet running, waiting {timeout} seconds before retrying...")
+                time.sleep(timeout)
+            
+    except Exception as e:
+        return handle_local_error("Could not launch HF-Waitress instance with kb-generator model, encountered error: ", e)
+    
+    return False
+
+
 def summary_generator(chunk_entities=None):
     print("\nGenerating summaries...\n")
 
     if chunk_entities is None:
         return handle_local_error("Chunk entities are required to generate summaries")
 
+    try:
+        bring_graph_summarizer_model_online()
+    except Exception as e:
+        return handle_local_error("Could not bring graph summarizer model online, encountered error: ", e)
+
     local_llm_server = read_config(['local_llm_server'])['local_llm_server']
     exl2 = str(read_hf_config(['exl2'])['exl2']).lower() == 'true'
 
-    if local_llm_server == 'hf-waitress' and exl2:
+    if local_llm_server == 'hf-waitress':
+        
+        summarizer_url = ""
+        if exl2:
 
-        exl2_prompt_template_format = read_config(['exl2_prompt_template_format'])['exl2_prompt_template_format']
+            graph_summarizer_model_prompt_template_format = read_config(['graph_summarizer_model_prompt_template_format'])['graph_summarizer_model_prompt_template_format']
+
+            try:
+                summarizer_url, headers, _ = get_request_params_for_graph_summarizer_model()
+            except Exception as e:
+                return handle_local_error("Could not get graphing request params, encountered error: ", e)
+
+            try:
+                payload = json.dumps({"chunk_entities": chunk_entities, "graph_summarizer_model_prompt_template_format": graph_summarizer_model_prompt_template_format, "summary_generation_mode": True})
+                full_response = hf_waitress_bulk_stream_request_response_handler(summarizer_url, headers, payload)
+                # print(f"\nExl2 Bulk-Summary Generation Response:\n\n{full_response}\n")
+                return full_response
+            except Exception as e:
+                return handle_local_error("Error with request to exl2_grapher API, encountered error: ", e)
+
+        else:
+            # TODO: Implement non-exl2 bulk-summary generation with /completions
+            pass
 
         try:
-            endpoint_url, headers, _, _ = get_request_params_for_local_llm_server()
+            # While the summarizer model is being shutdown after use, we don't terminate the graph-extraction model as it's used for GraphRAG responses!
+            if utils.shutdown_waitress_server(summarizer_url)['success']:
+                print(f"\nSuccessfully shut down graph summarizer model at URL {summarizer_url}\n")
+            else:
+                raise Exception(f"\nCould not shut down graph summarizer model at URL {summarizer_url}, proceeding regardless...\n")
         except Exception as e:
-            return handle_local_error("Could not get graphing request params, encountered error: ", e)
-
-        try:
-            payload = json.dumps({"chunk_entities": chunk_entities, "exl2_prompt_template_format": exl2_prompt_template_format, "summary_generation_mode": True})
-            full_response = hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payload)
-            # print(f"\nExl2 Bulk-Summary Generation Response:\n\n{full_response}\n")
-            return full_response
-        except Exception as e:
-            return handle_local_error("Error with request to exl2_grapher API, encountered error: ", e)
-
-    elif local_llm_server == 'hf-waitress' and not exl2:
-        # TODO: Implement non-exl2 bulk-summary generation with /completions
-        pass
+            handle_error_no_return("Could not shutdown graph summarizer model, encountered error: ", e)
 
     elif local_llm_server == 'llama-cpp':
         # TODO: Implement llama-cpp summary generation
@@ -2437,21 +2585,22 @@ def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with k
             'exl2_quantize_graph_model_bpw', 'graph_model_max_new_tokens',
             'graph_model_max_seq_len', 'graph_models_base_directory_name',
             'graph_extraction_model_directory_name', 'graph_summary_generator_directory_name',
-            'minimum_free_vram_for_graph_extraction_model'
+            'minimum_free_vram_for_graph_extraction_model', 'graph_summarizer_access_url', 'graph_summarizer_server_port'
         ])
         hf_waitress_kb_generator_server_path = os.path.normpath(os.path.join(os.getcwd(), config_data['graph_models_base_directory_name'], config_data['graph_extraction_model_directory_name']))    # normpath() is used to "normalize" i.e. convert to a path that is appropriate for the current OS
         print(f"\nLaunching HF-Waitress instance with kb-generator model at path: {hf_waitress_kb_generator_server_path}\n")
     except Exception as e:
         return handle_local_error("Could not read graph model config, encountered error: ", e)
 
-    if utils.is_local_server_online(f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}")['server_available']:
+    if utils.is_local_server_online(f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}")['server_online']:
         print("\nGraphing model server is already online, skipping launch...\n")
         return True
     
     # Get free GPU memory and shutdown the main Waitress LLM chat server if necessary:
     try:
         hf_waitress_base_url = get_url_for_server('hf-waitress')
-        utils.ensure_minimum_free_vram(config_data['minimum_free_vram_for_graph_extraction_model'], hf_waitress_base_url)
+        graph_summarizer_base_url = f"http://{config_data['graph_summarizer_access_url']}:{config_data['graph_summarizer_server_port']}"
+        utils.ensure_minimum_free_vram(config_data['minimum_free_vram_for_graph_extraction_model'], [graph_summarizer_base_url, hf_waitress_base_url])
     except Exception as e:
         return handle_local_error(f"Could not reserve minimum GPU memory ({config_data['minimum_free_vram_for_graph_extraction_model']}MB) required for Graph-Extraction model, encountered error: ", e)
 
@@ -2484,7 +2633,7 @@ def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with k
         timeout = 5
         attempts = 25
         for _ in range(attempts):
-            if utils.is_local_server_online(f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}")['server_available']:
+            if utils.is_local_server_online(f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}")['server_online']:
                 print(f"\nKB-Generator model launched successfully!\n")
                 return True
             else:
@@ -2494,7 +2643,7 @@ def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with k
     except Exception as e:
         return handle_local_error("Could not launch HF-Waitress instance with kb-generator model, encountered error: ", e)
     
-    return True
+    return False
 
 
 def is_graph_blank_or_newly_created(graph):
@@ -4429,7 +4578,10 @@ def llama_cpp_server_starter():
         if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
             print("\n\nThe HF-Waitress server is running. Attempting to shut it down before starting the llama.cpp server.\n\n")
             try:
-                utils.shutdown_waitress_server(hf_waitress_base_url)
+                if utils.shutdown_waitress_server(hf_waitress_base_url)['success']:
+                    print(f"\nSuccessfully shut down HF-Waitress server at URL {hf_waitress_base_url}\n")
+                else:
+                    raise Exception(f"\nCould not shut down HF-Waitress server at URL {hf_waitress_base_url}, proceeding regardless...\n")
                 LLM_LOADED_UP = False
             except Exception as e:
                 LLM_LOADED_UP = True    # We know the HF-Waitress server is running, which means `hf_waitress.py` is available, so we set LLM_LOADED_UP to True
@@ -4550,7 +4702,10 @@ def hf_waitress_server_starter(hard_reboot_required = False):
         if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
             print("\nHF-Waitress server is running, terminating it before hard-reboot.\n")
             try:
-                utils.shutdown_waitress_server(hf_waitress_base_url)
+                if utils.shutdown_waitress_server(hf_waitress_base_url)['success']:
+                    print(f"\nSuccessfully shut down HF-Waitress server at URL {hf_waitress_base_url}\n")
+                else:
+                    raise Exception(f"\nCould not shut down HF-Waitress server at URL {hf_waitress_base_url}, proceeding regardless...\n")
             except Exception as e:
                 other_server_running = True
                 handle_error_no_return("Could not terminate running HF-Waitress process before hard-reboot. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator to whitelist your IP. Additional technical details follow: ", e)
@@ -4671,22 +4826,18 @@ def hf_waitress_server_starter_endpoint():
 
 
 @app.route('/check_local_llm_server_status', methods=['POST'])
-def check_local_llm_server_status():
-    
-    server_online = False
-    
+def check_local_llm_server_status():    
     try:
         server_to_check = request.form['server_to_check']
     except Exception as e:
-        return handle_api_error("Server-side error, could not read server_to_check from the POST request in method check_local_llm_server_status, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read server_to_check from the POST request, encountered error: ", e)
     
     try:
         server_url = get_url_for_server(server_to_check)
-        server_online = utils.is_local_server_online(server_url)['server_available']
+        server_online = utils.is_local_server_online(server_url)['server_online']
+        return jsonify({'success': True, 'server_online': server_online})
     except Exception as e:
-        return handle_api_error(f"Error checking {server_to_check} server status in method check_local_llm_server_status, encountered error: ", e)
-
-    return jsonify({'success': True, 'server_online': server_online})
+        return handle_api_error(f"Error checking {server_to_check} server status, encountered error: ", e)
 
 
 @app.route('/local_llm_server_starter')
