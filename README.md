@@ -46,10 +46,9 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
 1. [LARS - The LLM & Advanced Referencing Solution](https://github.com/abgulati/LAR-Enterprise?tab=readme-ov-file#lars---the-llm--advanced-referencing-solution)
     - [Detailed list of LARS's feature-set](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#heres-a-list-detailing-larss-feature-set-as-it-stands-today)
     - [A demonstration video showcasing these features](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#a-demonstration-video-showcasing-these-features-can-be-viewed-at-the-link-below)
-2. [Dependencies](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#dependencies)
-3. [Installing LARS](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#installing-lars)
-4. [Usage - First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#usage---first-run)
-5. [Optional Dependencies](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#optional-dependencies)
+2. [Installation](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#installation)
+3. [Usage - First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#usage---first-run)
+4. [Optional Dependencies](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#optional-dependencies)
     - [llama.cpp - Installation Instructions](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#llamacpp---installation-instructions)
         - [1. Build Tools](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#1-build-tools)
         - [2. llama.cpp](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#2-llamacpp)
@@ -59,63 +58,277 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
     - [LibreOffice](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#libreoffice)
     - [Poppler](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#poppler)
     - [PyTesseract (optional)](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#pytesseract-optional)
-6. [Troubleshooting Installation Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting-installation-issues)
+5. [Troubleshooting Installation Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting-installation-issues)
     - [Python Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#python-issues)
     - [Other Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#other-issues)
-7. [First Run with llama.cpp](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#first-run-with-llamacpp)
-8. [General User Guide - Post First-Run Steps](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#general-user-guide---post-first-run-steps)
-9. [Troubleshooting](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting)
-10. [Docker - Deploying Containerized LARS](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#docker---deploying-containerized-lars)
+6. [First Run with llama.cpp](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#first-run-with-llamacpp)
+7. [General User Guide - Post First-Run Steps](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#general-user-guide---post-first-run-steps)
+8. [Troubleshooting](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting)
+9. [Docker - Deploying Containerized LARS](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#docker---deploying-containerized-lars)
     - [Background and Setup](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#background-and-setup)
     - [Building & Running the CPU-Inferencing Container](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#building--running-the-cpu-inferencing-container)
     - [Building & Running the Nvidia-CUDA GPU-Enabled Container](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#building--running-the-nvidia-cuda-gpu-enabled-container)
     - [Special Note for Containers - Troubleshooting Networking Issues and Errors on First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#special-note-for-containers---troubleshooting-networking-issues-and-errors-on-first-run)
     - [Special Note for Containers - Updating the Container Image Post-First-Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#special-note-for-containers---updating-the-container-image-post-first-run)
-11. [Current Development Roadmap](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#current-development-roadmap)
-12. [Support and Donations](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#support-and-donations)
+10. [Current Development Roadmap](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#current-development-roadmap)
+11. [Support and Donations](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#support-and-donations)
 
 
-## Dependencies
+## Installation
 
-1. Python v3.10.x or above: https://www.python.org/downloads/
+1. Install Nvidia [GPU Drivers](https://www.nvidia.com/Download/index.aspx?lang=en-us)
 
-2. PyTorch:
+2. Download and install [Python 3.11.5](https://www.python.org/downloads/release/python-3115/) (should also work with any `3.10.x` or `3.11.x` versions)
 
-    **If you're planning to use your GPU to run LLMs, make sure to install the GPU drivers and CUDA/ROCm toolkits as appropriate for your setup, and only then proceed with PyTorch setup below**
+3. Download and install the [Visual Studio IDE](https://visualstudio.microsoft.com/thank-you-downloading-visual-studio/?sku=Community&channel=Release&version=VS2022&source=VSLandingPage&cid=2030&passive=false)
 
-    Download and install the PyTorch version appropriate for your system: https://pytorch.org/get-started/locally/
+    - NOTE: Make sure to select "Desktop Development with C++"!
 
+    - Required by Nvidia-CUDA on Windows specifically for MSVC (Microsoft Visual C++) Compiler
 
-## Installing LARS
+    - CUDA integrates into MS Visual Studio in various ways, facilitating development, debugging and profiling, which may not be available with other IDEs.
 
-1. Clone the repository:
-    ```
-    git clone https://github.com/abgulati/LARS
-    cd LARS
-    ```
-
-    - If prompted for GitHub authentication, use a [Personal Access Token](https://github.com/settings/tokens) as passwords are deprecated. Also accessible via:      
-        ```GitHub Settings -> Developer settings (located on the bottom left!) -> Personal access tokens```
-
-2. Install Python dependencies:
-    - Windows via PIP:
-        ```
-        pip install -r .\requirements.txt
-        ```
-    
-    - Linux via PIP:
-        ```
-        pip3 install -r ./requirements.txt
-        ```
-
-    - Note on Azure: Some required Azure libraries are NOT available on the MacOS platform! A separate requirements file is therefore included for MacOS excluding these libraries:
-
-    - MacOS:
-        ```
-        pip3 install -r ./requirements_mac.txt
-        ```
+    - [For more information see](https://stackoverflow.com/questions/57450317/confusion-about-cuda-installation-instructions-what-exactly-is-microsoft-visual)
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
+
+4. Download and install [Microsoft Visual Studio Build Tools 2022](https://visualstudio.microsoft.com/downloads/)
+
+    - NOTE: Scroll down to "Tools for Visual Studio"
+
+    - NOTE: When installing the above, make sure to select the following components:
+    ```
+    Desktop development with C++
+    # Then from the "Optional" category on the right, make sure to select the following:
+    MSVC C++ x64/x86 build tools
+    C++ CMake tools for Windows
+    ```
+
+    - Refer to the screenshot below:
+    <p align="center">
+    <img src="https://github.com/abgulati/LARS/blob/main/documents/images_and_screenshots/build_tools_ms_visual_studio_installation.png"  align="center">
+    </p>
+
+    - If you skipped selecting the above workloads when first installing the Visual Studio Build Tools, simply run the vs_buildTools.exe installer again, click "Modify" and ensure the ```Desktop development with C++``` workload and the ```MSVC and C++ CMake``` Optionals are selected as outlined above
+
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
+
+5. Download and install Nvidia's [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archive)
+
+    - NOTE: LARS built and tested with v12.2 and v12.4.1 on Ampere & Ada GPUs, and v12.8.1 on Blackwell GPUs
+
+    - NOTE: Make sure to "Visual-Studio integration" is selected at the time of installation! 
+
+    - To verify the installation:
+
+        - Basic Check via Terminal:
+            ```
+            nvcc -V
+            nvidia-smi
+            ```
+
+        - Or, write & compile a `Hello World` Test Program:
+
+            - Save the following as `hello.cu`:
+                ```
+                #include <stdio.h>
+                #include <cuda_runtime.h>
+
+                __global__ void helloCUDA()
+                {
+                    printf("Hello from the GPU!\n");
+                }
+
+                int main()
+                {
+                    printf("Starting CUDA program...\n");
+                    
+                    int deviceCount;
+                    cudaGetDeviceCount(&deviceCount);
+                    printf("Number of CUDA devices: %d\n", deviceCount);
+                    
+                    if (deviceCount > 0) {
+                        helloCUDA<<<1, 1>>>();
+                        cudaDeviceSynchronize();
+                        
+                        cudaError_t error = cudaGetLastError();
+                        if (error != cudaSuccess) {
+                            printf("CUDA error: %s\n", cudaGetErrorString(error));
+                        }
+                    }
+                    
+                    printf("CUDA program finished.\n");
+                    return 0;
+                }
+                ```
+
+            - Add cl.exe to PATH (exact path may differ slightly on your setup, use the following as a guideline): `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.43.34808\bin\Hostx64\x64`
+
+            - Open a terminal in the same directory and compile the program: `nvcc hello.cu -o hello`
+
+            - As it finishes compilation, you should see an output akin to the below:
+                ```
+                hello.cu
+                tmpxft_0000579c_00000000-10_hello.cudafe1.cpp
+                Creating library hello.lib and object hello.exp
+                ```
+
+            - Run: `./hello`
+
+            - The output should be the following:
+                ```
+                Starting CUDA program...
+                Number of CUDA devices: 1
+                Hello from the GPU!
+                CUDA program finished.
+            ```
+
+            - Done & done!
+
+    - Verify (and implement if missing) CUDA-Visual Studio Integration:
+
+        Copy all the four files from the following directory (path changes basis CUDA version):   
+        ```C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.2\extras\visual_studio_integration\MSBuildExtensions```
+        
+        and Paste them to the following directory:   
+        ```C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Microsoft\VC\v170\BuildCustomizations```
+
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
+
+6. Install LARS Requirements:
+
+    - Clone the repository:
+        ```
+        git clone https://github.com/abgulati/LARS
+        cd LARS
+        ```
+
+        - If prompted for GitHub authentication, use a [Personal Access Token](https://github.com/settings/tokens) as passwords are deprecated. Also accessible via:      
+            ```GitHub Settings -> Developer settings (located on the bottom left!) -> Personal access tokens```
+
+    - Install Python dependencies:
+        - Windows via PIP:
+            ```
+            pip install -r .\requirements.txt
+            ```
+        
+        - Linux via PIP:
+            ```
+            pip3 install -r ./requirements.txt
+            ```
+
+        - Note on Azure: Some required Azure libraries are NOT available on the MacOS platform! A separate requirements file is therefore included for MacOS excluding these libraries:
+
+        - MacOS:
+            ```
+            pip3 install -r ./requirements_mac.txt
+            ```
+
+7. Install [Pytorch](https://pytorch.org/get-started/locally/)
+
+    - NOTE: LARS built and tested with Pytorch v2.5.0 with CUDA 12.4.1 for Ampere & Ada GPUs, and Pytorch v2.7.1 with CUDA 12.8.1 for Blackwell GPUs
+
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
+
+8. Install Flash-Attention 2:
+
+    - Flash-Attention 2 is used to reduce the memory footprint of a model's KV-Cache context space, and speed up inferencing.
+
+    - It has very specific hardware and software pre-requisites, make sure to check the [official repo](https://github.com/Dao-AILab/flash-attention) for the most up-to-date list of requirements.
+
+    - NOTE (V. Imp): Make sure that ninja is installed and that it works correctly (e.g. `ninja --version` then `echo $?` should return exit code `0`). If not (sometimes `ninja --version` then `echo $?` returns a nonzero exit code), uninstall then reinstall ninja (`pip uninstall -y ninja && pip install ninja`). Without ninja, compiling can take a very long time (2h) since it does not use multiple CPU cores. With ninja compiling takes 3-5 minutes on a 64-core machine using CUDA toolkit.
+
+    - To install:
+
+        0. Disable filename length limit - Git has a limit of 4096 chars for a filename which can lead to "Filename too long" errors when compiling FA2. To mitigate this, open an Admin command-prompt and run:
+            ```
+            git config --system core.longpaths true
+            ```
+
+        1. Clone the latest stable release (v2.7.4.post1 as of this writing, update as necessary) from the official repository:
+            ```
+            git clone -b v2.7.4.post1 https://github.com/Dao-AILab/flash-attention.git
+            cd flash-attention
+            ```
+
+        2. Open the `setup.py` file and uncomment (or add) the following lines to the `extra_compile_args` on line 287 or thereabouts:
+            ```                        
+            "-DFLASHATTENTION_DISABLE_BACKWARD",
+            "-DFLASHATTENTION_DISABLE_DROPOUT",
+            "-DFLASHATTENTION_DISABLE_ALIBI",
+            "-DFLASHATTENTION_DISABLE_UNEVEN_K",
+            "-DFLASHATTENTION_DISABLE_LOCAL",
+            ```
+            This is as per an [official comment on how to reduce compilation times](https://github.com/Dao-AILab/flash-attention/pull/1025#issuecomment-2207077088)
+        
+        3. Set MAX_JOBS (as per CPU thread-count) and run `pip install` to build (make sure Ninja is correctly installed as noted above):
+            - On Windows:
+                ```
+                set MAX_JOBS=20
+                pip install . --no-build-isolation
+                ```
+
+            - On Linux:
+                ```
+                MAX_JOBS=20 pip install . --no-build-isolation
+                ```
+
+    - Verify Installation with Test:
+        ```
+        # python3 CMD
+        import flash_attn
+        print(flash_attn.__version__)
+        ```
+
+    - Backup Wheels:
+
+        - Once built, wheels can and should be backed up for reuse on the same system in the future, unless Python, Torch, CUDA and FA2 versions need to be updated.
+
+        - To Backup, look for built wheels in the following location:
+
+            1. On Windows:
+                ```
+                C:\Users\<username>\AppData\Local\pip\cache\wheels # PIP Wheels Location
+
+                # Example locations:
+
+                C:\Users\<username>\AppData\Local\pip\cache\wheels\3d\88\d8\284b89f56af7d5bf366b10d6b8e251ac8a7c7bf3f04203fb4f
+
+                C:\Users\<username>\AppData\Local\pip\cache\wheels\45\31\56\0ad23c683f47a2cd1854109d5f61d2b9798aadb382e5c1a656
+                ```
+
+            2. On Linux:
+                ```
+                /home/<username>/.cache/pip/wheels/f6/b4/f5/30df6540ed09f56a99a1138f669e1dbee729478850845504f0/flash_attn-2.5.9.post1-cp310-cp310-linux_x86_64.whl
+                ```
+
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
+
+9. Install ExLlamaV2:
+
+    - ExLlama is a highly optimized LLM inference library spcifically for consumer GPUs.
+
+    - It attempts to utilize Flash-Attention (v2.5.7+) by default so do install that before ExLlama (see above). MAKE SURE TO INSTALL IT AFTER INSTALLING FLASH ATTENTION 2!
+
+    - Since HF-Waitress includes full management of ExLlama, including the downloading and quantization of models and saving of measurements for each model processed, it's required to clone the ExLlamav2 repo into the LARS `web_app` dir:
+        ```
+        cd LARS-Enterprise/web_app
+        git clone -b 0.3.1 https://github.com/turboderp-org/exllamav2.git
+        cd exllamav2
+        pip install .
+        ```
+
+    - There's no need to `pip install` the dependencies in the requirements.txt within the ExLlamaV2 dir as these are included in LARS's requirements.txt already.
+
+    - In case you encounter `Permission` Errors when quantizing models with ExLlamaV2, try the following:
+
+        1. OneDrive is the most likely culprit if on a synced folder so make sure to disable or at least temporarily shut it.
+
+        2. If that doesn't work/apply, try running `python hf_waitress.py --exl2` via an Admin shell from within the `LARS-Enterprise/web_app` dir.
+
+        3. If all else fails, try uninstalling and re-installing via an `Admin` shell: run `pip uninstall exllamav2 -y` from within the `exllamav2` dir, delete the entire directory, re-clone and re-install, and retry quantization via `python hf_waitress.py --exl2` from within the `LARS-Enterprise/web_app` dir.
+
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)    
 
 
 ## Usage - First Run
@@ -146,7 +359,7 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
 
 - On Windows:
 
-    - Download Microsoft Visual Studio Build Tools 2022 from the [Official Site - "Tools for Visual Studio"](https://visualstudio.microsoft.com/downloads/)
+    - Download Microsoft Visual Studio Build Tools 2022 from the [Official Site - Scroll down to "Tools for Visual Studio"](https://visualstudio.microsoft.com/downloads/)
 
     - NOTE: When installing the above, make sure to select the following components:
     ```
@@ -313,19 +526,70 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
 
     * Make sure that ninja is installed and that it works correctly (e.g. `ninja --version` then `echo $?` should return exit code `0`). If not (sometimes `ninja --version` then `echo $?` returns a nonzero exit code), uninstall then reinstall ninja (`pip uninstall -y ninja && pip install ninja`). Without ninja, compiling can take a very long time (2h) since it does not use multiple CPU cores. With ninja compiling takes 3-5 minutes on a 64-core machine using CUDA toolkit.
 
-- To install, you can either:
+- To install:
 
-    1. Clone the repository:
+    0. Disable filename length limit - Git has a limit of 4096 chars for a filename which can lead to "Filename too long" errors when compiling FA2. To mitigate this, open an Admin command-prompt and run:
         ```
-        git clone https://github.com/Dao-AILab/flash-attention.git
+        git config --system core.longpaths true
+        ```
+
+    1. Clone the latest stable release (v2.7.4.post1 as of this writing, update as necessary) from the official repository:
+        ```
+        git clone -b v2.7.4.post1 https://github.com/Dao-AILab/flash-attention.git
         cd flash-attention
-        pip install . --no-build-isolation
         ```
 
-    2. Install directly via PIP:
+    2. Open the `setup.py` file and uncomment (or add) the following lines to the `extra_compile_args` on line 287 or thereabouts:
+        ```                        
+        "-DFLASHATTENTION_DISABLE_BACKWARD",
+        "-DFLASHATTENTION_DISABLE_DROPOUT",
+        "-DFLASHATTENTION_DISABLE_ALIBI",
+        "-DFLASHATTENTION_DISABLE_UNEVEN_K",
+        "-DFLASHATTENTION_DISABLE_LOCAL",
         ```
-        pip install flash-attn --no-build-isolation
-        ```
+        This is as per an [official comment on how to reduce compilation times](https://github.com/Dao-AILab/flash-attention/pull/1025#issuecomment-2207077088)
+    
+    3. Set MAX_JOBS (as per CPU thread-count) and run `pip install` to build (make sure Ninja is correctly installed as noted above):
+        - On Windows:
+            ```
+            set MAX_JOBS=20
+            pip install . --no-build-isolation
+            ```
+
+        - On Linux:
+            ```
+            MAX_JOBS=20 pip install . --no-build-isolation
+            ```
+
+- Verify Installation with Test:
+    ```
+    # python3 CMD
+    import flash_attn
+    print(flash_attn.__version__)
+    ```
+
+- Backup Wheels:
+
+    - Once built, wheels can and should be backed up for reuse on the same system in the future, unless Python, Torch, CUDA and FA2 versions need to be updated.
+
+    - To Backup, look for built wheels in the following location:
+
+        1. On Windows:
+            ```
+            C:\Users\<username>\AppData\Local\pip\cache\wheels # PIP Wheels Location
+
+            # Example locations:
+
+            C:\Users\<username>\AppData\Local\pip\cache\wheels\3d\88\d8\284b89f56af7d5bf366b10d6b8e251ac8a7c7bf3f04203fb4f
+
+            C:\Users\<username>\AppData\Local\pip\cache\wheels\45\31\56\0ad23c683f47a2cd1854109d5f61d2b9798aadb382e5c1a656
+            ```
+
+        2. On Linux:
+            ```
+            /home/<username>/.cache/pip/wheels/f6/b4/f5/30df6540ed09f56a99a1138f669e1dbee729478850845504f0/flash_attn-2.5.9.post1-cp310-cp310-linux_x86_64.whl
+            ```
+
 
 
 ### ExLlamaV2:
