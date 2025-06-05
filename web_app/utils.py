@@ -18,45 +18,45 @@ def is_local_server_online(server_base_url):
             data = response.json()  # parse the JSON response to determine the server status
             if data['status'] == 'ok':
                 print(f"LLM Server ready and online at URL: {server_health_url}")
-                return {"server_available":True, "loading_model":False, "status_code":200}
+                return {"server_available":True, "server_online":True, "loading_model":False, "status_code":200}
             elif data['status'] == 'no slot available':
                 print("No slots available. Server is running but cannot handle more requests.")
-                return {"server_available":False, "loading_model":False, "status_code":200}
+                return {"server_available":False, "server_online":True, "loading_model":False, "status_code":200}
             
         elif response.status_code == 503:   # model still loading or no slots
             data = response.json()
             if data['status'] == 'loading model':
                 print("Server is loading the selected LLM, please wait")
-                return {"server_available":False, "loading_model":True, "status_code":503}
+                return {"server_available":False, "server_online":True, "loading_model":True, "status_code":503}
             else:
                 print("No slots available. Server is running but cannot handle more requests.")
-                return {"server_available":False, "loading_model":False, "status_code":503}
+                return {"server_available":False, "server_online":True, "loading_model":False, "status_code":503}
         
         elif response.status_code == 500:
             print("Server error: Failed to load LLM.")
-            return {"server_available":False, "loading_model":False, "status_code":500}
+            return {"server_available":False, "server_online":True, "loading_model":False, "status_code":500}
         
         else:
-            return {"server_available":False, "loading_model":False, "status_code":500}
+            return {"server_available":False, "server_online":False, "loading_model":False, "status_code":500}
     
     except requests.exceptions.ConnectionError as e:
         print("\n\nECONNREFUSED event\n\n")
-        return {"server_available":False, "loading_model":True, "status_code":500}
+        return {"server_available":False, "server_online":False, "loading_model":True, "status_code":500}
     except Exception as e:
         print(f"\n\nCould not check local LLM Server health, encountered error: {e}\n\n")
-        return {"server_available":False, "loading_model":False, "status_code":500}
+        return {"server_available":False, "server_online":False, "loading_model":False, "status_code":500}
 
 
-def shutdown_waitress_server(base_url = 'http://0.0.0.0:9069'):
+def shutdown_waitress_server(base_url = 'http://localhost:9069'):
     try:
         print(f"\n\nShutting down HF-Waitress server at: {base_url}\n\n")
 
-        if is_local_server_online(base_url)['server_available']:
+        if is_local_server_online(base_url)['server_online']:
             url = f"{base_url}/shutdown_hf_waitress"
             payload = ""
             headers = {}
             response = requests.post(url, data=payload, headers=headers)
-            return {"success":True, "message":response.json()}
+            return {"success":response.json()['success'], "message":response.json()['message']}
         else:
             return {"success":True, "message":"HF-Waitress server is already offline at the specified URL."}
     except Exception as e:
@@ -64,22 +64,25 @@ def shutdown_waitress_server(base_url = 'http://0.0.0.0:9069'):
     
 
 def send_ctrl_c_to_process(process):
-    if process.poll() is None:  # check if process is still running via poll(), which returns None if a process is still running 
-        if platform.system() == 'Windows':
-            process.send_signal(signal.CTRL_BREAK_EVENT)
-        else:
-            process.send_signal(signal.SIGINT)
-        try:
-            # Wait a bit for the process to terminate gracefully:
-            process.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            print("\n\nProcess did not terminate within timeout, will be force-killed.\n\n")
-            process.kill()  # Sends 'SIGKILL' on Unix-like to force-kill immediately / 'TerminateProcess' on Windows which still allows for graceful termination
-            process.wait()
-            if process.poll() is not None:
-                print("\n\nProcess has been killed successfully.\n\n")
+    try:
+        if process.poll() is None:  # check if process is still running via poll(), which returns None if a process is still running 
+            if platform.system() == 'Windows':
+                process.send_signal(signal.CTRL_BREAK_EVENT)
             else:
-                print("\n\nProcess still running after force kill attempt.\n\n")
+                process.send_signal(signal.SIGINT)
+            try:
+                # Wait a bit for the process to terminate gracefully:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                print("\n\nProcess did not terminate within timeout, will be force-killed.\n\n")
+                process.kill()  # Sends 'SIGKILL' on Unix-like to force-kill immediately / 'TerminateProcess' on Windows which still allows for graceful termination
+                process.wait()
+                if process.poll() is not None:
+                    print("\n\nProcess has been killed successfully.\n\n")
+                else:
+                    raise Exception("\n\nProcess still running after force kill attempt.\n\n")
+    except Exception as e:
+        raise Exception(f"Could not force-kill process, encountered error: {e}")
 
 
 def terminate_local_llm_server_process(process):
@@ -90,7 +93,7 @@ def terminate_local_llm_server_process(process):
         if process.poll() is not None:  # process has indeed terminated
             print("\n\nProcess terminated gracefully.\n\n")
     except Exception as e:
-        return Exception("Failed to terminate local LLM server process, encountered error: ", e)
+        raise Exception(f"Failed to terminate local LLM server process, encountered error: {e}")
 
 
 def get_nvidia_gpu_info():
@@ -161,19 +164,27 @@ def get_nvidia_gpu_info():
     return gpu_info_list, math.ceil(total_free_memory_mib)
 
 
-def ensure_minimum_free_vram(vram_amount_mib, shutdown_server_at_url_to_make_room):
-    # Get free GPU memory and shutdown the main Waitress LLM chat server if necessary:
+def ensure_minimum_free_vram(vram_amount_mib=5120, shutdown_server_at_url_to_make_room=['http://localhost:9069']):
+    '''
+    Receives a request to ensure a certain amount of free VRAM, and a list of servers to shut down if necessary, in order of priority.
+    '''
     try:
         _, total_free_memory_mib = get_nvidia_gpu_info()
         if total_free_memory_mib < vram_amount_mib:
-            print(f"\nTotal free GPU memory is less than {vram_amount_mib}MB, shutting down main Waitress LLM chat server...\n")
+            print(f"\nTotal free GPU memory is less than {vram_amount_mib}MB, attempting server shutdowns...\n")
             try:
-                shutdown_waitress_server(shutdown_server_at_url_to_make_room)
+                for server_url in shutdown_server_at_url_to_make_room:
+                    shutdown_waitress_server(server_url)    # Will either return True or False, either way we check the free VRAM again and continue if necessary
+                    _, total_free_memory_mib = get_nvidia_gpu_info()
+                    if total_free_memory_mib >= vram_amount_mib:
+                        print(f"Requested VRAM freed by successfully shutting down server at URL {server_url}.")
+                        return True
+                
                 _, total_free_memory_mib = get_nvidia_gpu_info()
                 if total_free_memory_mib < vram_amount_mib:
-                    raise Exception(f"Insufficient GPU memory even after shutting down the chat server at URL {shutdown_server_at_url_to_make_room}.")
+                    raise Exception("Could not free the requested amount of GPU VRAM.")
             except Exception as e:
-                raise Exception(f"Insufficient GPU memory, encountered error: {e}")
+                raise Exception(f"Could not ensure minimum free GPU VRAM, encountered error: {e}")
     except Exception as e:
-        raise Exception(f"Could not check GPU memory, encountered error: {e}")
+        raise Exception(f"Could not ensure minimum free GPU VRAM, encountered error: {e}")
 
