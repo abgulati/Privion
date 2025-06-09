@@ -54,6 +54,31 @@ from whoosh import scoring
 
 from waitress import serve
 
+import fitz # PyMuPDF
+
+try:
+    # Standard Pipeline
+    from docling.datamodel.pipeline_options import (
+        PdfPipelineOptions, 
+        TableFormerMode,
+        EasyOcrOptions,
+        TesseractOcrOptions,
+        TesseractCliOcrOptions,
+        OcrMacOptions,
+        RapidOcrOptions,
+    )
+
+    from docling.datamodel.base_models import DocumentStream, InputFormat
+    from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+
+    # VLM Pipeline
+    from docling.datamodel.pipeline_options import VlmPipelineOptions
+    from docling.datamodel import vlm_model_specs
+    from docling.pipeline.vlm_pipeline import VlmPipeline
+except Exception as e:
+    print(f"Could not import Docling OCR, skipping. If not installed, please run `pip install docling`. Encountered error: {e}")
+
 try:
     from graph_clustering import apply_leiden_clustering
 except Exception as e:
@@ -282,6 +307,20 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'kosmos_container_name':'kosmos-2.5',
                 'min_char_threshold_for_backup_ocr':1000,
                 'minimum_free_vram_for_kosmos_ocr':10240,
+                'docling_pipeline':'standard',
+                'docling_vlm_model':'phi4_transformers',
+                'docling_ocr_model':'easyocr',
+                'docling_do_ocr':True,
+                'docling_do_code_enrichment':False,
+                'docling_do_formula_enrichment':False,
+                'docling_do_table_structure':True,
+                'docling_do_picture_classification':False,
+                'docling_do_picture_description':False,
+                'docling_table_structure_mode':'accurate',
+                'docling_do_cell_matching':True,
+                'docling_cuda_use_flash_attention2':False,
+                'docling_ocr_lang':['en'],
+                'docling_force_full_page_ocr':False,
                 'lars_host':'0.0.0.0',
                 'lars_port':5000,
                 'hf_waitress_serving_url':'0.0.0.0',    # the serving URL is where the HF-Waitress server is listening for requests, and is specified in the serve() launch command of the Flask/Waitress WSGI server. 0.0.0.0 means all interfaces.
@@ -932,7 +971,7 @@ def PDFtoAzureDocAiTXT(input_filepath):
         ocr_pdfs = read_return['ocr_pdfs']
         force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Missing Azure OCR Endpoint URL & Subscription Key for PDFtoAzureDocAiTXT, please provide required API config. Error: ", e)
+        handle_local_error("Missing Azure OCR Endpoint URL & Subscription Key for Azure Document Intelligence OCR, please provide required API config. Error: ", e)
 
     try:
         source_filename = os.path.basename(input_filepath)
@@ -1050,7 +1089,7 @@ def PDFtoAzureOCRTXT(input_filepath):
         azure_cv_free_tier = read_return['azure_cv_free_tier']
         force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Missing Azure OCR Endpoint URL & Subscription Key for PDFtoAzureOCRTXT, please provide required API config. Error: ", e)
+        handle_local_error("Missing Azure OCR Endpoint URL & Subscription Key for Azure OCR, please provide required API config. Error: ", e)
 
     try:
         source_filename = os.path.basename(input_filepath)
@@ -1208,7 +1247,7 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
         ocr_pdfs = read_return['ocr_pdfs']
         force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Missing OCR PDFs directory for PDFtoVisionLLMOCRTXT, please provide required API config. Error: ", e)
+        handle_local_error("Missing OCR PDFs directory for Vision LLM-based OCR, please provide required API config. Error: ", e)
 
     try:
         source_filename = os.path.basename(input_filepath)
@@ -1469,7 +1508,7 @@ def PDFtoKosmosOCRTXT(input_pdf_filepath):
         ocr_pdfs = read_return['ocr_pdfs']
         force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
     except Exception as e:
-        return handle_local_error("Missing OCR PDFs directory for PDFtoKosmosOCRTXT, please provide required API config. Error: ", e)
+        return handle_local_error("Missing OCR PDFs directory for Kosmos OCR, please provide required API config. Error: ", e)
 
     try:
         source_filename = os.path.basename(input_pdf_filepath)
@@ -1510,6 +1549,243 @@ def PDFtoKosmosOCRTXT(input_pdf_filepath):
             output_text_file.write(f"[PAGE:{page_number}]\n{full_parsed_text}\n")
         except Exception as e:
             handle_error_no_return("Could not process page, encountered error: ", e)
+            continue
+    
+    # Close & return
+    output_text_file.close()
+    return output_text_file_path
+
+
+def get_docling_ocr_model(model_name_string):
+    try:
+        if model_name_string == 'easyocr':
+            return EasyOcrOptions()
+        
+        if model_name_string == 'tesseract':
+            return TesseractOcrOptions()
+        
+        if model_name_string == 'tesseract_cli':
+            return TesseractCliOcrOptions()
+        
+        if model_name_string == 'ocrmac':
+            return OcrMacOptions()
+        
+        if model_name_string == 'rapidocr':
+            return RapidOcrOptions()
+        
+    except Exception as e:
+        return handle_local_error("Could not get Docling OCR model, encountered error: ", e)
+        
+
+def get_docling_vlm_model(model_name_string):
+    try:
+        if model_name_string == 'smoldocling_mlx':
+            return vlm_model_specs.SMOLDOCLING_MLX
+        
+        if model_name_string == 'smoldocling_transformers':
+            return vlm_model_specs.SMOLDOCLING_TRANSFORMERS
+        
+        if model_name_string == 'granite_vision_transformers':
+            return vlm_model_specs.GRANITE_VISION_TRANSFORMERS
+        
+        if model_name_string == 'granite_vision_ollama':
+            return vlm_model_specs.GRANITE_VISION_OLLAMA
+
+        if model_name_string == 'pixtral_12b_transformers':
+            return vlm_model_specs.PIXTRAL_12B_TRANSFORMERS
+        
+        if model_name_string == 'pixtral_12b_mlx':
+            return vlm_model_specs.PIXTRAL_12B_MLX
+        
+        if model_name_string == 'phi4_transformers':
+            return vlm_model_specs.PHI4_TRANSFORMERS
+        
+        if model_name_string == 'qwen25_vl_3b_mlx':
+            return vlm_model_specs.QWEN25_VL_3B_MLX
+        
+        if model_name_string == 'gemma3_12b_mlx':
+            return vlm_model_specs.GEMMA3_12B_MLX
+        
+        if model_name_string == 'gemma3_27b_mlx':
+            return vlm_model_specs.GEMMA3_27B_MLX
+        
+    except Exception as e:
+        return handle_local_error("Could not get Docling VLM model, encountered error: ", e)
+
+
+def get_docling_config():
+    try:
+        return read_config(
+            [
+                'docling_pipeline',
+                'docling_vlm_model',
+                'docling_ocr_model',
+                'docling_do_ocr',
+                'docling_do_code_enrichment',
+                'docling_do_formula_enrichment',
+                'docling_do_table_structure',
+                'docling_do_picture_classification',
+                'docling_do_picture_description',
+                'docling_table_structure_mode',
+                'docling_do_cell_matching',
+                'docling_cuda_use_flash_attention2',
+                'docling_ocr_lang',
+                'docling_force_full_page_ocr'
+            ]
+        )
+    except Exception as e:
+        return handle_local_error("Could not read Docling config, encountered error: ", e)
+
+
+def get_docling_converter(docling_config):
+    try:
+
+        if docling_config['docling_pipeline'] == 'vlm':
+            
+            # a. Set VLM Pipeline Options
+            vlm_pipeline_options = VlmPipelineOptions()
+            vlm_pipeline_options.vlm_options = get_docling_vlm_model(docling_config['docling_vlm_model'])
+
+            # b. VLM Converter
+            vlm_converter = DocumentConverter(
+                format_options={
+                    InputFormat.PDF: PdfFormatOption(
+                        pipeline_cls=VlmPipeline,
+                        pipeline_options=vlm_pipeline_options,
+                    ),
+                }
+            )
+
+            return vlm_converter
+
+        # Standard Pipeline
+        # a. Set PDF Pipeline Options
+        pdf_pipeline_options = PdfPipelineOptions()
+        pdf_pipeline_options.do_ocr=docling_config['docling_do_ocr'].lower() == 'true'
+        pdf_pipeline_options.do_code_enrichment=docling_config['docling_do_code_enrichment'].lower() == 'true'
+        pdf_pipeline_options.do_formula_enrichment=docling_config['docling_do_formula_enrichment'].lower() == 'true'
+        pdf_pipeline_options.do_table_structure=docling_config['docling_do_table_structure'].lower() == 'true'
+        pdf_pipeline_options.do_picture_classification=docling_config['docling_do_picture_classification'].lower() == 'true'
+        pdf_pipeline_options.do_picture_description=docling_config['docling_do_picture_description'].lower() == 'true'
+        pdf_pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE if docling_config['docling_table_structure_mode'] == 'accurate' else TableFormerMode.FAST
+        pdf_pipeline_options.table_structure_options.do_cell_matching = docling_config['docling_do_cell_matching'].lower() == 'true'
+        pdf_pipeline_options.accelerator_options = AcceleratorOptions(
+            num_threads=4,
+            device=AcceleratorDevice.AUTO,
+            cuda_use_flash_attention2=docling_config['docling_cuda_use_flash_attention2'].lower() == 'true'
+        )
+
+        # b. Set OCR Options
+        ocr_options = get_docling_ocr_model(docling_config['docling_ocr_model'])
+        ocr_options.lang = docling_config['docling_ocr_lang'].split(',')
+        ocr_options.force_full_page_ocr = docling_config['docling_force_full_page_ocr'].lower() == 'true'
+        pdf_pipeline_options.ocr_options = ocr_options
+
+        # c. Initialize converter and process
+        converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(
+                    pipeline_options=pdf_pipeline_options,
+                )
+            }
+        )
+        
+        return converter
+
+    except Exception as e:
+        return handle_local_error("Could not get Docling converter, encountered error: ", e)
+
+
+def docling_ocr_page(page_as_pdf_bytes, page_number, retry_count=0):
+    '''
+    OCR a single page using Docling
+    '''
+
+    try:
+        # Create Document-Stream object from bytes
+        buf = io.BytesIO(page_as_pdf_bytes)
+        source = DocumentStream(name=f"page_{page_number}.pdf", stream=buf)
+
+        # Get Docling converter
+        docling_config = get_docling_config()
+        converter = get_docling_converter(docling_config)
+
+        # Extract text and return the result
+        result = converter.convert(source=source)
+        return str(result.document.export_to_markdown())
+
+    except Exception as e:
+        if retry_count < 3:
+            print(f"Retrying Docling OCR for page {page_number}, retry attempt {retry_count+1} of 3. Encountered error: {e}")
+            return docling_ocr_page(page_as_pdf_bytes, page_number, retry_count + 1)
+        else:
+            return handle_local_error("Failed to receive a proper response from the Docling OCR service even after 3 retries, stopping execution. Encountered error: ", e)
+
+
+def PDFtoDoclingOCRTXT(input_pdf_filepath):
+    '''
+    OCR PDFs using Docling by iterating through each page, converting to a binary stream and then invoking `dolcing_ocr_page()`
+    '''
+
+    print("\n\nProcessing Document - PDF to Docling OCR TXT\n\n")
+
+    try:
+        read_return = read_config(['force_extract_previously_extracted_text', 'ocr_pdfs'])
+        ocr_pdfs = read_return['ocr_pdfs']
+        force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
+    except Exception as e:
+        return handle_local_error("Could not read required values from config.json when attempting to convert PDF to TXT, encountered error: ", e)
+    
+    try:
+        source_filename = os.path.basename(input_pdf_filepath)
+    except Exception as e:
+        handle_local_error("Could not extract filename, encountered error: ", e)
+
+    # Set output path
+    output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
+    output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
+
+    if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
+        if os.path.getsize(output_text_file_path) > 0:
+            print("Vision LLM OCR'ed doc already exists and is not empty! Returning existing file.")
+            return output_text_file_path
+        else:
+            print("Vision LLM OCR'ed doc already exists but is empty! Overwriting with new OCR'ed file.")
+
+    # Open with PyMuPDF for conversion to binary byte stream
+    try:
+        pdf_document = fitz.open(input_pdf_filepath)
+        pdf_document_length = len(pdf_document)
+    except Exception as e:
+        return handle_local_error("Could not open PDF file, encountered error: ", e)
+    
+    # Initialize text output
+    try:
+        output_text_file = open(output_text_file_path, 'w', encoding='utf-8')
+    except Exception as e:
+        return handle_local_error("Could not initialize/access output text file, encountered error: ", e)
+    
+    # Iterate through each page and OCR
+    for page_number in range(pdf_document_length):
+        try:
+            print(f"\n\nProcessing Page: {page_number + 1} of {pdf_document_length} from file: {source_filename}\n\n")
+
+            # Extract single page as a new PDF
+            single_page_pdf = fitz.open()
+            single_page_pdf.insert_pdf(pdf_document, from_page=page_number, to_page=page_number)
+
+            # Convert to bytes
+            single_page_pdf_bytes = single_page_pdf.tobytes()
+            single_page_pdf.close()
+
+            # Process with Docling
+            full_parsed_text = docling_ocr_page(single_page_pdf_bytes, page_number + 1)
+
+            # Write to output file
+            output_text_file.write(f"[PAGE:{page_number + 1}]\n{full_parsed_text}\n")
+
+        except Exception as e:
+            handle_error_no_return(f"Could not process page {page_number+1} of {pdf_document_length}, encountered error: ", e)
             continue
     
     # Close & return
@@ -3688,7 +3964,9 @@ def get_text_extract_from_pdf(pdf_filepath):
     
     if force_ocr:
         try:
-            if ocr_service_choice == 'AzureVision':
+            if ocr_service_choice == 'Docling':
+                txt_filepath = PDFtoDoclingOCRTXT(pdf_filepath)
+            elif ocr_service_choice == 'AzureVision':
                 txt_filepath = PDFtoAzureOCRTXT(pdf_filepath)
             elif ocr_service_choice == 'AzureDocAi':
                 txt_filepath = PDFtoAzureDocAiTXT(pdf_filepath)
