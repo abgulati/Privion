@@ -93,6 +93,21 @@ function loadCoreLarsConfig() {
         'selected_knowledge_domain',
         'force_ocr',
         'ocr_service_choice',
+        'backup_ocr_service_choice',
+        'docling_pipeline',
+        'docling_vlm_model',
+        'docling_do_ocr',
+        'docling_force_full_page_ocr',
+        'docling_ocr_model',
+        'docling_do_code_enrichment',
+        'docling_do_formula_enrichment',
+        'docling_do_table_structure',
+        'docling_do_picture_classification',
+        'docling_do_picture_description',
+        'docling_table_structure_mode',
+        'docling_do_cell_matching',
+        'docling_cuda_use_flash_attention_2',
+        'docling_num_threads',
         'local_llm_chat_template_format',
         'exl2_prompt_template_format',
         'force_enable_rag',
@@ -1027,20 +1042,33 @@ function initializeOCRTabRadios(force_ocr, ocr_service_choice, azure_cv_free_tie
 function toggleOcrSelection() { //Show or hide OCR-Service selection:
     var selection = document.querySelector('input[name="specify_ocr_and_service"]:checked').value;
     document.getElementById('apiOcrSelection').style.display = selection === 'ocr' ? 'block' : 'none';
-    if (selection === 'pypdf') {    //Hide API-Details-Form 
+    if (selection === 'pypdf') {    //Hide API-Details-Form
+        document.getElementById('backupOcrSelection').style.display = 'block';
         document.getElementById('azure_vision_api_form').style.display = 'none'; 
         document.getElementById('azure_doc_ai_api_form').style.display = 'none';
         document.getElementById('local_vision_api_form').style.display = 'none';
         document.getElementById('kosmos_api_form').style.display = 'none';
     } else {
+        document.getElementById('backupOcrSelection').style.display = 'none';
+        
         if (document.getElementById('ocrApiDropdown').value != 'AzureVision') {
             document.getElementById('azure_vision_api_form').style.display = 'none'; //Hide API-Details-Form
-        } else if (document.getElementById('ocrApiDropdown').value != 'AzureDocAi') {
+        } 
+        
+        if (document.getElementById('ocrApiDropdown').value != 'AzureDocAi') {
             document.getElementById('azure_doc_ai_api_form').style.display = 'none';
-        } else if (document.getElementById('ocrApiDropdown').value != 'LocalVisionLLM') {
+        } 
+        
+        if (document.getElementById('ocrApiDropdown').value != 'LocalVisionLLM') {
             document.getElementById('local_vision_api_form').style.display = 'none';
-        } else if (document.getElementById('ocrApiDropdown').value != 'Kosmos') {
+        } 
+        
+        if (document.getElementById('ocrApiDropdown').value != 'Kosmos') {
             document.getElementById('kosmos_api_form').style.display = 'none';
+        } 
+        
+        if (document.getElementById('ocrApiDropdown').value != 'Docling') {
+            document.getElementById('docling_form').style.display = 'none';
         }
     }
 }
@@ -1052,11 +1080,40 @@ function toggleOcrApiForm() {   //Show or hide API form:
     document.getElementById('azure_doc_ai_api_form').style.display = selection === 'AzureDocAi' ? 'block' : 'none';
     document.getElementById('local_vision_api_form').style.display = selection === 'LocalVisionLLM' ? 'block' : 'none';
     document.getElementById('kosmos_api_form').style.display = selection === 'Kosmos' ? 'block' : 'none';
+    document.getElementById('docling_form').style.display = selection === 'Docling' ? 'block' : 'none';
     //Add more API form selectors here
 }
 
 
+function toggleBackupOcrForms() {
+    var selection = document.getElementById('backupOcrApiDropdown').value;
+    document.getElementById('docling_form').style.display = selection === 'Backup-Docling' ? 'block' : 'none';
+    document.getElementById('kosmos_api_form').style.display = selection === 'Backup-Kosmos' ? 'block' : 'none';
+}
+
+
+function toggleDoclingPipelineForm() {
+    var selection = document.getElementById('docling_pipeline').value;
+    document.getElementById('docling_vlm_options').style.display = selection === 'vlm' ? 'block' : 'none';
+    document.getElementById('docling_standard_options').style.display = selection === 'standard' ? 'block' : 'none';
+}
+
+
+function toggleDoclingOcrOptions() {
+    var selection = document.getElementById('docling_enable_ocr').checked;
+    document.getElementById('docling_ocr_options').style.display = selection ? 'block' : 'none';
+}
+
+
+function toggleDoclingTableOptions() {
+    var selection = document.getElementById('docling_do_table_structure').checked;
+    document.getElementById('docling_table_options').style.display = selection ? 'block' : 'none';
+}
+
+
 function initializeOCRTabListeners() {
+
+    // Event listeners for 'Update Config' checkboxes:
     document.getElementById('update_azure_vision').addEventListener('change', function() {
         document.getElementById('azure_vision_api_url').disabled = !this.checked;    
         document.getElementById('azure_vision_api_key').disabled = !this.checked;
@@ -1071,32 +1128,79 @@ function initializeOCRTabListeners() {
     });
     document.getElementById('update_kosmos_url_config').addEventListener('change', function() {
         document.getElementById('kosmos_api_url').disabled = !this.checked;
+        document.getElementById('kosmos_task').disabled = !this.checked;
+        document.getElementById('kosmos_threshold').disabled = !this.checked;
+    });
+    document.getElementById('update_docling_config').addEventListener('change', function() {
+        document.getElementById('docling_pipeline').disabled = !this.checked;
+        document.getElementById('docling_vlm_model').disabled = !this.checked;
+        document.getElementById('docling_enable_ocr').disabled = !this.checked;
+        document.getElementById('docling_force_full_page_ocr').disabled = !this.checked;
+        document.getElementById('docling_ocr_model').disabled = !this.checked;
+        document.getElementById('docling_do_code_enrichment').disabled = !this.checked;
+        document.getElementById('docling_do_formula_enrichment').disabled = !this.checked;
+        document.getElementById('docling_do_table_structure').disabled = !this.checked;
+        document.getElementById('docling_table_structure_mode').disabled = !this.checked;
+        document.getElementById('docling_do_picture_classification').disabled = !this.checked;
+        document.getElementById('docling_do_picture_description').disabled = !this.checked;
+        document.getElementById('docling_do_cell_matching').disabled = !this.checked;
+        document.getElementById('docling_cuda_use_flash_attention_2').disabled = !this.checked;
+        document.getElementById('docling_num_threads').disabled = !this.checked;
     });
 
-    // Event listener for radio buttons:
+    // Event listener for radio buttons and dropdowns:
     document.getElementById('ocr_yes_radio_button').addEventListener('change', toggleOcrApiForm);
     document.getElementById('ocr_yes_radio_button').addEventListener('change', toggleOcrSelection);
 
     document.getElementById('ocr_no_radio_button').addEventListener('change', toggleOcrApiForm);
     document.getElementById('ocr_no_radio_button').addEventListener('change', toggleOcrSelection);
 
+    document.getElementById('ocrApiDropdown').addEventListener('change', toggleOcrApiForm);
+
+    document.getElementById('backupOcrApiDropdown').addEventListener('change', toggleBackupOcrForms);
+
+    document.getElementById('docling_pipeline').addEventListener('change', toggleDoclingPipelineForm);
+    document.getElementById('docling_enable_ocr').addEventListener('change', toggleDoclingOcrOptions);
+    document.getElementById('docling_do_table_structure').addEventListener('change', toggleDoclingTableOptions);
+
     // Initial state check:
     toggleOcrSelection();
     toggleOcrApiForm();
-
-    // Event listener for API dropdown:
-    document.getElementById('ocrApiDropdown').addEventListener('change', toggleOcrApiForm);
+    toggleBackupOcrForms();
+    toggleDoclingPipelineForm();
+    toggleDoclingOcrOptions();
+    toggleDoclingTableOptions();
 }
 
 
-function initializeOCRTabComponents(values) {
-    initializeOCRTabRadios(values.force_ocr, values.ocr_service_choice, values.azure_cv_free_tier);
-    initializeOCRTabListeners();
+function initializeOCRFormValues(values) {
     if (values.force_extract_previously_extracted_text) { document.getElementById('force_extract_previously_extracted_text_checkbox').checked = true; }
     if (values.kosmos_local_url) { document.getElementById('kosmos_api_url').value = values.kosmos_local_url; }
     if (values.kosmos_task) { document.getElementById('kosmos_task').value = values.kosmos_task; }
     if (values.kosmos_threshold) { document.getElementById('kosmos_threshold').value = values.kosmos_threshold; }
     if (values.vision_llm_local_url) { document.getElementById('local_vision_api_url').value = values.vision_llm_local_url; }
+    if (values.backup_ocr_service_choice) { document.getElementById('backupOcrApiDropdown').value = values.backup_ocr_service_choice; }
+    if (values.docling_pipeline) { document.getElementById('docling_pipeline').value = values.docling_pipeline; }
+    if (values.docling_vlm_model) { document.getElementById('docling_vlm_model').value = values.docling_vlm_model; }
+    if (values.docling_enable_ocr) { document.getElementById('docling_enable_ocr').checked = values.docling_enable_ocr; }
+    if (values.docling_force_full_page_ocr) { document.getElementById('docling_force_full_page_ocr').checked = values.docling_force_full_page_ocr; }
+    if (values.docling_ocr_model) { document.getElementById('docling_ocr_model').value = values.docling_ocr_model; }
+    if (values.docling_do_code_enrichment) { document.getElementById('docling_do_code_enrichment').checked = values.docling_do_code_enrichment; }
+    if (values.docling_do_formula_enrichment) { document.getElementById('docling_do_formula_enrichment').checked = values.docling_do_formula_enrichment; }
+    if (values.docling_do_table_structure) { document.getElementById('docling_do_table_structure').checked = values.docling_do_table_structure; }
+    if (values.docling_table_structure_mode) { document.getElementById('docling_table_structure_mode').value = values.docling_table_structure_mode; }
+    if (values.docling_do_picture_classification) { document.getElementById('docling_do_picture_classification').checked = values.docling_do_picture_classification; }
+    if (values.docling_do_picture_description) { document.getElementById('docling_do_picture_description').checked = values.docling_do_picture_description; }
+    if (values.docling_do_cell_matching) { document.getElementById('docling_do_cell_matching').checked = values.docling_do_cell_matching; }
+    if (values.docling_cuda_use_flash_attention_2) { document.getElementById('docling_cuda_use_flash_attention_2').checked = values.docling_cuda_use_flash_attention_2; }
+    if (values.docling_num_threads) { document.getElementById('docling_num_threads').value = values.docling_num_threads; }
+}
+
+
+function initializeOCRTabComponents(values) {
+    initializeOCRTabRadios(values.force_ocr, values.ocr_service_choice, values.azure_cv_free_tier);
+    initializeOCRFormValues(values);
+    initializeOCRTabListeners();
 }
 
 
