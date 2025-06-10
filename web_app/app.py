@@ -307,6 +307,8 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'kosmos_container_name':'kosmos-2.5',
                 'min_char_threshold_for_backup_ocr':1000,
                 'minimum_free_vram_for_kosmos_ocr':10240,
+                'ocr_service_choice':'Docling',
+                'backup_ocr_service_choice':'Backup-Docling',
                 'docling_pipeline':'standard',
                 'docling_vlm_model':'phi4_transformers',
                 'docling_ocr_model':'easyocr',
@@ -318,9 +320,10 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'docling_do_picture_description':False,
                 'docling_table_structure_mode':'accurate',
                 'docling_do_cell_matching':True,
-                'docling_cuda_use_flash_attention2':False,
-                'docling_ocr_lang':['en'],
+                'docling_cuda_use_flash_attention_2':False,
                 'docling_force_full_page_ocr':False,
+                'docling_num_threads':4,
+                'force_ocr':False,
                 'lars_host':'0.0.0.0',
                 'lars_port':5000,
                 'hf_waitress_serving_url':'0.0.0.0',    # the serving URL is where the HF-Waitress server is listening for requests, and is specified in the serve() launch command of the Flask/Waitress WSGI server. 0.0.0.0 means all interfaces.
@@ -341,8 +344,6 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'azure_openai_api_version':'2023-05-15',
                 'azure_openai_max_tokens':4096,
                 'azure_openai_temperature':0.7,
-                'force_ocr':False,
-                'ocr_service_choice':'None',
                 'force_extract_previously_extracted_text':False,
                 'llm_filter_citations':True,
                 'local_llm_model_type':'llama',
@@ -1628,8 +1629,8 @@ def get_docling_config():
                 'docling_do_picture_description',
                 'docling_table_structure_mode',
                 'docling_do_cell_matching',
-                'docling_cuda_use_flash_attention2',
-                'docling_ocr_lang',
+                'docling_cuda_use_flash_attention_2',
+                'docling_num_threads',
                 'docling_force_full_page_ocr'
             ]
         )
@@ -1661,23 +1662,22 @@ def get_docling_converter(docling_config):
         # Standard Pipeline
         # a. Set PDF Pipeline Options
         pdf_pipeline_options = PdfPipelineOptions()
-        pdf_pipeline_options.do_ocr=docling_config['docling_do_ocr'].lower() == 'true'
-        pdf_pipeline_options.do_code_enrichment=docling_config['docling_do_code_enrichment'].lower() == 'true'
-        pdf_pipeline_options.do_formula_enrichment=docling_config['docling_do_formula_enrichment'].lower() == 'true'
-        pdf_pipeline_options.do_table_structure=docling_config['docling_do_table_structure'].lower() == 'true'
-        pdf_pipeline_options.do_picture_classification=docling_config['docling_do_picture_classification'].lower() == 'true'
-        pdf_pipeline_options.do_picture_description=docling_config['docling_do_picture_description'].lower() == 'true'
+        pdf_pipeline_options.do_ocr = docling_config['docling_do_ocr'].lower() == 'true'
+        pdf_pipeline_options.do_code_enrichment = docling_config['docling_do_code_enrichment'].lower() == 'true'
+        pdf_pipeline_options.do_formula_enrichment = docling_config['docling_do_formula_enrichment'].lower() == 'true'
+        pdf_pipeline_options.do_table_structure = docling_config['docling_do_table_structure'].lower() == 'true'
+        pdf_pipeline_options.do_picture_classification = docling_config['docling_do_picture_classification'].lower() == 'true'
+        pdf_pipeline_options.do_picture_description = docling_config['docling_do_picture_description'].lower() == 'true'
         pdf_pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE if docling_config['docling_table_structure_mode'] == 'accurate' else TableFormerMode.FAST
         pdf_pipeline_options.table_structure_options.do_cell_matching = docling_config['docling_do_cell_matching'].lower() == 'true'
         pdf_pipeline_options.accelerator_options = AcceleratorOptions(
-            num_threads=4,
+            num_threads = int(docling_config['docling_num_threads']),
             device=AcceleratorDevice.AUTO,
-            cuda_use_flash_attention2=docling_config['docling_cuda_use_flash_attention2'].lower() == 'true'
+            cuda_use_flash_attention2=docling_config['docling_cuda_use_flash_attention_2'].lower() == 'true'
         )
 
         # b. Set OCR Options
         ocr_options = get_docling_ocr_model(docling_config['docling_ocr_model'])
-        ocr_options.lang = docling_config['docling_ocr_lang'].split(',')
         ocr_options.force_full_page_ocr = docling_config['docling_force_full_page_ocr'].lower() == 'true'
         pdf_pipeline_options.ocr_options = ocr_options
 
@@ -1793,6 +1793,52 @@ def PDFtoDoclingOCRTXT(input_pdf_filepath):
     return output_text_file_path
 
 
+def UseBackupOcrOnPage(input_pdf_filepath, current_page_num):
+    try:
+        read_return = read_config(['backup_ocr_service_choice'])
+        backup_ocr_service_choice = read_return['backup_ocr_service_choice']
+    except Exception as e:
+        return handle_local_error("Could not read required values from config.json when attempting to use backup OCR on page, encountered error: ", e)
+    
+    if backup_ocr_service_choice == 'Kosmos':
+        try:
+            current_page_as_pil_image_object = convert_from_path(
+                input_pdf_filepath,
+                dpi=300,
+                first_page=current_page_num,
+                last_page=current_page_num
+            )[0]
+       
+            if current_page_as_pil_image_object:
+                ocr_result = kosmos_ocr_page(current_page_as_pil_image_object)
+                return ocr_result if ocr_result is not None else ""
+            else:
+                raise Exception(f"Imaged page is empty. Skipping page {current_page_num}.")
+        
+        except Exception as e:
+            return handle_local_error("Could not OCR page with Kosmos, skipping. Encountered error: ", e)
+        
+    elif backup_ocr_service_choice == 'Docling':
+        try:
+            pdf_document = fitz.open(input_pdf_filepath)
+            # Extract single page as a new PDF
+            single_page_pdf = fitz.open()
+            single_page_pdf.insert_pdf(pdf_document, from_page=current_page_num, to_page=current_page_num)
+
+            # Convert to bytes
+            single_page_pdf_bytes = single_page_pdf.tobytes()
+            single_page_pdf.close()
+
+            # Process with Docling
+            full_parsed_text = docling_ocr_page(single_page_pdf_bytes, current_page_num)
+            return full_parsed_text if full_parsed_text is not None else ""
+        except Exception as e:
+            return handle_local_error("Could not OCR page with Docling, skipping. Encountered error: ", e)
+
+    else:
+        return handle_local_error("Invalid backup OCR service choice, skipping. Encountered error: ", backup_ocr_service_choice)
+    
+
 def PDFtoTXT(input_pdf_filepath):
 
     print("\n\nProcessing Document - PDF to TXT\n\n")
@@ -1853,25 +1899,9 @@ def PDFtoTXT(input_pdf_filepath):
                     if use_backup_ocr or pypdf2_text is None or len(pypdf2_text) < min_char_threshold_for_backup_ocr:
                         print(f"OCR Necessary - Attempting to OCR page {current_page_num} of {num_pages} using backup OCR method.")
                         try:
-                            current_page_as_pil_image_object = convert_from_path(
-                                input_pdf_filepath,
-                                dpi=300,
-                                first_page=current_page_num,
-                                last_page=current_page_num
-                            )[0]
+                            ocr_text = UseBackupOcrOnPage(input_pdf_filepath, current_page_num)
                         except Exception as e:
-                            handle_error_no_return("Could not convert page to PIL image object, skipping. Encountered error: ", e)
-                            current_page_as_pil_image_object = None
-                        
-                        try:
-                            if current_page_as_pil_image_object:
-                                ocr_result = kosmos_ocr_page(current_page_as_pil_image_object)
-                                if ocr_result is not None:
-                                    ocr_text = ocr_result
-                            else:
-                                raise Exception(f"Imaged page is empty. Skipping page {current_page_num}.")
-                        except Exception as e:
-                            handle_error_no_return("Could not OCR page, skipping. Encountered error: ", e)
+                            handle_error_no_return("Could not OCR page with backup OCR method, skipping. Encountered error: ", e)
                             ocr_text = ""
                         
                     try:
