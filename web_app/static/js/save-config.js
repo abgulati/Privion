@@ -155,7 +155,6 @@ function getOcrConfig() {
             } else if (config.docling_pipeline === 'standard') {
                 
                 config.docling_do_ocr = document.getElementById("docling_enable_ocr").checked;
-                
                 if (config.docling_do_ocr) {
                     config.docling_force_full_page_ocr = document.getElementById("docling_force_full_page_ocr").checked;
                     config.docling_ocr_model = document.getElementById("docling_ocr_model").value;
