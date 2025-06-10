@@ -131,6 +131,7 @@ LLM = None
 LOADED_UP = False
 LLM_LOADED_UP = False
 LLM_CHANGE_RELOAD_TRIGGER_SET = False
+DOCLING_CONVERTER = None
 
 # Dict for user queries:  queries[session_id] = user_input
 QUERIES = {}
@@ -1644,15 +1645,17 @@ def get_docling_converter(docling_config):
         if docling_config['docling_pipeline'] == 'vlm':
             
             # a. Set VLM Pipeline Options
-            vlm_pipeline_options = VlmPipelineOptions()
-            vlm_pipeline_options.vlm_options = get_docling_vlm_model(docling_config['docling_vlm_model'])
+            global VLM_PIPELINE_OPTIONS
+            VLM_PIPELINE_OPTIONS = None
+            VLM_PIPELINE_OPTIONS = VlmPipelineOptions()
+            VLM_PIPELINE_OPTIONS.vlm_options = get_docling_vlm_model(docling_config['docling_vlm_model'])
 
             # b. VLM Converter
             vlm_converter = DocumentConverter(
                 format_options={
                     InputFormat.PDF: PdfFormatOption(
                         pipeline_cls=VlmPipeline,
-                        pipeline_options=vlm_pipeline_options,
+                        pipeline_options=VLM_PIPELINE_OPTIONS,
                     ),
                 }
             )
@@ -1661,31 +1664,33 @@ def get_docling_converter(docling_config):
 
         # Standard Pipeline
         # a. Set PDF Pipeline Options
-        pdf_pipeline_options = PdfPipelineOptions()
-        pdf_pipeline_options.do_ocr = docling_config['docling_do_ocr'].lower() == 'true'
-        pdf_pipeline_options.do_code_enrichment = docling_config['docling_do_code_enrichment'].lower() == 'true'
-        pdf_pipeline_options.do_formula_enrichment = docling_config['docling_do_formula_enrichment'].lower() == 'true'
-        pdf_pipeline_options.do_table_structure = docling_config['docling_do_table_structure'].lower() == 'true'
-        pdf_pipeline_options.do_picture_classification = docling_config['docling_do_picture_classification'].lower() == 'true'
-        pdf_pipeline_options.do_picture_description = docling_config['docling_do_picture_description'].lower() == 'true'
-        pdf_pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE if docling_config['docling_table_structure_mode'] == 'accurate' else TableFormerMode.FAST
-        pdf_pipeline_options.table_structure_options.do_cell_matching = docling_config['docling_do_cell_matching'].lower() == 'true'
-        pdf_pipeline_options.accelerator_options = AcceleratorOptions(
+        global PDF_PIPELINE_OPTIONS
+        PDF_PIPELINE_OPTIONS = None
+        PDF_PIPELINE_OPTIONS = PdfPipelineOptions()
+        PDF_PIPELINE_OPTIONS.do_ocr = docling_config['docling_do_ocr'].lower() == 'true'
+        PDF_PIPELINE_OPTIONS.do_code_enrichment = docling_config['docling_do_code_enrichment'].lower() == 'true'
+        PDF_PIPELINE_OPTIONS.do_formula_enrichment = docling_config['docling_do_formula_enrichment'].lower() == 'true'
+        PDF_PIPELINE_OPTIONS.do_table_structure = docling_config['docling_do_table_structure'].lower() == 'true'
+        PDF_PIPELINE_OPTIONS.do_picture_classification = docling_config['docling_do_picture_classification'].lower() == 'true'
+        PDF_PIPELINE_OPTIONS.do_picture_description = docling_config['docling_do_picture_description'].lower() == 'true'
+        PDF_PIPELINE_OPTIONS.table_structure_options.mode = TableFormerMode.ACCURATE if docling_config['docling_table_structure_mode'] == 'accurate' else TableFormerMode.FAST
+        PDF_PIPELINE_OPTIONS.table_structure_options.do_cell_matching = docling_config['docling_do_cell_matching'].lower() == 'true'
+        PDF_PIPELINE_OPTIONS.accelerator_options = AcceleratorOptions(
             num_threads = int(docling_config['docling_num_threads']),
             device=AcceleratorDevice.AUTO,
-            cuda_use_flash_attention2=docling_config['docling_cuda_use_flash_attention_2'].lower() == 'true'
+            cuda_use_flash_attention_2=docling_config['docling_cuda_use_flash_attention_2'].lower() == 'true'
         )
 
         # b. Set OCR Options
         ocr_options = get_docling_ocr_model(docling_config['docling_ocr_model'])
         ocr_options.force_full_page_ocr = docling_config['docling_force_full_page_ocr'].lower() == 'true'
-        pdf_pipeline_options.ocr_options = ocr_options
+        PDF_PIPELINE_OPTIONS.ocr_options = ocr_options
 
         # c. Initialize converter and process
         converter = DocumentConverter(
             format_options={
                 InputFormat.PDF: PdfFormatOption(
-                    pipeline_options=pdf_pipeline_options,
+                    pipeline_options=PDF_PIPELINE_OPTIONS,
                 )
             }
         )
@@ -1700,7 +1705,7 @@ def docling_ocr_page(page_as_pdf_bytes, page_number, retry_count=0):
     '''
     OCR a single page using Docling
     '''
-
+    global DOCLING_CONVERTER
     try:
         # Create Document-Stream object from bytes
         buf = io.BytesIO(page_as_pdf_bytes)
@@ -1708,10 +1713,10 @@ def docling_ocr_page(page_as_pdf_bytes, page_number, retry_count=0):
 
         # Get Docling converter
         docling_config = get_docling_config()
-        converter = get_docling_converter(docling_config)
+        DOCLING_CONVERTER = get_docling_converter(docling_config) if DOCLING_CONVERTER is None else DOCLING_CONVERTER
 
         # Extract text and return the result
-        result = converter.convert(source=source)
+        result = DOCLING_CONVERTER.convert(source=source)
         return str(result.document.export_to_markdown())
 
     except Exception as e:
@@ -4270,7 +4275,7 @@ def validate_file_transfer_info(file_transfer_info: dict):
 def check_if_file_already_staged(file_transfer_info: dict):
     try:
         staged_file_info = check_for_staged_file_info_in_staging_db(file_transfer_info)
-        print(f"\n\nStaged file info: {staged_file_info}\n\n")
+        # print(f"\n\nStaged file info: {staged_file_info}\n\n")
         if staged_file_info is not None:
             print(f"\n\nStaged file info is not None! Validating...\n\n")
             try:    # validate file transfer data
@@ -4468,53 +4473,60 @@ def bulk_text_extract_from_staging_area(staged_docs_to_upload: list[dict], data_
     '''
     print("\nBulk uploading documents from staging area\n")
 
-    must_enable_kosmos_vram_offloading_after_bulk_upload_completes = disable_kosmos_vram_offloading()
-
-    for count, doc in enumerate(staged_docs_to_upload):
-        if data_queue is not None: data_queue.put(f"Performing Step 1 of 2 for document: {doc.get('document_name_and_extension', 'Unknown document name')} - Data Extraction. Progress: {count + 1} of {len(staged_docs_to_upload)}... | waiting")
-        try:    # Move to upload dir
-            filename, filepath = move_file_to_upload_dir(doc['document_name_and_extension'], doc['staged_filepath']) # will also delete from staging dir
-        except Exception as e:
-            if data_queue is not None: data_queue.put(f"Error processing file - Could not move file to upload directory | failure")
-            handle_error_no_return(f"Could not move file to upload directory. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
-            continue
-        
-        try:
-            doc['status'] = 'Extracting Text - Moved to Upload Dir'
-            insert_into_staging_db(doc)
-        except Exception as e:
-            if data_queue is not None: data_queue.put(f"Error processing file - Could not update file status in staging DB | failure")
-            handle_error_no_return(f"Could not update the `status` key in the staging DB. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
-        
-        try:    # Get PDF filepath for upload
-            pdf_filepath = get_pdf_filepath_for_upload(filename, filepath)
-        except Exception as e:
-            if data_queue is not None: data_queue.put(f"Error processing file - Could not get filepath for upload | failure")
-            handle_error_no_return(f"Could not get PDF filepath for upload. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
-            continue
-        
-        try:    # Get text from PDF
-            txt_filepath = get_text_extract_from_pdf(pdf_filepath)
-            if data_queue is not None: data_queue.put(f"Successfully extracted text from document: {doc.get('document_name_and_extension', 'Unknown document name')} | success")
-        except Exception as e:
-            if data_queue is not None: data_queue.put(f"Error processing file - Could not extract text from the document | failure")
-            handle_error_no_return(f"Could not extract text from the PDF document. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
-            continue
-
-        try:
-            doc['txt_filepath'] = txt_filepath
-            doc['status'] = 'Text Extraction Completed - Path to TXT File Saved'
-            insert_into_staging_db(doc) # update the `txt_filepath` key in the staging DB
-        except Exception as e:
-            if data_queue is not None: data_queue.put(f"Error processing file - Could not save text extract | failure")
-            handle_error_no_return(f"Could not update the `txt_filepath` key in the staging DB. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
-    
     try:
-        if must_enable_kosmos_vram_offloading_after_bulk_upload_completes: 
-            enable_kosmos_vram_offloading()
-            invoke_offload_kosmos_vram_endpoint()
-    except Exception as e:
-        handle_error_no_return("Could not enable Kosmos VRAM offloading after bulk upload completes, skipping. Encountered error: ", e)
+
+        must_enable_kosmos_vram_offloading_after_bulk_upload_completes = disable_kosmos_vram_offloading()
+
+        for count, doc in enumerate(staged_docs_to_upload):
+            if data_queue is not None: data_queue.put(f"Performing Step 1 of 2 for document: {doc.get('document_name_and_extension', 'Unknown document name')} - Data Extraction. Progress: {count + 1} of {len(staged_docs_to_upload)}... | waiting")
+            try:    # Move to upload dir
+                filename, filepath = move_file_to_upload_dir(doc['document_name_and_extension'], doc['staged_filepath']) # will also delete from staging dir
+            except Exception as e:
+                if data_queue is not None: data_queue.put(f"Error processing file - Could not move file to upload directory | failure")
+                handle_error_no_return(f"Could not move file to upload directory. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
+                continue
+            
+            try:
+                doc['status'] = 'Extracting Text - Moved to Upload Dir'
+                insert_into_staging_db(doc)
+            except Exception as e:
+                if data_queue is not None: data_queue.put(f"Error processing file - Could not update file status in staging DB | failure")
+                handle_error_no_return(f"Could not update the `status` key in the staging DB. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
+            
+            try:    # Get PDF filepath for upload
+                pdf_filepath = get_pdf_filepath_for_upload(filename, filepath)
+            except Exception as e:
+                if data_queue is not None: data_queue.put(f"Error processing file - Could not get filepath for upload | failure")
+                handle_error_no_return(f"Could not get PDF filepath for upload. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
+                continue
+            
+            try:    # Get text from PDF
+                txt_filepath = get_text_extract_from_pdf(pdf_filepath)
+                if data_queue is not None: data_queue.put(f"Successfully extracted text from document: {doc.get('document_name_and_extension', 'Unknown document name')} | success")
+            except Exception as e:
+                if data_queue is not None: data_queue.put(f"Error processing file - Could not extract text from the document | failure")
+                handle_error_no_return(f"Could not extract text from the PDF document. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
+                continue
+
+            try:
+                doc['txt_filepath'] = txt_filepath
+                doc['status'] = 'Text Extraction Completed - Path to TXT File Saved'
+                insert_into_staging_db(doc) # update the `txt_filepath` key in the staging DB
+            except Exception as e:
+                if data_queue is not None: data_queue.put(f"Error processing file - Could not save text extract | failure")
+                handle_error_no_return(f"Could not update the `txt_filepath` key in the staging DB. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
+        
+        try:
+            if must_enable_kosmos_vram_offloading_after_bulk_upload_completes: 
+                enable_kosmos_vram_offloading()
+                invoke_offload_kosmos_vram_endpoint()
+        except Exception as e:
+            handle_error_no_return("Could not enable Kosmos VRAM offloading after bulk upload completes, skipping. Encountered error: ", e)
+
+    finally:    # Cleanup
+        global DOCLING_CONVERTER, VLM_PIPELINE_OPTIONS, PDF_PIPELINE_OPTIONS
+        DOCLING_CONVERTER, VLM_PIPELINE_OPTIONS, PDF_PIPELINE_OPTIONS = None, None, None
+        utils.safe_empty_cuda_cache()
 
     return True
 
@@ -5799,7 +5811,8 @@ def rerank_results_ml(query, documents, top_n=5):
         handle_error_no_return("Could not read use_embedding_model_for_reranking or selected_embedding_model from config.json proceeding to re-use embedding model for reranking. Encountered error: ", e)
 
     if not use_embedding_model_for_reranking:
-        selected_embedding_model = 'all-MiniLM-L6-v2'
+        # selected_embedding_model = 'all-MiniLM-L6-v2'
+        selected_embedding_model = 'Qwen/Qwen3-Reranker-0.6B'
 
     print(f"\n\nSelected embedding model for reranking: {selected_embedding_model}\n\n")
 
