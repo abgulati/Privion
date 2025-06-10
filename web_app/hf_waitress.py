@@ -2808,7 +2808,7 @@ def exl2_grapher():
         rag_response_mode = request.json.get('rag_response_mode', False)
         graph_summarizer_model_prompt_template_format = request.json.get('graph_summarizer_model_prompt_template_format', None)
         gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
-        exl2_grapher_skip_cache_reuse = read_config(['exl2_grapher_skip_cache_reuse'])['exl2_grapher_skip_cache_reuse'].lower() == 'true'
+        exl2_grapher_skip_cache_reuse = str(read_config(['exl2_grapher_skip_cache_reuse'])['exl2_grapher_skip_cache_reuse']).lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
         llm_semaphore.release()
