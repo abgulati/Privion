@@ -947,20 +947,31 @@
 
                                     <div id="ocr_use_choice" class="modal-selection-radios">
                                         <label for="ocr_yes_radio_button" style="flex: 1;">
-                                            <input type="radio" id="ocr_yes_radio_button" name="specify_ocr_and_service" value="ocr"> Only use OCR
+                                            <input type="radio" id="ocr_yes_radio_button" name="specify_ocr_and_service" value="ocr"> Force Full-Page OCR (High Accuracy, Slow)
                                         </label>
                                         <label for="ocr_no_radio_button" style="flex: 1;">
-                                            <input type="radio" id="ocr_no_radio_button" name="specify_ocr_and_service" value="pypdf" checked> Default - Uses OCR when necessary
+                                            <input type="radio" id="ocr_no_radio_button" name="specify_ocr_and_service" value="pypdf" checked> Dynamic OCR: Quick Text-Extraction + OCR When Necessary (Lower Accuracy, Faster)
                                         </label>
                                     </div>
 
                                     <br>
+
+                                    <div id="backupOcrSelection" style="display: none;">
+                                        <label style="margin-bottom: 3px;">Select a Backup OCR Service:</label>
+                                        <br>
+                                        <select class="modal-selects" name="backup_ocr_api_choice" id="backupOcrApiDropdown" style="width: 100%;">
+                                            <option value="">Please select</option>.
+                                            <option value="Backup-Docling">Docling OCR</option>
+                                            <option value="Backup-Kosmos">Kosmos OCR</option>
+                                        </select>
+                                    </div>
 
                                     <div id="apiOcrSelection" style="display: none;">
                                         <label style="margin-bottom: 3px;">Select an OCR Service:</label>
                                         <br>
                                         <select class="modal-selects" name="ocr_api_choice" id="ocrApiDropdown" style="width: 100%;">
                                             <option value="">Please select</option>
+                                            <option value="Docling">Docling OCR</option>
                                             <option value="AzureVision">Azure Vision Service OCR</option>
                                             <option value="AzureDocAi">Azure Document Intelligence AI OCR</option>
                                             <option value="Kosmos">Kosmos OCR</option>
@@ -970,6 +981,133 @@
                                     </div>
                                     
                                     <br>
+
+                                    <form action="" class="api_form" id="docling_form" style="display: none;">
+                                        <div class="form-group">
+                                            <input type="checkbox" id="update_docling_config" name="update_docling_config">
+                                            <label for="update_docling_config"> Update Configuration</label>
+                                        </div>
+                                        <br>
+                                        
+                                        <div class="form-group">
+                                            <label for="docling_pipeline" style="margin-bottom: 3px;">Pipeline:</label>
+                                            <br>
+                                            <select id="docling_pipeline" name="docling_pipeline" class="modal-selects" style="width: 100%;" disabled>
+                                                <option value="standard" selected>Standard (Default)</option>
+                                                <option value="vlm">VLM</option>
+                                            </select>
+                                        </div>
+                                        <br>
+                            
+                                        <div id="docling_vlm_options" style="display: none;">
+                                            <div class="form-group">
+                                                <label for="docling_vlm_model" style="margin-bottom: 3px;">VLM Model:</label>
+                                                <br>
+                                                <select id="docling_vlm_model" name="docling_vlm_model" class="modal-selects" style="width: 100%;" disabled>
+                                                    <option value="smoldocling_mlx">SmolDocling MLX</option>
+                                                    <option value="smoldocling_transformers">SmolDocling Transformers</option>
+                                                    <option value="granite_vision_transformers">Granite Vision Transformers</option>
+                                                    <option value="granite_vision_ollama">Granite Vision Ollama</option>
+                                                    <option value="pixtral_12b_transformers">Pixtral 12B Transformers</option>
+                                                    <option value="pixtral_12b_mlx">Pixtral 12B MLX</option>
+                                                    <option value="phi4_transformers" selected>Phi4 Transformers (Recommended)</option>
+                                                    <option value="qwen25_vl_3b_mlx">Qwen2.5-VL-3B MLX</option>
+                                                    <option value="gemma3_12b_mlx">Gemma3 12B MLX</option>
+                                                    <option value="gemma3_27b_mlx">Gemma3 27B MLX</option>
+                                                </select>
+                                            </div>
+                                            <br>
+                                        </div>
+                            
+                                        <div id="docling_standard_options">
+                                            <div class="form-group">
+                                                <input type="checkbox" id="docling_enable_ocr" name="docling_enable_ocr" checked disabled>
+                                                <label for="docling_enable_ocr">Enable OCR (Default: Enabled)</label>
+                                            </div>
+                                            <br>
+                            
+                                            <div id="docling_ocr_options">
+                                                <div class="form-group" style="margin-left: 20px;">
+                                                    <input type="checkbox" id="docling_force_full_page_ocr" name="docling_force_full_page_ocr" disabled>
+                                                    <label for="docling_force_full_page_ocr">Force Full-Page OCR (Default: Disabled)</label>
+                                                </div>
+                                                <br>
+                                                <div class="form-group" style="margin-left: 20px;">
+                                                    <label for="docling_ocr_model" style="margin-bottom: 3px;">OCR Model:</label>
+                                                    <br>
+                                                    <select id="docling_ocr_model" name="docling_ocr_model" class="modal-selects" style="width: 100%;" disabled>
+                                                        <option value="easyocr" selected>EasyOCR (Default)</option>
+                                                        <option value="tesseract">Tesseract</option>
+                                                        <option value="tesseract_cli">Tesseract CLI</option>
+                                                        <option value="ocrmac">OCR-Mac (MacOS Only)</option>
+                                                        <option value="rapidocr">Rapid OCR</option>
+                                                    </select>
+                                                </div>
+                                                <br>
+                                            </div>
+                            
+                                            <div class="form-group">
+                                                <input type="checkbox" id="docling_do_code_enrichment" name="docling_do_code_enrichment" disabled>
+                                                <label for="docling_do_code_enrichment">Do Code Enrichment (Default: Disabled)</label>
+                                            </div>
+                                            <br>
+                            
+                                            <div class="form-group">
+                                                <input type="checkbox" id="docling_do_formula_enrichment" name="docling_do_formula_enrichment" disabled>
+                                                <label for="docling_do_formula_enrichment">Do Formula Enrichment (Default: Disabled)</label>
+                                            </div>
+                                            <br>
+                            
+                                            <div class="form-group">
+                                                <input type="checkbox" id="docling_do_table_structure" name="docling_do_table_structure" checked disabled>
+                                                <label for="docling_do_table_structure">Do Table Structure (Default: Enabled)</label>
+                                            </div>
+                                            <br>
+                                            
+                                            <div id="docling_table_options">
+                                                <div class="form-group" style="margin-left: 20px;">
+                                                    <label for="docling_table_structure_mode" style="margin-bottom: 3px;">Table Structure Mode:</label>
+                                                    <br>
+                                                    <select id="docling_table_structure_mode" name="docling_table_structure_mode" class="modal-selects" style="width: 100%;" disabled>
+                                                        <option value="accurate" selected>Accurate (Default)</option>
+                                                        <option value="fast">Fast</option>
+                                                    </select>
+                                                </div>
+                                                <br>
+                                            </div>
+                            
+                                            <div class="form-group">
+                                                <input type="checkbox" id="docling_do_picture_classification" name="docling_do_picture_classification" disabled>
+                                                <label for="docling_do_picture_classification">Do Picture Classification (Default: Disabled)</label>
+                                            </div>
+                                            <br>
+                            
+                                            <div class="form-group">
+                                                <input type="checkbox" id="docling_do_picture_description" name="docling_do_picture_description" disabled>
+                                                <label for="docling_do_picture_description">Do Picture Description (Default: Disabled)</label>
+                                            </div>
+                                            <br>
+                            
+                                            <div class="form-group">
+                                                <input type="checkbox" id="docling_do_cell_matching" name="docling_do_cell_matching" checked disabled>
+                                                <label for="docling_do_cell_matching">Do Cell Matching (Default: Enabled)</label>
+                                            </div>
+                                            <br>
+                            
+                                            <div class="form-group">
+                                                <input type="checkbox" id="docling_cuda_use_flash_attention_2" name="docling_cuda_use_flash_attention_2" disabled>
+                                                <label for="docling_cuda_use_flash_attention_2">Use Flash Attention 2 (Default: Disabled)</label>
+                                            </div>
+                                            <br>
+                            
+                                            <div class="form-group">
+                                                <label for="docling_num_threads">Number of Threads (Default: 4)</label>
+                                                <input type="number" id="docling_num_threads" name="docling_num_threads" class="settings-input-fields" value="4" disabled>
+                                            </div>
+                                            <br>
+                                        </div>
+
+                                    </form>
 
                                     <form action="" class="api_form" id="azure_vision_api_form" style="display: none;">
                                         <div class="form-group">
@@ -1038,7 +1176,7 @@
                                         <br>
                                         <div class="form-group">
                                             <label for="kosmos_task">Task:</label>
-                                            <select id="kosmos_task" name="kosmos_task" class="modal-selects">
+                                            <select id="kosmos_task" name="kosmos_task" class="modal-selects" disabled>
                                                 <option value="ocr" selected>OCR (Default)</option>
                                                 <option value="md">MD</option>
                                             </select>
@@ -1046,7 +1184,7 @@
                                         <br>
                                         <div class="form-group">
                                             <label for="kosmos_threshold" class="hf-select-settings-labels-group">Threshold:</label>
-                                            <input type="number" id="kosmos_threshold" class="settings-input-fields" min="0" max="100" value="20">
+                                            <input type="number" id="kosmos_threshold" class="settings-input-fields" min="0" max="100" value="20" disabled>
                                         </div>
                                         <br>
                                     </form>
