@@ -97,16 +97,23 @@ function getOcrConfig() {
     const azure_doc_ai_form = document.getElementById("azure_doc_ai_api_form");
     const local_vision_form = document.getElementById("local_vision_api_form");
     const kosmos_form = document.getElementById("kosmos_api_form");
+    const docling_form = document.getElementById("docling_form");
+
+    const ocr_yes_radio_button = document.getElementById('ocr_yes_radio_button').checked;
     const update_azure_vision_config = document.getElementById('update_azure_vision').checked;
     const update_azure_doc_ai_config = document.getElementById('update_azure_doc_ai').checked;
     const update_local_vision_config = document.getElementById('update_local_vision_config').checked;
     const update_kosmos_url_config = document.getElementById('update_kosmos_url_config').checked;
+    const update_docling_config = document.getElementById('update_docling_config').checked;
+
     const force_extract_previously_extracted_text = document.getElementById('force_extract_previously_extracted_text_checkbox').checked;
+    const backup_ocr_service_choice = document.getElementById('backupOcrApiDropdown').value;
 
     let config = {
         'ocr_service_choice': 'None',
         'force_ocr': false,
-        'force_extract_previously_extracted_text': force_extract_previously_extracted_text
+        'force_extract_previously_extracted_text': force_extract_previously_extracted_text,
+        'backup_ocr_service_choice': backup_ocr_service_choice
     };
 
     if (window.getComputedStyle(azure_ocr_form).display != 'none') {
@@ -132,12 +139,42 @@ function getOcrConfig() {
         }
     } else if (window.getComputedStyle(kosmos_form).display != 'none') {
         config.ocr_service_choice = 'Kosmos';
-        config.force_ocr = true;
+        config.force_ocr = ocr_yes_radio_button ? true : false;
         if (update_kosmos_url_config) {
             config.kosmos_local_url = document.getElementById("kosmos_api_url").value;
+            config.kosmos_task = document.getElementById("kosmos_task").value;
+            config.kosmos_threshold = document.getElementById("kosmos_threshold").value;
         }
-        config.kosmos_task = document.getElementById("kosmos_task").value;
-        config.kosmos_threshold = document.getElementById("kosmos_threshold").value;
+    } else if (window.getComputedStyle(docling_form).display != 'none') {
+        config.ocr_service_choice = 'Docling';
+        config.force_ocr = ocr_yes_radio_button ? true : false;
+        if (update_docling_config) {
+            config.docling_pipeline = document.getElementById("docling_pipeline").value;
+            if (config.docling_pipeline === 'vlm') {
+                config.docling_vlm_model = document.getElementById("docling_vlm_model").value;
+            } else if (config.docling_pipeline === 'standard') {
+                
+                config.docling_do_ocr = document.getElementById("docling_enable_ocr").checked;
+                
+                if (config.docling_do_ocr) {
+                    config.docling_force_full_page_ocr = document.getElementById("docling_force_full_page_ocr").checked;
+                    config.docling_ocr_model = document.getElementById("docling_ocr_model").value;
+                }
+
+                config.docling_do_table_structure = document.getElementById("docling_do_table_structure").checked;
+                if (config.docling_do_table_structure) {
+                    config.docling_table_structure_mode = document.getElementById("docling_table_structure_mode").value;
+                }
+
+                config.docling_do_code_enrichment = document.getElementById("docling_do_code_enrichment").checked;
+                config.docling_do_formula_enrichment = document.getElementById("docling_do_formula_enrichment").checked;
+                config.docling_do_picture_classification = document.getElementById("docling_do_picture_classification").checked;
+                config.docling_do_picture_description = document.getElementById("docling_do_picture_description").checked;
+                config.docling_do_cell_matching = document.getElementById("docling_do_cell_matching").checked;
+                config.docling_cuda_use_flash_attention_2 = document.getElementById("docling_cuda_use_flash_attention_2").checked;
+                config.docling_num_threads = document.getElementById("docling_num_threads").value;
+            }
+        }
     }
 
     return config;
