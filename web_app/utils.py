@@ -3,8 +3,31 @@ import platform
 import signal
 import subprocess
 import math
+import torch
 
 from pynvml import *
+
+
+def empty_cuda_cache():
+    print("\n\nEmptying CUDA cache\n\n")
+    # check if torch.cuda is available
+    if torch.cuda.is_available():
+        try:
+            print("Attempting to empty cuda cache")
+            torch.cuda.empty_cache()
+            print("CUDA cache successfully emptied")
+        except Exception as e:
+            raise Exception(f"Could not empty cuda cache, encountered error: {e}")
+    else:
+        print("\n\nCUDA is not available, skipping cache-emptying\n\n")
+        return True
+
+
+def safe_empty_cuda_cache():
+    try:
+        empty_cuda_cache()
+    except Exception as e:
+        print(f"Could not empty CUDA cache, encountered error: {e}")
 
 
 def is_local_server_online(server_base_url):
