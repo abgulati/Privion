@@ -2611,15 +2611,6 @@ def summary_generator(chunk_entities=None):
             # TODO: Implement non-exl2 bulk-summary generation with /completions
             pass
 
-        try:
-            # While the summarizer model is being shutdown after use, we don't terminate the graph-extraction model as it's used for GraphRAG responses!
-            if utils.shutdown_waitress_server(summarizer_url)['success']:
-                print(f"\nSuccessfully shut down graph summarizer model at URL {summarizer_url}\n")
-            else:
-                raise Exception(f"\nCould not shut down graph summarizer model at URL {summarizer_url}, proceeding regardless...\n")
-        except Exception as e:
-            handle_error_no_return("Could not shutdown graph summarizer model, encountered error: ", e)
-
     elif local_llm_server == 'llama-cpp':
         # TODO: Implement llama-cpp summary generation
         pass
@@ -4390,24 +4381,61 @@ def insert_into_staging_db(doc_info: dict, skip_check: bool = False):
     return True
 
 
-def bulk_upload_files_to_rag_and_records_databases(docs_to_upload: list[dict], data_queue: queue.Queue = None):
-    for count, doc in enumerate(docs_to_upload):
-        if data_queue is not None: data_queue.put(f"Performing Step 2 of 2 for document: {doc.get('document_name_and_extension', 'Unknown document name')} - Uploading Document to RAG & Records Databases. Progress: {count + 1} of {len(docs_to_upload)}... | waiting")
-        try:
-            doc['status'] = 'Processing - Uploading to RAG & Records Databases'
-            insert_into_staging_db(doc)
-        except Exception as e:
-            if data_queue is not None: data_queue.put(f"Error staging file for upload | failure")
-            handle_error_no_return(f"Could not update the `status` key in the staging DB. Encountered error: ", e)
+def perform_post_bulk_upload_cleanup():
+    # 1. Shutdown the graph summarizer model - while the summarizer model is being shutdown after use, we don't terminate the graph-extraction model as it's used for GraphRAG responses!
+    try:
+        config_data = read_config(['graph_summarizer_access_url', 'graph_summarizer_server_port'])
+        summarizer_url = f"http://{config_data['graph_summarizer_access_url']}:{config_data['graph_summarizer_server_port']}"
+        response = utils.shutdown_waitress_server(summarizer_url)
+        if isinstance(response, dict) and response.get('success', False):
+            print(f"\nSuccessfully shut down graph summarizer model at URL {summarizer_url}\n")
+        else:
+            handle_error_no_return(f"\nCould not shut down graph summarizer model at URL {summarizer_url}, proceeding regardless...\n")
+    except Exception as e:
+        handle_error_no_return("Could not shutdown graph summarizer model, encountered error: ", e)
 
-        try:
-            upload_to_rag_and_records_databases(doc['document_name_and_extension'], doc['txt_filepath'])
-            if data_queue is not None: data_queue.put(f"Successfully Uploaded Document: {doc.get('document_name_and_extension', 'Unknown document name')} | success")
-            safe_delete_entry_from_staging_db(doc)
-        except Exception as e:
-            if data_queue is not None: data_queue.put(f"Error uploading file to RAG & Records databases | failure")
-            handle_error_no_return(f"Could not upload {doc.get('document_name_and_extension', 'Unknown document name')} to RAG & Records databases, skipping this document. Encountered error: ", e)
-        if data_queue is not None: data_queue.put(f"Completed processing file {count + 1} of {len(docs_to_upload)}! | success")
+    # 2. Ensure chat-LLM server is online
+    try:
+        read_return = read_config(['local_llm_server'])
+        server_to_start = read_return['local_llm_server']
+    except Exception as e:
+        handle_error_no_return("Server-side error, could not read local_llm_server from config.json, encountered error: ", e)
+    
+    try:
+        if server_to_start == 'hf-waitress':
+            hf_waitress_server_starter()
+        elif server_to_start == 'llama-cpp':
+            llama_cpp_server_starter()
+        else:
+            handle_error_no_return(f"Invalid local LLM server choice: {server_to_start}")
+    except Exception as e:
+        handle_error_no_return("Server-side error, could not start local LLM server, encountered error: ", e)
+
+    return True
+
+
+def bulk_upload_files_to_rag_and_records_databases(docs_to_upload: list[dict], data_queue: queue.Queue = None):
+    try:
+        for count, doc in enumerate(docs_to_upload):
+            if data_queue is not None: data_queue.put(f"Performing Step 2 of 2 for document: {doc.get('document_name_and_extension', 'Unknown document name')} - Uploading Document to RAG & Records Databases. Progress: {count + 1} of {len(docs_to_upload)}... | waiting")
+            try:
+                doc['status'] = 'Processing - Uploading to RAG & Records Databases'
+                insert_into_staging_db(doc)
+            except Exception as e:
+                if data_queue is not None: data_queue.put(f"Error staging file for upload | failure")
+                handle_error_no_return(f"Could not update the `status` key in the staging DB. Encountered error: ", e)
+
+            try:
+                upload_to_rag_and_records_databases(doc['document_name_and_extension'], doc['txt_filepath'])
+                if data_queue is not None: data_queue.put(f"Successfully Uploaded Document: {doc.get('document_name_and_extension', 'Unknown document name')} | success")
+                safe_delete_entry_from_staging_db(doc)
+            except Exception as e:
+                if data_queue is not None: data_queue.put(f"Error uploading file to RAG & Records databases | failure")
+                handle_error_no_return(f"Could not upload {doc.get('document_name_and_extension', 'Unknown document name')} to RAG & Records databases, skipping this document. Encountered error: ", e)
+            if data_queue is not None: data_queue.put(f"Completed processing file {count + 1} of {len(docs_to_upload)}! | success")
+    finally:    # Cleanup!
+        perform_post_bulk_upload_cleanup()
+
     return True
 
 
@@ -4577,7 +4605,7 @@ def bulk_upload_files():
                 return handle_api_error("Server-side error, could not bulk upload files to RAG & Records databases, encountered error: ", e)
         finally:
             data_queue.put(None)
-            print("\n\nGDrive-Sync stream done, breaking thread\n\n")
+            print("\n\nDocument upload stream done, breaking thread\n\n")
 
     def bulk_process_files():
 
@@ -5168,7 +5196,7 @@ def local_llm_server_starter():
         read_return = read_config(['local_llm_server'])
         server_to_start = read_return['local_llm_server']
     except Exception as e:
-        return handle_api_error("Server-side error, could not read local_llm_server from config.json in method local_llm_server_starter, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read local_llm_server from config.json, encountered error: ", e)
 
     try:
         if server_to_start == 'hf-waitress':
@@ -5176,9 +5204,9 @@ def local_llm_server_starter():
         elif server_to_start == 'llama-cpp':
             return llama_cpp_server_starter()
         else:
-            return handle_api_error(f"Invalid local LLM server choice in method local_llm_server_starter: {server_to_start}")
+            return handle_api_error(f"Invalid local LLM server choice: {server_to_start}")
     except Exception as e:
-        return handle_api_error("Server-side error, could not start local LLM server in method local_llm_server_starter, encountered error: ", e)
+        return handle_api_error("Server-side error, could not start local LLM server, encountered error: ", e)
 
     # return jsonify({'success': True})
 
