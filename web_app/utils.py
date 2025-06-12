@@ -4,6 +4,7 @@ import signal
 import subprocess
 import math
 import torch
+import time
 
 from pynvml import *
 
@@ -198,11 +199,20 @@ def ensure_minimum_free_vram(vram_amount_mib=5120, shutdown_server_at_url_to_mak
             try:
                 for server_url in shutdown_server_at_url_to_make_room:
                     shutdown_waitress_server(server_url)    # Will either return True or False, either way we check the free VRAM again and continue if necessary
-                    _, total_free_memory_mib = get_nvidia_gpu_info()
-                    if total_free_memory_mib >= vram_amount_mib:
-                        print(f"Requested VRAM freed by successfully shutting down server at URL {server_url}.")
-                        return True
+                    print(f"\nShutdown command sent to server at URL {server_url}\n")
+
+                    wait_timeout = 7    # seconds
+                    max_attempts = 3    # ~21 seconds to allow for the server the shutdown before proceeding to the next one
+
+                    for _ in range(max_attempts):
+                        print(f"\nWaiting for {wait_timeout} seconds before checking free VRAM again...\n")
+                        time.sleep(wait_timeout)
+                        _, total_free_memory_mib = get_nvidia_gpu_info()
+                        if total_free_memory_mib >= vram_amount_mib:
+                            print(f"Requested VRAM freed by successfully shutting down server at URL {server_url}.")
+                            return True
                 
+                # Finished iterating through the server list, and still not enough free VRAM as True would have been returned by now...
                 _, total_free_memory_mib = get_nvidia_gpu_info()
                 if total_free_memory_mib < vram_amount_mib:
                     raise Exception("Could not free the requested amount of GPU VRAM.")
