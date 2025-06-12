@@ -295,6 +295,8 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'docs_to_knowledge_graph_dir': base_directory + '/docs_to_knowledge_graph',
                 'upload_staging_folder':base_directory + '/upload_staging',
                 'upload_staging_db':base_directory + '/upload_staging.db',
+                'knowledge_domain_base_directory': base_directory + '/knowledge_domains',
+                'graph_db_data_directory': base_directory + '/graph_db_data',
                 'graph_models_base_directory_name': 'graph-model-servers',
                 'graph_extraction_model_directory_name': 'graph-extraction-model-server',
                 'graph_summary_generator_directory_name': 'graph-summary-generator-server',
@@ -477,8 +479,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                     'Education',
                     'Casual'
                 ],
-                'selected_knowledge_domain':'General',
-                'knowledge_domain_base_directory': base_directory + '/knowledge_domains'
+                'selected_knowledge_domain':'General'
             }.get(key, 'undefined') # "implicit string concatenation" used for keys with large-string values!
 
             if default_value == 'undefined':
@@ -626,7 +627,9 @@ except Exception as e:
     handle_local_error("Failed to create Base App Directory, encountered error: ", e)
         
 try:
-    read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 'docs_to_knowledge_graph_dir', 'upload_staging_folder'])
+    read_return = read_config([
+        'model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 
+        'docs_to_knowledge_graph_dir', 'upload_staging_folder', 'graph_db_data_directory'])
     model_dir = read_return['model_dir']
     highlighted_docs = read_return['highlighted_docs']
     upload_folder = read_return['upload_folder']
@@ -634,6 +637,7 @@ try:
     pdfs_to_txts = read_return['pdfs_to_txts']
     docs_to_knowledge_graph_dir = read_return['docs_to_knowledge_graph_dir']
     upload_staging_folder = read_return['upload_staging_folder']
+    graph_db_data_directory = read_return['graph_db_data_directory']
 except Exception as e:
     handle_local_error("Could not read paths for app directories (model_dir, highlighted_docs, upload_folder, etc.) from config.json on boot, encountered error: ", e)
 
@@ -671,6 +675,11 @@ try:
     os.makedirs(upload_staging_folder, exist_ok=True)
 except Exception as e:
     handle_local_error("Failed to create upload_staging_folder, encountered error: ", e)
+
+try:
+    os.makedirs(graph_db_data_directory, exist_ok=True)
+except Exception as e:
+    handle_local_error("Failed to create graph_db_data_directory, encountered error: ", e)
 
 app.config['UPLOAD_FOLDER'] = upload_folder
 app.config['DOWNLOAD_FOLDER'] = highlighted_docs
@@ -2821,10 +2830,13 @@ def bring_graph_db_online():    # launch FalkorDB Docker container
     print(f"\nLaunching FalkorDB Docker container...\n")
 
     try:
-        read_return = read_config(['launch_graph_db_with_ui', 'assign_host_port_to_graph_db_server', 'assign_host_port_to_graph_db_ui'])
+        read_return = read_config([
+            'launch_graph_db_with_ui', 'assign_host_port_to_graph_db_server', 
+            'assign_host_port_to_graph_db_ui', 'graph_db_data_directory'])
         launch_graph_db_with_ui = read_return['launch_graph_db_with_ui']
         assign_host_port_to_graph_db_server = read_return['assign_host_port_to_graph_db_server']
         assign_host_port_to_graph_db_ui = read_return['assign_host_port_to_graph_db_ui']
+        graph_db_data_directory = read_return['graph_db_data_directory']
     except Exception as e:
         return handle_local_error("Could not read graph DB config when attempting to bring FalkorDB online, encountered error: ", e)
 
@@ -2844,7 +2856,7 @@ def bring_graph_db_online():    # launch FalkorDB Docker container
         'docker', 'run', '-p', f'{assign_host_port_to_graph_db_server}:6379',
         *(['-p', f'{assign_host_port_to_graph_db_ui}:3000'] if launch_graph_db_with_ui else []),
         '--name', 'falkor-db',
-        '-it', '--rm', '-v', './data:/data', 'falkordb/falkordb:edge'
+        '-it', '--rm', '-v', f'{graph_db_data_directory}:/var/lib/falkordb/data', 'falkordb/falkordb:edge'
     ]   # Using conditional list-unpacking with * to handle optional arguments!
 
     try:
@@ -5325,7 +5337,7 @@ def delete_knowledge_domain_graph(knowledge_domain):
     try:
         if not check_if_container_is_running('falkor-db'):
             bring_graph_db_online()
-            time.sleep(5)   # While the bring_graph_db_online() method waits for the container to start, loading the datasets takes a bit longer so we wait 5 seconds before proceeding.
+            time.sleep(5)   # While the bring-graph-db-online() method waits for the container to start, loading the datasets takes a bit longer so we wait 5 seconds before proceeding.
     except Exception as e:
         return handle_local_error(f"Could not bring graph DB online, unable to delete knowledge graph for {knowledge_domain} domain. Encountered error: ", e)
     
@@ -5335,7 +5347,7 @@ def delete_knowledge_domain_graph(knowledge_domain):
         graph.delete()  # client.delete_graph() is unsupported by FalkorDB. Delete individual nodes with Cypher: `MATCH (n) DETACH DELETE n`
         print(f"Successfully deleted graph for {knowledge_domain} domain in graph DB")
     except Exception as e:
-        handle_error_no_return("Could not delete graph for {knowledge_domain} domain in graph DB, encountered error: ", e)
+        handle_error_no_return(f"Could not delete graph for {knowledge_domain} domain in graph DB, encountered error: ", e)
 
 
 @app.route('/reset_vector_db_on_disk', methods=['POST'])
