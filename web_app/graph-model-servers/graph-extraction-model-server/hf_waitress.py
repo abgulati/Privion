@@ -311,7 +311,8 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'exl2_max_seq_len':2048,
                     'exl2_force_regenerate_measurement':False,
                     'exl2_no_flash_attn':False,
-                    'exl2_grapher_skip_cache_reuse':False,
+                    'exl2_grapher_skip_extraction_cache_reuse':False,
+                    'exl2_grapher_skip_summary_cache_reuse':False,
                     'gguf':False,
                     'awq':False,
                     'flux_diffusers':False,
@@ -543,7 +544,7 @@ def shutdown_hf_waitress():
         print(shutdown_message)
         if LOGGER:
             try:
-                LOGGER.log(shutdown_message)
+                LOGGER.log(logging.INFO, shutdown_message)  # Logger.log() requires the logging level (INFO, ERROR, etc.) and the message to log
             except Exception as e:
                 handle_error_no_return("Could not log shutdown message to logger, skipping. Encountered error: ", e)
 
@@ -2629,7 +2630,7 @@ def get_request_payload_for_graph_entity_extraction(chunk_text: str):
     return full_payload
 
 
-def core_dict_validation_logic_for_entity_extraction(extracted_dict: dict):
+def core_dict_validation_logic_for_cache_reuse(extracted_dict: dict, validate_summary = False):
     try:
         # Check for required keys
         if 'nodes' not in extracted_dict or 'relationships' not in extracted_dict:
@@ -2645,6 +2646,14 @@ def core_dict_validation_logic_for_entity_extraction(extracted_dict: dict):
         if not all(isinstance(relationship, dict) for relationship in extracted_dict['relationships']):
             raise ValueError("Expected all elements in 'relationships' list to be dicts.")
         
+        if validate_summary:    # Ensure that the summary key in the nodes and relationships dict is not a blank string, list, or None
+            for node in extracted_dict['nodes']:
+                if node.get('summary') is None or not isinstance(node.get('summary'), list) or len(node.get('summary')) == 0:
+                    raise ValueError(f"Expected 'summary' to be a non-empty list, got {type(node.get('summary')).__name__}")
+            for relationship in extracted_dict['relationships']:
+                if relationship.get('summary') is None or not isinstance(relationship.get('summary'), list) or len(relationship.get('summary')) == 0:
+                    raise ValueError(f"Expected 'summary' to be a non-empty list, got {type(relationship.get('summary')).__name__}")
+
         return extracted_dict
 
     except Exception as e:
@@ -2668,7 +2677,7 @@ def validate_entity_extraction_response(extraction_response: str):
             if not isinstance(response_dict, dict):
                 raise ValueError(f"Expected a dict, got {type(response_dict).__name__}")
             
-            validated_response = core_dict_validation_logic_for_entity_extraction(response_dict)
+            validated_response = core_dict_validation_logic_for_cache_reuse(response_dict)
             if validated_response is not None:
                 return {'validated_response': validated_response, 'is_valid': True}
             return None
@@ -2808,7 +2817,8 @@ def exl2_grapher():
         rag_response_mode = request.json.get('rag_response_mode', False)
         graph_summarizer_model_prompt_template_format = request.json.get('graph_summarizer_model_prompt_template_format', None)
         gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
-        exl2_grapher_skip_cache_reuse = str(read_config(['exl2_grapher_skip_cache_reuse'])['exl2_grapher_skip_cache_reuse']).lower() == 'true'
+        exl2_grapher_skip_extraction_cache_reuse = str(read_config(['exl2_grapher_skip_extraction_cache_reuse'])['exl2_grapher_skip_extraction_cache_reuse']).lower() == 'true'
+        exl2_grapher_skip_summary_cache_reuse = str(read_config(['exl2_grapher_skip_summary_cache_reuse'])['exl2_grapher_skip_summary_cache_reuse']).lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
         llm_semaphore.release()
@@ -2827,10 +2837,12 @@ def exl2_grapher():
             for chunk_number, chunk_data in chunk_entities.items():
                 print(f"\nExtracting entities and relationships for chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
 
-                if not rag_response_mode and not exl2_grapher_skip_cache_reuse:   # When responding to a query, we don't want to use the cache which is meant only for the file-processing step!
-                    print(f"\nNon-response mode: Checking for existing cache of previously extracted nodes and relationships for chunk {chunk_number}...\n")
+                if not rag_response_mode:   # When responding to a query, we don't want to use the cache which is meant only for the file-processing step!
+                    print("\nNon-response mode\n")
+
                     source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
                     extraction_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_extraction_cache.json")
+                    
                     if source_doc_name not in cache_data_map:
                         try:
                             cached_data = load_json_file(extraction_cache_file_path)
@@ -2841,18 +2853,21 @@ def exl2_grapher():
                         except Exception as e:
                             handle_error_no_return(f"Could not load nodes and relationships from cache file {extraction_cache_file_path}, proceeding to extract afresh. Encountered error: ", e)
                     
-                    cache_entry = cache_data_map.get(source_doc_name)
-                    cached_chunk_data = cache_entry.get('data', {}).get(chunk_number, {})
-                    if cached_chunk_data.get('entities_and_relationships') is not None:
+                    if not exl2_grapher_skip_extraction_cache_reuse:
+                        print(f"\nChecking for existing cache of previously extracted nodes and relationships for chunk {chunk_number}...\n")
 
-                        cached_entry_validation_result = core_dict_validation_logic_for_entity_extraction(cached_chunk_data['entities_and_relationships'])
-                        if cached_entry_validation_result is not None:
-                            chunk_entities[chunk_number]['entities_and_relationships'] = cached_chunk_data['entities_and_relationships']    # NOTE: Only the 'entities_and_relationships' key is updated in the chunk_entities dict received in the POST request!
-                            output_queue.put(chunk_entities[chunk_number])
-                            print(f"\nFound existing cache of previously extracted nodes and relationships for chunk {chunk_number}, returning cached data...\n")
-                            continue
-                        else:
-                            print(f"\nCached data for chunk {chunk_number} failed validation, proceeding to extract afresh...\n")
+                        cache_entry = cache_data_map.get(source_doc_name)
+                        cached_chunk_data = cache_entry.get('data', {}).get(chunk_number, {})
+                        if cached_chunk_data.get('entities_and_relationships') is not None:
+
+                            cached_entry_validation_result = core_dict_validation_logic_for_cache_reuse(cached_chunk_data['entities_and_relationships'])
+                            if cached_entry_validation_result is not None:
+                                chunk_entities[chunk_number]['entities_and_relationships'] = cached_chunk_data['entities_and_relationships']    # NOTE: Only the 'entities_and_relationships' key is updated in the chunk_entities dict received in the POST request!
+                                output_queue.put(chunk_entities[chunk_number])
+                                print(f"\nFound existing cache of previously extracted nodes and relationships for chunk {chunk_number}, returning cached data...\n")
+                                continue
+                            else:
+                                print(f"\nCached data for chunk {chunk_number} failed validation, proceeding to extract afresh...\n")
                     
                 try:
                     full_payload = get_request_payload_for_graph_entity_extraction(chunk_data['chunk_text'])
@@ -2952,9 +2967,9 @@ def exl2_grapher():
                 print(f"\nGenerating comprehensive summaries for all nodes and relationships {print_string}...\n")
                 print(f"Timestamp: {datetime.datetime.now()}")
 
-                print(f"\nChecking for existing summary cache for chunk {chunk_number}...\n")
                 source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
                 summary_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_summary_cache.json")
+
                 if source_doc_name not in cache_data_map:
                     try:
                         cached_data = load_json_file(summary_cache_file_path)
@@ -2964,16 +2979,22 @@ def exl2_grapher():
                         }
                     except Exception as e:
                         handle_error_no_return(f"Could not load summary from cache file {summary_cache_file_path}, proceeding to generate afresh. Encountered error: ", e)
-                
-                # Check if cache available for this chunk
-                cache_entry = cache_data_map.get(source_doc_name)
-                if (cache_entry and cache_entry['data'] and chunk_number in cache_entry['data'] and
-                    cache_entry['data'][chunk_number]['entities_and_relationships'] is not None):
                     
-                    chunk_entities[chunk_number]['entities_and_relationships'] = cache_entry['data'][chunk_number]['entities_and_relationships']
-                    output_queue.put(chunk_entities[chunk_number])
-                    print(f"\nFound existing summary cache for chunk {chunk_number}, returning cached data...\n")
-                    continue
+                if not exl2_grapher_skip_summary_cache_reuse:
+                    print(f"\nChecking for existing summary cache for chunk {chunk_number}...\n")
+
+                    cache_entry = cache_data_map.get(source_doc_name)
+                    cached_chunk_data = cache_entry.get('data', {}).get(chunk_number, {})
+                    if cached_chunk_data.get('entities_and_relationships') is not None:
+
+                        cached_entry_validation_result = core_dict_validation_logic_for_cache_reuse(cached_chunk_data['entities_and_relationships'], validate_summary=True)
+                        if cached_entry_validation_result is not None:
+                            chunk_entities[chunk_number]['entities_and_relationships'] = cached_chunk_data['entities_and_relationships']
+                            output_queue.put(chunk_entities[chunk_number])
+                            print(f"\nFound existing summary cache for chunk {chunk_number}, returning cached data...\n")
+                            continue
+                        else:
+                            print(f"\nCached data for chunk {chunk_number} failed validation, proceeding to generate summary afresh...\n")
                 
                 try:
                     summarized_nodes_and_relationships = process_nodes_and_relationships(
