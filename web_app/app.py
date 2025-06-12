@@ -1667,23 +1667,23 @@ def get_docling_converter(docling_config):
         global PDF_PIPELINE_OPTIONS
         PDF_PIPELINE_OPTIONS = None
         PDF_PIPELINE_OPTIONS = PdfPipelineOptions()
-        PDF_PIPELINE_OPTIONS.do_ocr = docling_config['docling_do_ocr'].lower() == 'true'
-        PDF_PIPELINE_OPTIONS.do_code_enrichment = docling_config['docling_do_code_enrichment'].lower() == 'true'
-        PDF_PIPELINE_OPTIONS.do_formula_enrichment = docling_config['docling_do_formula_enrichment'].lower() == 'true'
-        PDF_PIPELINE_OPTIONS.do_table_structure = docling_config['docling_do_table_structure'].lower() == 'true'
-        PDF_PIPELINE_OPTIONS.do_picture_classification = docling_config['docling_do_picture_classification'].lower() == 'true'
-        PDF_PIPELINE_OPTIONS.do_picture_description = docling_config['docling_do_picture_description'].lower() == 'true'
-        PDF_PIPELINE_OPTIONS.table_structure_options.mode = TableFormerMode.ACCURATE if docling_config['docling_table_structure_mode'] == 'accurate' else TableFormerMode.FAST
-        PDF_PIPELINE_OPTIONS.table_structure_options.do_cell_matching = docling_config['docling_do_cell_matching'].lower() == 'true'
+        PDF_PIPELINE_OPTIONS.do_ocr = str(docling_config['docling_do_ocr']).lower() == 'true'
+        PDF_PIPELINE_OPTIONS.do_code_enrichment = str(docling_config['docling_do_code_enrichment']).lower() == 'true'
+        PDF_PIPELINE_OPTIONS.do_formula_enrichment = str(docling_config['docling_do_formula_enrichment']).lower() == 'true'
+        PDF_PIPELINE_OPTIONS.do_table_structure = str(docling_config['docling_do_table_structure']).lower() == 'true'
+        PDF_PIPELINE_OPTIONS.do_picture_classification = str(docling_config['docling_do_picture_classification']).lower() == 'true'
+        PDF_PIPELINE_OPTIONS.do_picture_description = str(docling_config['docling_do_picture_description']).lower() == 'true'
+        PDF_PIPELINE_OPTIONS.table_structure_options.mode = TableFormerMode.ACCURATE if str(docling_config['docling_table_structure_mode']) == 'accurate' else TableFormerMode.FAST
+        PDF_PIPELINE_OPTIONS.table_structure_options.do_cell_matching = str(docling_config['docling_do_cell_matching']).lower() == 'true'
         PDF_PIPELINE_OPTIONS.accelerator_options = AcceleratorOptions(
             num_threads = int(docling_config['docling_num_threads']),
-            device=AcceleratorDevice.AUTO,
-            cuda_use_flash_attention_2=docling_config['docling_cuda_use_flash_attention_2'].lower() == 'true'
+            device = AcceleratorDevice.AUTO,
+            # cuda_use_flash_attention_2 = str(docling_config['docling_cuda_use_flash_attention_2']).lower() == 'true'
         )
 
         # b. Set OCR Options
-        ocr_options = get_docling_ocr_model(docling_config['docling_ocr_model'])
-        ocr_options.force_full_page_ocr = docling_config['docling_force_full_page_ocr'].lower() == 'true'
+        ocr_options = get_docling_ocr_model(str(docling_config['docling_ocr_model']))
+        ocr_options.force_full_page_ocr = str(docling_config['docling_force_full_page_ocr']).lower() == 'true'
         PDF_PIPELINE_OPTIONS.ocr_options = ocr_options
 
         # c. Initialize converter and process
