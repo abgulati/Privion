@@ -2558,7 +2558,7 @@ def bring_graph_summarizer_model_online():  # Launch HF-Waitress instance with g
 
     try:
         if platform.system() == 'Windows':
-            windows_command = f'start cmd /k "{command}"'   # /k tells cmd to keep the window open even after the command has finished, which is useful for debugging, versus /c which closes the window after the command has finished.
+            windows_command = f'start cmd /c "{command}"'   # /k tells cmd to keep the window open even after the command has finished, which is useful for debugging, versus /c which closes the window after the command has finished.
             subprocess.Popen(windows_command, shell=True)   # Popen is used to launch the command in a new process in a new terminal, while subprocess.run() is used to simply run the command and wait for it to finish.
             # Using `start` in this manner explicitly instructs Windows to start a new command window to run the command, while CREATE_NEW_CONSOLE combined with shell=True might not work correctly as the shell itself might capture the console!
         else:
@@ -2936,7 +2936,7 @@ def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with k
 
     try:
         if platform.system() == 'Windows':
-            windows_command = f'start cmd /k "{command}"'   # /k tells cmd to keep the window open even after the command has finished, which is useful for debugging, versus /c which closes the window after the command has finished.
+            windows_command = f'start cmd /c "{command}"'   # /k tells cmd to keep the window open even after the command has finished, which is useful for debugging, versus /c which closes the window after the command has finished.
             subprocess.Popen(windows_command, shell=True)   # Popen is used to launch the command in a new process in a new terminal, while subprocess.run() is used to simply run the command and wait for it to finish.
             # Using `start` in this manner explicitly instructs Windows to start a new command window to run the command, while CREATE_NEW_CONSOLE combined with shell=True might not work correctly as the shell itself might capture the console!
         else:
@@ -4415,13 +4415,21 @@ def perform_post_bulk_upload_cleanup():
     
     try:
         if server_to_start == 'hf-waitress':
-            hf_waitress_server_starter()
+            server_starter_response = hf_waitress_server_starter()
+            if server_starter_response is not None and server_starter_response.get('success'):
+                print("\nSuccessfully started HF-Waitress Chat server\n")
+            else:
+                handle_error_no_return(f"\nCould not start HF-Waitress server, proceeding regardless...\n")
         elif server_to_start == 'llama-cpp':
-            llama_cpp_server_starter()
+            server_starter_response = llama_cpp_server_starter()
+            if server_starter_response is not None and server_starter_response.get('success'):
+                print("\nSuccessfully started llama-cpp Chat server\n")
+            else:
+                handle_error_no_return(f"\nCould not start llama-cpp server, proceeding regardless...\n")
         else:
             handle_error_no_return(f"Invalid local LLM server choice: {server_to_start}")
     except Exception as e:
-        handle_error_no_return("Server-side error, could not start local LLM server, encountered error: ", e)
+        handle_error_no_return("Could not start local LLM server post-document upload, encountered error: ", e)
 
     return True
 
@@ -4961,12 +4969,12 @@ def llama_cpp_server_starter():
         read_return = read_config(['model_choice'])
         model_choice = read_return['model_choice']
     except Exception as e:
-        handle_error_no_return("Missing model_choice in config.json in method llama_cpp_server_starter. Printing error and proceeding with model_choice: 'undefined' ", e)
+        handle_error_no_return("Missing model_choice in config.json in method llama-cpp-server-starter. Printing error and proceeding with model_choice: 'undefined' ", e)
 
     if is_llama_cpp_running and not LLM_CHANGE_RELOAD_TRIGGER_SET:
         LLM_LOADED_UP = True
         print(f'\n\nThe llama.cpp server is already loaded and the reload trigger is not set. Simply returning with model choice: {model_choice}\n\n')
-        return jsonify({'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running})
+        return {'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running}
     
     elif is_llama_cpp_running and LLM_CHANGE_RELOAD_TRIGGER_SET:
         print("\n\nllama.cpp server online and LLM_CHANGE_RELOAD_TRIGGER_SET is set. Attempting to terminate and reload from config.json\n\n")
@@ -4977,7 +4985,7 @@ def llama_cpp_server_starter():
         except Exception as e:
             LLM_LOADED_UP = True  # We know the llama.cpp server is running but there was an error terminating it, so we set LLM_LOADED_UP to True while leaving LLM_CHANGE_RELOAD_TRIGGER_SET to True as we know the server needs to be re-loaded.
             handle_error_no_return("Failed to terminate running llama.cpp process, server was likely launched by a previous session. Returning with the currently loaded LLM. To change, shutdown the previously launched server manually and reload this page. Technical error-details follow: ", e)
-            return jsonify({'success': True, 'llm_model': 'undefined', 'other_server_running': other_server_running})   # We still return success:True as we've at least determined llama.cpp is running and loaded with a model, even if we cannot reload it.
+            return {'success': True, 'llm_model': 'undefined', 'other_server_running': other_server_running}   # We still return success:True as we've at least determined llama.cpp is running and loaded with a model, even if we cannot reload it.
                  
     elif LLM_CHANGE_RELOAD_TRIGGER_SET: # llama.cpp is not running, set flags to false and new settings will be loaded on next llama.cpp launch
         print("\n\nResetting the LLM_CHANGE_RELOAD_TRIGGER_SET flag and attemping to launch the server with the currently selected LLM.\n\n")
@@ -5029,7 +5037,7 @@ def llama_cpp_server_starter():
             if utils.is_local_server_online(llama_cpp_base_url)['server_available']:
                 print("\n\nllama.cpp server launched succesfully! Returning.\n\n")
                 LLM_LOADED_UP = True
-                return jsonify({'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running})
+                return {'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running}
             time.sleep(timeout)
     except Exception as e:
         handle_error_no_return("Could not check server status after launch attempt, printing error and retrying: ", e)
@@ -5107,7 +5115,7 @@ def hf_waitress_server_starter(hard_reboot_required = False):
         print("\n\nHF-Waitress server already running. Resetting LLM_CHANGE_RELOAD_TRIGGER_SET and simply returning!\n\n")
         LLM_LOADED_UP = True
         LLM_CHANGE_RELOAD_TRIGGER_SET = False   # The only instance where we're in this method and LLM_CHANGE_RELOAD_TRIGGER_SET is set while the HF-Waitress server is running is when we're trying to switch back to it after running llama.cpp. So we simply reset the flag and return.
-        return jsonify({'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running})
+        return {'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running}
     elif LLM_CHANGE_RELOAD_TRIGGER_SET:  # Switching to HF-Waitress and it's offline, so we set LLM_CHANGE_RELOAD_TRIGGER_SET to False and proceed to launch the server.
         print('\n\nProceeding to reload the LLM & resetting the LLM_CHANGE_RELOAD_TRIGGER_SET flag.\n\n')
         LLM_CHANGE_RELOAD_TRIGGER_SET = False
@@ -5161,7 +5169,7 @@ def hf_waitress_server_starter(hard_reboot_required = False):
             if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
                 print("\n\nHF-Waitress server launched succesfully! Returning.\n\n")
                 LLM_LOADED_UP = True
-                return jsonify({'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running})
+                return {'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running}
             time.sleep(timeout)
     except Exception as e:
         handle_error_no_return("Could not check server status after launch attempt, printing error and retrying: ", e)
@@ -5180,7 +5188,8 @@ def hf_waitress_server_starter_endpoint():
         return handle_api_error("Could not read request, encountered error: ", e)
 
     try:
-        return hf_waitress_server_starter(hard_reboot_required)
+        result = hf_waitress_server_starter(hard_reboot_required)
+        return jsonify(result)
     except Exception as e:
         return handle_api_error("Could not start HF-Waitress server, encountered error: ", e)
 
@@ -5212,9 +5221,11 @@ def local_llm_server_starter():
 
     try:
         if server_to_start == 'hf-waitress':
-            return hf_waitress_server_starter()
+            result = hf_waitress_server_starter()
+            return jsonify(result)
         elif server_to_start == 'llama-cpp':
-            return llama_cpp_server_starter()
+            result = llama_cpp_server_starter()
+            return jsonify(result)
         else:
             return handle_api_error(f"Invalid local LLM server choice: {server_to_start}")
     except Exception as e:
