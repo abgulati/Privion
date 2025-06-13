@@ -4396,7 +4396,7 @@ def insert_into_staging_db(doc_info: dict, skip_check: bool = False):
 def perform_post_bulk_upload_cleanup():
     # 1. Shutdown the graph summarizer model - while the summarizer model is being shutdown after use, we don't terminate the graph-extraction model as it's used for GraphRAG responses!
     try:
-        config_data = read_config(['graph_summarizer_access_url', 'graph_summarizer_server_port'])
+        config_data = read_config(['graph_summarizer_access_url', 'graph_summarizer_server_port', 'graph_model_access_url', 'graph_model_server_port'])
         summarizer_url = f"http://{config_data['graph_summarizer_access_url']}:{config_data['graph_summarizer_server_port']}"
         response = utils.shutdown_waitress_server(summarizer_url)
         if isinstance(response, dict) and response.get('success', False):
@@ -4415,15 +4415,33 @@ def perform_post_bulk_upload_cleanup():
     
     try:
         if server_to_start == 'hf-waitress':
-            server_starter_response = hf_waitress_server_starter()
-            if server_starter_response is not None and server_starter_response.get('success'):
-                print("\nSuccessfully started HF-Waitress Chat server\n")
+            hf_waitress_base_url = get_url_for_server('hf-waitress')
+            if not utils.is_local_server_online(hf_waitress_base_url)['server_online']: # This means the main chat server was likely shut due to insufficient VRAM, so we should also shut down the graph-extraction model
+
+                print("\nMain LLM server offline, shutting down graph-extraction model and attempting restart of chat server...\n")
+                graph_model_base_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
+                response = utils.shutdown_waitress_server(graph_model_base_url)
+                if isinstance(response, dict) and response.get('success'):
+                    print(f"\nSuccessfully shut down graph model at URL {graph_model_base_url}\n")
+                else:
+                    handle_error_no_return(f"\nCould not shut down graph model at URL {graph_model_base_url}, proceeding regardless...\n")
+
+                server_starter_response = hf_waitress_server_starter()
+                if server_starter_response is not None and server_starter_response.get('success'):
+                    print("\nSuccessfully started HF-Waitress Chat server\n")
+                    return True
+                else:
+                    handle_error_no_return(f"\nCould not start HF-Waitress server, proceeding regardless...\n")
+
             else:
-                handle_error_no_return(f"\nCould not start HF-Waitress server, proceeding regardless...\n")
+                print("\nHF-Waitress chat server already online\n")
+                return True
+        
         elif server_to_start == 'llama-cpp':
             server_starter_response = llama_cpp_server_starter()
             if server_starter_response is not None and server_starter_response.get('success'):
                 print("\nSuccessfully started llama-cpp Chat server\n")
+                return True
             else:
                 handle_error_no_return(f"\nCould not start llama-cpp server, proceeding regardless...\n")
         else:
