@@ -16,7 +16,7 @@
 
 from __future__ import print_function
 
-from distutils.version import LooseVersion
+from distutils.version import Version as LooseVersion
 import getopt
 import glob
 import os
