@@ -80,11 +80,11 @@ def shutdown_waitress_server(base_url = 'http://localhost:9069'):
             payload = ""
             headers = {}
             response = requests.post(url, data=payload, headers=headers)
-            return {"success":response.json()['success'], "message":response.json()['message']}
+            return {"success":response.json()['success'], "message":response.json()['message'], "was_offline":False}
         else:
-            return {"success":True, "message":"HF-Waitress server is already offline at the specified URL."}
+            return {"success":True, "message":"HF-Waitress server is already offline at the specified URL.", "was_offline":True}
     except Exception as e:
-        return {"success":False, "message":f"Could not shutdown HF-Waitress server, encountered error: {e}"}
+        return {"success":False, "message":f"Could not shutdown HF-Waitress server, encountered error: {e}", "was_offline":False}
     
 
 def send_ctrl_c_to_process(process):
@@ -198,8 +198,11 @@ def ensure_minimum_free_vram(vram_amount_mib=5120, shutdown_server_at_url_to_mak
             print(f"\nTotal free GPU memory is less than {vram_amount_mib}MB, attempting server shutdowns...\n")
             try:
                 for server_url in shutdown_server_at_url_to_make_room:
-                    shutdown_waitress_server(server_url)    # Will either return True or False, either way we check the free VRAM again and continue if necessary
-                    print(f"\nShutdown command sent to server at URL {server_url}\n")
+                    print(f"\nSending shutdown command to server at URL {server_url}\n")
+                    response = shutdown_waitress_server(server_url)    # Will either return True or False, either way we check the free VRAM again and continue if necessary
+                    if response.get('was_offline'):
+                        print(f"\nServer at URL {server_url} was already offline, skipping...\n")
+                        continue
 
                     wait_timeout = 7    # seconds
                     max_attempts = 3    # ~21 seconds to allow for the server the shutdown before proceeding to the next one
