@@ -76,6 +76,8 @@ try:
     from docling.datamodel.pipeline_options import VlmPipelineOptions
     from docling.datamodel import vlm_model_specs
     from docling.pipeline.vlm_pipeline import VlmPipeline
+
+    from docling_core.types.doc import ImageRefMode
 except Exception as e:
     print(f"Could not import Docling OCR, skipping. If not installed, please run `pip install docling`. Encountered error: {e}")
 
@@ -1726,7 +1728,7 @@ def docling_ocr_page(page_as_pdf_bytes, page_number, retry_count=0):
 
         # Extract text and return the result
         result = DOCLING_CONVERTER.convert(source=source)
-        return str(result.document.export_to_markdown())
+        return str(result.document.export_to_markdown(image_mode=ImageRefMode.PLACEHOLDER))
 
     except Exception as e:
         if retry_count < 3:
