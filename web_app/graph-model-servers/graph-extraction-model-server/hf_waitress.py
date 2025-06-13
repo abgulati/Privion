@@ -2694,8 +2694,10 @@ def validate_entity_extraction_response(extraction_response: str):
     trimmed_response = prompt_formatting_module.trim_response(extraction_response, '{"nodes":', '"}]}', include_start_substring=True, include_end_substring=True)
     result = try_validation(trimmed_response)
     if result is not None:
+        print("\n\nTrimmed response validated successfully\n\n")
         return result
     
+    print(f"\nResponse validation failed even after trimming.\n")
     return {'validated_response': extraction_response, 'is_valid': False}
 
 

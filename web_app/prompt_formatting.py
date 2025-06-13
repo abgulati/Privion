@@ -318,6 +318,7 @@ def append_eot_token_to_llm_response(local_llm_chat_template_format: str, llm_re
 
 
 def trim_response(response, start_substring, end_substring, include_start_substring=False, include_end_substring=False):
+    print("\n\nAttempting to trim response...\n\n")
     try:
         if start_substring in response and end_substring in response:
             start_index = response.rindex(start_substring)  # Sometimes the model re-gurgitates multiple copies of the same dict in it's response
