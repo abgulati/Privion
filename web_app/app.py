@@ -470,6 +470,11 @@ def read_config(keys, default_value=None, filename='config.json'):
                     'nvidia/NV-Embed-v2'
                 ],
                 'selected_embedding_model':'sentence-transformers/all-mpnet-base-v2',
+                'reranker_models_list':[
+                    'all-MiniLM-L6-v2',
+                    'Qwen/Qwen3-Reranker-0.6B'
+                ],
+                'selected_reranker_model':'all-MiniLM-L6-v2',
                 'use_embedding_model_for_reranking':True,
                 'knowledge_domain_list':[
                     'General',
@@ -5874,23 +5879,25 @@ def rerank_results_ml(query, documents, top_n=5):
     print("\n\nReranking Invoked\n\n")
 
     try:
-        read_return = read_config(['use_embedding_model_for_reranking', 'selected_embedding_model'])
+        read_return = read_config(['use_embedding_model_for_reranking', 'selected_embedding_model', 'selected_reranker_model'])
         use_embedding_model_for_reranking = str(read_return['use_embedding_model_for_reranking']).lower() == 'true'
         selected_embedding_model = str(read_return['selected_embedding_model'])
+        selected_reranker_model = str(read_return['selected_reranker_model'])
     except Exception as e:
         use_embedding_model_for_reranking = True
-        handle_error_no_return("Could not read use_embedding_model_for_reranking or selected_embedding_model from config.json proceeding to re-use embedding model for reranking. Encountered error: ", e)
+        handle_error_no_return("Could not read reranker configfrom config.json, encountered error: ", e)
 
-    if not use_embedding_model_for_reranking:
-        # selected_embedding_model = 'all-MiniLM-L6-v2'
-        selected_embedding_model = 'Qwen/Qwen3-Reranker-0.6B'
+    if use_embedding_model_for_reranking:
+        selected_reranker_model = selected_embedding_model
+    else:
+        selected_reranker_model = selected_reranker_model
 
-    print(f"\n\nSelected embedding model for reranking: {selected_embedding_model}\n\n")
+    print(f"\n\nSelected model for re-ranking: {selected_reranker_model}\n\n")
 
     model = None
     try:
         # Load pre-trained SBERT model
-        model = SentenceTransformer(selected_embedding_model)
+        model = SentenceTransformer(selected_reranker_model)
         
         # Encode the query
         query_embedding = model.encode(query, convert_to_tensor=True)
@@ -5898,7 +5905,7 @@ def rerank_results_ml(query, documents, top_n=5):
         # Encode the documents
         doc_embeddings = model.encode([doc.page_content for doc in documents], convert_to_tensor=True)
     except Exception as e:
-        handle_local_error("Could not rerank results with SBERT, encountered error: ", e)
+        handle_local_error(f"Could not rerank results with {selected_reranker_model}, encountered error: ", e)
         return [doc.page_content for doc in documents]
     finally:
         if model is not None:
