@@ -16,7 +16,15 @@
 
 from __future__ import print_function
 
-from distutils.version import Version as LooseVersion
+try:
+    from distutils.version import LooseVersion
+except Exception:
+    print("\nCould not import LooseVersion from distutils, attempting to import Version as LooseVersion...\n")
+    try:
+        from distutils.version import Version as LooseVersion
+    except Exception:
+        print("\nCould not import import Version as LooseVersion from distutils, check Python and LibreOffice versions.\n")
+
 import getopt
 import glob
 import os
