@@ -782,6 +782,12 @@ def remove_folder_from_filepath(folderpath):
 def safe_remove_folder_from_filepath(folderpath):
     try:
         remove_folder_from_filepath(folderpath)
+    except PermissionError:
+        print(f"\nPermissionError: Ensure OneDrive or other file sync services aren't running! If not, manually delete the folder at the path that follows and try again. Error -- Could not remove folder from filepath: {folderpath}\n")
+    except FileNotFoundError:   # Raised when the path doesn't exist at all
+        print(f"\nFileNotFoundError: Could not remove folder from filepath: {folderpath}\n")
+    except NotADirectoryError:   # Raised when the path exists but is not a directory (shutil.rmtree() only works on directories)
+        print(f"\nNotADirectoryError: Could not remove folder from filepath: {folderpath}\n")
     except Exception as e:
         handle_error_no_return(f"Could not remove folder from filepath: {folderpath}, encountered error: ", e)
 
