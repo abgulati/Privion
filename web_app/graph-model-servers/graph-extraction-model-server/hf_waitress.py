@@ -31,7 +31,6 @@ from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
 from PIL import Image, ImageDraw, ImageFont
 
-import concurrent.futures
 import multiprocessing
 import subprocess
 import threading
