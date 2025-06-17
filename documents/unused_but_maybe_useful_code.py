@@ -4981,3 +4981,106 @@ Was called in search_knowledge_base() after `rerank_results_ml` and before `perf
 # END OF OLD DO_RAG LOGIC-------------
 # ===================================
 
+
+
+def safe_empty_cuda_cache(timeout=5):
+    import concurrent.futures
+
+    '''
+    - Demonstrates why we CANNOT use concurrent.futures's ThreadPoolExecutor nor ProcessPoolExecutor as neither gurantess termination and the former even risks holding the GIL hostage. Details:
+
+    - ThreadPoolExecutor (Unsafe):
+        
+        - Mechanism: Launches a thread, which shares the main process's Global Interpretor Lock (GIL) and other resources such as memory.
+        - Intended Use: I/O bound (background) tasks (network requests/downloads, disk access, etc.) that release the GIL while waiting.
+        - Why it fails:
+            - Failure Mode 1 -- GIL-Releasing Hang (stuck network calls, etc.): `TimeoutError` will trigger but will result in a zombie thread leading to resource leakage and unpredictable behavior (operations, logs, etc.)
+            - Failure Mode 2 -- GIL-Holding Hang (deadlocks): Worker thread holds the GIL hostage. Python threads cannot be killed forcefully, so the main thread can never acquire the GIL. `TimeError` is never raised and the entire application freezes.
+        - Key Takeaways:
+            - Unrelaible because we cannot predict the failure mode.
+            - Python threads cannot be forcefully killed.
+            - Testing with `time.sleep()` is misleading as it's a "polite hang" (GIL-releasing). A "rude hang" (`while True:`) is a more accurate way of testing for a deadlock.
+
+    - ProcessPoolExecutor (Deceptively Flawed):
+
+        - Mechanism: Launches a completely separate process with it's own GIL, memory & resources.
+        - Why it fails: High-level API that lacks the control needed for guaranteed termination.
+            - If using `with ProcessPoolExecutor(max_workers=1) as executor`: The `with` contains an implicit `executor.shutdown(wait=True)`, which aims for graceful shutdown (completion) of the task. If that task hangs, the main process also hangs indefinitely waiting for it.
+            - If manually managing `TimeoutError` Exceptions with `executor.shutdown(wait=False)`: Fire's and forgets a SIGTERM, without awaiting termination, allowing the main process to continue. Child process might not terminate at all(hung/deadlocked) or may still have time to complete leading to unpredictable behavior (operations, logs, etc.)
+    '''
+    
+    print(f"\nAttempting empty_cuda_cache with a {timeout}-second timeout\n")
+    
+
+    # --- Using ThreadPoolExecutor ---
+    '''
+    Test result (with `while True:`): Primary process and GIL held hostage, response slowed to a crawl. Application was non-responsive.
+    CTRL + C termination failed and hung up too! Task manager had to be used to end the process.
+    '''
+    try:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(empty_cuda_cache)
+            try:
+                future.result(timeout=timeout)
+                print(f"\nCUDA cache successfully emptied\n")
+            except TimeoutError:
+                print(f"\nCUDA cache emptying timed out after {timeout} seconds, returning without emptying CUDA cache\n")
+    except Exception:
+        print("\nReturning without emptying CUDA cache\n")
+
+    # --- Using ProcessPoolExecutor ---
+
+    # Approach 1: Manually managing executor shutdown:
+    '''
+    Test result (with `while True:`): Application continued working but a number of never-resolving background processes were spawned that would eventually screw up the system.
+    On termination, a number of Kernel errors were observed.
+    '''
+    executor = concurrent.futures.ProcessPoolExecutor(max_workers=1)    # max_workers=1 ensures we only spin up one process
+    future = executor.submit(empty_cuda_cache)
+    
+    try:
+        result = future.result(timeout=timeout)
+        if result:
+            print(f"\nCUDA cache successfully emptied\n")
+        else:
+            print(f"\nCUDA cache could not be emptied within {timeout} seconds\n")
+
+        # If successful, perform a clean shutdown
+        executor.shutdown(wait=True)
+
+    except TimeoutError:
+        print(f"\nTimeout: `empty_cuda_cache` took longer than {timeout} seconds. Terminating operation and continuing...\n")
+
+        try:
+            executor.shutdown(wait=False, cancel_futures=True)
+        except TypeError: # For Python < 3.9 that doesn't have cancel_futures
+            executor.shutdown(wait=False)
+
+    except Exception as e:  # Ensure cleanup even on other errors
+        handle_error_no_return("An exception occurred while emptying CUDA cache: ", e)
+        executor.shutdown(wait=False)
+    
+    print(f"\nCUDA cache empty operation completed\n")
+
+
+    # Approach 2: Using with statement (implicitly calls `executor.shutdown(wait=True)`):
+    '''
+    Test result (with `while True:`): Server hung up waiting on the child process to complete: even though as a child process it has an independent GIL, the implicit `wait=True` causes the main process to wait indefinitely!
+    Similar Kernel errors were observed on CTRL + C termination.
+
+    '''
+    with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:    
+        try:
+            future = executor.submit(empty_cuda_cache)
+            # wait for the result for a max of timeout seconds
+            result = future.result(timeout=timeout)
+            if result:
+                print(f"\nCUDA cache successfully emptied\n")
+            else:
+                print(f"\nCUDA cache could not be emptied within {timeout} seconds\n")
+        
+        except TimeoutError:
+            print(f"\nTimeout: `empty_cuda_cache` took longer than {timeout} seconds. Terminating operation and continuing...\n")
+        
+        except Exception as e:
+            handle_error_no_return("Could not empty CUDA cache, encountered error: ", e)
