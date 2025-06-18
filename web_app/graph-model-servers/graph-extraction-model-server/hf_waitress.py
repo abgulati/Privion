@@ -1,4 +1,4 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel, CLIPTextModel, AutoProcessor
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel, CLIPTextModel, AutoProcessor, GenerationConfig
 from transformers import StoppingCriteria, StoppingCriteriaList
 from huggingface_hub import login, snapshot_download, scan_cache_dir
 import torch
@@ -81,7 +81,8 @@ def serve_uploaded_file(filename):
 
 #########################------------------GLOBALS!----------------------###############################
 PIPE = None
-MODEL = None
+VISION_MODEL = None
+EXL2_MODEL = None
 EXL2_TOKENIZER = None
 EXL2_CACHE = None
 
@@ -556,14 +557,11 @@ def shutdown_hf_waitress():
 
                     def cleanup():
                         try:
-                            shutdown_model()
+                            shutdown_vision_model()
                             shutdown_pipe()
                             shutdown_exl2()
 
                             print("✅ All models, pipes, and exl2 caches shut down, proceeding with final cleanup...")
-                            
-                            global PIPE, MODEL, EXL2_CACHE, EXL2_TOKENIZER
-                            PIPE, MODEL, EXL2_CACHE, EXL2_TOKENIZER = None, None, None, None
                             safe_empty_cuda_cache()
                             print("✅ Graceful shutdown completed")
                         except Exception as e:
@@ -572,11 +570,11 @@ def shutdown_hf_waitress():
                     cleanup_thread = threading.Thread(target=cleanup)
                     cleanup_thread.start()
 
-                    print("⏰ Starting cleanup with 5-second timeout...")
-                    cleanup_thread.join(timeout=5.0)    # Wait max 5 seconds
+                    print("⏰ Starting cleanup with 7-second timeout...")
+                    cleanup_thread.join(timeout=7)    # Wait max 7 seconds
 
                     if cleanup_thread.is_alive():
-                        print("⚠️  Cleanup timeout reached (5 seconds) - proceeding with force shutdown")
+                        print("⚠️  Cleanup timeout reached (7 seconds) - proceeding with force shutdown")
                     else:
                         print("✅ Cleanup completed successfully")
 
@@ -767,6 +765,14 @@ def safe_remove_folder_from_filepath(folderpath):
 
 def empty_cuda_cache():
     print("\n\nEmptying CUDA cache (in a separate process)\n\n")
+    '''
+    - Source: https://docs.pytorch.org/docs/stable/generated/torch.cuda.empty_cache.html
+
+    - Releases all unoccupied cached memory currently held by the caching allocator so that those can be used in other GPU application and visible in nvidia-smi.
+    - empty_cache() doesn’t increase the amount of GPU memory available for PyTorch. However, it may help reduce fragmentation of GPU memory in certain cases.
+    - Think of it this way: It does not evict the people from the occupied offices!
+    - See Memory Management for more details: https://docs.pytorch.org/docs/stable/notes/cuda.html#cuda-memory-management
+    '''
 
     # --- To test the timeout, uncomment the next line ---
     # print("Simulating a long-running operation that releases the GIL when waiting...")
@@ -805,7 +811,7 @@ def safe_empty_cuda_cache(timeout=10):
             - Failure Mode 2 -- GIL-Holding Hang (deadlocks): Worker thread holds the GIL hostage. Python threads cannot be killed forcefully, so the main thread can never acquire the GIL. `TimeError` is never raised and the entire application freezes.
         - Key Takeaways:
             - Unrelaible because we cannot predict the failure mode.
-            - Python threads cannot be forcefully killed.
+            - Python threads cannot be forcefully killed as a fundamental design philosophy: Forcefully killing a thread is extremely dangerous because threads share memory and resources.
             - Testing with `time.sleep()` is misleading as it's a "polite hang" (GIL-releasing). A "rude hang" (`while True:`) is a more accurate way of testing for a deadlock.
 
     - ProcessPoolExecutor (Deceptively Flawed):
@@ -817,7 +823,13 @@ def safe_empty_cuda_cache(timeout=10):
     '''
 
     try:
-        # For CUDA, it's safest to use the 'spawn' start method to create a clean process.
+        '''
+        For CUDA, it's safest to use the 'spawn' start method to create a clean process: this creates a new interpreter, re-imports all modules, serializes and sends data before executing the target function.
+        The other option is `fork`, which is a near-instant clone of the parent processbut shares the same memory space as the main process, which is not safe for CUDA. In fact, it's fundamentally incompatible:
+            - If the parent process has already touched the GPU and initialized the CUDA context, the child process inherits a "stale" copy of that context. 
+            - When the child then tries to use CUDA, the driver sees a new process ID trying to operate on a context owned by the parent process ID. 
+            - This leads to a state mismatch that almost always results in a crash, a hard deadlock, or a CUDA_ERROR_NOT_INITIALIZED error. fork and CUDA are thus fundamentally incompatible!
+        '''
         ctx = multiprocessing.get_context('spawn')
         p = ctx.Process(target=empty_cuda_cache)
 
@@ -841,19 +853,18 @@ def safe_empty_cuda_cache(timeout=10):
         print("\nReturning without emptying CUDA cache\n")
 
 
-def shutdown_model():
-    print("\n\nShutting down model\n\n")
-    global MODEL
-    if MODEL:
+def shutdown_vision_model():
+    print("\n\nShutting down vision-model\n\n")
+    global VISION_MODEL
+    if VISION_MODEL:
         try:
             print("Attempting graceful offload of model")
-            del MODEL
+            del VISION_MODEL
             print("Model graceful-offload successful")
         except Exception as e:
             handle_error_no_return("Could not gracefully offload model. Proceeding to directly force-offload. Encountered error: ", e)
         finally:
-            MODEL = None
-            safe_empty_cuda_cache()
+            VISION_MODEL = None
     print("\n\nModel offloading complete\n\n")
     return True
 
@@ -870,14 +881,23 @@ def shutdown_pipe():
             handle_error_no_return("Could not gracefully offload pipeline. Proceeding to directly force-offload pipeline. Encountered error: ", e)
         finally:
             PIPE = None
-            safe_empty_cuda_cache()
     print("\n\nPipeline offloading complete\n\n")
     return True
 
 
 def shutdown_exl2():
     print("\n\nShutting down ExLlamaV2 model\n\n")
-    global EXL2_CACHE, EXL2_TOKENIZER
+    global EXL2_CACHE, EXL2_TOKENIZER, EXL2_MODEL
+
+    if EXL2_MODEL:
+        try:
+            print("Attempting to free ExLlamaV2 model")
+            del EXL2_MODEL
+            print("ExLlamaV2 model freed successfully")
+        except Exception as e:
+            handle_error_no_return("Could not free ExLlamaV2 model, encountered error: ", e)
+        finally:
+            EXL2_MODEL = None
     
     if EXL2_CACHE:
         try:
@@ -898,9 +918,7 @@ def shutdown_exl2():
             handle_error_no_return("Could not free ExLlamaV2 tokenizer, encountered error: ", e)
         finally:
             EXL2_TOKENIZER = None
-    
-    safe_empty_cuda_cache()
-    
+        
     print("\n\nExLlamaV2 cleanup complete\n\n")
 
 ############################-----------------------------------------------###############################
@@ -1510,23 +1528,23 @@ def load_flux_pipeline(pipeline):
 
 def load_vision_pipeline(pipeline, model_params):
 
-    global MODEL
+    global VISION_MODEL
 
     try:
         read_return = read_config(['model_id', 'torch_device_map'])
         model_id = str(read_return['model_id'])
         torch_device_map = str(read_return['torch_device_map'])
     except Exception as e:
-        return handle_local_error("Could not read values from hf_config.json when attempting to load_vision_pipeline(), encountered error: ", e)
+        return handle_local_error("Could not read values from hf_config.json when attempting to load vision-pipeline, encountered error: ", e)
 
     model_params.pop('trust_remote_code', None)
 
     try:
         print(f"\nInitializing vision model: {model_id} with device_map: {torch_device_map}\n")
-        MODEL = MllamaForConditionalGeneration.from_pretrained(model_id, **model_params)
+        VISION_MODEL = MllamaForConditionalGeneration.from_pretrained(model_id, **model_params)
        
         try:
-            print(f"Your vision-model's memory footprint is: {MODEL.get_memory_footprint()}")
+            print(f"Your vision-model's memory footprint is: {VISION_MODEL.get_memory_footprint()}")
         except Exception as e:
             handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
 
@@ -1652,8 +1670,8 @@ def get_exl2_cache_type(exl2_cache_type: str):  #  -> ExLlamaV2Cache; commenting
         return handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
 
 
-def define_exllama_generator(quantized_model_path: os.PathLike, exl2_no_flash_attn: bool):    # -> ExLlamaV2DynamicGenerator: commenting out as it will cause the server to error out if ExLlamaV2 is not installed!
-    print(f"\n\nAttempting to define ExLlamaV2 generator for model {quantized_model_path}...\n\n")
+def define_exllama_generator_components(quantized_model_path: os.PathLike, exl2_no_flash_attn: bool):    # -> ExLlamaV2DynamicGenerator: commenting out as it will cause the server to error out if ExLlamaV2 is not installed!
+    print(f"\n\nAttempting to define ExLlamaV2 Generator Components for Model: {quantized_model_path}...\n\n")
 
     try:
         if exl2_no_flash_attn:
@@ -1667,7 +1685,8 @@ def define_exllama_generator(quantized_model_path: os.PathLike, exl2_no_flash_at
         return handle_local_error("Could not define ExLlamaV2 config, encountered error: ", e)
     
     try:
-        model = ExLlamaV2(config)
+        global EXL2_MODEL
+        EXL2_MODEL = ExLlamaV2(config)
         print("\nModel defined successfully\n")
     except Exception as e:
         return handle_local_error("Could not define ExLlamaV2 model, encountered error: ", e)
@@ -1686,14 +1705,14 @@ def define_exllama_generator(quantized_model_path: os.PathLike, exl2_no_flash_at
 
     try:
         global EXL2_CACHE
-        EXL2_CACHE = cache_type(model, max_seq_len = exl2_max_seq_len, lazy = True)
+        EXL2_CACHE = cache_type(EXL2_MODEL, max_seq_len = exl2_max_seq_len, lazy = True)
         print(f"\nCache defined successfully with max_seq_len: {exl2_max_seq_len}\n")
     except Exception as e:
         return handle_local_error("Could not define ExLlamaV2 cache, encountered error: ", e)
 
     try:
         print(f"\nLoading model...\n")
-        model.load_autosplit(EXL2_CACHE)
+        EXL2_MODEL.load_autosplit(EXL2_CACHE)
         print("\nModel loaded with autosplit successfully\n")
     except Exception as e:
         return handle_local_error("Could not load ExLlamaV2 model with autosplit, encountered error: ", e)
@@ -1704,17 +1723,11 @@ def define_exllama_generator(quantized_model_path: os.PathLike, exl2_no_flash_at
         print("\nTokenizer defined successfully\n")
     except Exception as e:
         return handle_local_error("Could not define ExLlamaV2 tokenizer, encountered error: ", e)
-    
-    try:
-        generator = ExLlamaV2DynamicGenerator(model = model, cache = EXL2_CACHE, tokenizer = EXL2_TOKENIZER)
-        print("\nGenerator defined successfully\n")
-    except Exception as e:
-        return handle_local_error("Could not define ExLlamaV2 generator, encountered error: ", e)
 
-    return generator
+    return True
 
 
-def load_exllama_pipeline(pipeline):
+def load_exllama_pipeline():
     print("\n\nLoading ExLlamaV2 Pipeline\n\n")
     
     try:
@@ -1723,7 +1736,7 @@ def load_exllama_pipeline(pipeline):
         exl2_bpw = float(read_return['exl2_bpw'])
         exl2_no_flash_attn = str(read_return['exl2_no_flash_attn']).lower() == 'true'
     except Exception as e:
-        return handle_local_error("Could not read values from hf_config.json when attempting to load_exllama_pipeline(), encountered error: ", e)
+        return handle_local_error("Could not read values from hf_config.json when attempting to load the ExLlamaV2 pipeline, encountered error: ", e)
 
     latest_snapshot_path = None
     try:
@@ -1750,12 +1763,12 @@ def load_exllama_pipeline(pipeline):
         return handle_local_error(f"Error ExLlamaV2 quantizing {model_id} to {exl2_bpw} bits per word. Encountered error: ", e)
 
     try:
-        pipeline = define_exllama_generator(quantized_model_path, exl2_no_flash_attn)
+        define_exllama_generator_components(quantized_model_path, exl2_no_flash_attn)
     except Exception as e:
         return handle_local_error(f"Error loading ExLlamaV2 quantized model from {quantized_model_path}. Encountered error: ", e)
 
     print("\n\nExLlamaV2 Pipeline Loaded Successfully!\n\n")
-    return pipeline
+    return True
 
 
 
@@ -1784,18 +1797,18 @@ class ThreadSafeStream(io.StringIO):
 def restart_server_stream():
 
     llm_semaphore.acquire()
-    print("\n\n/restart_server acquired llm_semaphore, proceeding...\n\n")
+    print("\n\nrestart-server-stream acquired llm_semaphore, proceeding...\n\n")
     config_writer_semaphore.acquire()
-    print("\n\n/restart_server acquired config_writer_semaphore, proceeding...\n\n")
+    print("\n\nrestart-server-stream acquired config_writer_semaphore, proceeding...\n\n")
     error_logging_semaphore.acquire()
-    print("\n\n/restart_server acquired error_logging_semaphore, proceeding...\n\n")
+    print("\n\nrestart-server-stream acquired error_logging_semaphore, proceeding...\n\n")
 
     print("\n\nrestarting server with stream\n\n")
 
-    global PIPE, MODEL
-    
+    shutdown_vision_model()
+    shutdown_pipe()
     shutdown_exl2()
-    PIPE, MODEL = None, None
+    safe_empty_cuda_cache()
 
     try:
         read_return = read_config(['model_id', 'pipeline_task', 'flux_diffusers', 'vision', 'exl2'])
@@ -1806,7 +1819,7 @@ def restart_server_stream():
         exl2 = str(read_return['exl2']).lower() == 'true'
     except Exception as e:
         llm_semaphore.release()
-        return handle_api_error("Could not read values from hf_config.json when attempting /restart_server_stream, encountered error: ", e)
+        return handle_api_error("Could not read values from hf_config.json when attempting restart-server-stream, encountered error: ", e)
 
     model_params = {}
 
@@ -1842,7 +1855,7 @@ def restart_server_stream():
                 
                 if exl2:
                     print("\n\nExLlamaV2 Selected - Loading...\n\n")
-                    PIPE = load_exllama_pipeline(PIPE)
+                    load_exllama_pipeline()
                 elif vision:
                     print("\nVision Model Selected - Loading...\n")
                     PIPE = load_vision_pipeline(PIPE, model_params)
@@ -1883,7 +1896,7 @@ def restart_server_stream():
             yield f"data: {json.dumps(line)}\n\n"
         
         yield f"event: END\ndata: \"null\"\n\n"
-        print("\nrestart_server_stream done\n")
+        print("\nrestart-server-stream done\n")
 
     thread = threading.Thread(target=model_initialization_task)
     thread.start()
@@ -1921,7 +1934,7 @@ def initialize_model():
 
         if exl2:
             print("\n\nExLlamaV2 Selected - Loading...\n\n")
-            PIPE = load_exllama_pipeline(PIPE)
+            load_exllama_pipeline()
         
         else:
             model_params = get_model_params()
@@ -2068,23 +2081,24 @@ def get_input_params_for_vision_model(request):
             vision_file_present = True
         messages = json.loads(request.form.get('messages', '[]'))
     except Exception as e:
-        handle_local_error("Could not read POST-request messages when attempting to get_input_params_for_vision_model, encountered error: ", e)
+        handle_local_error("Could not read POST-request messages when attempting to get input_params for vision-model, encountered error: ", e)
         return False
 
     try:
         read_return = read_config(['max_new_tokens'])
         max_new_tokens = int(read_return['max_new_tokens'])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when trying to get_input_params_for_vision_model(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when trying to get input_params for vision-model, encountered error: ", e)
 
     try:
         dpi = int(request.headers.get('X-DPI', 300))
         try:
-            generation_args = {
+            generation_config = {
                 "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
+                "use_cache": True
             }
         except Exception as e:
-            handle_error_no_return("Could not set generation-arguments when attempting to get_input_params_for_vision_model, proceeding without them. Encountered error: ", e)
+            handle_error_no_return("Could not set generation-arguments when attempting to get input_params for vision-model, proceeding without them. Encountered error: ", e)
     except Exception as e:
         handle_error_no_return("Could not read DPI from request headers, proceeding with default: 300. Encountered error: ", e)
 
@@ -2118,7 +2132,7 @@ def get_input_params_for_vision_model(request):
         handle_local_error("Could not apply chat template, encountered error: ", e)
         return False
 
-    return input_text, pil_image_object_list, generation_args, filename, vision_file_present
+    return input_text, pil_image_object_list, generation_config, filename, vision_file_present
 
 
 def get_font(size=16):
@@ -2154,7 +2168,7 @@ def inference_with_vision_model(request):
     print("\n\nvision-completions route triggered") # No need to acquire LLM semaphore here, as the invoking method already has it!
     
     try:
-        input_text, pil_image_object_list, generation_args, filename, vision_file_present = get_input_params_for_vision_model(request)
+        input_text, pil_image_object_list, generation_config, filename, vision_file_present = get_input_params_for_vision_model(request)
     except Exception as e:
         handle_local_error("Could not get input params in vision-completions, encountered error: ", e)
 
@@ -2169,14 +2183,14 @@ def inference_with_vision_model(request):
         
         try:
             print("\n\nLoading Input to Model\n\n")
-            inputs = PIPE(image, input_text, return_tensors="pt").to(MODEL.device)
+            inputs = PIPE(image, input_text, return_tensors="pt").to(VISION_MODEL.device)
         except Exception as e:
             handle_local_error("Could not load input to model, encountered error: ", e)
             return False
 
         try:
             print("\n\nGenerating Output\n\n")
-            output = MODEL.generate(**inputs, **generation_args)    # `output` is a tensor and needs to be decoded!
+            output = VISION_MODEL.generate(**inputs, **generation_config)    # `output` is a tensor and needs to be decoded!
 
             # Get length of the input sequence as follows:
             # 1. The `inputs` object returned by processor is typically a dictionary-like object containing various tensors needed for the model's forward pass (output generation).
@@ -2196,8 +2210,6 @@ def inference_with_vision_model(request):
         except Exception as e:
             handle_local_error("Could not generate output, encountered error: ", e)
             return False
-
-        safe_empty_cuda_cache()
     
     return inference_output
 
@@ -2247,16 +2259,20 @@ def completions():
             return handle_api_error("Could not read POST-request messages for /completions, encountered error: ", e)
 
         try:
-            generation_args = {
-                "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
-                "temperature": float(request.headers.get('X-Temperature', str(temperature))),
-                "do_sample": request.headers.get('X-Do-Sample', str(do_sample)).lower() == 'true',
-                "top_k": int(request.headers.get('X-Top-K', str(top_k))),
-                "top_p": float(request.headers.get('X-Top-P', str(top_p))),
-                "min_p": float(request.headers.get('X-Min-P', str(min_p)))
-            }
+            generation_config = GenerationConfig(
+                max_new_tokens=int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
+                temperature=float(request.headers.get('X-Temperature', str(temperature))),
+                do_sample=request.headers.get('X-Do-Sample', str(do_sample)).lower() == 'true',
+                top_k=int(request.headers.get('X-Top-K', str(top_k))),
+                top_p=float(request.headers.get('X-Top-P', str(top_p))),
+                min_p=float(request.headers.get('X-Min-P', str(min_p))),
+                use_cache=True
+            )
+            # use_cache=True by default, setting explictily to True for clarity. Intra-call optimization: tells the generator, "During this single generation call, please be efficient.
+            # As you process the prompt and generate new tokens, create and use a KV cache internally so you don't have to re-calculate everything for every single new token." 
         except Exception as e:
             handle_error_no_return("Could not set generation-arguments for /completions, proceeding without them. Encountered error: ", e)
+            generation_config = GenerationConfig(max_new_tokens=max_new_tokens, use_cache=True)
 
         try:
             print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
@@ -2275,11 +2291,7 @@ def completions():
         inference_output = ""
         try:
             print("\n\nGenerating Output\n\n")
-            if generation_args:
-                output = PIPE.model.generate(**inputs, **generation_args)    # `output` is a tensor and needs to be decoded!
-            else:
-                output = PIPE.model.generate(**inputs, max_new_tokens=max_new_tokens)
-            
+            output = PIPE.model.generate(**inputs, generation_config=generation_config)
             input_length = inputs.input_ids.shape[1]   # Check inference_with_vision_model(request) for detailed explanation!
             
             # Slice the tensor and decode only the output!
@@ -2292,8 +2304,6 @@ def completions():
             return False
 
         print("\n\nCompletions done - releasing LLM semaphore\n\n")
-
-        safe_empty_cuda_cache()
 
         return jsonify({"success": True, "response": inference_output})
 
@@ -2324,7 +2334,7 @@ def vision_stream():
     print("\n\nLLM semaphore acquired by /vision_stream\n\n")
 
     try:
-        input_text, pil_image_object_list, generation_args, filename, vision_file_present = get_input_params_for_vision_model(request)
+        input_text, pil_image_object_list, generation_config, filename, vision_file_present = get_input_params_for_vision_model(request)
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not get input params in vision_stream, encountered error: ", e)
@@ -2333,7 +2343,7 @@ def vision_stream():
         pil_image_object_list.append(get_blank_pil_image_object())
 
     stop_event = threading.Event()
-    generation_args["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
+    generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
 
     data_queue = queue.Queue()
 
@@ -2348,10 +2358,10 @@ def vision_stream():
                     print(status_string)
                 
                 print("\n\nLoading Input to Model\n\n")
-                inputs = PIPE(image, input_text, return_tensors="pt").to(MODEL.device)
+                inputs = PIPE(image, input_text, return_tensors="pt").to(VISION_MODEL.device)
 
                 print("\n\nGenerating Output\n\n")
-                output = MODEL.generate(**inputs, **generation_args)    # `output` is a tensor and needs to be decoded!
+                output = VISION_MODEL.generate(**inputs, **generation_config)    # `output` is a tensor and needs to be decoded!
 
                 # Get length of the input sequence - look for detailed comment in inference_with_vision_model() !
                 input_length = inputs.input_ids.shape[1] 
@@ -2363,7 +2373,6 @@ def vision_stream():
                 data_queue.put(decoded_output)
                 data_queue.put("\n\n\n")
 
-                safe_empty_cuda_cache()
         finally:
             data_queue.put(None)
             print("\n\nLLM stream done, releasing semaphore\n\n")
@@ -2393,8 +2402,6 @@ def vision_stream():
         yield f"event: END\ndata: \"null\"\n\n"
 
         STOP_GENERATION = False
-
-        safe_empty_cuda_cache()
             
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
@@ -2447,19 +2454,20 @@ def completions_stream():
         llm_semaphore.release()
         return handle_api_error("Could not read values from hf_config.json when attempting /completions_stream, encountered error: ", e)
 
-    try:
-        generation_args = {
+    try:    # Create a GenerationConfig object
+        generation_config = {
             "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
             "return_full_text": request.headers.get('X-Return-Full-Text', str(return_full_text)).lower() == 'true',
             "temperature": float(request.headers.get('X-Temperature', str(temperature))),
             "do_sample": request.headers.get('X-Do-Sample', str(do_sample)).lower() == 'true',
             "top_k": int(request.headers.get('X-Top-K', str(top_k))),
             "top_p": float(request.headers.get('X-Top-P', str(top_p))),
-            "min_p": float(request.headers.get('X-Min-P', str(min_p)))
+            "min_p": float(request.headers.get('X-Min-P', str(min_p))),
+            "use_cache": True
         }
     except Exception as e:
-        llm_semaphore.release()
-        return handle_api_error("Could not set generation-arguments for /completions_stream, proceeding without them. Encountered error: ", e)
+        handle_error_no_return("Could not set generation-arguments for /completions_stream, proceeding without them. Encountered error: ", e)
+        generation_config = {"max_new_tokens": max_new_tokens,"use_cache": True}
 
     try:
         print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
@@ -2492,13 +2500,10 @@ def completions_stream():
 
         global PIPE
 
-        try:                
-            if generation_args:
-                generation_args["streamer"] = custom_streamer
-                generation_args["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
-                output = PIPE(decoded_inputs, **generation_args)
-            else:
-                output = PIPE(decoded_inputs, streamer=custom_streamer, stopping_criteria=StoppingCriteriaList([StopOnEvent(stop_event)]))
+        try:
+            generation_config["streamer"] = custom_streamer
+            generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
+            output = PIPE(decoded_inputs, **generation_config)
         finally:
             data_queue.put(None)
             print("\n\nLLM stream done, releasing semaphore\n\n")
@@ -2528,18 +2533,26 @@ def completions_stream():
         yield f"event: END\ndata: \"null\"\n\n"
 
         STOP_GENERATION = False
-
-        safe_empty_cuda_cache()
             
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
+
+
+def set_global_exl2_dynamic_generator():
+    try:
+        print("\n\nSetting global ExLlamaV2DynamicGenerator\n\n")
+        exl2_dynamic_generator = ExLlamaV2DynamicGenerator(model = EXL2_MODEL, cache = EXL2_CACHE, tokenizer = EXL2_TOKENIZER)
+        print("\nGenerator defined successfully\n")
+        return exl2_dynamic_generator
+    except Exception as e:
+        return handle_local_error("Could not define ExLlamaV2 generator, encountered error: ", e)
 
 
 def get_exl2_gen_settings(request):
     try:
         config_data = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'knowledge_graph_cache_dir'])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting /exl2_grapher, encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when attempting exl2-grapher, encountered error: ", e)
 
     try:
         print("\nExLlamaV2Sampler.Settings In-Progress...\n")
@@ -2551,7 +2564,7 @@ def get_exl2_gen_settings(request):
         requested_max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(config_data['max_new_tokens'])))
         print("\nExLlamaV2Sampler.Settings Defined Successfully\n")
     except Exception as e:
-        handle_error_no_return("Could not set generation-arguments for /exl2_grapher, proceeding without them. Encountered error: ", e)
+        handle_error_no_return("Could not set generation-arguments for exl2-grapher, proceeding without them. Encountered error: ", e)
 
     return gen_settings, requested_max_new_tokens, config_data['knowledge_graph_cache_dir']
 
@@ -2559,11 +2572,11 @@ def get_exl2_gen_settings(request):
 @app.route('/exl2_stream', methods=['POST'])
 def exl2_stream():
 
-    print("\n\nexl2_stream route triggered - attempting to acquire LLM semaphore\n\n")
+    print("\n\nexl2-stream route triggered - attempting to acquire LLM semaphore\n\n")
 
     llm_semaphore.acquire()
 
-    print("\nLLM semaphore acquired by /exl2_stream\n")
+    print("\nLLM semaphore acquired by exl2-stream\n")
 
     try:
         data = request.json
@@ -2572,7 +2585,13 @@ def exl2_stream():
         print(f"\nRead request - message received: {messages}\n")
     except Exception as e:
         llm_semaphore.release()
-        return handle_api_error("Could not read POST-request messages for /exl2_stream, encountered error: ", e)
+        return handle_api_error("Could not read POST-request messages for exl2-stream, encountered error: ", e)
+    
+    try:
+        exl2_dynamic_generator = set_global_exl2_dynamic_generator()
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
 
     try:
         print("\nCreating ExLlamaV2DynamicJob Object...\n")
@@ -2582,23 +2601,21 @@ def exl2_stream():
             stop_conditions = [EXL2_TOKENIZER.eos_token_id],
             gen_settings = gen_settings
         )
-        PIPE.enqueue(job)
+        exl2_dynamic_generator.enqueue(job)
         print("\nExLlamaV2DynamicJob Defined & Enqueued Successfully\n")
     except Exception as e:
         llm_semaphore.release()
-        return handle_api_error("Could not create ExLlamaV2DynamicJob object for /exl2_stream, encountered error: ", e)
+        return handle_api_error("Could not create ExLlamaV2DynamicJob object for exl2-stream, encountered error: ", e)
 
     stop_thread = threading.Event()
     output_queue = queue.Queue()
 
     def llm_task():
 
-        global PIPE
-
         try:            
-            while PIPE.num_remaining_jobs():
-                # output_queue.put(PIPE.iterate()[0])  # Will print dict with keys: dict_keys(['job', 'stage', 'eos', 'serial', 'text', 'token_ids']) ### USE: yield f"data: {(line)}\n\n"
-                current_token = PIPE.iterate()   # directly trying to access the 'text' key here will result in a KeyError as iteration may not have completed yet!
+            while exl2_dynamic_generator.num_remaining_jobs():
+                # output_queue.put(exl2_dynamic_generator.iterate()[0])  # Will print dict with keys: dict_keys(['job', 'stage', 'eos', 'serial', 'text', 'token_ids']) ### USE: yield f"data: {(line)}\n\n"
+                current_token = exl2_dynamic_generator.iterate()   # directly trying to access the 'text' key here will result in a KeyError as iteration may not have completed yet!
                 if len(current_token) == 1 and 'text' in current_token[0]:
                     output_queue.put(current_token[0]['text'])  # thus best to capture the current iteration's output and then access the 'text' key!
                 elif len(current_token) > 1:
@@ -2639,9 +2656,7 @@ def exl2_stream():
         
         yield f"event: END\ndata: \"null\"\n\n"
 
-        safe_empty_cuda_cache()
-
-        print("\n/exl2_stream done\n")
+        print("\nexl2-stream done\n")
 
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
@@ -2651,17 +2666,18 @@ def exl2_stream():
 ### Exl2 Graph Helper Functions ###
 
 def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
+    exl2_dynamic_generator = set_global_exl2_dynamic_generator()
     job = ExLlamaV2DynamicJob(
         input_ids= EXL2_TOKENIZER.encode(payload, add_bos=True),
         max_new_tokens = max_new_tokens,
         stop_conditions = [EXL2_TOKENIZER.eos_token_id],
         gen_settings = gen_settings
     )
-    PIPE.enqueue(job)
+    exl2_dynamic_generator.enqueue(job)
 
     full_response = ""
-    while PIPE.num_remaining_jobs():
-        current_token = PIPE.iterate()
+    while exl2_dynamic_generator.num_remaining_jobs():
+        current_token = exl2_dynamic_generator.iterate()
         
         if len(current_token) == 1 and 'text' in current_token[0]:
             full_response += current_token[0]['text']
@@ -2671,8 +2687,6 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
                 if 'stage' in job and job['stage'] == 'streaming':
                     if 'text' in job: 
                         full_response += job['text']
-
-    safe_empty_cuda_cache()
 
     return full_response
 
@@ -2884,8 +2898,6 @@ def exl2_grapher():
 
     def extraction_task():
 
-        global PIPE
-
         try:
 
             cache_data_map = {}
@@ -3012,8 +3024,6 @@ def exl2_grapher():
 
     def summary_generation_task():
 
-        global PIPE
-
         try:
             
             cache_data_map = {}
@@ -3091,8 +3101,6 @@ def exl2_grapher():
         
         yield f"event: END\ndata: \"null\"\n\n"
 
-        safe_empty_cuda_cache()
-
         print("\n/exl2_grapher done\n")
 
     if extraction_mode:
@@ -3122,7 +3130,7 @@ def health():
     with reader_semaphore:
     
         try:
-            if PIPE is None:
+            if PIPE is None and (EXL2_MODEL is None or EXL2_CACHE is None or EXL2_TOKENIZER is None):
                 return jsonify(status="error", message="Model not loaded"), 503 # Service Unavailable
             
             model_info = {}
@@ -3251,22 +3259,18 @@ def health():
 def restart_server():
     
     with llm_semaphore:
-        print("\n\n/restart_server acquired llm_semaphore, proceeding...\n\n")
+        print("\n\nrestart-server acquired llm_semaphore, proceeding...\n\n")
         with config_writer_semaphore:
-            print("\n\n/restart_server acquired config_writer_semaphore, proceeding...\n\n")
+            print("\n\nrestart-server acquired config_writer_semaphore, proceeding...\n\n")
             with error_logging_semaphore:
-                print("\n\n/restart_server acquired error_logging_semaphore, proceeding...\n\n")
+                print("\n\nrestart-server acquired error_logging_semaphore, proceeding...\n\n")
 
                 try:
-                    # shutdown_pipe()
-                    # if MODEL is not None:
-                    #     shutdown_model()
-                    global PIPE
-                    global MODEL
-
+                    shutdown_vision_model()
+                    shutdown_pipe()
                     shutdown_exl2()
-                    PIPE = None
-                    MODEL = None
+                    safe_empty_cuda_cache()
+
                     initialize_model()
                 except Exception as e:
                     handle_api_error("Could not restart server, encountered error: ", e)
