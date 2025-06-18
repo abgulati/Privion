@@ -4605,7 +4605,6 @@ def bulk_text_extract_from_staging_area(staged_docs_to_upload: list[dict], data_
     finally:    # Cleanup
         global DOCLING_CONVERTER, VLM_PIPELINE_OPTIONS, PDF_PIPELINE_OPTIONS
         DOCLING_CONVERTER, VLM_PIPELINE_OPTIONS, PDF_PIPELINE_OPTIONS = None, None, None
-        utils.safe_empty_cuda_cache()
 
     return True
 
