@@ -12,6 +12,14 @@ from pynvml import *
 
 def empty_cuda_cache():
     print("\n\nEmptying CUDA cache (in a separate process)\n\n")
+    '''
+    - Source: https://docs.pytorch.org/docs/stable/generated/torch.cuda.empty_cache.html
+
+    - Releases all unoccupied cached memory currently held by the caching allocator so that those can be used in other GPU application and visible in nvidia-smi.
+    - empty_cache() doesn’t increase the amount of GPU memory available for PyTorch. However, it may help reduce fragmentation of GPU memory in certain cases.
+    - Think of it this way: It does not evict the people from the occupied offices!
+    - See Memory Management for more details: https://docs.pytorch.org/docs/stable/notes/cuda.html#cuda-memory-management
+    '''
 
     # --- To test the timeout, uncomment the next line ---
     # print("Simulating a long-running operation that releases the GIL when waiting...")
@@ -50,7 +58,7 @@ def safe_empty_cuda_cache(timeout=10):
             - Failure Mode 2 -- GIL-Holding Hang (deadlocks): Worker thread holds the GIL hostage. Python threads cannot be killed forcefully, so the main thread can never acquire the GIL. `TimeError` is never raised and the entire application freezes.
         - Key Takeaways:
             - Unrelaible because we cannot predict the failure mode.
-            - Python threads cannot be forcefully killed.
+            - Python threads cannot be forcefully killed as a fundamental design philosophy: Forcefully killing a thread is extremely dangerous because threads share memory and resources.
             - Testing with `time.sleep()` is misleading as it's a "polite hang" (GIL-releasing). A "rude hang" (`while True:`) is a more accurate way of testing for a deadlock.
 
     - ProcessPoolExecutor (Deceptively Flawed):
@@ -62,7 +70,13 @@ def safe_empty_cuda_cache(timeout=10):
     '''
 
     try:
-        # For CUDA, it's safest to use the 'spawn' start method to create a clean process.
+        '''
+        For CUDA, it's safest to use the 'spawn' start method to create a clean process: this creates a new interpreter, re-imports all modules, serializes and sends data before executing the target function.
+        The other option is `fork`, which is a near-instant clone of the parent processbut shares the same memory space as the main process, which is not safe for CUDA. In fact, it's fundamentally incompatible:
+            - If the parent process has already touched the GPU and initialized the CUDA context, the child process inherits a "stale" copy of that context. 
+            - When the child then tries to use CUDA, the driver sees a new process ID trying to operate on a context owned by the parent process ID. 
+            - This leads to a state mismatch that almost always results in a crash, a hard deadlock, or a CUDA_ERROR_NOT_INITIALIZED error. fork and CUDA are thus fundamentally incompatible!
+        '''
         ctx = multiprocessing.get_context('spawn')
         p = ctx.Process(target=empty_cuda_cache)
 
