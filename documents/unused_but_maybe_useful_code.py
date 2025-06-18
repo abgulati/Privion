@@ -4998,7 +4998,7 @@ def safe_empty_cuda_cache(timeout=5):
             - Failure Mode 2 -- GIL-Holding Hang (deadlocks): Worker thread holds the GIL hostage. Python threads cannot be killed forcefully, so the main thread can never acquire the GIL. `TimeError` is never raised and the entire application freezes.
         - Key Takeaways:
             - Unrelaible because we cannot predict the failure mode.
-            - Python threads cannot be forcefully killed.
+            - Python threads cannot be forcefully killed as a fundamental design philosophy: Forcefully killing a thread is extremely dangerous because threads share memory and resources.
             - Testing with `time.sleep()` is misleading as it's a "polite hang" (GIL-releasing). A "rude hang" (`while True:`) is a more accurate way of testing for a deadlock.
 
     - ProcessPoolExecutor (Deceptively Flawed):
@@ -5084,3 +5084,45 @@ def safe_empty_cuda_cache(timeout=5):
         
         except Exception as e:
             handle_error_no_return("Could not empty CUDA cache, encountered error: ", e)
+
+
+    # --- Using a Nested Thread ---
+    '''
+    Suffers the same main-process hanging issue on deadlock of the nested thread as the GIL is shared!
+    '''
+
+    def safe_empty_cuda_cache(timeout=10):
+
+        def empty_cuda_cache():
+            print("\n\nEmptying CUDA cache (in a separate process)\n\n")
+
+            if torch.cuda.is_available():
+                try:
+                    print("Attempting to empty cuda cache")
+                    torch.cuda.empty_cache()
+                    print("CUDA cache successfully emptied")
+                    return True
+                except Exception as e:
+                    print(f"Could not empty cuda cache, encountered error: {str(e)}")
+                    return False
+            else:
+                print("\n\nCUDA is not available, skipping cache-emptying\n\n")
+                return True
+
+        try:
+            cuda_cache_cleanup_thread = threading.Thread(target=empty_cuda_cache)
+            cuda_cache_cleanup_thread.start()
+
+            print(f"⏰ Starting cleanup with a {timeout}-second timeout...")
+            cuda_cache_cleanup_thread.join(timeout=timeout)
+            
+            if cuda_cache_cleanup_thread.is_alive():
+                print(f"⚠️  Cleanup timeout reached ({timeout} seconds) - proceeding with force shutdown")
+                cuda_cache_cleanup_thread.terminate()
+                cuda_cache_cleanup_thread.join()
+            else:
+                print("✅ Cleanup completed successfully")
+
+
+        except Exception:
+            print("\nReturning without emptying CUDA cache\n")
