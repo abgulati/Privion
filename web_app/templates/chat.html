@@ -204,12 +204,13 @@
                             <!--Options on the left-->
                             <div class="list-group w-25 me-3" id="modal-left-options-list">
                                 <a href="#" class="list-group-item list-group-item-action active" data-content="option1">LLM Selection</a>
-                                <a href="#" class="list-group-item list-group-item-action" data-content="option2">Knowledge Bases & Embedding Models</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option2">Knowledge Domains & Embedding Models</a>
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option3">System Prompt</a>
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option4">RAG Options</a>
-                                <a href="#" class="list-group-item list-group-item-action" data-content="option5">OCR Options</a>
-                                <a href="#" class="list-group-item list-group-item-action" data-content="option6">Google Drive Loader</a>
-                                <a href="#" class="list-group-item list-group-item-action" data-content="option7">Additional Settings</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option5">GraphRAG Settings</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option6">OCR Options</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option7">Google Drive Loader</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option8">Additional Settings</a>
                                 <!--Add as Needed-->
                             </div>
 
@@ -772,12 +773,12 @@
 
                                 <div id="option2" class="d-none">
                                     <!--Option 2 Content-->
-                                    <h5>Switch Knowledge Bases</h5>
+                                    <h5>Switch Knowledge Domains</h5>
 
                                     <br>
 
                                     <div class="hf-waitress-kb-custom-select" id="hf-waitress-kb-custom-select">
-                                        <label style="margin-bottom: 3px;">Select a Knowledge Base:</label>
+                                        <label style="margin-bottom: 3px;">Select a Knowledge Domain:</label>
                                         <br>
                                         <div class="hf-waitress-kb-custom-select-header" id="hf-waitress-kb-custom-select-header">
                                             <span class="hf-waitress-kb-custom-dropdown-selected-value" id="hf-waitress-kb-custom-dropdown-selected-value">Select an item</span>
@@ -864,6 +865,35 @@
                                                 </div>
                                             </div>
 
+                                            <br>
+
+                                            <div class="form-group">
+                                                <input type="checkbox" id="use_embedding_model_for_reranking" name="use_embedding_model_for_reranking" checked>
+                                                <label for="use_embedding_model_for_reranking">Use Embedding Model for Re-Ranking (Default: Enabled)</label>
+                                            </div>
+
+                                            <br>
+
+                                            <div class="hf-waitress-reranker-custom-select" id="hf-waitress-reranker-custom-select">
+                                                <label style="margin-bottom: 3px;">Select a Reranker Model:</label>
+                                                <br>
+                                                <div class="hf-waitress-reranker-custom-select-header" id="hf-waitress-reranker-custom-select-header">
+                                                    <span class="hf-waitress-reranker-custom-dropdown-selected-value" id="hf-waitress-reranker-custom-dropdown-selected-value">Select an item</span>
+                                                    <span class="hf-waitress-reranker-custom-dropdown-arrow" id="hf-waitress-reranker-custom-dropdown-arrow">▼</span>
+                                                </div>
+                                                <div class="hf-waitress-reranker-custom-dropdown-content" id="hf-waitress-reranker-custom-dropdown-content">
+                                                    <div class="hf-waitress-reranker-custom-dropdown-search-and-sort-header">
+                                                        <button class="hf-waitress-reranker-custom-dropdown-sort-btn" id="hf-waitress-reranker-custom-dropdown-sort-btn" onclick="reverseSortCustomRerankerDropdown()">Sort</button>
+                                                        <input type="text" class="hf-waitress-reranker-custom-dropdown-search-input" id="hf-waitress-reranker-custom-dropdown-search-input" placeholder="Search...">
+                                                    </div>
+                                                    <div class="hf-waitress-reranker-custom-dropdown-add-item-container">
+                                                        <button class="hf-waitress-reranker-custom-dropdown-add-btn" id="hf-waitress-reranker-custom-dropdown-add-btn">+ Add</button>
+                                                        <input type="text" class="hf-waitress-reranker-custom-dropdown-add-input" id="hf-waitress-reranker-custom-dropdown-add-input" style="display: none;" placeholder="Select a reranker model...">
+                                                    </div>
+                                                    <div class="hf-waitress-reranker-custom-dropdown-items-list" id="hf-waitress-reranker-custom-dropdown-items-list"></div>
+                                                </div>
+                                            </div>
+
                                         </div>
                                     </div>
 
@@ -921,19 +951,431 @@
                                     </div>
                                     
                                     <br>
+
+                                    <div id="fetch_top_k_results_from_whoosh_div" class="llm-settings-standard-styling">
+                                        <label class="hf-select-settings-labels-group">Fetch Top-K Results from Whoosh (Default: 50):</label>
+                                        <input type="number" id="fetch_top_k_results_from_whoosh" name="fetch_top_k_results_from_whoosh" class="settings-input-fields" value="50" min="0" max="1000">
+                                    </div>
+
+                                    <div id="fetch_top_k_results_from_vectordb_div" class="llm-settings-standard-styling">
+                                        <label class="hf-select-settings-labels-group">Fetch Top-K Results from VectorDB (Default: 50):</label>
+                                        <input type="number" id="fetch_top_k_results_from_vectordb" name="fetch_top_k_results_from_vectordb" class="settings-input-fields" value="50" min="0" max="1000">
+                                    </div>
+
+                                    <div id="filter_top_k_results_by_reranking_div" class="llm-settings-standard-styling">
+                                        <label class="hf-select-settings-labels-group">Filter Top-K Results by Re-Ranking (Default: 11):</label>
+                                        <input type="number" id="filter_top_k_results_by_reranking" name="filter_top_k_results_by_reranking" class="settings-input-fields" value="11" min="0" max="1000">
+                                    </div>
+                                    
+                                    <div id="min_semantic_similarity_threshold_div" class="llm-settings-standard-styling">
+                                        <label class="hf-select-settings-labels-group">Minimum Semantic Similarity Threshold (Default: 0.5):</label>
+                                        <input type="number" id="min_semantic_similarity_threshold" name="min_semantic_similarity_threshold" class="settings-input-fields" value="0.5" step="0.1" min="-1" max="1">
+                                    </div>
+
+                                    <div id="min_lexical_similarity_threshold_div" class="llm-settings-standard-styling">
+                                        <label class="hf-select-settings-labels-group">Minimum Lexical Similarity Threshold (Default: 3.0):</label>
+                                        <input type="number" id="min_lexical_similarity_threshold" name="min_lexical_similarity_threshold" class="settings-input-fields" value="3.0" step="1.0" min="0" max="11">
+                                    </div>
+                                    
+                                    <!-- <br>
                                     
                                     <br>
                                     <h5 style="margin-bottom: 0;">Citations Settings:</h5>
-                                    <br>
+                                    <br> -->
                                     <div>
-                                        <input type="checkbox" id="llm_filter_citations_checkbox" name="llm_filter_citations">
+                                        <input type="checkbox" id="llm_filter_citations_checkbox" name="llm_filter_citations" style="display: none;">
                                         <label for="llm_filter_citations_checkbox">Filter Citations for Additional Accuracy (Uncheck to display all citations)</label>
                                     </div>
 
                                 </div>
 
                                 <div id="option5" class="d-none">
-                                    <!--Option 1 Content-->
+
+                                    <h5>GraphRAG - Entity & Relationship Extraction Settings</h5>
+
+                                    <br>
+
+                                    <div class="graph-extractor-custom-select" id="graph-extractor-custom-select">
+                                        <label style="margin-bottom: 3px;">Select a Graph Extractor Model:</label>
+                                        <br>
+                                        <div class="graph-extractor-custom-select-header" id="graph-extractor-custom-select-header" style="cursor: not-allowed; background-color: darkgray;">
+                                            <span class="graph-extractor-custom-dropdown-selected-value" id="graph-extractor-custom-dropdown-selected-value">Select an item</span>
+                                            <span class="graph-extractor-custom-dropdown-arrow" id="graph-extractor-custom-dropdown-arrow">▼</span>
+                                        </div>
+                                        <div class="graph-extractor-custom-dropdown-content" id="graph-extractor-custom-dropdown-content">
+                                            <div class="graph-extractor-custom-dropdown-search-and-sort-header">
+                                                <button class="graph-extractor-custom-dropdown-sort-btn" id="graph-extractor-custom-dropdown-sort-btn" onclick="reverseSortCustomGraphExtractorDropdown()">Sort</button>
+                                                <input type="text" class="graph-extractor-custom-dropdown-search-input" id="graph-extractor-custom-dropdown-search-input" placeholder="Search...">
+                                            </div>
+                                            <div class="graph-extractor-custom-dropdown-add-item-container">
+                                                <button class="graph-extractor-custom-dropdown-add-btn" id="graph-extractor-custom-dropdown-add-btn">+ Add</button>
+                                                <input type="text" class="graph-extractor-custom-dropdown-add-input" id="graph-extractor-custom-dropdown-add-input" style="display: none;" placeholder="Select a graph extractor model...">
+                                            </div>
+                                            <div class="graph-extractor-custom-dropdown-items-list" id="graph-extractor-custom-dropdown-items-list"></div>
+                                        </div>
+                                    </div>
+
+                                    <br>
+
+                                    <!--Advanced Settings Section Begins-->
+                                    <a href="#" class="btn btn-link btn-primary llm-adv-set-toggle" id="advancedGraphRagSettingsToggle" data-bs-toggle="collapse" data-bs-target="#advancedGraphRagSettings" aria-expanded="false" aria-controls="advancedGraphRagSettings" style="display: inline-block;">
+                                        Advanced Settings >>>
+                                    </a>
+
+                                    <div class="collapse" id="advancedGraphRagSettings">
+                                        <div class="card card-body" style="background-color: #181A1B; border: none;">
+
+                                            <br>
+
+                                            <div>
+                                                <input type="checkbox" id="reuse_graph_extraction_cache_checkbox" name="reuse_graph_extraction_cache" checked>
+                                                <label for="reuse_graph_extraction_cache_checkbox">Reuse Cache</label>
+                                            </div>
+
+                                            <br>
+                
+                                            <div>
+                                                <input type="checkbox" id="validate_graph_extraction_cache_checkbox" name="validate_graph_extraction_cache" checked>
+                                                <label for="validate_graph_extraction_cache_checkbox">Validate Cache</label>
+                                            </div>
+
+                                            <br>
+                                            <br>
+
+                                            <h6>Quantizations Settings:</h6>
+
+                                            <br>
+
+                                            <div id="graph_extractor_exl2" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">EXL2 Backend (--exl2):</label>
+                                                <input type="radio" id="graph_extractor_exl2_yes" name="graph_extractor_use_exl2" value="y" style="margin-left: 7px;" checked> Yes (Default)
+                                                <input type="radio" id="graph_extractor_exl2_no" name="graph_extractor_use_exl2" value="n" style="margin-left: 7px;" disabled> No
+                                            </div>
+
+                                            <div id="graph_extractor_exl2_bpw_div" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Exl2 Bits Per Word (--exl2_bpw):</label>
+                                                <input type="number" id="graph_extractor_exl2_bpw" name="graph_extractor_exl2_bpw" class="settings-input-fields" value="8.0" min="0" max="8" step="0.1">
+                                            </div>
+
+                                            <div id="graph_extractor_memory_required_div" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Memory Required (MB):</label>
+                                                <input type="number" id="graph_extractor_memory_required" name="graph_extractor_memory_required" class="settings-input-fields" value="7168" min="0" max="100000">
+                                            </div>
+
+                                            <br>
+
+                                            <h6>Generation Settings:</h6>
+
+                                            <br>
+
+                                            <div id="graph_extractor_max_new_tokens_div" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Max New Tokens:</label>
+                                                <input type="number" id="graph_extractor_max_new_tokens" name="graph_extractor_max_new_tokens" class="settings-input-fields" value="4096" min="0" max="100000">
+                                            </div>
+
+                                            <div id="graph_extractor_max_seq_len_div" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Max Sequence Length:</label>
+                                                <input type="number" id="graph_extractor_max_seq_len" name="graph_extractor_max_seq_len" class="settings-input-fields" value="15360" min="0" max="100000">
+                                            </div>
+
+                                            <div id="graph_extractor_temperature_div" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Temperature:</label>
+                                                <input type="number" id="graph_extractor_temperature" name="graph_extractor_temperature" class="settings-input-fields" value="0.1" min="0" max="10" step="0.01">
+                                            </div>
+
+                                            <div id="graph_extractor_top_k_div" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Top K:</label>
+                                                <input type="number" id="graph_extractor_top_k" name="graph_extractor_top_k" class="settings-input-fields" value="40" min="0" max="100">
+                                            </div>
+
+                                            <div id="graph_extractor_top_p_div" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Top P:</label>
+                                                <input type="number" id="graph_extractor_top_p" name="graph_extractor_top_p" class="settings-input-fields" value="0.95" min="0" max="10" step="0.01">
+                                            </div>
+
+                                            <div id="graph_extractor_min_p_div" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Min P:</label>
+                                                <input type="number" id="graph_extractor_min_p" name="graph_extractor_min_p" class="settings-input-fields" value="0.05" min="0" max="10" step="0.01">
+                                            </div>
+
+                                            <br>
+
+                                            <h6>Network Settings:</h6>
+
+                                            <br>
+
+                                            <div id="graph_extractor_access_url_div" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Access URL:</label>
+                                                <input type="text" id="graph_extractor_access_url" name="graph_extractor_access_url" class="settings-input-fields" value="localhost">
+                                            </div>
+
+                                            <div id="graph_extractor_server_port_div" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Port:</label>
+                                                <input type="number" id="graph_extractor_server_port" name="graph_extractor_server_port" class="settings-input-fields" value="9070" min="0" max="65535">
+                                            </div>
+
+                                        </div>
+                                    </div>
+
+                                    <br>
+                                    <br>
+                                    <br>
+
+                                    <h5>GraphRAG - Summarization Settings</h5>
+
+                                    <br>
+
+                                    <div class="graph-summarizer-custom-select" id="graph-summarizer-custom-select">
+                                        <label style="margin-bottom: 3px;">Select a Graph Summarizer Model:</label>
+                                        <br>
+                                        <div class="graph-summarizer-custom-select-header" id="graph-summarizer-custom-select-header" style="cursor: not-allowed; background-color: darkgray;">
+                                            <span class="graph-summarizer-custom-dropdown-selected-value" id="graph-summarizer-custom-dropdown-selected-value">Select an item</span>
+                                            <span class="graph-summarizer-custom-dropdown-arrow" id="graph-summarizer-custom-dropdown-arrow">▼</span>
+                                        </div>
+                                        <div class="graph-summarizer-custom-dropdown-content" id="graph-summarizer-custom-dropdown-content">
+                                            <div class="graph-summarizer-custom-dropdown-search-and-sort-header">
+                                                <button class="graph-summarizer-custom-dropdown-sort-btn" id="graph-summarizer-custom-dropdown-sort-btn" onclick="reverseSortCustomGraphSummarizerDropdown()">Sort</button>
+                                                <input type="text" class="graph-summarizer-custom-dropdown-search-input" id="graph-summarizer-custom-dropdown-search-input" placeholder="Search...">
+                                            </div>
+                                            <div class="graph-summarizer-custom-dropdown-add-item-container">
+                                                <button class="graph-summarizer-custom-dropdown-add-btn" id="graph-summarizer-custom-dropdown-add-btn">+ Add</button>
+                                                <input type="text" class="graph-summarizer-custom-dropdown-add-input" id="graph-summarizer-custom-dropdown-add-input" style="display: none;" placeholder="Select a graph summarizer model...">
+                                            </div>
+                                            <div class="graph-summarizer-custom-dropdown-items-list" id="graph-summarizer-custom-dropdown-items-list"></div>
+                                        </div>
+                                    </div>
+
+                                    <br>
+
+                                    <!--Advanced Settings Section Begins-->
+                                    <a href="#" class="btn btn-link btn-primary llm-adv-set-toggle" id="advancedGraphSummarizerSettingsToggle" data-bs-toggle="collapse" data-bs-target="#advancedGraphSummarizerSettings" aria-expanded="false" aria-controls="advancedGraphSummarizerSettings" style="display: inline-block;">
+                                        Advanced Settings >>>
+                                    </a>
+
+                                    <div class="collapse" id="advancedGraphSummarizerSettings">
+                                        <div class="card card-body" style="background-color: #181A1B; border: none;">
+
+                                            <br>
+
+                                            <div id="graph_summarizer_prompt_template_format" class="hf-select-settings-divs-group llm-settings-standard-styling" style="width: 100%;">
+                                                <label class="hf-select-settings-labels-group">Prompt Template Format:</label>
+                                                <br>
+                                                <select class="modal-selects" id="graph_summarizer_prompt_template_format_choice" style="width: 100%; max-width: 60vh;" disabled>
+                                                    <option value="raw">Model Agnostic - Raw</option>
+                                                    <option value="mistral-small-v7">Mistral Small-24B Prompt Template Format</option>
+                                                    <option value="mistral-large-v7">Mistral Large-123B Prompt Template Format</option>
+                                                    <option value="llama2">Llama-2 Prompt Template Format (Mistral Nemo-12B Instruct, Instruct-7B & MoE - v0.1 & v0.2, etc.)</option>
+                                                    <option value="llama3">Llama-3 & 3.1 Prompt Template Format</option>
+                                                    <option value="chatml">ChatML (Qwen3) Prompt Template Format (Qwen3, Open & Nous Hermes-Mistral & MoE, etc.) </option>
+                                                    <option value="qwen-chatml">ChatML-Qwen2 Family Prompt Template Format (Qwen1.5, Qwen2, Qwen2-Math, Qwen2.5, Qwen2.5-Coder, QwQ, etc.)</option>
+                                                    <option value="phi3">Microsoft Phi-3, Phi-3.5 and Phi-4-Mini Prompt Template Format</option>
+                                                    <option value="phi4">Microsoft Phi-4 Prompt Template Format</option>
+                                                    <option value="command-r">Cohere Command-R & Command-R+ Prompt Template Format</option>
+                                                    <option value="deepseek">Deepseek-Coder Prompt Template Format</option>
+                                                    <option value="deepseek-coder-v2">Deepseek-Coder-V2 Prompt Template Format</option>
+                                                    <option value="gemma2" selected>Google Gemma2 & Gemma3 Prompt Template Format (default)</option>
+                                                    <option value="vicuna">Nous-Capybara Vicuna Prompt Template Format</option>
+                                                    <option value="openchat">OpenChat-3.5-0106 Prompt Template Format</option>
+                                                </select>
+                                            </div>
+
+                                            <br>
+
+                                            <div>
+                                                <input type="checkbox" id="reuse_graph_summarization_cache_checkbox" name="reuse_graph_summarization_cache" checked>
+                                                <label for="reuse_graph_summarization_cache_checkbox">Reuse Cache</label>
+                                            </div>
+
+                                            <br>
+                
+                                            <div>
+                                                <input type="checkbox" id="validate_graph_summarization_cache_checkbox" name="validate_graph_summarization_cache" checked>
+                                                <label for="validate_graph_summarization_cache_checkbox">Validate Cache</label>
+                                            </div>
+
+                                            <br>
+                                            <br>
+
+                                            <h6>Quantizations Settings:</h6>
+
+                                            <br>
+
+                                            <div id="graph_summarizer_exl2" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">EXL2 Backend (--exl2):</label>
+                                                <input type="radio" id="graph_summarizer_exl2_yes" name="graph_summarizer_use_exl2" value="y" style="margin-left: 7px;" checked> Yes (Default)
+                                                <input type="radio" id="graph_summarizer_exl2_no" name="graph_summarizer_use_exl2" value="n" style="margin-left: 7px;" disabled> No
+                                            </div>
+
+                                            <div id="graph_summarizer_exl2_bpw" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Exl2 Bits Per Word (--exl2_bpw):</label>
+                                                <input type="number" id="graph_summarizer_exl2_bpw" name="graph_summarizer_exl2_bpw" class="settings-input-fields" value="8.0" min="0" max="8" step="0.1">
+                                            </div>
+
+                                            <div id="graph_summarizer_memory_required" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Memory Required (MB):</label>
+                                                <input type="number" id="graph_summarizer_memory_required" name="graph_summarizer_memory_required" class="settings-input-fields" value="7168" min="0" max="100000">
+                                            </div>
+
+                                            <br>
+
+                                            <h6>Generation Settings:</h6>
+
+                                            <br>
+
+                                            <div id="graph_summarizer_max_new_tokens" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Max New Tokens:</label>
+                                                <input type="number" id="graph_summarizer_max_new_tokens" name="graph_summarizer_max_new_tokens" class="settings-input-fields" value="4096" min="0" max="10000">
+                                            </div>
+
+                                            <div id="graph_summarizer_max_seq_len" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Max Sequence Length:</label>
+                                                <input type="number" id="graph_summarizer_max_seq_len" name="graph_summarizer_max_seq_len" class="settings-input-fields" value="15360" min="0" max="100000">
+                                            </div>
+
+                                            <div id="graph_summarizer_temperature" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Temperature:</label>
+                                                <input type="number" id="graph_summarizer_temperature" name="graph_summarizer_temperature" class="settings-input-fields" value="0.1" min="0" max="10" step="0.01">
+                                            </div>
+
+                                            <div id="graph_summarizer_top_k" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Top K:</label>
+                                                <input type="number" id="graph_summarizer_top_k" name="graph_summarizer_top_k" class="settings-input-fields" value="40" min="0" max="100">
+                                            </div>
+
+                                            <div id="graph_summarizer_top_p" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Top P:</label>
+                                                <input type="number" id="graph_summarizer_top_p" name="graph_summarizer_top_p" class="settings-input-fields" value="0.95" min="0" max="10" step="0.01">
+                                            </div>
+
+                                            <div id="graph_summarizer_min_p" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Min P:</label>
+                                                <input type="number" id="graph_summarizer_min_p" name="graph_summarizer_min_p" class="settings-input-fields" value="0.05" min="0" max="10" step="0.01">
+                                            </div>
+
+                                            <br>
+
+                                            <h6>Network Settings:</h6>
+
+                                            <br>
+
+                                            <div id="graph_summarizer_access_url" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Access URL:</label>
+                                                <input type="text" id="graph_summarizer_access_url" name="graph_summarizer_access_url" class="settings-input-fields" value="localhost">
+                                            </div>
+
+                                            <div id="graph_summarizer_server_port" class="llm-settings-standard-styling">
+                                                <label class="hf-select-settings-labels-group">Port:</label>
+                                                <input type="number" id="graph_summarizer_server_port" name="graph_summarizer_server_port" class="settings-input-fields" value="9071" min="0" max="65535">
+                                            </div>
+
+                                        </div>
+                                    </div>
+
+                                    <br>
+                                    <br>
+                                    <br>
+
+                                    <h5>GraphRAG - General Settings</h5>
+
+                                    <br>
+
+                                    <a href="#" class="btn btn-link btn-primary llm-adv-set-toggle" id="generalGraphRagSettingsToggle" data-bs-toggle="collapse" data-bs-target="#generalGraphRagSettings" aria-expanded="false" aria-controls="generalGraphRagSettings" style="display: inline-block;">
+                                        Expand Settings >>>
+                                    </a>
+                                    
+                                    <div class="collapse" id="generalGraphRagSettings">
+                                        <div class="card card-body" style="background-color: #181A1B; border: none;">
+
+                                            <div>
+                                                <input type="checkbox" id="enable_graph_rag_checkbox" name="enable_graph_rag" checked>
+                                                <label for="enable_graph_rag_checkbox">Enable GraphRAG</label>
+                                            </div>
+        
+                                            <br>
+        
+                                            <div>
+                                                <input type="checkbox" id="upload_doc_to_graph_db_checkbox" name="upload_doc_to_graph_db" checked>
+                                                <label for="upload_doc_to_graph_db_checkbox">Upload Documents to Graph Database</label>
+                                            </div>
+        
+                                            <br>
+        
+                                            <div id="graph_rag_context_length_limit_chars_div">
+                                                <label for="graph_rag_context_length_limit_chars" class="hf-select-settings-labels-group">Max GraphRAG Context Length: </label>
+                                                <input type="number" id="graph_rag_context_length_limit_chars" min="0"  max="100000" class="settings-input-fields" value="25000">
+                                            </div>
+        
+                                            <br>
+        
+                                            <div id="graph_rag_chunk_size_div">
+                                                <label for="graph_rag_chunk_size" class="hf-select-settings-labels-group">GraphRAG Chunk Size: </label>
+                                                <input type="number" id="graph_rag_chunk_size" min="0"  max="10000" class="settings-input-fields" value="1500">
+                                            </div>
+        
+                                            <br>
+        
+                                            <div id="graph_rag_chunk_overlap_div">
+                                                <label for="graph_rag_chunk_overlap" class="hf-select-settings-labels-group">GraphRAG Chunk Overlap: </label>
+                                                <input type="number" id="graph_rag_chunk_overlap" min="0"  max="1000" class="settings-input-fields" value="300">
+                                            </div>
+
+                                        </div>
+                                    </div>
+
+                                    <br>
+                                    <br>
+                                    <br>
+
+                                    <h5>GraphRAG - Graph Database Settings</h5>
+
+                                    <br>
+
+                                    <a href="#" class="btn btn-link btn-primary llm-adv-set-toggle" id="graphDbGraphRagSettingsToggle" data-bs-toggle="collapse" data-bs-target="#graphDbGraphRagSettings" aria-expanded="false" aria-controls="graphDbGraphRagSettings" style="display: inline-block;">
+                                        Expand Settings >>>
+                                    </a>
+                                    
+                                    <div class="collapse" id="graphDbGraphRagSettings">
+                                        <div class="card card-body" style="background-color: #181A1B; border: none;">
+
+                                            <div id="graph_db_server_host_div">
+                                                <label for="graph_db_server_host" class="hf-select-settings-labels-group">Access URL: </label>
+                                                <input type="text" id="graph_db_server_host" name="graph_db_server_host" class="settings-input-fields" value="localhost">
+                                            </div>
+        
+                                            <br>
+        
+                                            <div id="graph_db_server_port_div">
+                                                <label for="graph_db_server_port" class="hf-select-settings-labels-group">Port: </label>
+                                                <input type="number" id="graph_db_server_port" name="graph_db_server_port" class="settings-input-fields" value="6379" min="0" max="65535">
+                                            </div>
+        
+                                            <br>
+        
+                                            <div id="launch_graph_db_with_ui_div">
+                                                <label for="launch_graph_db_with_ui_checkbox" class="hf-select-settings-labels-group">Launch Graph Database with UI: </label>
+                                                <input type="checkbox" id="launch_graph_db_with_ui_checkbox" name="launch_graph_db_with_ui_checkbox" checked>
+                                            </div>
+        
+                                            <br>
+
+                                            <div id="graph_db_ui_port_div">
+                                                <label for="graph_db_ui_port" class="hf-select-settings-labels-group">UI Port: </label>
+                                                <input type="number" id="graph_db_ui_port" name="graph_db_ui_port" class="settings-input-fields" value="3000" min="0" max="65535">
+                                            </div>
+
+                                            <br>
+        
+                                            <div id="apply_clustering_to_graph_db_on_doc_load_div">
+                                                <label for="apply_clustering_to_graph_db_on_doc_load_checkbox" class="hf-select-settings-labels-group">Apply Leiden Clustering to Graph Database on Document Load (Disabled by Default): </label>
+                                                <input type="checkbox" id="apply_clustering_to_graph_db_on_doc_load_checkbox" name="apply_clustering_to_graph_db_on_doc_load_checkbox">
+                                            </div>
+
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                                <div id="option6" class="d-none">
                                     <h5>Optical Character Recognition (OCR): Specify Usage & Service</h5>
 
                                     <br>
@@ -1191,7 +1633,7 @@
 
                                 </div>
 
-                                <div id="option6" class="d-none">
+                                <div id="option7" class="d-none">
                                     <!--Option 6 Content-->
                                     <h5>Google Drive Loader</h5>
                                     <br>
@@ -1251,7 +1693,7 @@
                                     <button class="btn btn-primary" type="button" id="googleDriveSyncAction" style="display: none;">Sync Files</button>
                                 </div>
 
-                                <div id="option7" class="d-none">
+                                <div id="option8" class="d-none">
                                     <!--Option 6 Content-->
                                     <h5>Additional Settings</h5>
                                     <br>

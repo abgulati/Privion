@@ -1189,6 +1189,48 @@ function removeEmbeddingModelFromCustomDropdown(model) {
 }
 
 
+function removeRerankerModelFromCustomDropdown(model) {
+    loadCoreLarsConfig()
+    .then(values => {
+        let model_list = values.reranker_models_list;
+        model_list = model_list.filter(m => m.toLowerCase() !== model.toLowerCase());   // The .filter() function returns a new array with all elements that pass the test implemented by the provided function.
+        updateLarsCustomModelList('reranker_models_list', model_list);
+        initializeRerankerCustomDropdown(model_list, values.selected_reranker_model);
+    })
+    .catch(error => {
+        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeModelFromCustomDropdown()", String(error.message));
+    });
+}
+
+
+function removeGraphExtractorModelFromCustomDropdown(model) {
+    loadCoreLarsConfig()
+    .then(values => {
+        let model_list = values.graph_generator_model_list;
+        model_list = model_list.filter(m => m.toLowerCase() !== model.toLowerCase());   // The .filter() function returns a new array with all elements that pass the test implemented by the provided function.
+        updateLarsCustomModelList('graph_generator_model_list', model_list);
+        initializeGraphExtractorCustomDropdown(model_list, values.graph_generator_model);
+    })
+    .catch(error => {
+        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeModelFromCustomDropdown()", String(error.message));
+    });
+}
+
+
+function removeGraphSummarizerModelFromCustomDropdown(model) {
+    loadCoreLarsConfig()
+    .then(values => {
+        let model_list = values.graph_summarizer_model_list;
+        model_list = model_list.filter(m => m.toLowerCase() !== model.toLowerCase());   // The .filter() function returns a new array with all elements that pass the test implemented by the provided function.
+        updateLarsCustomModelList('graph_summarizer_model_list', model_list);
+        initializeGraphSummarizerCustomDropdown(model_list, values.graph_summarizer_model);
+    })
+    .catch(error => {
+        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeModelFromCustomDropdown()", String(error.message));
+    });
+}
+
+
 function reverseSortCustomKbDropdown() {
     loadCoreLarsConfig()
     .then(values => {
@@ -1211,6 +1253,45 @@ function reverseSortCustomEmbedDropdown() {
     })
     .catch(error => {
         errorHandler("reversing the LLM list (likely means the HF-Waitress server is offline)", "reverseSortCustomEmbedDropdown()", String(error.message));
+    });
+}
+
+
+function reverseSortCustomRerankerDropdown() {
+    loadCoreLarsConfig()
+    .then(values => {
+        let reversed_model_list = values.reranker_models_list.reverse();
+        updateLarsCustomModelList('reranker_models_list', reversed_model_list);
+        initializeRerankerCustomDropdown(reversed_model_list, values.selected_reranker_model);
+    })
+    .catch(error => {
+        errorHandler("reversing the LLM list (likely means the HF-Waitress server is offline)", "reverseSortCustomRerankerDropdown()", String(error.message));
+    });
+}
+
+
+function reverseSortCustomGraphExtractorDropdown() {
+    loadCoreLarsConfig()
+    .then(values => {
+        let reversed_model_list = values.graph_generator_model_list.reverse();
+        updateLarsCustomModelList('graph_generator_model_list', reversed_model_list);
+        initializeGraphExtractorCustomDropdown(reversed_model_list, values.graph_generator_model);
+    })
+    .catch(error => {
+        errorHandler("reversing the LLM list (likely means the HF-Waitress server is offline)", "reverseSortCustomGraphExtractorDropdown()", String(error.message));
+    });
+}
+
+
+function reverseSortCustomGraphSummarizerDropdown() {
+    loadCoreLarsConfig()
+    .then(values => {
+        let reversed_model_list = values.graph_summarizer_model_list.reverse();
+        updateLarsCustomModelList('graph_summarizer_model_list', reversed_model_list);
+        initializeGraphSummarizerCustomDropdown(reversed_model_list, values.graph_summarizer_model);
+    })
+    .catch(error => {
+        errorHandler("reversing the LLM list (likely means the HF-Waitress server is offline)", "reverseSortCustomGraphSummarizerDropdown()", String(error.message));
     });
 }
 
@@ -1273,6 +1354,27 @@ function filterCustomKbDropdown(search_words) {
 function filterCustomEmbedDropdown(search_words) {
     const customDropdownList = document.getElementById('hf-waitress-embed-custom-dropdown-items-list');
     const items = customDropdownList.getElementsByClassName('hf-waitress-embed-custom-dropdown-item');
+    coreFilterFunction(search_words, items);
+}
+
+
+function filterCustomRerankerDropdown(search_words) {
+    const customDropdownList = document.getElementById('hf-waitress-reranker-custom-dropdown-items-list');
+    const items = customDropdownList.getElementsByClassName('hf-waitress-reranker-custom-dropdown-item');
+    coreFilterFunction(search_words, items);
+}
+
+
+function filterCustomGraphExtractorDropdown(search_words) {
+    const customDropdownList = document.getElementById('graph-extractor-custom-dropdown-items-list');
+    const items = customDropdownList.getElementsByClassName('graph-extractor-custom-dropdown-item');
+    coreFilterFunction(search_words, items);
+}
+
+
+function filterCustomGraphSummarizerDropdown(search_words) {
+    const customDropdownList = document.getElementById('graph-summarizer-custom-dropdown-items-list');
+    const items = customDropdownList.getElementsByClassName('graph-summarizer-custom-dropdown-item');
     coreFilterFunction(search_words, items);
 }
 
@@ -1354,6 +1456,48 @@ function addNewEmbeddingModel(model) {
     })
     .catch(error => {
         errorHandler("adding a new model_id to the list of LLMs (likely means the HF-Waitress server is offline)", "addNewEmbeddingModel()", String(error.message));
+    });
+}
+
+
+function addNewRerankerModel(model) {
+    loadCoreLarsConfig()
+    .then(values => {
+        let model_list = values.reranker_models_list;
+        model_list.push(model);
+        updateLarsCustomModelList('reranker_models_list', model_list);
+        initializeRerankerCustomDropdown(model_list, values.selected_reranker_model);
+    })
+    .catch(error => {
+        errorHandler("adding a new model_id to the list of LLMs (likely means the HF-Waitress server is offline)", "addNewRerankerModel()", String(error.message));
+    });
+}
+
+
+function addNewGraphExtractorModel(model) {
+    loadCoreLarsConfig()
+    .then(values => {
+        let model_list = values.graph_generator_model_list;
+        model_list.push(model);
+        updateLarsCustomModelList('graph_generator_model_list', model_list);
+        initializeGraphExtractorCustomDropdown(model_list, values.graph_generator_model);
+    })
+    .catch(error => {
+        errorHandler("adding a new model_id to the list of LLMs (likely means the HF-Waitress server is offline)", "addNewGraphExtractorModel()", String(error.message));
+    });
+}
+
+
+function addNewGraphSummarizerModel(model) {
+    loadCoreLarsConfig()
+    .then(values => {
+        let model_list = values.graph_summarizer_model_list;
+        model_list.push(model);
+        updateLarsCustomModelList('graph_summarizer_model_list', model_list);
+        initializeGraphSummarizerCustomDropdown(model_list, values.graph_summarizer_model);
+    })
+    .catch(error => {
+        errorHandler("adding a new model_id to the list of LLMs (likely means the HF-Waitress server is offline)", "addNewGraphSummarizerModel()", String(error.message));
     });
 }
 

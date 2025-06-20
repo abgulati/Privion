@@ -50,7 +50,9 @@ function getLlmConfig() {
 function getVectorEmbeddingsConfig() {
     return config = {
         'selected_embedding_model': document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent,
-        'selected_knowledge_domain': document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent
+        'selected_knowledge_domain': document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent,
+        'selected_reranker_model': document.getElementById('hf-waitress-reranker-custom-dropdown-selected-value').textContent,
+        'use_embedding_model_for_reranking': document.getElementById('use_embedding_model_for_reranking').checked
     }
 }
 
@@ -88,7 +90,16 @@ function getRagConfig() {
         llm_filter_citations = true;
     }
 
-    return {'force_enable_rag': force_enable_rag, 'force_disable_rag': force_disable_rag, 'llm_filter_citations': llm_filter_citations};
+    return {
+        'force_enable_rag': force_enable_rag, 
+        'force_disable_rag': force_disable_rag, 
+        'llm_filter_citations': llm_filter_citations,
+        'fetch_top_k_results_from_whoosh': document.getElementById('fetch_top_k_results_from_whoosh').value,
+        'fetch_top_k_results_from_vectordb': document.getElementById('fetch_top_k_results_from_vectordb').value,
+        'filter_top_k_results_by_reranking': document.getElementById('filter_top_k_results_by_reranking').value,
+        'min_semantic_similarity_threshold': document.getElementById('min_semantic_similarity_threshold').value,
+        'min_lexical_similarity_threshold': document.getElementById('min_lexical_similarity_threshold').value
+    };
 }
 
 

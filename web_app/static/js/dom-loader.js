@@ -89,6 +89,9 @@ function loadCoreLarsConfig() {
         'use_gpu',
         'embedding_models_list',
         'selected_embedding_model',
+        'reranker_models_list',
+        'selected_reranker_model',
+        'use_embedding_model_for_reranking',
         'knowledge_domain_list',
         'selected_knowledge_domain',
         'force_ocr',
@@ -112,6 +115,54 @@ function loadCoreLarsConfig() {
         'exl2_prompt_template_format',
         'force_enable_rag',
         'force_disable_rag',
+        'enable_graph_rag',
+        'upload_doc_to_graph_db',
+        'graph_rag_context_length_limit_chars',
+        'graph_chunk_size',
+        'graph_chunk_overlap',
+        'reuse_graph_extraction_cache_without_validation',
+        'reuse_graph_extraction_cache_with_validation',
+        'graph_generator_model',
+        'graph_generator_model_list',
+        'exl2_quantize_graph_model',
+        'exl2_quantize_graph_model_bpw',
+        'minimum_free_vram_for_graph_extraction_model',
+        'graph_model_max_new_tokens',
+        'graph_model_max_seq_len',
+        'graph_model_temperature',
+        'graph_model_do_sample',
+        'graph_model_top_k',
+        'graph_model_top_p',
+        'graph_model_min_p',
+        'graph_model_access_url',
+        'graph_model_server_port',
+        'reuse_graph_summary_cache_without_validation',
+        'reuse_graph_summary_cache_with_validation',
+        'graph_summarizer_model',
+        'graph_summarizer_model_list',
+        'graph_summarizer_model_prompt_template_format',
+        'exl2_quantize_graph_summarizer_model',
+        'exl2_quantize_graph_summarizer_model_bpw',
+        'minimum_free_vram_for_graph_summarizer_model',
+        'graph_summarizer_max_new_tokens',
+        'graph_summarizer_max_seq_len',
+        'graph_summarizer_temperature',
+        'graph_summarizer_do_sample',
+        'graph_summarizer_top_k',
+        'graph_summarizer_top_p',
+        'graph_summarizer_min_p',
+        'graph_summarizer_access_url',
+        'graph_summarizer_server_port',
+        'graph_db_server_host',
+        'assign_host_port_to_graph_db_server',
+        'assign_host_port_to_graph_db_ui',
+        'launch_graph_db_with_ui',
+        'apply_clustering_to_graph_db_on_doc_load',
+        'fetch_top_k_results_from_whoosh',
+        'fetch_top_k_results_from_vectordb',
+        'filter_top_k_results_by_reranking',
+        'min_semantic_similarity_threshold',
+        'min_lexical_similarity_threshold',
         'base_template',
         'vision_ocr_prompt',
         'local_llm_gpu_layers',
@@ -338,6 +389,97 @@ function initializeEmbeddingCustomDropdown(model_list, model_id) {
 }
 
 
+function initializeRerankerCustomDropdown(model_list, model_id) {
+    const customDropdownList = document.getElementById('hf-waitress-reranker-custom-dropdown-items-list');
+    customDropdownList.innerHTML = '';
+
+    const selectedValue = document.getElementById('hf-waitress-reranker-custom-dropdown-selected-value');
+    
+    model_list.forEach(model => {
+        if (model.toLowerCase() == model_id.toLowerCase()) {
+            selectedValue.textContent = model;
+        }
+        const div = document.createElement('div');
+        div.className = 'hf-waitress-reranker-custom-dropdown-item';
+        div.innerHTML = `
+            <span class="hf-waitress-reranker-custom-dropdown-item-text">${model}</span>
+            <span class="hf-waitress-reranker-custom-dropdown-delete-btn">×</span>
+        `;
+        const deleteButton = div.querySelector('.hf-waitress-reranker-custom-dropdown-delete-btn');
+        deleteButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            removeRerankerModelFromCustomDropdown(model);
+        });
+        div.addEventListener('click', () => {
+            selectedValue.textContent = model;
+            document.getElementById('hf-waitress-reranker-custom-dropdown-content').classList.remove('show');
+        });
+        customDropdownList.appendChild(div);
+    });
+
+}
+
+
+function initializeGraphExtractorCustomDropdown(model_list, model_id) {
+    const customDropdownList = document.getElementById('graph-extractor-custom-dropdown-items-list');
+    customDropdownList.innerHTML = '';
+
+    const selectedValue = document.getElementById('graph-extractor-custom-dropdown-selected-value');
+
+    model_list.forEach(model => {
+        if (model.toLowerCase() == model_id.toLowerCase()) {
+            selectedValue.textContent = model;
+        }
+        const div = document.createElement('div');
+        div.className = 'graph-extractor-custom-dropdown-item';
+        div.innerHTML = `
+            <span class="graph-extractor-custom-dropdown-item-text">${model}</span>
+            <span class="graph-extractor-custom-dropdown-delete-btn">×</span>
+        `;
+        const deleteButton = div.querySelector('.graph-extractor-custom-dropdown-delete-btn');
+        deleteButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            removeGraphExtractorModelFromCustomDropdown(model);
+        });
+        div.addEventListener('click', () => {
+            selectedValue.textContent = model;
+            document.getElementById('graph-extractor-custom-dropdown-content').classList.remove('show');
+        });
+        customDropdownList.appendChild(div);
+    });
+}
+
+
+function initializeGraphSummarizerCustomDropdown(model_list, model_id) {
+    const customDropdownList = document.getElementById('graph-summarizer-custom-dropdown-items-list');
+    customDropdownList.innerHTML = '';
+
+    const selectedValue = document.getElementById('graph-summarizer-custom-dropdown-selected-value');
+
+    model_list.forEach(model => {
+        if (model.toLowerCase() == model_id.toLowerCase()) {
+            selectedValue.textContent = model;
+        }
+        const div = document.createElement('div');
+        div.className = 'graph-summarizer-custom-dropdown-item';
+        div.innerHTML = `
+            <span class="graph-summarizer-custom-dropdown-item-text">${model}</span>
+            <span class="graph-summarizer-custom-dropdown-delete-btn">×</span>
+        `;
+        const deleteButton = div.querySelector('.graph-summarizer-custom-dropdown-delete-btn');
+        deleteButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            removeGraphSummarizerModelFromCustomDropdown(model);
+        });
+        div.addEventListener('click', () => {
+            selectedValue.textContent = model;
+            document.getElementById('graph-summarizer-custom-dropdown-content').classList.remove('show');
+        });
+        customDropdownList.appendChild(div);
+    });
+}
+
+
 
 function initializeHfSettingsDropdowns(all_values) {
     const hfTorchDeviceMap = document.getElementById('hf_waitress_torch_device_map_choice');
@@ -505,6 +647,18 @@ function initializeLLMTemplateDropdown(local_llm_chat_template_format) {
 
     for (let option of llmTempDd.options) {
         if (option.value == local_llm_chat_template_format) {
+            option.selected = true;
+            break;
+        }
+    }
+}
+
+
+function initializeGraphSummarizerPromptTemplateDropdown(graph_summarizer_model_prompt_template_format) {
+    const graphSummarizerPromptTemplateDd = document.getElementById('graph_summarizer_prompt_template_format_choice');
+    
+    for (let option of graphSummarizerPromptTemplateDd.options) {
+        if (option.value == graph_summarizer_model_prompt_template_format) {
             option.selected = true;
             break;
         }
@@ -850,6 +1004,30 @@ function initializeLLMTabComponents(values) {
 }
 
 
+function toggleRerankerDropdown() {
+    document.getElementById('hf-waitress-reranker-custom-dropdown-content').classList.toggle('show');
+}
+
+
+function toggleRerankerDropdownEnabledState() {
+    // disable the click event listener for 'hf-waitress-reranker-custom-select-header' and set its background-color to darkgray
+
+    const header = document.getElementById('hf-waitress-reranker-custom-select-header');
+    const rerankerCheckbox = document.getElementById('use_embedding_model_for_reranking');
+
+    header.style.backgroundColor = rerankerCheckbox.checked ? 'darkgray' : 'white';
+    
+    // Remove or add the click event listener based on checkbox state
+    if (rerankerCheckbox.checked) {
+        header.removeEventListener('click', toggleRerankerDropdown);
+        header.style.cursor = 'not-allowed';
+    } else {
+        header.addEventListener('click', toggleRerankerDropdown);
+        header.style.cursor = 'pointer';
+    }
+}
+
+
 function initializeEventListenersForEmbeddingModelTab() {
 
     // Add Event Listener for ResetDB button:
@@ -864,6 +1042,11 @@ function initializeEventListenersForEmbeddingModelTab() {
         document.getElementById('hf-waitress-embed-custom-dropdown-content').classList.toggle('show');
     });
 
+    document.getElementById('hf-waitress-reranker-custom-select-header').addEventListener('click', toggleRerankerDropdown);
+
+    // Event listener for use_embedding_model_for_reranking checkbox:
+    document.getElementById('use_embedding_model_for_reranking').addEventListener('change', toggleRerankerDropdownEnabledState);
+
     // Event listener to filter custom dropdown:
     document.getElementById('hf-waitress-kb-custom-dropdown-search-input').addEventListener('input', function() {
         filterCustomKbDropdown(this.value);
@@ -871,6 +1054,10 @@ function initializeEventListenersForEmbeddingModelTab() {
 
     document.getElementById('hf-waitress-embed-custom-dropdown-search-input').addEventListener('input', function() {
         filterCustomEmbedDropdown(this.value);
+    });
+
+    document.getElementById('hf-waitress-reranker-custom-dropdown-search-input').addEventListener('input', function() {
+        filterCustomRerankerDropdown(this.value);
     });
 
     // Event listener to populate docs table when a different embedding model is selected:
@@ -889,7 +1076,7 @@ function initializeEventListenersForEmbeddingModelTab() {
         }
     });
 
-    // Event listener to add new item to custom dropdown:
+    // Event listener to add new item to KB-custom dropdown:
     const addKbInput = document.getElementById('hf-waitress-kb-custom-dropdown-add-input');
     const addKbBtn = document.getElementById('hf-waitress-kb-custom-dropdown-add-btn');
 
@@ -900,14 +1087,14 @@ function initializeEventListenersForEmbeddingModelTab() {
 
     addKbInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter' && this.value) {
-            addNewKnowledgeDomain(this.value); //TODO: add function
+            addNewKnowledgeDomain(this.value);
             addKbInput.value = '';
             addKbInput.style.display = 'none';
             addKbBtn.style.display = 'block';
         }
     });
 
-    // Event listener to add new item to custom dropdown:
+    // Event listener to add new item to Embedding-custom dropdown:
     const addEmbedInput = document.getElementById('hf-waitress-embed-custom-dropdown-add-input');
     const addEmbedBtn = document.getElementById('hf-waitress-embed-custom-dropdown-add-btn');
 
@@ -918,13 +1105,30 @@ function initializeEventListenersForEmbeddingModelTab() {
 
     addEmbedInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter' && this.value) {
-            addNewEmbeddingModel(this.value); //TODO: add function
+            addNewEmbeddingModel(this.value);
             addEmbedInput.value = '';
             addEmbedInput.style.display = 'none';
             addEmbedBtn.style.display = 'block';
         }
     });
 
+    // Event listener to add new item to Reranker-custom dropdown:
+    const addRerankerInput = document.getElementById('hf-waitress-reranker-custom-dropdown-add-input');
+    const addRerankerBtn = document.getElementById('hf-waitress-reranker-custom-dropdown-add-btn');
+
+    addRerankerBtn.addEventListener('click', function() {
+        addRerankerBtn.style.display = 'none';
+        addRerankerInput.style.display = 'block';
+    });
+
+    addRerankerInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && this.value) {
+            addNewRerankerModel(this.value);
+            addRerankerInput.value = '';
+            addRerankerInput.style.display = 'none';
+            addRerankerBtn.style.display = 'block';
+        }
+    });
 
 }
 
@@ -932,9 +1136,12 @@ function initializeEventListenersForEmbeddingModelTab() {
 function initializeEmbeddingModelTabComponents(values) {
     initializeKnowledgeDomainCustomDropdown(values.knowledge_domain_list, values.selected_knowledge_domain);
     initializeEmbeddingCustomDropdown(values.embedding_models_list, values.selected_embedding_model);
+    initializeRerankerCustomDropdown(values.reranker_models_list, values.selected_reranker_model);
+    document.getElementById('use_embedding_model_for_reranking').checked = values.use_embedding_model_for_reranking;
+    initializeEventListenersForEmbeddingModelTab();
+    toggleRerankerDropdownEnabledState();
     clearDocsLoadedTable();
     populateDocsLoadedTable();
-    initializeEventListenersForEmbeddingModelTab();
 }
 
 
@@ -1005,7 +1212,130 @@ function initializeRAGTabComponents(values) {
     if (values.llm_filter_citations) {
         document.getElementById('llm_filter_citations_checkbox').checked = true;
     }
+    document.getElementById('fetch_top_k_results_from_whoosh').value = values.fetch_top_k_results_from_whoosh;
+    document.getElementById('fetch_top_k_results_from_vectordb').value = values.fetch_top_k_results_from_vectordb;
+    document.getElementById('filter_top_k_results_by_reranking').value = values.filter_top_k_results_by_reranking;
+    document.getElementById('min_semantic_similarity_threshold').value = values.min_semantic_similarity_threshold;
+    document.getElementById('min_lexical_similarity_threshold').value = values.min_lexical_similarity_threshold;
 }
+
+
+function initializeGraphRAGCustomDropdowns(values) {
+    // Extractor Server:
+    initializeGraphExtractorCustomDropdown(values.graph_generator_model_list, values.graph_generator_model);
+    
+    // UNCOMMENT IN THE FUTURE IF MAKING THIS USER-SELECTABLE!
+    // document.getElementById('graph-extractor-custom-select-header').addEventListener('click', function() {
+    //     document.getElementById('graph-extractor-custom-dropdown-content').classList.toggle('show');
+    // });
+
+    document.getElementById('graph-extractor-custom-dropdown-search-input').addEventListener('input', function() {
+        filterCustomGraphExtractorDropdown(this.value);
+    });
+
+    // Event listener to add new item to Extractor-custom dropdown:
+    const addExtractorInput = document.getElementById('graph-extractor-custom-dropdown-add-input');
+    const addExtractorBtn = document.getElementById('graph-extractor-custom-dropdown-add-btn');
+
+    addExtractorBtn.addEventListener('click', function() {
+        addExtractorBtn.style.display = 'none';
+        addExtractorInput.style.display = 'block';
+    });
+
+    addExtractorInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && this.value) {
+            addNewGraphExtractorModel(this.value); //TODO: add function
+            addExtractorInput.value = '';
+            addExtractorInput.style.display = 'none';
+            addExtractorBtn.style.display = 'block';
+        }
+    });
+
+    // Summarizer Server:
+    initializeGraphSummarizerCustomDropdown(values.graph_summarizer_model_list, values.graph_summarizer_model);
+    
+    // UNCOMMENT IN THE FUTURE IF MAKING THIS USER-SELECTABLE!
+    // document.getElementById('graph-summarizer-custom-select-header').addEventListener('click', function() {
+    //     document.getElementById('graph-summarizer-custom-dropdown-content').classList.toggle('show');
+    // });
+
+    document.getElementById('graph-summarizer-custom-dropdown-search-input').addEventListener('input', function() {
+        filterCustomGraphSummarizerDropdown(this.value);
+    });
+
+    // Event listener to add new item to Summarizer-custom dropdown:
+    const addSummarizerInput = document.getElementById('graph-summarizer-custom-dropdown-add-input');
+    const addSummarizerBtn = document.getElementById('graph-summarizer-custom-dropdown-add-btn');
+
+    addSummarizerBtn.addEventListener('click', function() {
+        addSummarizerBtn.style.display = 'none';
+        addSummarizerInput.style.display = 'block';
+    });
+
+    addSummarizerInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && this.value) {
+            addNewGraphSummarizerModel(this.value); //TODO: add function
+            addSummarizerInput.value = '';
+            addSummarizerInput.style.display = 'none';
+            addSummarizerBtn.style.display = 'block';
+        }
+    });
+
+}
+
+
+function initializeGraphRAGTabComponents(values) {
+    // General Settings:
+    document.getElementById('enable_graph_rag_checkbox').checked = values.enable_graph_rag;
+    document.getElementById('upload_doc_to_graph_db_checkbox').checked = values.upload_doc_to_graph_db;
+    document.getElementById('graph_rag_context_length_limit_chars').value = values.graph_rag_context_length_limit_chars;
+    document.getElementById('graph_rag_chunk_size').value = values.graph_chunk_size;
+    document.getElementById('graph_rag_chunk_overlap').value = values.graph_chunk_overlap;
+    
+    // GraphDB Settings:
+    document.getElementById('graph_db_server_host').value = values.graph_db_server_host;
+    document.getElementById('graph_db_server_port').value = values.assign_host_port_to_graph_db_server;
+    document.getElementById('launch_graph_db_with_ui_checkbox').checked = values.launch_graph_db_with_ui;
+    document.getElementById('graph_db_ui_port').value = values.assign_host_port_to_graph_db_ui;
+    document.getElementById('apply_clustering_to_graph_db_on_doc_load_checkbox').checked = values.apply_clustering_to_graph_db_on_doc_load;
+
+    // GraphRAG Custom Dropdowns:
+    initializeGraphRAGCustomDropdowns(values);
+
+    // Gearp-Extraction Model Settings:
+    document.getElementById('reuse_graph_extraction_cache_checkbox').checked = values.reuse_graph_extraction_cache_with_validation;
+    document.getElementById('validate_graph_extraction_cache_checkbox').checked = values.reuse_graph_extraction_cache_with_validation;
+    document.getElementById('graph_extractor_exl2_yes').checked = String(values.exl2_quantize_graph_model).toLowerCase() === 'true';
+    document.getElementById('graph_extractor_exl2_no').checked = String(values.exl2_quantize_graph_model).toLowerCase() === 'false';
+    document.getElementById('graph_extractor_exl2_bpw').value = values.exl2_quantize_graph_model_bpw;
+    document.getElementById('graph_extractor_memory_required').value = values.minimum_free_vram_for_graph_extraction_model;
+    document.getElementById('graph_extractor_max_new_tokens').value = values.graph_model_max_new_tokens;
+    document.getElementById('graph_extractor_max_seq_len').value = values.graph_model_max_seq_len;
+    document.getElementById('graph_extractor_temperature').value = values.graph_model_temperature;
+    document.getElementById('graph_extractor_top_k').value = values.graph_model_top_k;
+    document.getElementById('graph_extractor_top_p').value = values.graph_model_top_p;
+    document.getElementById('graph_extractor_min_p').value = values.graph_model_min_p;
+    document.getElementById('graph_extractor_access_url').value = values.graph_model_access_url;
+    document.getElementById('graph_extractor_server_port').value = values.graph_model_server_port;
+
+    // Summarizer Model Settings:
+    initializeGraphSummarizerPromptTemplateDropdown(values.graph_summarizer_model_prompt_template_format);
+    document.getElementById('reuse_graph_summarization_cache_checkbox').checked = values.reuse_graph_summary_cache_with_validation;
+    document.getElementById('validate_graph_summarization_cache_checkbox').checked = values.reuse_graph_summary_cache_with_validation;
+    document.getElementById('graph_summarizer_exl2_yes').checked = String(values.exl2_quantize_graph_summarizer_model).toLowerCase() === 'true';
+    document.getElementById('graph_summarizer_exl2_no').checked = String(values.exl2_quantize_graph_summarizer_model).toLowerCase() === 'false';
+    document.getElementById('graph_summarizer_exl2_bpw').value = values.exl2_quantize_graph_summarizer_model_bpw;
+    document.getElementById('graph_summarizer_memory_required').value = values.minimum_free_vram_for_graph_summarizer_model;
+    document.getElementById('graph_summarizer_max_new_tokens').value = values.graph_summarizer_model_max_new_tokens;
+    document.getElementById('graph_summarizer_max_seq_len').value = values.graph_summarizer_model_max_seq_len;
+    document.getElementById('graph_summarizer_temperature').value = values.graph_summarizer_model_temperature;
+    document.getElementById('graph_summarizer_top_k').value = values.graph_summarizer_model_top_k;
+    document.getElementById('graph_summarizer_top_p').value = values.graph_summarizer_model_top_p;
+    document.getElementById('graph_summarizer_min_p').value = values.graph_summarizer_model_min_p;
+    document.getElementById('graph_summarizer_access_url').value = values.graph_summarizer_model_access_url;
+    document.getElementById('graph_summarizer_server_port').value = values.graph_summarizer_model_server_port;
+}
+
 
 
 function initializeOCRTabRadios(force_ocr, ocr_service_choice, azure_cv_free_tier) {
@@ -1368,6 +1698,7 @@ document.addEventListener("DOMContentLoaded", function() {
             initializeEmbeddingModelTabComponents(values);
             initializeSystemPromptTabComponents(values);
             initializeRAGTabComponents(values);
+            initializeGraphRAGTabComponents(values);
             initializeOCRTabComponents(values);
             initializeGoogleDriveTabComponents(values);
             initializeSettingsModalTabCycleListener();
