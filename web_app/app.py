@@ -391,8 +391,53 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'exl2_quantize_graph_model':True,
                 'exl2_quantize_graph_model_bpw':8.0,
                 'graph_summarizer_model_list':[
-                    'google/gemma-2-2b-it',
-                    'google/gemma-2-9b-it'
+                    "google/gemma-3-4b-it",
+                    "microsoft/Phi-4-mini-instruct",
+                    "google/gemma-3-1b-it",
+                    "google/gemma-3-27b-it",
+                    "Qwen/Qwen3-14B",
+                    "Qwen/Qwen3-30B-A3B",
+                    "Qwen/Qwen3-14B",
+                    "Qwen/Qwen3-0.6B",
+                    "nvidia/Llama-3_3-Nemotron-Super-49B-v1",
+                    "Qwen/Qwen3-32B",
+                    "Qwen/QwQ-32B",
+                    "mistralai/Mistral-Small-24B-Instruct-2501",
+                    "microsoft/phi-4",
+                    "meta-llama/Llama-3.2-11B-Vision-Instruct",
+                    "meta-llama/Llama-3.2-1B-Instruct",
+                    "meta-llama/Llama-3.2-3B-Instruct",
+                    "black-forest-labs/FLUX.1-schnell",
+                    "black-forest-labs/FLUX.1-dev",
+                    "mistralai/Mistral-Nemo-Instruct-2407",
+                    "meta-llama/Meta-Llama-3.1-8B-Instruct",
+                    "meta-llama/Meta-Llama-3.1-70B-Instruct",
+                    "meta-llama/Meta-Llama-3.1-405B-Instruct-FP8",
+                    "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4",
+                    "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
+                    "microsoft/Phi-3.5-mini-instruct",
+                    "microsoft/Phi-3.5-MoE-instruct",
+                    "microsoft/Phi-3-mini-4k-instruct",
+                    "microsoft/Phi-3-mini-128k-instruct",
+                    "microsoft/Phi-3-small-8k-instruct",
+                    "microsoft/Phi-3-small-128k-instruct",
+                    "microsoft/Phi-3-medium-4k-instruct",
+                    "microsoft/Phi-3-medium-128k-instruct",
+                    "CohereForAI/c4ai-command-r-plus",
+                    "CohereForAI/c4ai-command-r-v01",
+                    "google/gemma-2-2b-it",
+                    "google/gemma-2-9b-it",
+                    "google/gemma-2-27b-it",
+                    "Qwen/Qwen2-7B-Instruct",
+                    "Qwen/Qwen2-72B-Instruct",
+                    "Qwen/Qwen2.5-Coder-32B-Instruct",
+                    "Qwen/Qwen2.5-1.5B-Instruct",
+                    "Qwen/QwQ-32B-Preview",
+                    "Qwen/Qwen2.5-0.5B-Instruct",
+                    "Qwen/Qwen2.5-3B-Instruct",
+                    "Qwen/Qwen2.5-14B-Instruct",
+                    "deepseek-ai/DeepSeek-R1",
+                    "open-thoughts/OpenThinker-32B"
                 ],
                 'graph_summarizer_model':'google/gemma-2-2b-it',
                 'graph_summarizer_model_prompt_template_format':'gemma2',
@@ -932,9 +977,9 @@ def search_whoosh_index(query):
     
     try:
         read_return = read_config(['fetch_top_k_results_from_whoosh', 'whoosh_search_weighting', 'min_lexical_similarity_threshold'])
-        fetch_top_k_results_from_whoosh = read_return['fetch_top_k_results_from_whoosh']
+        fetch_top_k_results_from_whoosh = int(read_return['fetch_top_k_results_from_whoosh'])
         whoosh_search_weighting = read_return['whoosh_search_weighting']
-        min_lexical_similarity_threshold = read_return['min_lexical_similarity_threshold']  # Like semantic search with ChromaDB, higher scores indicate better matches but the range with Whoosh is different!
+        min_lexical_similarity_threshold = float(read_return['min_lexical_similarity_threshold'])  # Like semantic search with ChromaDB, higher scores indicate better matches but the range with Whoosh is different!
     except Exception as e:
         handle_local_error("Missing whoosh_index_folder in config.json for method search_whoosh_index. Error: ", e)
 
@@ -2271,7 +2316,7 @@ def get_request_params_for_graph_entity_extraction_model(rag_response_mode: bool
         'X-Top-P': str(config_data['graph_model_top_p']),
         'X-Min-P': str(config_data['graph_model_min_p']),
         'X-Chunk-Overlap': str(config_data['graph_chunk_overlap']) if not rag_response_mode else '0',
-        'X-Reuse-Extraction-Cache': str(config_data['reuse_graph_extraction_cache_with_validation']).lower() == 'true'
+        'X-Reuse-Extraction-Cache': str(config_data['reuse_graph_extraction_cache_with_validation']).lower()
     }
 
     grapher_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
@@ -2535,7 +2580,7 @@ def get_request_params_for_graph_summarizer_model():
         'X-Temperature': str(config_data['graph_summarizer_temperature']),
         'X-Top-K': str(config_data['graph_summarizer_top_k']),
         'X-Top-P': str(config_data['graph_summarizer_top_p']),
-        'X-Reuse-Summary-Cache': str(config_data['reuse_graph_summary_cache_with_validation']).lower() == 'true'
+        'X-Reuse-Summary-Cache': str(config_data['reuse_graph_summary_cache_with_validation']).lower()
     }
 
     if not exl2_quantize_graph_summarizer_model:
@@ -6316,7 +6361,7 @@ def handle_force_disabled_rag(local_llm_server:str, formatted_history_prompt:str
 def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results_from_vectordb: int):
     print("Searching vectorDB")
 
-    min_semantic_similarity_threshold = read_config(['min_semantic_similarity_threshold'])['min_semantic_similarity_threshold']
+    min_semantic_similarity_threshold = float(read_config(['min_semantic_similarity_threshold'])['min_semantic_similarity_threshold'])
 
     path_to_knowledge_domain = get_path_to_knowledge_domain()
     vector_db_path = create_vector_db_directory(path_to_knowledge_domain, embedding_function)
@@ -7071,7 +7116,7 @@ def search_knowledge_base(user_query:str, embedding_function:str, force_enable_r
     print("Do RAG is True, continuing...")
     filtered_docs = []
     try:
-        docs_list_with_cosine_distance = search_vector_db(user_query, embedding_function, fetch_top_k_results_from_vectordb)
+        docs_list_with_cosine_distance = search_vector_db(user_query, embedding_function, int(fetch_top_k_results_from_vectordb))
         filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc,score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of a Document object and a float score!
     except Exception as e:
         handle_error_no_return("Could not perform vector search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
@@ -7158,7 +7203,7 @@ def setup_for_local_llm_response():
         docs, do_rag, graph_rag_context = search_knowledge_base(user_query, selected_embedding_function,
         (config['force_enable_rag'] or regenerate_with_citations_force_enabled), 
         (config['force_disable_rag'] or regenerate_with_citations_force_disabled), 
-        config['filter_top_k_results_by_reranking'], config['fetch_top_k_results_from_vectordb'])
+        int(config['filter_top_k_results_by_reranking']), int(config['fetch_top_k_results_from_vectordb']))
     except Exception as e:
         return handle_api_error("Could not process vector search in method setup_for_local_llm_response, encountered error: ", e)
 
