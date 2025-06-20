@@ -313,8 +313,8 @@ def read_config(keys, default_value=None, filename='hf_config.json'):
                     'exl2_max_seq_len':2048,
                     'exl2_force_regenerate_measurement':False,
                     'exl2_no_flash_attn':False,
-                    'exl2_grapher_skip_extraction_cache_reuse':False,
-                    'exl2_grapher_skip_summary_cache_reuse':False,
+                    'reuse_graph_extraction_cache':True,    # dev flag: controlled by X-Reuse-Extraction-Cache header
+                    'reuse_graph_summary_cache':True,       # dev flag: controlled by X-Reuse-Summary-Cache header
                     'gguf':False,
                     'awq':False,
                     'flux_diffusers':False,
@@ -2886,8 +2886,8 @@ def exl2_grapher():
         rag_response_mode = request.json.get('rag_response_mode', False)
         graph_summarizer_model_prompt_template_format = request.json.get('graph_summarizer_model_prompt_template_format', None)
         gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
-        exl2_grapher_skip_extraction_cache_reuse = str(read_config(['exl2_grapher_skip_extraction_cache_reuse'])['exl2_grapher_skip_extraction_cache_reuse']).lower() == 'true'
-        exl2_grapher_skip_summary_cache_reuse = str(read_config(['exl2_grapher_skip_summary_cache_reuse'])['exl2_grapher_skip_summary_cache_reuse']).lower() == 'true'
+        reuse_graph_extraction_cache = str(request.headers.get('X-Reuse-Extraction-Cache', str(read_config(['reuse_graph_extraction_cache'])['reuse_graph_extraction_cache']).lower())).lower() == 'true'
+        reuse_graph_summary_cache = str(request.headers.get('X-Reuse-Summary-Cache', str(read_config(['reuse_graph_summary_cache'])['reuse_graph_summary_cache']).lower())).lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
         llm_semaphore.release()
@@ -2920,7 +2920,7 @@ def exl2_grapher():
                         except Exception as e:
                             handle_error_no_return(f"Could not load nodes and relationships from cache file {extraction_cache_file_path}, proceeding to extract afresh. Encountered error: ", e)
                     
-                    if not exl2_grapher_skip_extraction_cache_reuse:
+                    if reuse_graph_extraction_cache:
                         print(f"\nChecking for existing cache of previously extracted nodes and relationships for chunk {chunk_number}...\n")
 
                         cache_entry = cache_data_map.get(source_doc_name)
@@ -3045,7 +3045,7 @@ def exl2_grapher():
                     except Exception as e:
                         handle_error_no_return(f"Could not load summary from cache file {summary_cache_file_path}, proceeding to generate afresh. Encountered error: ", e)
                     
-                if not exl2_grapher_skip_summary_cache_reuse:
+                if reuse_graph_summary_cache:
                     print(f"\nChecking for existing summary cache for chunk {chunk_number}...\n")
 
                     cache_entry = cache_data_map.get(source_doc_name)
