@@ -1255,9 +1255,9 @@ function initializeGraphRAGCustomDropdowns(values) {
     initializeGraphSummarizerCustomDropdown(values.graph_summarizer_model_list, values.graph_summarizer_model);
     
     // UNCOMMENT IN THE FUTURE IF MAKING THIS USER-SELECTABLE!
-    // document.getElementById('graph-summarizer-custom-select-header').addEventListener('click', function() {
-    //     document.getElementById('graph-summarizer-custom-dropdown-content').classList.toggle('show');
-    // });
+    document.getElementById('graph-summarizer-custom-select-header').addEventListener('click', function() {
+        document.getElementById('graph-summarizer-custom-dropdown-content').classList.toggle('show');
+    });
 
     document.getElementById('graph-summarizer-custom-dropdown-search-input').addEventListener('input', function() {
         filterCustomGraphSummarizerDropdown(this.value);
