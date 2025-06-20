@@ -372,11 +372,17 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'min_lexical_similarity_threshold':3.0,
                 'chunk_size':250,
                 'chunk_overlap':0,
-                'perform_graph_rag':True,
-                'perform_only_graph_rag':False,
+                'enable_graph_rag':True,
+                'perform_graph_rag':True,   # Determined & managed by the LLM
+                'perform_only_graph_rag':False, # dev flag only for testing
                 'upload_doc_to_graph_db':True,
                 'graph_chunk_size':1500,    # Larger chunks are better because they provide more context for the model to identify meaningful entities and relationships
                 'graph_chunk_overlap':300,  # 20% overlap for a 1500 char chunk: provides very reasonable overlap while not being too redundant.
+                'graph_generator_model_list':[
+                    'Metin/Gemma-2-2B-TR-Knowledge-Graph',
+                    'google/gemma-2-2b-it',
+                    'google/gemma-2-9b-it'
+                ],
                 'graph_generator_model':'Metin/Gemma-2-2B-TR-Knowledge-Graph',
                 'graph_model_server_port':9070,
                 'graph_model_access_url':'localhost',
@@ -384,6 +390,10 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'quantize_graph_model_bits':'int8',
                 'exl2_quantize_graph_model':True,
                 'exl2_quantize_graph_model_bpw':8.0,
+                'graph_summarizer_model_list':[
+                    'google/gemma-2-2b-it',
+                    'google/gemma-2-9b-it'
+                ],
                 'graph_summarizer_model':'google/gemma-2-2b-it',
                 'graph_summarizer_model_prompt_template_format':'gemma2',
                 'graph_summarizer_server_port':9071,
@@ -413,9 +423,11 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'graph_summarizer_top_p':0.95,
                 'graph_summarizer_min_p':0.05,
                 'minimum_free_vram_for_graph_summarizer_model':7168,
-                'skip_summary_generation':False,
-                'reuse_previously_extracted_graph_entities_and_relationships':True,
-                'reuse_previously_generated_graph_summaries':True,
+                'skip_summary_generation':False,    # dev flag only for testing
+                'reuse_graph_extraction_cache_without_validation':False,#NEW
+                'reuse_graph_summary_cache_without_validation':False,#NEW
+                'reuse_graph_extraction_cache_with_validation':True,#NEW
+                'reuse_graph_summary_cache_with_validation':True,#NEW
                 'graph_rag_context_length_limit_chars':25000,
                 'base_template': (
                             "You are a helpful assistant deployed in a Retrieval Augmented Generation (RAG) system.\n"
@@ -464,15 +476,23 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'skip_system_prompt':False,
                 'embedding_models_list':[
                     'sentence-transformers/all-mpnet-base-v2',
-                    'BAAI/bge-large-en-v1.5',
-                    'BAAI/bge-base-en-v1.5',
+                    'Qwen/Qwen3-Embedding-0.6B',
+                    'Qwen/Qwen3-Embedding-4B',
+                    'Qwen/Qwen3-Embedding-8B',
                     'BAAI/bge-small-en-v1.5',
+                    'BAAI/bge-base-en-v1.5',
+                    'BAAI/bge-large-en-v1.5',
                     'nvidia/NV-Embed-v2'
                 ],
                 'selected_embedding_model':'sentence-transformers/all-mpnet-base-v2',
                 'reranker_models_list':[
                     'all-MiniLM-L6-v2',
-                    'Qwen/Qwen3-Reranker-0.6B'
+                    'Qwen/Qwen3-Reranker-0.6B',
+                    'Qwen/Qwen3-Reranker-4B',
+                    'Qwen/Qwen3-Reranker-8B',
+                    'BAAI/bge-small-en-v1.5',
+                    'BAAI/bge-base-en-v1.5',
+                    'BAAI/bge-large-en-v1.5'
                 ],
                 'selected_reranker_model':'all-MiniLM-L6-v2',
                 'use_embedding_model_for_reranking':True,
@@ -2236,7 +2256,8 @@ def get_request_params_for_graph_entity_extraction_model(rag_response_mode: bool
             'exl2_quantize_graph_model', 'graph_model_access_url',
             'graph_model_server_port', 'graph_model_max_new_tokens',
             'graph_model_temperature', 'graph_model_do_sample', 'graph_model_top_k',
-            'graph_model_top_p', 'graph_model_min_p', 'graph_chunk_overlap'
+            'graph_model_top_p', 'graph_model_min_p', 'graph_chunk_overlap',
+            'reuse_graph_extraction_cache_with_validation'
         ])
         exl2_quantize_graph_model = str(config_data['exl2_quantize_graph_model']).lower() == 'true'
     except Exception as e:
@@ -2249,7 +2270,8 @@ def get_request_params_for_graph_entity_extraction_model(rag_response_mode: bool
         'X-Top-K': str(config_data['graph_model_top_k']),
         'X-Top-P': str(config_data['graph_model_top_p']),
         'X-Min-P': str(config_data['graph_model_min_p']),
-        'X-Chunk-Overlap': str(config_data['graph_chunk_overlap']) if not rag_response_mode else '0'
+        'X-Chunk-Overlap': str(config_data['graph_chunk_overlap']) if not rag_response_mode else '0',
+        'X-Reuse-Extraction-Cache': str(config_data['reuse_graph_extraction_cache_with_validation']).lower() == 'true'
     }
 
     grapher_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
@@ -2498,7 +2520,8 @@ def get_request_params_for_graph_summarizer_model():
             'exl2_quantize_graph_summarizer_model', 'graph_summarizer_access_url',
             'graph_summarizer_server_port', 'graph_summarizer_max_new_tokens',
             'graph_summarizer_temperature', 'graph_summarizer_do_sample', 'graph_summarizer_top_k',
-            'graph_summarizer_top_p', 'graph_summarizer_min_p'
+            'graph_summarizer_top_p', 'graph_summarizer_min_p',
+            'reuse_graph_summary_cache_with_validation'
         ])
         exl2_quantize_graph_summarizer_model = str(config_data['exl2_quantize_graph_summarizer_model']).lower() == 'true'
     except Exception as e:
@@ -2511,7 +2534,8 @@ def get_request_params_for_graph_summarizer_model():
         'X-Max-New-Tokens': str(config_data['graph_summarizer_max_new_tokens']),
         'X-Temperature': str(config_data['graph_summarizer_temperature']),
         'X-Top-K': str(config_data['graph_summarizer_top_k']),
-        'X-Top-P': str(config_data['graph_summarizer_top_p'])
+        'X-Top-P': str(config_data['graph_summarizer_top_p']),
+        'X-Reuse-Summary-Cache': str(config_data['reuse_graph_summary_cache_with_validation']).lower() == 'true'
     }
 
     if not exl2_quantize_graph_summarizer_model:
@@ -3082,9 +3106,9 @@ def assemble_chunks_for_graph_db(chunks):
 
 def determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_filepath):
     try:
-        read_return = read_config(['reuse_previously_extracted_graph_entities_and_relationships', 'reuse_previously_generated_graph_summaries', 'skip_summary_generation'])
-        reuse_previously_extracted_graph_entities_and_relationships = str(read_return['reuse_previously_extracted_graph_entities_and_relationships']).lower() == 'true'
-        reuse_previously_generated_graph_summaries = str(read_return['reuse_previously_generated_graph_summaries']).lower() == 'true'
+        read_return = read_config(['reuse_graph_extraction_cache_without_validation', 'reuse_graph_summary_cache_without_validation', 'skip_summary_generation'])
+        reuse_graph_extraction_cache_without_validation = str(read_return['reuse_graph_extraction_cache_without_validation']).lower() == 'true'
+        reuse_graph_summary_cache_without_validation = str(read_return['reuse_graph_summary_cache_without_validation']).lower() == 'true'
         skip_summary_generation = str(read_return['skip_summary_generation']).lower() == 'true'
         complete_chunk_entities = None
         reuse_previous_extract = False
@@ -3092,7 +3116,7 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_f
     except Exception as e:
         return handle_local_error("Could not determine graph cache config, encountered error: ", e)
     
-    if reuse_previously_extracted_graph_entities_and_relationships and os.path.exists(entities_and_relationships_filepath):
+    if reuse_graph_extraction_cache_without_validation and os.path.exists(entities_and_relationships_filepath):
         try:
             candidate = load_json_file(entities_and_relationships_filepath)
             if isinstance(candidate, dict) and candidate != {}: # TODO: validation of the JSON file format
@@ -3106,7 +3130,7 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_f
             loaded_entities_and_relationships = False
             handle_error_no_return("Could not load previously extracted graph entities and relationships, encountered error: ", e)
     
-    if reuse_previously_generated_graph_summaries and os.path.exists(summaries_filepath):
+    if reuse_graph_summary_cache_without_validation and os.path.exists(summaries_filepath):
         try:
             candidate = load_json_file(summaries_filepath)
             if isinstance(candidate, dict) and candidate != {}: # TODO: validation of the JSON file format
@@ -7079,15 +7103,18 @@ def search_knowledge_base(user_query:str, embedding_function:str, force_enable_r
     # do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
     
     perform_graph_rag = read_config(['perform_graph_rag'])['perform_graph_rag']
+    enable_graph_rag = read_config(['enable_graph_rag'])['enable_graph_rag']
 
     graph_rag_context = None
-    if perform_graph_rag and do_rag:
+    if perform_graph_rag and do_rag and enable_graph_rag:   # All conditions must be met for GraphRAG to be performed!
         try:
             graph_rag_context, reranked_summaries_list_descending = execute_graph_rag(user_query, docs)
             if reranked_summaries_list_descending != []:
                 return reranked_summaries_list_descending, do_rag, graph_rag_context
         except Exception as e:
             handle_error_no_return("Could not execute graph RAG, encountered error: ", e)
+    else:
+        write_config({'perform_graph_rag': False})  # In-case the LLM elected to use GraphRAG but the user has explicitly disabled it, we need to set perform_graph_rag to False to avoid any issues downstream!
 
     return docs, do_rag, graph_rag_context
 
