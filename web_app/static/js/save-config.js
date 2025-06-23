@@ -103,6 +103,92 @@ function getRagConfig() {
 }
 
 
+function getGraphRAGConfig() {
+    let reuse_graph_extraction_cache_without_validation = false;
+    let reuse_graph_extraction_cache_with_validation = false;
+
+    let reuse_graph_summary_cache_without_validation = false;
+    let reuse_graph_summary_cache_with_validation = false;
+
+    if (document.getElementById('reuse_graph_extraction_cache_checkbox').checked) {
+        if (document.getElementById('validate_graph_extraction_cache_checkbox').checked) {
+            reuse_graph_extraction_cache_without_validation = false;    // lars-cache not used - determine_graph_cache_reuse() resolves to False
+            reuse_graph_extraction_cache_with_validation = true;    // waitress cache used - 'X-Reuse-Extraction-Cache' header set to True
+        } else {
+            reuse_graph_extraction_cache_without_validation = true;    // lars-cache used - determine_graph_cache_reuse() resolves to True
+            reuse_graph_extraction_cache_with_validation = false;    // waitress cache not used - call never made as determine_graph_cache_reuse() resolves to True
+        }
+    } else {
+        reuse_graph_extraction_cache_without_validation = false;    // lars-cache not used - determine_graph_cache_reuse() resolves to False
+        reuse_graph_extraction_cache_with_validation = false;    // waitress cache not used - 'X-Reuse-Extraction-Cache' header set to False
+    }
+
+    if (document.getElementById('reuse_graph_summarization_cache_checkbox').checked) {
+        if (document.getElementById('validate_graph_summarization_cache_checkbox').checked) {
+            reuse_graph_summary_cache_without_validation = false;    // lars-cache not used - determine_graph_cache_reuse() resolves to False
+            reuse_graph_summary_cache_with_validation = true;    // waitress cache used - 'X-Reuse-Summary-Cache' header set to True
+        } else {
+            reuse_graph_summary_cache_without_validation = true;    // lars-cache used - determine_graph_cache_reuse() resolves to True
+            reuse_graph_summary_cache_with_validation = false;    // waitress cache not used - call never made as determine_graph_cache_reuse() resolves to True
+        }
+    } else {
+        reuse_graph_summary_cache_without_validation = false;    // lars-cache not used - determine_graph_cache_reuse() resolves to False
+        reuse_graph_summary_cache_with_validation = false;    // waitress cache not used - 'X-Reuse-Summary-Cache' header set to False
+    }
+
+    return {
+        // Extractor Settings:
+        'graph_generator_model': document.getElementById('graph-extractor-custom-dropdown-selected-value').textContent,
+        'reuse_graph_extraction_cache_without_validation': reuse_graph_extraction_cache_without_validation,
+        'reuse_graph_extraction_cache_with_validation': reuse_graph_extraction_cache_with_validation,
+        'exl2_quantize_graph_model': document.getElementById('graph_extractor_exl2_yes').checked,
+        'exl2_quantize_graph_model_bpw': document.getElementById('graph_extractor_exl2_bpw').value,
+        'minimum_free_vram_for_graph_extraction_model': document.getElementById('graph_extractor_memory_required').value,
+        'graph_model_max_new_tokens': document.getElementById('graph_extractor_max_new_tokens').value,
+        'graph_model_max_seq_len': document.getElementById('graph_extractor_max_seq_len').value,
+        'graph_model_temperature': document.getElementById('graph_extractor_temperature').value,
+        'graph_model_do_sample': document.getElementById('graph_extractor_temperature').value > 0.0 ? true : false,
+        'graph_model_top_k': document.getElementById('graph_extractor_top_k').value,
+        'graph_model_top_p': document.getElementById('graph_extractor_top_p').value,
+        'graph_model_min_p': document.getElementById('graph_extractor_min_p').value,
+        'graph_model_access_url': document.getElementById('graph_extractor_access_url').value,
+        'graph_model_server_port': document.getElementById('graph_extractor_server_port').value,
+
+        // Summarizer Settings:
+        'graph_summarizer_model': document.getElementById('graph-summarizer-custom-dropdown-selected-value').textContent,
+        'graph_summarizer_model_prompt_template_format': document.getElementById('graph_summarizer_prompt_template_format_choice').value,
+        'reuse_graph_summary_cache_without_validation': reuse_graph_summary_cache_without_validation,
+        'reuse_graph_summary_cache_with_validation': reuse_graph_summary_cache_with_validation,
+        'exl2_quantize_graph_summarizer_model': document.getElementById('graph_summarizer_exl2_yes').checked,
+        'exl2_quantize_graph_summarizer_model_bpw': document.getElementById('graph_summarizer_exl2_bpw').value,
+        'minimum_free_vram_for_graph_summarizer_model': document.getElementById('graph_summarizer_memory_required').value,
+        'graph_summarizer_max_new_tokens': document.getElementById('graph_summarizer_max_new_tokens').value,
+        'graph_summarizer_max_seq_len': document.getElementById('graph_summarizer_max_seq_len').value,
+        'graph_summarizer_temperature': document.getElementById('graph_summarizer_temperature').value,
+        'graph_summarizer_do_sample': document.getElementById('graph_summarizer_temperature').value > 0.0 ? true : false,
+        'graph_summarizer_top_k': document.getElementById('graph_summarizer_top_k').value,
+        'graph_summarizer_top_p': document.getElementById('graph_summarizer_top_p').value,
+        'graph_summarizer_min_p': document.getElementById('graph_summarizer_min_p').value,
+        'graph_summarizer_access_url': document.getElementById('graph_summarizer_access_url').value,
+        'graph_summarizer_server_port': document.getElementById('graph_summarizer_server_port').value,
+
+        // General Settings:
+        'enable_graph_rag': document.getElementById('enable_graph_rag_checkbox').checked,
+        'upload_doc_to_graph_db': document.getElementById('upload_doc_to_graph_db_checkbox').checked,
+        'graph_rag_context_length_limit_chars': document.getElementById('graph_rag_context_length_limit_chars').value,
+        'graph_chunk_size': document.getElementById('graph_rag_chunk_size').value,
+        'graph_chunk_overlap': document.getElementById('graph_rag_chunk_overlap').value,
+
+        // GraphDB Settings:
+        'graph_db_server_host': document.getElementById('graph_db_server_host').value,
+        'assign_host_port_to_graph_db_server': document.getElementById('graph_db_server_port').value,
+        'launch_graph_db_with_ui': document.getElementById('launch_graph_db_with_ui_checkbox').checked,
+        'assign_host_port_to_graph_db_ui': document.getElementById('graph_db_ui_port').value,
+        'apply_clustering_to_graph_db_on_doc_load': document.getElementById('apply_clustering_to_graph_db_on_doc_load_checkbox').checked
+    };
+}
+
+
 function getOcrConfig() {
     const azure_ocr_form = document.getElementById("azure_vision_api_form");
     const azure_doc_ai_form = document.getElementById("azure_doc_ai_api_form");
@@ -463,6 +549,7 @@ function handleSaveChanges() {
         ...getVectorEmbeddingsConfig(),
         ...getSysPromptConfig(),
         ...getRagConfig(),
+        ...getGraphRAGConfig(),
         ...getOcrConfig(),
         ...getGoogleDriveConfig()
     };
