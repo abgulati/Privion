@@ -1220,6 +1220,36 @@ function initializeRAGTabComponents(values) {
 }
 
 
+function initializeGraphRAGEventListeners() {
+
+    const extractorReuseCacheCheckbox = document.getElementById('reuse_graph_extraction_cache_checkbox');
+    const extractorValidateCacheCheckbox = document.getElementById('validate_graph_extraction_cache_checkbox');
+    const summarizerReuseCacheCheckbox = document.getElementById('reuse_graph_summarization_cache_checkbox');
+    const summarizerValidateCacheCheckbox = document.getElementById('validate_graph_summarization_cache_checkbox');
+
+    extractorReuseCacheCheckbox.addEventListener('change', function() {
+        if (this.checked) {
+            extractorValidateCacheCheckbox.checked = true;
+            extractorValidateCacheCheckbox.disabled = false;
+        } else {
+            extractorValidateCacheCheckbox.checked = false;
+            extractorValidateCacheCheckbox.disabled = true;
+        }
+    });
+
+    summarizerReuseCacheCheckbox.addEventListener('change', function() {
+        if (this.checked) {
+            summarizerValidateCacheCheckbox.checked = true;
+            summarizerValidateCacheCheckbox.disabled = false;
+        } else {
+            summarizerValidateCacheCheckbox.checked = false;
+            summarizerValidateCacheCheckbox.disabled = true;
+        }
+    });
+
+}
+
+
 function initializeGraphRAGCustomDropdowns(values) {
     // Extractor Server:
     initializeGraphExtractorCustomDropdown(values.graph_generator_model_list, values.graph_generator_model);
@@ -1301,6 +1331,7 @@ function initializeGraphRAGTabComponents(values) {
 
     // GraphRAG Custom Dropdowns:
     initializeGraphRAGCustomDropdowns(values);
+    initializeGraphRAGEventListeners();
 
     // Gearp-Extraction Model Settings:
     document.getElementById('reuse_graph_extraction_cache_checkbox').checked = values.reuse_graph_extraction_cache_with_validation;
@@ -1326,14 +1357,14 @@ function initializeGraphRAGTabComponents(values) {
     document.getElementById('graph_summarizer_exl2_no').checked = String(values.exl2_quantize_graph_summarizer_model).toLowerCase() === 'false';
     document.getElementById('graph_summarizer_exl2_bpw').value = values.exl2_quantize_graph_summarizer_model_bpw;
     document.getElementById('graph_summarizer_memory_required').value = values.minimum_free_vram_for_graph_summarizer_model;
-    document.getElementById('graph_summarizer_max_new_tokens').value = values.graph_summarizer_model_max_new_tokens;
-    document.getElementById('graph_summarizer_max_seq_len').value = values.graph_summarizer_model_max_seq_len;
-    document.getElementById('graph_summarizer_temperature').value = values.graph_summarizer_model_temperature;
-    document.getElementById('graph_summarizer_top_k').value = values.graph_summarizer_model_top_k;
-    document.getElementById('graph_summarizer_top_p').value = values.graph_summarizer_model_top_p;
-    document.getElementById('graph_summarizer_min_p').value = values.graph_summarizer_model_min_p;
-    document.getElementById('graph_summarizer_access_url').value = values.graph_summarizer_model_access_url;
-    document.getElementById('graph_summarizer_server_port').value = values.graph_summarizer_model_server_port;
+    document.getElementById('graph_summarizer_max_new_tokens').value = values.graph_summarizer_max_new_tokens;
+    document.getElementById('graph_summarizer_max_seq_len').value = values.graph_summarizer_max_seq_len;
+    document.getElementById('graph_summarizer_temperature').value = values.graph_summarizer_temperature;
+    document.getElementById('graph_summarizer_top_k').value = values.graph_summarizer_top_k;
+    document.getElementById('graph_summarizer_top_p').value = values.graph_summarizer_top_p;
+    document.getElementById('graph_summarizer_min_p').value = values.graph_summarizer_min_p;
+    document.getElementById('graph_summarizer_access_url').value = values.graph_summarizer_access_url;
+    document.getElementById('graph_summarizer_server_port').value = values.graph_summarizer_server_port;
 }
 
 
