@@ -469,10 +469,10 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'graph_summarizer_min_p':0.05,
                 'minimum_free_vram_for_graph_summarizer_model':7168,
                 'skip_summary_generation':False,    # dev flag only for testing
-                'reuse_graph_extraction_cache_without_validation':False,#NEW
-                'reuse_graph_summary_cache_without_validation':False,#NEW
-                'reuse_graph_extraction_cache_with_validation':True,#NEW
-                'reuse_graph_summary_cache_with_validation':True,#NEW
+                'reuse_graph_extraction_cache_without_validation':False,
+                'reuse_graph_summary_cache_without_validation':False,
+                'reuse_graph_extraction_cache_with_validation':True,
+                'reuse_graph_summary_cache_with_validation':True,
                 'graph_rag_context_length_limit_chars':25000,
                 'base_template': (
                             "You are a helpful assistant deployed in a Retrieval Augmented Generation (RAG) system.\n"
@@ -2314,7 +2314,6 @@ def get_request_params_for_graph_entity_extraction_model(rag_response_mode: bool
         'X-Temperature': str(config_data['graph_model_temperature']),
         'X-Top-K': str(config_data['graph_model_top_k']),
         'X-Top-P': str(config_data['graph_model_top_p']),
-        'X-Min-P': str(config_data['graph_model_min_p']),
         'X-Chunk-Overlap': str(config_data['graph_chunk_overlap']) if not rag_response_mode else '0',
         'X-Reuse-Extraction-Cache': str(config_data['reuse_graph_extraction_cache_with_validation']).lower()
     }
@@ -2323,6 +2322,7 @@ def get_request_params_for_graph_entity_extraction_model(rag_response_mode: bool
 
     if not exl2_quantize_graph_model:
         headers['X-Return-Full-Text'] = 'False'
+        headers['X-Min-P'] = str(config_data['graph_model_min_p'])
         headers['X-Do-Sample'] = str(config_data['graph_model_do_sample'])
         grapher_url += "/completions"
     else:
@@ -2457,13 +2457,16 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
             return handle_local_error("Error with request to exl2_grapher API, encountered error: ", e)
 
     else:   # invoke /completions
+        '''
+        Block Unused!
+        '''
         # TODO: Implement non-exl2 bulk-summary generation with /completions
 
         try:
             for chunk_number, chunk_data in chunk_entities.items(): # chunk_entities.items() returns a dict_items object which is iterable. chunk_data is a dict for each chunk while chunk_number is a string ranging from 0 to len(chunk_entities) - 1
                 try:
                     print(f"\nExtracting entities and relationships for chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
-                    payload = get_graphing_request_payload(chunk_data['chunk_text'], exl2_quantize_graph_model)
+                    payload = get_graphing_request_payload(chunk=chunk_data['chunk_text'], exl2_quantize_graph_model=False)
                     response = graphing_request_response_handler(grapher_url, headers, payload)
 
                     if response is None or response == {}:
@@ -2505,7 +2508,7 @@ def sanitize_names(name):
     return sanitized
 
 
-# For general purpose use with HF-Waitress or llama.cpp LLMs:
+# UNUSED - For general purpose use with HF-Waitress or llama.cpp LLMs:
 def get_request_params_for_local_llm_server(formatted_prompt=""):
     try:
         read_return = read_config([
@@ -3123,8 +3126,10 @@ def assemble_chunks_for_graph_db(chunks):
                         'page_number': page_number_list
                     }
 
-                    # Add overlap text to the next chunk
-                    overlap_text = graphing_chunk[-graph_chunk_overlap:] if len(graphing_chunk) > graph_chunk_size else graphing_chunk  # The [-<number>:] syntax is used to get the last <number> of characters from the string
+                    # Add overlap text to the next chunk - The [-<number>:] syntax is used to get the last <number> of characters from the string
+                    overlap_text = graphing_chunk[-graph_chunk_overlap:]
+                    # Python's negative-indexing handles edge cases gracefully and will return the entire string if somehow the overlap is larger than the chunk size, 
+                    # which should never happen anyways, especially after the if-condition check above! 
 
                     graph_chunk_count += 1
                     graphing_chunk = overlap_text # Start the next chunk with the overlap text
@@ -3193,7 +3198,7 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_f
     if complete_chunk_entities is not None:
         reuse_previous_extract = True
 
-    return reuse_previous_extract, skip_summary_generation, complete_chunk_entities # skip_summary_generation flag is used to determine if we should skip summary generation
+    return reuse_previous_extract, skip_summary_generation, complete_chunk_entities
 
 
 def get_graph_cache_filepaths(input_file, docs_to_knowledge_graph_dir):
