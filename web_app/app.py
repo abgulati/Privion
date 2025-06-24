@@ -2228,14 +2228,14 @@ def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
     try:    # To generate a list of Document objects, each containing a 'page_content' string, and a 'metadata' dictionary with 'source_link', 'page_number', and 'source' keys
         numbered_splits = [Document(page_content=chunk['content'], metadata={'source_link':chunk['source_link'], 'page_number': chunk['page_number'], 'source': chunk['source']}) for chunk in chunks]
     except Exception as e:
-        handle_local_error("Failed to convert chunks to Document objects for storage to VectorDB, encountered error: ", e)
+        return handle_local_error("Failed to convert chunks to Document objects for storage to VectorDB, encountered error: ", e)
 
     # Load Embedding Model
     embedding_model = None
     try:
         embedding_model = SentenceTransformer(selected_embedding_model, trust_remote_code=True)
     except Exception as e:
-        handle_local_error("Could not load embedding model, encountered error: ", e)
+        return handle_local_error("Could not load embedding model in core-embedder, encountered error: ", e)
 
     # Generate Embeddings for just the page_content
     try:
@@ -2243,7 +2243,7 @@ def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
         print("\n\nGenerating embeddings...\n\n")
         embeddings = embedding_model.encode(texts_to_embed)    # By default, convert_to_tensor=False and this is what we want because ChromaDB expects numpy arrays, not PyTorch tensors!
     except Exception as e:
-        handle_local_error("Could not generate embeddings, encountered error: ", e)
+        return handle_local_error("Could not generate embeddings, encountered error: ", e)
     finally:
         if embedding_model is not None:
             del embedding_model
@@ -2290,7 +2290,7 @@ def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
                 embeddings=batch_embeddings.tolist()  # Convert embeddings from NumPy arrays to list of lists
             )
     except Exception as e:
-        handle_local_error("Could not store to VectorDB, encountered error: ", e)
+        return handle_local_error("Could not store to VectorDB, encountered error: ", e)
 
     return True
 
@@ -2490,8 +2490,8 @@ def get_graph_db_client():
 
     try:
         read_return = read_config(['graph_db_server_host', 'assign_host_port_to_graph_db_server'])
-        graph_db_server_host = read_return['graph_db_server_host']
-        assign_host_port_to_graph_db_server = read_return['assign_host_port_to_graph_db_server']
+        graph_db_server_host = str(read_return['graph_db_server_host'])
+        assign_host_port_to_graph_db_server = int(read_return['assign_host_port_to_graph_db_server'])
 
         client = FalkorDB(host=graph_db_server_host, port=assign_host_port_to_graph_db_server)
         print(f"\nGraph DB Client obtained successfully!\n")
@@ -2621,7 +2621,7 @@ def bring_graph_summarizer_model_online():  # Launch HF-Waitress instance with g
     try:
         hf_waitress_base_url = get_url_for_server('hf-waitress')    # shutdown general-chat LLM server at this URL in case free VRAM is insufficient
         graph_model_base_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
-        utils.ensure_minimum_free_vram(config_data['minimum_free_vram_for_graph_summarizer_model'], [graph_model_base_url, hf_waitress_base_url])
+        utils.ensure_minimum_free_vram(int(config_data['minimum_free_vram_for_graph_summarizer_model']), [graph_model_base_url, hf_waitress_base_url])
     except Exception as e:
         return handle_local_error(f"Could not reserve minimum GPU memory ({config_data['minimum_free_vram_for_graph_summarizer_model']}MB) required for Graph-Summarizer model, encountered error: ", e)
 
@@ -2636,7 +2636,7 @@ def bring_graph_summarizer_model_online():  # Launch HF-Waitress instance with g
         f"--model_id {str(config_data['graph_summarizer_model'])} "
         f"--max_new_tokens {str(config_data['graph_summarizer_max_new_tokens'])} "
     )
-    if config_data['exl2_quantize_graph_summarizer_model']:
+    if str(config_data['exl2_quantize_graph_summarizer_model']).lower() == 'true':
         command += f" --exl2 --exl2_bpw {str(config_data['exl2_quantize_graph_summarizer_model_bpw'])} --exl2_max_seq_len {str(config_data['graph_summarizer_max_seq_len'])}"
     else:
         command += f" --quantize {str(config_data['quantize_graph_summarizer_model'])} --quant_level {str(config_data['quantize_graph_summarizer_model_bits'])}"
@@ -2999,7 +2999,7 @@ def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with k
     try:
         hf_waitress_base_url = get_url_for_server('hf-waitress')
         graph_summarizer_base_url = f"http://{config_data['graph_summarizer_access_url']}:{config_data['graph_summarizer_server_port']}"
-        utils.ensure_minimum_free_vram(config_data['minimum_free_vram_for_graph_extraction_model'], [graph_summarizer_base_url, hf_waitress_base_url])
+        utils.ensure_minimum_free_vram(int(config_data['minimum_free_vram_for_graph_extraction_model']), [graph_summarizer_base_url, hf_waitress_base_url])
     except Exception as e:
         return handle_local_error(f"Could not reserve minimum GPU memory ({config_data['minimum_free_vram_for_graph_extraction_model']}MB) required for Graph-Extraction model, encountered error: ", e)
 
@@ -3014,7 +3014,7 @@ def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with k
         f"--model_id {str(config_data['graph_generator_model'])} "
         f"--max_new_tokens {str(config_data['graph_model_max_new_tokens'])} "
     )
-    if config_data['exl2_quantize_graph_model']:
+    if str(config_data['exl2_quantize_graph_model']).lower() == 'true':
         command += f" --exl2 --exl2_bpw {str(config_data['exl2_quantize_graph_model_bpw'])} --exl2_max_seq_len {str(config_data['graph_model_max_seq_len'])}"
     else:
         command += f" --quantize {str(config_data['quantize_graph_model'])} --quant_level {str(config_data['quantize_graph_model_bits'])}"
@@ -3090,8 +3090,8 @@ def assemble_chunks_for_graph_db(chunks):
     '''
     try:
         read_return = read_config(['graph_chunk_size', 'graph_chunk_overlap'])
-        graph_chunk_size = read_return['graph_chunk_size']
-        graph_chunk_overlap = read_return.get('graph_chunk_overlap', 300)
+        graph_chunk_size = int(read_return.get('graph_chunk_size', 1500))
+        graph_chunk_overlap = int(read_return.get('graph_chunk_overlap', 300))
         
         graphing_chunk = ""
         chunks_in_storage_queue = []    # chunks will be combined upto `graph_chunk_size` and stored here
@@ -6378,7 +6378,7 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
     try:
         embedding_model = SentenceTransformer(embedding_function, trust_remote_code=True)
     except Exception as e:
-        handle_local_error("Could not load embedding model, encountered error: ", e)
+        return handle_local_error("Could not load embedding model for searching the vector database, encountered error: ", e)
 
     try:
         # Initialize Chroma Client and collection
@@ -6776,7 +6776,7 @@ def merge_chunk_entities_for_graph_rag(chunk_entities: dict) -> dict:
     merging will allow for de-duplication of nodes and relationships in the get_summary step.
     '''
 
-    #print(f"\n\nMerging chunk entities for graph RAG. Received chunk_entities: \n {chunk_entities}\n\n")
+    # print(f"\n\nMerging chunk entities for graph RAG. Received chunk_entities: \n {chunk_entities}\n\n")
     print(f"\nMerging chunk entities for graph RAG.\n")
 
     try:
@@ -6797,7 +6797,7 @@ def merge_chunk_entities_for_graph_rag(chunk_entities: dict) -> dict:
             chunk_entities_merged[0]['source_chunks'].extend(chunk_data['source_chunks'])
             chunk_entities_merged[0]['source_doc_name'] += f"{chunk_data['source_doc_name']} "
         
-        print(f"\n\nMerged chunk entities for graph RAG. Resulting chunk_entities_merged: \n {chunk_entities_merged}\n\n")
+        # print(f"\n\nMerged chunk entities for graph RAG. Resulting chunk_entities_merged: \n {chunk_entities_merged}\n\n")
         return chunk_entities_merged
     except Exception as e:
         handle_error_no_return("Could not merge chunk entities for graph RAG, proceeding with original chunk_entities dict. WARNING: Duplicates may be present and negatively impact response quality! Encountered error: ", e)
@@ -6929,7 +6929,7 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
         return handle_local_error("Could not store entities and relationships in graph DB, encountered error: ", e)
 
     try:
-        graph_rag_context_length_limit_chars = read_config(['graph_rag_context_length_limit_chars'])['graph_rag_context_length_limit_chars']
+        graph_rag_context_length_limit_chars = int(read_config(['graph_rag_context_length_limit_chars'])['graph_rag_context_length_limit_chars'])
         summary_report, reranked_summaries_list_descending = get_summary_report(summarized_and_deduplicated_chunk_entities, graph_rag_context_length_limit_chars, user_query)
     except Exception as e:
         return handle_local_error("Could not get summary report, encountered error: ", e)
@@ -7124,13 +7124,13 @@ def search_knowledge_base(user_query:str, embedding_function:str, force_enable_r
         docs_list_with_cosine_distance = search_vector_db(user_query, embedding_function, int(fetch_top_k_results_from_vectordb))
         filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc,score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of a Document object and a float score!
     except Exception as e:
-        handle_error_no_return("Could not perform vector search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
+        handle_error_no_return("Could not perform vector search to determine do_rag when attempting to search-knowledge-base, encountered error: ", e)
 
     whoosh_results = []
     try:
         whoosh_results = search_whoosh_index(user_query)
     except Exception as e:
-        handle_error_no_return("Could not perform whoosh search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
+        handle_error_no_return("Could not perform whoosh search to determine do_rag when attempting to search-knowledge-base, encountered error: ", e)
 
     combined_docs = []
     try:
@@ -7204,8 +7204,8 @@ def setup_for_local_llm_response():
             
     try:    # RAG Routine Begins: Perform semantic search on the vector DB, lexical search on the whoosh index, combine and rerank results and determine if RAG is necessary
         print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n") 
-        selected_embedding_function = read_config(['selected_embedding_model'])['selected_embedding_model']
-        docs, do_rag, graph_rag_context = search_knowledge_base(user_query, selected_embedding_function,
+        selected_embedding_model = read_config(['selected_embedding_model'])['selected_embedding_model']
+        docs, do_rag, graph_rag_context = search_knowledge_base(user_query, selected_embedding_model,
         (config['force_enable_rag'] or regenerate_with_citations_force_enabled), 
         (config['force_disable_rag'] or regenerate_with_citations_force_disabled), 
         int(config['filter_top_k_results_by_reranking']), int(config['fetch_top_k_results_from_vectordb']))
@@ -7213,7 +7213,7 @@ def setup_for_local_llm_response():
         return handle_api_error("Could not process vector search in method setup_for_local_llm_response, encountered error: ", e)
 
     try:    # Write do_rag to config and prepare RAG context if necessary
-        print(f'Do RAG? {do_rag}')
+        # print(f'Do RAG? {do_rag}')
         write_config({'do_rag':do_rag})
         if do_rag:    # Add similarity search results for RAG if necessary!
             QUERIES[key_for_vector_results] = docs
