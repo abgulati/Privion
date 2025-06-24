@@ -174,7 +174,7 @@ def handle_model_loading_error(message, exception=None, target="local"):
         handle_error_no_return("Could not set load_safe_defaults to true in hf_config.json, encountered error: ", e)
     
     if target == "local":
-        return handle_local_error(message, exception)
+        handle_local_error(message, exception)
     elif target == "api":
         return handle_api_error(message, exception)
 
@@ -561,9 +561,8 @@ def shutdown_hf_waitress():
                             shutdown_pipe()
                             shutdown_exl2()
 
-                            print("✅ All models, pipes, and exl2 caches shut down, proceeding with final cleanup...")
-                            safe_empty_cuda_cache()
-                            print("✅ Graceful shutdown completed")
+                            print("✅ All models, pipes, and exl2 caches shut down...")
+                            print("✅ Cleanup completed successfully")
                         except Exception as e:
                             handle_error_no_return("Could not shutdown model, pipe, or exl2, proceeding to force-kill. Encountered error: ", e)
 
@@ -576,7 +575,7 @@ def shutdown_hf_waitress():
                     if cleanup_thread.is_alive():
                         print("⚠️  Cleanup timeout reached (7 seconds) - proceeding with force shutdown")
                     else:
-                        print("✅ Cleanup completed successfully")
+                        print("✅ Graceful shutdown completed")
 
                     response = jsonify(success=True, message="Server shutting down gracefully...")
 
@@ -686,7 +685,7 @@ def load_json_file(file_path):
             with open(file_path, 'r') as file:
                 return json.load(file)
         except Exception as e:
-            return handle_local_error("Could not load JSON file, encountered error: ", e)
+            handle_local_error("Could not load JSON file, encountered error: ", e)
     else:
         return None   # NOTE: isinstance({}, dict) will return True so better to return None!
 
@@ -698,14 +697,14 @@ def update_and_save_json_file(data, file_path):
             with open(file_path, 'r') as file:
                 current_cache = json.load(file)
         except Exception as e:
-            return handle_local_error("Could not save JSON file, encountered error: ", e)
+            handle_local_error("Could not save JSON file, encountered error: ", e)
     
     try:
         current_cache.update(data)
         with open(file_path, 'w') as file:
             json.dump(current_cache, file, indent=4)
     except Exception as e:
-        return handle_local_error("Could not save JSON file, encountered error: ", e)
+        handle_local_error("Could not save JSON file, encountered error: ", e)
 
     return True
 
@@ -715,7 +714,7 @@ def overwrite_json_file(data, file_path):
         with open(file_path, 'w') as file:
             json.dump(data, file, indent=4)
     except Exception as e:
-        return handle_local_error("Could not save JSON file, encountered error: ", e)
+        handle_local_error("Could not save JSON file, encountered error: ", e)
 
     return True
 
@@ -726,7 +725,7 @@ def remove_file_from_filepath(filepath):
         os.remove(filepath)
         print(f"Successfully deleted file: {filepath}")
     except Exception as e:
-        return handle_local_error(f"Could not remove file from filepath: {filepath}, encountered error: ", e)
+        handle_local_error(f"Could not remove file from filepath: {filepath}, encountered error: ", e)
 
 
 def safe_remove_file_from_filepath(filepath):
@@ -742,7 +741,7 @@ def remove_folder_from_filepath(folderpath):
         shutil.rmtree(folderpath)
         print(f"Successfully deleted folder: {folderpath}")
     except Exception as e:
-        return handle_local_error(f"Could not remove folder from filepath: {folderpath}, encountered error: ", e)
+        handle_local_error(f"Could not remove folder from filepath: {folderpath}, encountered error: ", e)
     
 
 def safe_remove_folder_from_filepath(folderpath):
@@ -961,7 +960,7 @@ def download_model_from_hf_hub(model_to_download):
         print(f"\n\nDownload Successful. Latest snapshot path for {model_to_download} is:\n\n{latest_snapshot_path}\n\n")
         return os_sanitize_path(latest_snapshot_path)
     except Exception as e:
-        handle_error_no_return("Could not download model from HF-Hub, encountered error: ", e)
+        handle_local_error("Could not download model from HF-Hub, encountered error: ", e)
 
 
 def get_repo_info_for_model(model_id):
@@ -970,7 +969,7 @@ def get_repo_info_for_model(model_id):
         cache_info = scan_cache_dir()
         print("\nCache Scan Complete.\n")
     except Exception as e:
-        handle_error_no_return(f"Could not get cache_info for model {model_id}, encountered error: ", e)
+        handle_local_error(f"Could not get cache_info for model {model_id}, encountered error: ", e)
     
     repo_info = next((repo for repo in cache_info.repos if repo.repo_id == model_id), None)
     if repo_info is None: return None
@@ -984,7 +983,7 @@ def get_latest_revision_for_model(model_id):
     try:
         repo_info = get_repo_info_for_model(model_id)
     except Exception as e:
-        return handle_error_no_return(f"Could not get repo_info for model {model_id}, encountered error: ", e)
+        handle_error_no_return(f"Could not get repo_info for model {model_id}, encountered error: ", e)
     
     if repo_info is None:
         print(f"No cache info found for {model_id}, attempting to download model from HF-Hub")
@@ -992,7 +991,7 @@ def get_latest_revision_for_model(model_id):
             download_model_from_hf_hub(model_id)
             repo_info = get_repo_info_for_model(model_id)
         except Exception as e:
-            return handle_local_error(f"Could not download model {model_id} from HF-Hub, encountered error: ", e)
+            handle_local_error(f"Could not download model {model_id} from HF-Hub, encountered error: ", e)
     
     try:
         revisions = list(repo_info.revisions)
@@ -1004,7 +1003,7 @@ def get_latest_revision_for_model(model_id):
         print(f"Number of Files: {len(latest_revision.files)}")
         return latest_revision
     except Exception as e:
-        return handle_local_error(f"Could not determine latest revision details for {model_id}, encountered error: ", e)
+        handle_local_error(f"Could not determine latest revision details for {model_id}, encountered error: ", e)
 
 
 def hf_login_for_gated_models():
@@ -1013,12 +1012,12 @@ def hf_login_for_gated_models():
         read_return = read_config(['access_token'])
         access_token = str(read_return['access_token'])
     except Exception as e:
-        handle_error_no_return("403 - No access token found, please submit an access token via the /hf_login endpoint")
+        handle_local_error("403 - No access token found, please submit an access token via the /hf_login endpoint")
 
     try:
         login(token=access_token)   # imported from huggingface_hub
     except Exception as e:
-        handle_error_no_return("Unable to login to the HuggingFace-Hub, please ensure the correct access token has been provided. Encountered error: ", e)
+        handle_local_error("Unable to login to the HuggingFace-Hub, please ensure the correct access token has been provided. Encountered error: ", e)
 
 
 def parse_arguments():
@@ -1474,7 +1473,7 @@ def load_flux_pipeline(pipeline):
         flux_low_vram_optimizations = str(read_return['flux_low_vram_optimizations']).lower() == 'true'
         load_quantized_flux = str(read_return['load_quantized_flux']).lower() == 'true'
     except Exception as e:
-        return handle_local_error("Could not read values from hf_config.json when attempting to load_flux_pipeline(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when attempting to load_flux_pipeline(), encountered error: ", e)
 
     if load_quantized_flux:
         print("Loading quantized Flux Pipeline")
@@ -1535,7 +1534,7 @@ def load_vision_pipeline(pipeline, model_params):
         model_id = str(read_return['model_id'])
         torch_device_map = str(read_return['torch_device_map'])
     except Exception as e:
-        return handle_local_error("Could not read values from hf_config.json when attempting to load vision-pipeline, encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when attempting to load vision-pipeline, encountered error: ", e)
 
     model_params.pop('trust_remote_code', None)
 
@@ -1566,7 +1565,7 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
         transformer_models_folder = str(read_return['transformer_models_folder'])
         exl2_force_regenerate_measurement = str(read_return['exl2_force_regenerate_measurement']).lower() == 'true'
     except Exception as e:
-        return handle_local_error("Could not read values from hf_config.json when attempting to generate_exllama_measurement_file_for_model(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when attempting to generate_exllama_measurement_file_for_model(), encountered error: ", e)
 
     try:
         temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
@@ -1577,7 +1576,7 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
         os.makedirs(os.path.dirname(measurement_file_path), exist_ok=True)
     except Exception as e:
         safe_remove_folder_from_filepath(temp_dir)
-        return handle_local_error("Could not create measurement file directory when attempting to generate_exllama_measurement_file_for_model(), encountered error: ", e)
+        handle_local_error("Could not create measurement file directory when attempting to generate_exllama_measurement_file_for_model(), encountered error: ", e)
     
     if os.path.exists(measurement_file_path) and not exl2_force_regenerate_measurement:
         print(f"\nMeasurement file for {model_id} already exists. Skipping measurement file generation.\n")
@@ -1600,7 +1599,7 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
         safe_remove_folder_from_filepath(temp_dir)
     except Exception as e:
         safe_remove_folder_from_filepath(temp_dir)
-        return handle_local_error("Could not run ExLlamaV2 measurement file generator, encountered error: ", e)
+        handle_local_error("Could not run ExLlamaV2 measurement file generator, encountered error: ", e)
 
     return measurement_file_path
 
@@ -1612,7 +1611,7 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
         read_return = read_config(['transformer_models_folder'])
         transformer_models_folder = str(read_return['transformer_models_folder'])
     except Exception as e:
-        return handle_local_error("Could not read values from hf_config.json when attempting to exllama_bpw_quantize_model(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when attempting to exllama_bpw_quantize_model(), encountered error: ", e)
 
     try:
         temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
@@ -1623,7 +1622,7 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
         os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)   # Create parent directory structure - final `{exl2_bpw}bpw` directory will be created by ExLlamaV2 converter
     except Exception as e:
         safe_remove_folder_from_filepath(temp_dir)
-        return handle_local_error("Could not create directory to store quantized model when attempting to exllama_bpw_quantize_model(), encountered error: ", e)
+        handle_local_error("Could not create directory to store quantized model when attempting to exllama_bpw_quantize_model(), encountered error: ", e)
 
     if os.path.exists(quantized_model_path):
         print(f"\nQuantized model for {model_id} already exists. Skipping quantization.\n")
@@ -1648,7 +1647,7 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
         safe_remove_folder_from_filepath(temp_dir)  # to free space and prevent Permission Errors!
     except Exception as e:
         safe_remove_folder_from_filepath(temp_dir)  # to prevent Permission Errors!
-        return handle_local_error("Could not run ExLlamaV2 bpw quantizer, encountered error: ", e)
+        handle_local_error("Could not run ExLlamaV2 bpw quantizer, encountered error: ", e)
 
     return quantized_model_path
 
@@ -1667,7 +1666,7 @@ def get_exl2_cache_type(exl2_cache_type: str):  #  -> ExLlamaV2Cache; commenting
         else:
             return ExLlamaV2Cache
     except Exception as e:
-        return handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
+        handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
 
 
 def define_exllama_generator_components(quantized_model_path: os.PathLike, exl2_no_flash_attn: bool):    # -> ExLlamaV2DynamicGenerator: commenting out as it will cause the server to error out if ExLlamaV2 is not installed!
@@ -1682,47 +1681,47 @@ def define_exllama_generator_components(quantized_model_path: os.PathLike, exl2_
             config = ExLlamaV2Config(quantized_model_path)
         print("\nConfig defined successfully\n")
     except Exception as e:
-        return handle_local_error("Could not define ExLlamaV2 config, encountered error: ", e)
+        handle_local_error("Could not define ExLlamaV2 config, encountered error: ", e)
     
     try:
         global EXL2_MODEL
         EXL2_MODEL = ExLlamaV2(config)
         print("\nModel defined successfully\n")
     except Exception as e:
-        return handle_local_error("Could not define ExLlamaV2 model, encountered error: ", e)
+        handle_local_error("Could not define ExLlamaV2 model, encountered error: ", e)
     
     try:
         exl2_cache_type = str(read_config(['exl2_cache_type'])['exl2_cache_type'])
         exl2_max_seq_len = int(read_config(['exl2_max_seq_len'])['exl2_max_seq_len'])
     except Exception as e:
-        return handle_local_error("Could not read cache type from hf_config.json, encountered error: ", e)
+        handle_local_error("Could not read cache type from hf_config.json, encountered error: ", e)
     
     try:
         cache_type = get_exl2_cache_type(exl2_cache_type)
         print(f"\nCache type determined successfully: {cache_type}\n")
     except Exception as e:
-        return handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
+        handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
 
     try:
         global EXL2_CACHE
         EXL2_CACHE = cache_type(EXL2_MODEL, max_seq_len = exl2_max_seq_len, lazy = True)
         print(f"\nCache defined successfully with max_seq_len: {exl2_max_seq_len}\n")
     except Exception as e:
-        return handle_local_error("Could not define ExLlamaV2 cache, encountered error: ", e)
+        handle_local_error("Could not define ExLlamaV2 cache, encountered error: ", e)
 
     try:
         print(f"\nLoading model...\n")
         EXL2_MODEL.load_autosplit(EXL2_CACHE)
         print("\nModel loaded with autosplit successfully\n")
     except Exception as e:
-        return handle_local_error("Could not load ExLlamaV2 model with autosplit, encountered error: ", e)
+        handle_local_error("Could not load ExLlamaV2 model with autosplit, encountered error: ", e)
 
     try:
         global EXL2_TOKENIZER
         EXL2_TOKENIZER = ExLlamaV2Tokenizer(config)
         print("\nTokenizer defined successfully\n")
     except Exception as e:
-        return handle_local_error("Could not define ExLlamaV2 tokenizer, encountered error: ", e)
+        handle_local_error("Could not define ExLlamaV2 tokenizer, encountered error: ", e)
 
     return True
 
@@ -1736,7 +1735,7 @@ def load_exllama_pipeline():
         exl2_bpw = float(read_return['exl2_bpw'])
         exl2_no_flash_attn = str(read_return['exl2_no_flash_attn']).lower() == 'true'
     except Exception as e:
-        return handle_local_error("Could not read values from hf_config.json when attempting to load the ExLlamaV2 pipeline, encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when attempting to load the ExLlamaV2 pipeline, encountered error: ", e)
 
     latest_snapshot_path = None
     try:
@@ -1747,25 +1746,25 @@ def load_exllama_pipeline():
             latest_revision = get_latest_revision_for_model(model_id)
             latest_snapshot_path = os_sanitize_path(latest_revision.snapshot_path)
         except Exception as e:
-            return handle_local_error(f"Error attempting to work with local snapshot for {model_id}. Encountered error: ", e)
+            handle_local_error(f"Error attempting to work with local snapshot for {model_id}. Encountered error: ", e)
     
     if latest_snapshot_path is None:
-        return handle_local_error(f"Could not find a local snapshot for {model_id}. Please check your connection and access token if you're using a private model.")
+        handle_local_error(f"Could not find a local snapshot for {model_id}. Please check your connection and access token if you're using a private model.")
     
     try:
         measurement_file_path = generate_exllama_measurement_file_for_model(model_id, latest_snapshot_path)
     except Exception as e:
-        return handle_local_error(f"Error generating ExLlamaV2 measurement file for {model_id}. Encountered error: ", e)
+        handle_local_error(f"Error generating ExLlamaV2 measurement file for {model_id}. Encountered error: ", e)
 
     try:
         quantized_model_path = exllama_bpw_quantize_model(model_id, measurement_file_path, latest_snapshot_path, exl2_bpw)
     except Exception as e:
-        return handle_local_error(f"Error ExLlamaV2 quantizing {model_id} to {exl2_bpw} bits per word. Encountered error: ", e)
+        handle_local_error(f"Error ExLlamaV2 quantizing {model_id} to {exl2_bpw} bits per word. Encountered error: ", e)
 
     try:
         define_exllama_generator_components(quantized_model_path, exl2_no_flash_attn)
     except Exception as e:
-        return handle_local_error(f"Error loading ExLlamaV2 quantized model from {quantized_model_path}. Encountered error: ", e)
+        handle_local_error(f"Error loading ExLlamaV2 quantized model from {quantized_model_path}. Encountered error: ", e)
 
     print("\n\nExLlamaV2 Pipeline Loaded Successfully!\n\n")
     return True
@@ -2545,7 +2544,7 @@ def set_global_exl2_dynamic_generator():
         print("\nGenerator defined successfully\n")
         return exl2_dynamic_generator
     except Exception as e:
-        return handle_local_error("Could not define ExLlamaV2 generator, encountered error: ", e)
+        handle_local_error("Could not define ExLlamaV2 generator, encountered error: ", e)
 
 
 def get_exl2_gen_settings(request):
@@ -2790,7 +2789,7 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
             full_response = prompt_formatting_module.trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n{Page Number(s): " + str(page_number_list) + "}\n\n"
             print(f"\n\nfull_response:\n\n{full_response}\n\n")
         except Exception as e:
-            return handle_local_error(f"Could not get comprehensive summary from LLM, encountered error: ", e)
+            handle_local_error(f"Could not get comprehensive summary from LLM, encountered error: ", e)
 
         summarized_nodes_and_relationships = {}
 
@@ -2853,7 +2852,7 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
         return summarized_nodes_and_relationships
 
     except Exception as e:
-        return handle_local_error(f"Could not generate comprehensive summary, encountered error: ", e)
+        handle_local_error(f"Could not generate comprehensive summary, encountered error: ", e)
     
 ### End of Helper Functions ###
 
