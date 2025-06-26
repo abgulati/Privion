@@ -53,13 +53,13 @@ function cleanStreamedContent(dataObj) {
     streamed_content = streamed_content.replace(/\\t/g, '    ');
 
     // Finally, encode HTML special characters, but preserve <br> tags
-    // streamed_content = streamed_content.replace(/&/g, '&amp;')
-    //                                 .replace(/</g, '&lt;')
-    //                                 .replace(/>/g, '&gt;')
-    //                                 .replace(/&lt;br&gt;/g, '<br>');
+    // Important to process the less-than and greater-than entities so we can escape other HTML elements the LLM puts out - primarily <think>...</think> tags!
+    streamed_content = streamed_content.replace(/</g, '&lt;')
+                                    .replace(/>/g, '&gt;')
+                                    .replace(/&lt;br&gt;/g, '<br>');
 
     // Replace <br> tags with <br>
-    streamed_content = streamed_content.replace(/&lt;br&gt;/g, '<br>');
+    // streamed_content = streamed_content.replace(/&/g, '&amp;').replace(/&lt;br&gt;/g, '<br>');
 
     // console.log("streamed_content: ", streamed_content);
     return streamed_content;
