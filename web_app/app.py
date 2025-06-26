@@ -7327,10 +7327,8 @@ def obtain_citation_urls_from_llm_response(llm_response: str) -> list[str]:
 
 def remove_embedded_links_from_llm_response(llm_response: str) -> str:
     try:
-        embedded_link_start_pattern = r'\(*\[[^\]]+\]\(\s*'  # Matches embedded links in the format: (*[link text](url))
-        embedded_link_end_pattern = r'\s*\){1,2}\.?'          # Matches the closing parenthesis and optional period
-        llm_response_without_embedded_links = re.sub(embedded_link_start_pattern, '', llm_response)
-        llm_response_without_embedded_links = re.sub(embedded_link_end_pattern, '', llm_response_without_embedded_links)
+        embedded_link_complete_pattern = r'\(*\[[^\]]+\]\(\s*\){1,2}\.?'  # Matches embedded links in the format: ([link text](url)) - For detailed explainer use: https://regex101.com/
+        llm_response_without_embedded_links = re.sub(embedded_link_complete_pattern, '', llm_response)
         return llm_response_without_embedded_links
     except Exception as e:
         handle_local_error("Could not remove embedded links from llm_response, encountered error: ", e)
