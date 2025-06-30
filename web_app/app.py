@@ -5722,16 +5722,20 @@ def load_chat_history():
                 handle_error_no_return("Could not retrieve integer value of user rating, encountered error: ", e)
 
 
-        llm_rating = f'''<div class="star-rating" data-rated={response_rated} rating-chat-id={chat_id_for_history_search} rating-sequence-id={sequence_id_for_history_search}>
-        <i class="far fa-star" data-rate="1"></i>
-        <i class="far fa-star" data-rate="2"></i>
-        <i class="far fa-star" data-rate="3"></i>
-        <i class="far fa-star" data-rate="4"></i>
-        <i class="far fa-star" data-rate="5"></i>
-        </div>
-        </div>
-        </div>'''
-
+        # Using string-join to avoid newline characters \n's appearing in the HTML output as <br>'s !:
+        llm_rating_html_parts = [
+            '<br>',
+            f'<div class="star-rating" data-rated={response_rated} rating-chat-id={chat_id_for_history_search} rating-sequence-id={sequence_id_for_history_search}>',
+            '<i class="far fa-star" data-rate="1"></i>',
+            '<i class="far fa-star" data-rate="2"></i>',
+            '<i class="far fa-star" data-rate="3"></i>',
+            '<i class="far fa-star" data-rate="4"></i>',
+            '<i class="far fa-star" data-rate="5"></i>',
+            '</div>',
+            '</div>',
+            '</div>'
+        ]
+        llm_rating = ''.join(llm_rating_html_parts)
 
         if user_rating_for_history_chat:
             rating_parts = llm_rating.split("far", user_rating_for_history_chat)
