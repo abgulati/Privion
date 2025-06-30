@@ -1566,6 +1566,7 @@ function stopGeneration() {
     })
     .then(data => {
         console.log(data);
+        displayProcessingStatus(false);
     })
     .catch(error => {
         errorHandler("stopping generation", "/stop_generation", String(error.message));
