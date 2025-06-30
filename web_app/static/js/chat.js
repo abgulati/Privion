@@ -605,6 +605,7 @@ function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapper
     }
     
     document.getElementById(responseContentID).innerHTML += `
+    <br>
     <div class="star-rating" data-rated="False" rating-chat-id=${current_chat_id} rating-sequence-id=${latest_sequence_id}>
         <i class="far fa-star" data-rate="1"></i>
         <i class="far fa-star" data-rate="2"></i>
@@ -807,17 +808,24 @@ textAttachmentRemoveBtn.addEventListener('click', removeTextAttachment);
 // Store user rating & update UI - confirm the associated route does not contain print() statements as the stdout is redirected during response generation!
 document.getElementById('chat-area').addEventListener('click', function(e) {
     if(e.target.classList.contains('fa-star')) {
-        let starContainer = e.target.parentElement;
-        if(starContainer.getAttribute('data-rated') === "False") {
+        let starContainer = e.target.parentElement; // should be div class="star-rating"
+        // if(starContainer.getAttribute('data-rated') === "False") {
             
             let rate = e.target.getAttribute('data-rate');
             let chat_id = starContainer.getAttribute('rating-chat-id');
             let sequence_id = starContainer.getAttribute('rating-sequence-id');
 
-            for(let i = 0; i < rate; i++) {
-                console.log("filling star-rating")
-                starContainer.children[i].classList.remove('far');
-                starContainer.children[i].classList.add('fas'); // This fills the star
+            for(let i = 0; i < 5; i++) {
+                // reset star
+                starContainer.children[i].classList.remove('fas');
+                starContainer.children[i].classList.add('far');
+
+                // fill star if rated
+                if(i < rate) {
+                    console.log("filling star-rating")
+                    starContainer.children[i].classList.remove('far');
+                    starContainer.children[i].classList.add('fas'); // This fills the star
+                }
             }
             starContainer.setAttribute('data-rated', "True");
             
@@ -838,7 +846,7 @@ document.getElementById('chat-area').addEventListener('click', function(e) {
             .catch(error => {
                 errorHandler("storing the user's rating", "/store_user_rating", String(error.message))
             });
-        }
+        // }
     }
 });
 
