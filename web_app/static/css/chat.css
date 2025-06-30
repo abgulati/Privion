@@ -2,6 +2,79 @@
 
 body {
     font-family: 'Inter', sans-serif;
+    background-color: #181a1b;  /* Fallback color in case the image doesn't load */
+    background-image: url('../images/main-background.png');  /* This CSS file is in the static/css folder, so we need to go up one level to get to the images folder! */
+    background-size: cover; /* Ensures the image covers the entire container while maintaining its aspect ratio */
+    background-position: center; /* Centers the image within the container */
+    background-repeat: no-repeat; /* Prevents the image from repeating */
+    background-attachment: fixed; /* Keeps the background image fixed while scrolling */
+}
+
+.app-title-playfair {
+    font-family: "Playfair Display", serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 45px;
+    color: white;
+    position: relative;
+    left: 7px;
+    top: -3px;
+}
+
+.app-title {
+    display: flex;
+    align-items: baseline;
+    gap: 1px;
+}
+
+.letter-p {
+    width: 25.88px;
+    height: 36.23px;
+    top: 8px;
+    left: 0.1px;
+}
+
+.letter-r {
+    width: 17.17px;
+    height: 25.56px;
+    top: 18.67px;
+    left: 26.88px;
+}
+
+.letter-i {
+    width: 9.94px;
+    height: 36.18px;
+    top: 8.04px;
+    left: 45.23px;
+}
+
+.letter-v {
+    width: 26.26px;
+    height: 25.51px;
+    top: 19.17px;
+    left: 54.65px;
+}
+
+.letter-i2 {
+    width: 9.94px;
+    height: 36.18px;
+    top: 8.04px;
+    left: 82.16px;
+}
+
+.letter-o {
+    width: 25.1px;
+    height: 25.92px;
+    top: 18.77px;
+    left: 93.13px;
+}
+
+.letter-n {
+    width: 26.81px;
+    height: 25.53px;
+    top: 18.67px;
+    left: 118.83px;
 }
 
 .glassmorphism {
@@ -23,6 +96,41 @@ body {
     transition: opacity 0.5s ease-out;
 }
 
+.privion-welcome-text, .privion-welcome-sub-text {
+    font-family: "Playfair Display", serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 45px;
+    color: white;
+}
+
+.privion-welcome-sub-text {
+    font-size: 27px;
+}
+
+.header-icons,
+.header-icons-extended,
+.header-icons-extended-margin-right {
+    font-size: 33px;
+    cursor: pointer;
+    /* color: #D1CDC7; */
+    color: white;
+}
+
+.header-icons-extended,
+.header-icons-extended-margin-right {
+    position: relative;
+}
+
+.header-icons-extended-margin-right {
+    margin-right: 15px;
+}
+
+.history-hamburger-icon {
+    margin-top: 1px !important;
+}
+
 .welcome-buttons {
     display: flex;
     flex-direction: center;
@@ -31,7 +139,7 @@ body {
     margin: 30px 0;
 }
 
-.welcome-button {
+/* .welcome-button {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -44,11 +152,33 @@ body {
     background-color: rgba(255, 255, 255, 0.9);
     position: relative;
     overflow: hidden;
+} */
+
+.welcome-button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    text-align: left;
+    padding: 20px;
+    width: 400px;
+    height: 217px;
+    color: white;
+    opacity: 0.9;
+    border-width: 0.1px;
+    border-style: solid;
+    border-color: darkgray;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+    background-color: #1D1C1D;
+    position: relative;
+    overflow: hidden;
 }
 
 .welcome-button:hover {
     transform: scale(1.05);
-    background-color: aliceblue;
+    /* background-color: aliceblue; */
 }
 
 .lars-logo {
@@ -85,14 +215,28 @@ body {
 } */
 
 .welcome-button i {
-    font-size: 39px;
-    margin-bottom: 10px;
-    font-style: italic;
+    font-size: 37px;
+    /* margin-bottom: 10px; */
+    font-style: normal;
+    border-radius: 30px;
+    border-style: solid;
+    border-width: thin;
+    align-self: flex-start; /* This aligns the icon to the left of the button */
+    margin-bottom: auto; /* Pushes the span (below) down */
+    padding: 10px;
 }
 
 .welcome-button span {
-    font-size: 16px;
-    font-style: italic;
+    font-size: 25px;
+    font-style: normal;
+    font-family: "Playfair Display", serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 25px;
+    color: white;
+    margin-top: auto;
+    margin-bottom: 51px;
 }
 
 @media (max-width: 768px) {
@@ -120,12 +264,14 @@ body {
     padding-top: 10px;
     border-radius: 10px;
     margin-top: 5px;
+    border: 1px solid darkgray;
+    border-left: none;
 }
 
 .nav-item {
     padding: 8px 8px 8px 18px;
     text-decoration: none;
-    font-size: 18px;
+    font-size: 20px;
     color: #818181;
     display: flex;
     justify-content: space-between;
@@ -191,7 +337,7 @@ body {
 
 .regenerate-menu {
     position: absolute;
-    top: -16px;
+    top: -13px;
     right: 0px;
     cursor: pointer;
     color: white;
@@ -312,6 +458,16 @@ body {
     left: 10px;
     right: 0;
     bottom: 0;
+    font-family: "Playfair Display", serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 18px;
+}
+
+.hamburger-new-chat-button {
+    padding: 3px 0px 10px 45px;
+    font-size: 21px;
 }
 
 .rename-chat-title-input {
@@ -330,6 +486,9 @@ body {
 }
 
 .chat-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     position: relative;
     flex: 1;
     overflow-y: auto; /* Add a scrollbar if content overflows */
@@ -338,11 +497,14 @@ body {
     font-size: 16px; /* Adjust as needed */
     color: #333; /* Dark gray color for better readability */
     margin-top: 30px;
+    margin-bottom: 25px;
+    border-style: none;
 }
 
 .input-area {
     /* Any specific styles you want for the input area */
-    padding: 1rem;
+    /* padding: 1rem; */
+    padding: 15px 127px;    /* 20px top and bottom, 127px left and right */
     background-color: #1e2021;
     display: flex;
     align-items: center;
@@ -363,6 +525,11 @@ body {
     padding-right: 100px; /* Make room for the attachment button */
 }
 
+.input-wrapper #user-input {
+    /* height: 41px !important; */
+    min-height: 41px !important;
+}
+
 #user-input {
     transition: height 0.1s ease-out;
     overflow-y: auto; /* Hidden will hide scrollbar during transitions */
@@ -372,11 +539,11 @@ body {
 #textAttachmentButton {
     position: absolute;
     right: 60px;
-    top: 3px;
+    top: 2px;
     background-color: transparent;
     border: none;
     color: #818181;
-    font-size: medium;
+    font-size: 20px;
 }
 
 #textAttachmentButton:hover {
@@ -392,7 +559,7 @@ body {
     position: absolute;
     right: 25px;
     top: 5px;
-    font-size: small;
+    font-size: 15px;
     border-radius: 69px;
 }
 
@@ -411,10 +578,16 @@ body {
     font-weight: 500; /* Medium thickness */
     margin-bottom: 0.5rem; /* Spacing between messages */
     background-color: #2F2F2F;
-    padding: 0.5rem;
-    border-radius: 1rem;
+    padding: 0.77rem;
+    border-radius: 9px;
     color: white;
     transition: margin-bottom 0.3s ease;
+    font-family: "Playfair Display", serif;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 18px;
+    border: thin solid darkgray;
     /* box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); */
 }
 
@@ -423,14 +596,25 @@ body {
 }
 
 .llm-response {
+    font-family: "Open Sans", sans-serif;
+    font-optical-sizing: auto;
+    font-style: normal;
     font-weight: 400; /* Was 500 */
-    margin-bottom: 0.5rem; /* Spacing between messages */
+    font-size: 16px;
     background-color: #1e2022;
     color: #e8e6e3; 
-    padding: 0.5rem;
-    border-radius: 1rem;
+    padding: 1rem;
+    border-radius: 9px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    border: 1px solid #3A3E41;
+    border: thin solid darkgray;
+    padding-bottom: 40px;
+}
+
+.user-message,
+.response-and-viewer-container {
+    width: 93%;
+    /* max-width: 1200px; */
+    /* margin: 0 auto; /* Additional centering insurance! */
 }
 
 .scroll-down-btn {
@@ -438,13 +622,14 @@ body {
     bottom: 101px;
     right: 20px;
     cursor: pointer;
-    font-size: 24px;
+    font-size: 25px;
     background-color: transparent;
 
     /* Additional styling */
     border: none;
     outline: none;
-    color: #6bb3ff;
+    /* color: #6bb3ff; */
+    color: #7057af;
 
     /* Optional padding */
     padding: 5px;
@@ -464,6 +649,13 @@ body {
 
 .upload-file-btn {
     margin-right: 7px; /* adjust as needed */
+    height: 41px !important;
+    width: 80px !important;
+}
+
+.upload-folder-btn {
+    height: 41px !important;
+    width: 80px !important;
 }
 
 @keyframes spin {
@@ -527,7 +719,13 @@ body {
 
 /*Example of a CSS-style `if` statement!*/
 .response-and-viewer-container:has(.pdf-viewer-container) {
-    min-height: 500px;
+    /* min-height: 500px; */
+    /* .llm-response {
+        padding-bottom: 1rem !important;
+    } */
+    .llm-wrapper {
+        padding-right: 10px !important;
+    }
 }
 
 .pdf-viewer {
@@ -540,47 +738,53 @@ body {
 
 .llm-wrapper {
     flex: 1;
-    padding: 10px;
+    padding: 10px 3px;
     box-sizing: border-box;
-    padding-left: 7px;
 }
 
-
 .star-rating {
-    position: absolute;
-    right: 0;
+    float: right;
+    clear: both;    /* The clear property helps to clear the float and prevent the star-rating from affecting the layout of other elements.*/
     display: flex;
-    justify-content: flex-end;
-    gap: 4px;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-end;
+    gap: 3px;
     padding: 5px 10px; /* Spacing inside the star-rating container */
     border: 1px solid #ccc; /* Border around the star-rating */
-    border-radius: 15px; /* Rounded border */
+    border-radius: 5px; /* Rounded border */
     background-color: #181A1B; /* White background */
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); /* Optional: adds a subtle shadow */
+    max-width: 133px;
+    max-height: 33px;
+    min-height: 33px;
 }
 
 .fa-star {
     cursor: pointer;
     color: #ccc; /* Color of non-rated stars. #ccc: light-gray */
-    font-size: 18px;
-    transition: color 0.3s; /* Smooth transition for filling stars */
+    font-size: 16px;
+    /* transition: color 0.3s; /* Smooth transition for filling stars */
 }
 
 .fas.fa-star {
-    color: #ffa500; /* Color of rated stars: Yellow */
+    /* color: #ffa500; /* Color of rated stars: Yellow */
+    color: white;
 }
 
 .header-container {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 10px 15px;
+    align-items: stretch;
+    /* padding: 30px 15px; */
     height: 5vh;
 }
 
 .header-right {
     display: flex;
     align-items: center;
+    padding-left: 27px;
+    margin-right: 15px;
 }
 
 .header-text {
@@ -727,6 +931,11 @@ body {
     overflow-y: auto;   /*Enables vertical scrolling if content exceeds max height*/
     max-height: calc(90vh - 155px); /*Subtracting the standard heights (check with browser dev tools) of the modal header (64px), footer (70px), and some padding (20px)*/
     margin-bottom: 20px;
+    font-family: "Open Sans", sans-serif;
+    font-optical-sizing: auto;  /* The optical size of the font means that the font will be scaled to the size of the container, which is good for readability*/
+    font-weight: 300;
+    font-style: normal;
+    font-variation-settings: "wdth" 100;  /* This is used to set the width of the font. 100 means the font will be 100% of the width of the container.*/
 }
 
 .modal-dialog.custom-modal-width {
@@ -786,30 +995,39 @@ body {
 /* Targeting all button elements within .modal-footer and .input-area */
 .modal-footer button,
 .input-area button,
-.input-area input[type="button"],
+.input-area input[type="button"]:not(.btn-primary-send),
 .input-area input[type="submit"] {
 background-color: #343A40; /* Example: Set a common background color */
 color: #ffffff; /* Example: Set a common text color */
 border: none; /* Example: Remove border */
-border-radius: 5px; /* Example: Set rounded corners */
+border-radius: 10px; /* Example: Set rounded corners */
 cursor: pointer; /* Change the cursor on hover */
 }
 
 /* Common hover effect for all buttons */
 .modal-footer button:hover,
 .input-area button:hover,
-.input-area input[type="button"]:hover,
+.input-area input[type="button"]:not(.btn-primary-send):hover,
 .input-area input[type="submit"]:hover {
 background-color: #282d33; /* Darker shade on hover */
 }
 
 .btn-primary {
-    background-color: darkslategray;
+    /* background-color: darkslategray; */
+    /* background-color: #343A40; */
+    background-color: #7057af !important;
     border-width: 0;
 }
 
-.btn-primary:hover {
-    background-color: darkslateblue;
+.btn-primary-send {
+    background-color: #7057af !important;
+    border-width: 0;
+    height: 41px !important;
+    width: 90px !important;
+}
+
+.btn-primary:hover, .btn-primary-send:hover {
+    background-color: darkslateblue !important;
 }
 
 .btn-outline-secondary {
@@ -825,7 +1043,8 @@ background-color: #282d33; /* Darker shade on hover */
 
 
 #saveChangesButton {
-    background-color: darkslategray;
+    /* background-color: darkslategray; */
+    background-color: #7057af;
     border-width: 0;
 }
 
@@ -907,7 +1126,8 @@ th, td {
 }
 
 tr:hover {
-    background-color: darkslategray;
+    /* background-color: darkslategray; */
+    background-color: #7057af;
 }
 
 .settings-requiring-restart-container, .hf-waitress-diffusers-configuration-div {
@@ -958,12 +1178,15 @@ a.list-group-item.list-group-item-action {
 }
 
 a.list-group-item.list-group-item-action:hover {
-    background-color: darkslategray
+    /* background-color: darkslategray */
+    background-color: #7057af;
 }
 
 a.list-group-item.list-group-item-action.active {
-    background-color: darkslategray;
-    border: 1px solid darkslategray;
+    /* background-color: darkslategray; */
+    background-color: #7057af;
+    /* border: 1px solid darkslategray; */
+    border: 1px solid #7057af;
     color: #D1CDC7;
 }
 
@@ -978,15 +1201,22 @@ a.list-group-item.list-group-item-action.active {
 
 @keyframes lightening {
     0%, 100% {
-        background-color: rgba(31, 38, 135, 0.3);   /*At the start and end of the animation, the background color is set to a light blue color with 30% opacity (0.3 alpha value)*/
+        /* background-color: rgba(31, 38, 135, 0.3);   /*At the start and end of the animation, the background color is set to a light blue color with 30% opacity (0.3 alpha value)*/
+        background-color: rgba(112, 87, 175, 0.3);
     }
     50% {
-        background-color: rgba(31, 38, 135, 0.7);   /*At the middle of the animation, the background color is set to a light blue color with 70% opacity (0.7 alpha value)*/
+        /* background-color: rgba(31, 38, 135, 0.7);   /*At the middle of the animation, the background color is set to a light blue color with 70% opacity (0.7 alpha value)*/
+        background-color: rgba(112, 87, 175, 0.7);
     }
 }
 
 /*Add left-to-right constant background lightening animation with color rgba(31, 38, 135, 0.7) to processingQnS*/
 #processingQnS {
+    font-family: "Playfair Display", serif;
+    font-optical-sizing: auto;
+    font-weight: 500;
+    font-style: normal;
+    font-size: 25px;
     color: #D1CDC7;
     animation: 
     slideIn 0.5s ease-out,
@@ -998,13 +1228,16 @@ a.list-group-item.list-group-item-action.active {
 }
 
 .loading-indicator-container {
+    width: 93%;
+    height: 50px;
     display: flex;
     align-items: center;
     padding: 15px 20px;
     margin: 10px 0;
     background-color: #1e2022;
-    border-radius: 1rem;
-    border: 1px solid #3A3E41;
+    border-radius: 9px;
+    border: thin solid darkgray;
+    opacity: 0.8;
 }
 
 .typing-indicator {
@@ -1017,7 +1250,7 @@ a.list-group-item.list-group-item-action.active {
     width: 8px;
     height: 8px;
     margin-right: 5px;
-    background-color: #6bb3ff;
+    background-color: #2F3D92;
     border-radius: 50%;
     opacity: 0.4;
     animation: typing-pulse 1.4s infinite;
@@ -1025,10 +1258,12 @@ a.list-group-item.list-group-item-action.active {
 
 .typing-indicator span:nth-child(2) {
     animation-delay: 0.2s;
+    background-color: #70559E;
 }
 
 .typing-indicator span:nth-child(3) {
     animation-delay: 0.4s;
+    background-color: #BD74AC;
 }
 
 @keyframes typing-pulse {
@@ -1125,7 +1360,7 @@ body {
     width: 50%;
     /* height: 750px; */
     padding: 10px;
-    padding-right: 7px;
+    padding-right: 3px;
     flex: 1;
     box-sizing: border-box;
     display: flex;  /* Make this a flex container */
@@ -1134,11 +1369,13 @@ body {
 
 .tab-buttons {
     overflow: hidden;
-    border: 1px solid #3A3E41; /*darkslategray;*/
-    background-color: transparent;
+    /* border: 1px solid #3A3E41; darkslategray; */
+    border: thin solid darkgray;
+    background-color: #1e2022;
     display: flex;
     overflow-x: auto;
     flex-shrink: 0;  /* Prevent the tab buttons from shrinking */
+    border-radius: 9px;
 }
 
 .tab-button {
@@ -1158,17 +1395,21 @@ body {
 }
 
 .tab-button.active {
-    background-color: white;
-    color: black;
+    background-color: #2F2F2F;
+    /* color: black; */
 }
 
 .tab-content {
     display: none;
-    padding: 6px 12px;
-    border: 1px solid #3A3E41; /*darkslategray;*/
-    border-top: none;
+    /* padding: 6px 12px; */
+    /* border: 1px solid #3A3E41; /*darkslategray;*/
+    /* border-top: none; */
+
+    border: thin solid darkgray;
     flex: 1;    /* Take up remaining space */
     overflow-y: auto;   /* Enable vertical scrolling if content exceeds height */
+    margin-top: 13px;
+    border-radius: 9px;
 }
 
 .citations-pdf-iframe {
@@ -1256,7 +1497,8 @@ body {
     width: 30%;
     margin-right: 5px;
     color: white;
-    background-color: darkslategray;
+    /* background-color: darkslategray; */
+    background-color: #7057af;
 }
 
 .hf-waitress-llm-custom-dropdown-search-input,
@@ -1286,7 +1528,8 @@ body {
 .graph-extractor-custom-dropdown-add-btn,
 .graph-summarizer-custom-dropdown-add-btn {
     color: white;
-    background-color: darkslategray;
+    /* background-color: darkslategray; */
+    background-color: #7057af;
 }
 
 .hf-waitress-llm-custom-dropdown-item,
@@ -1330,6 +1573,20 @@ body {
     display: flex;
     align-items: center;
     cursor: pointer;
+    padding-right: 30px;
+    margin-left: 15px;
+}
+
+body:has(.user-message) .header-container {
+    border-bottom: 1px solid darkgray;
+}
+
+body:has(.user-message) .nav-toggle {
+    border-right: 1px solid darkgray;
+}
+
+body:has(.user-message) .header-right {
+    border-left: 1px solid darkgray;
 }
 
 .app-title {
@@ -1399,4 +1656,17 @@ body {
 .download-label-for-vision-appended-file {
     font-size: 0.9em; /*em unit is relative to the font size of the element*/
     color: #b0b0b0;
+}
+
+/* Make the two columns in .response-and-viewer-container end exactly together */
+.response-and-viewer-container > .llm-wrapper,
+.response-and-viewer-container > .pdf-viewer-container {
+    /* Let flexbox stretch them the same height */
+    align-self: stretch;    /* Already the default for flex items, but declaring it makes sure nothing later overrides it. */
+
+    /* Kill any bottom spacing that makes one longer */
+    margin-bottom: 30px !important;
+    padding-bottom: 0 !important;
+    border-bottom-width: 0;     /* The border-bottom-width property is used to set the width of the bottom border of the element. */
+    box-sizing: border-box;     /* The box-sizing property of the element is the width and height of the element. */
 }
