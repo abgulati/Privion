@@ -7388,7 +7388,7 @@ def add_citations_and_pdf_browser_to_llm_response(llm_response: str, stream_sess
             frame_doc_path = f"/pdf/{doc_name_with_stream_id}#page={str(page_number)}"
             tab_name_string = f"stream{stream_session_id}tabName{str(count)}"            
 
-            citation_html = f'''<a href="javascript:void(0)" onclick="goToPageAndSwitchTab(\'{pdf_iframe_id}\', \'{frame_doc_path}\', \'tab{tab_name_string}\', \'{stream_session_id}\')">Reference: {doc_name}</a>'''
+            citation_html = f'''<a href="javascript:void(0)" class="citation-link" onclick="goToPageAndSwitchTab(\'{pdf_iframe_id}\', \'{frame_doc_path}\', \'tab{tab_name_string}\', \'{stream_session_id}\')">Reference: {doc_name}</a>'''
             llm_response_without_embedded_links = llm_response_without_embedded_links.replace(url, citation_html.strip())   # Swap the current URL with the citation HTML
             
             if not tab_previously_created:  # 2. Create tab button and content for the cited document, if not already created
