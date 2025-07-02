@@ -610,6 +610,16 @@ body {
     padding-bottom: 40px;
 }
 
+.citation-link {
+    border: none;
+    color: white;
+    border-radius: 21px;
+    padding: 1px 10px;
+    font-style: normal;
+    text-decoration: none;
+    background-color: rgb(75 73 73);
+}
+
 .user-message,
 .response-and-viewer-container {
     width: 93%;
@@ -1357,14 +1367,33 @@ body {
 }
 
 .pdf-viewer-container {
+    /* 
+    STICKY NOTES:
+
+    1. `position: sticky` tells the element to scroll normally until it hits a certain point in the viewport, then stick to that point. 
+        The top, right, bottom, and left properties are used to specify that sticking point!
+
+    2. `position: -webkit-sticky` is a vendor-specific version of `position: sticky` for Safari and older versions of Chrome.
+
+    3. `top: 20px` tells the browser: "As the user scrolls down, let .pdf-viewer-container move with the page. Once its top edge is 20px away from the top of the viewport, lock it in that position." 
+        Without this, position:sticky will have no effect as the browser does not know where to stick to!
+
+    4. `max-height: 80vh` is the most important part for making `position:sticky` work, because the sticky can only stick if it's smaller than the viewport!  
+        `align-self: stretch` (at the end of this file) forced the pdf container to the same height as the llm-wrapper, which may be very tall for long llm-responses. 
+        By removing that and defining this, we ensure the sticky behavior!
+    */
+    
     width: 50%;
-    /* height: 750px; */
+    min-height: 500px;
     padding: 10px;
     padding-right: 3px;
     flex: 1;
     box-sizing: border-box;
     display: flex;  /* Make this a flex container */
     flex-direction: column;  /* Stack children vertically */
+    position: sticky;   
+    top: 20px; 
+    max-height: 80vh;
 }
 
 .tab-buttons {
@@ -1662,7 +1691,7 @@ body:has(.user-message) .header-right {
 .response-and-viewer-container > .llm-wrapper,
 .response-and-viewer-container > .pdf-viewer-container {
     /* Let flexbox stretch them the same height */
-    align-self: stretch;    /* Already the default for flex items, but declaring it makes sure nothing later overrides it. */
+    /* align-self: stretch;    /* Already the default for flex items, but declaring it makes sure nothing later overrides it. */
 
     /* Kill any bottom spacing that makes one longer */
     margin-bottom: 30px !important;
