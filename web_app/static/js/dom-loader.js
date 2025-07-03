@@ -699,7 +699,7 @@ function initializeLLMRadioButtons(use_local_llm, model_choice) {
 function toggleLocalLlmSelection() {    // Show or hide local-LLM selection:
     const selection = document.querySelector('input[name="use_local_or_api_llm"]:checked').value;
     document.getElementById('localLlmDiv').style.display = selection === 'local' ? 'block' : 'none';
-    document.getElementById('apiLlmDiv').style.display = selection === 'api' ? 'block' : 'none';
+    //document.getElementById('apiLlmDiv').style.display = selection === 'api' ? 'block' : 'none';
 
     if (selection === 'local') {
         document.getElementById('azure_openai_api_form').style.display = 'none'; //Hide API-Details-Form if local selected

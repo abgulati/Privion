@@ -596,7 +596,7 @@ function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapper
 
     console.log("get_references data: ", data);
 
-    if (do_rag) {
+    if (do_rag && data.response != "" && data.response != null) {
         // document.getElementById(responseContentID).innerHTML += `
         // </br> 
         // ${data.response}
@@ -614,7 +614,7 @@ function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapper
         <i class="far fa-star" data-rate="5"></i>
     </div>
     `
-    if (do_rag) {
+    if (do_rag && data.pdf_frame != "" && data.pdf_frame != null) {
         document.getElementById(masterWrapperID).innerHTML += data.pdf_frame;
         // Open the first tab by default
         var defaultTabs = document.getElementsByClassName("defaultTabs");
