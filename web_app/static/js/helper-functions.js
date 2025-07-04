@@ -685,11 +685,32 @@ function loadChatHistoryMenu() {
             });
 
         } else {
-            throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+            throw new Error('Internal Server Error when loading the chat history menu: Check server-log and server command-line for more details.');
         }
     })
     .catch(error => {
         errorHandler("fetching the history-menu list", "/load_chat_history_list", String(error.message))
+    });
+}
+
+
+function startFalkorDB() {
+    fetch("/start_falkordb")
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error)});
+        }
+        return response.json()
+    })
+    .then(data => {
+        if (data.success) {
+            console.log("FalkorDB started successfully");
+        } else {
+            throw new Error('Internal Server Error when starting FalkorDB: Check server-log and server command-line for more details.');
+        }
+    })
+    .catch(error => {
+        errorHandler("starting FalkorDB", "/start_falkordb", String(error.message))
     });
 }
 

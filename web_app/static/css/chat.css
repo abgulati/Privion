@@ -1062,13 +1062,14 @@ background-color: #282d33; /* Darker shade on hover */
     background-color: darkslateblue;
 }
 
-.llm-adv-set-toggle, .embed-adv-set-toggle {
+.llm-adv-set-toggle, .embed-adv-set-toggle, .start-falkordb-button {
     text-decoration: none;
     color: white;
     font-weight: 500;
+    width: 195px;
 }
 
-.llm-adv-set-toggle:hover, .embed-adv-set-toggle:hover {
+.llm-adv-set-toggle:hover, .embed-adv-set-toggle:hover, .start-falkordb-button:hover {
     color: black;
 }
 

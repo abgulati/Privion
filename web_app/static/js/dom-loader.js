@@ -1725,6 +1725,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     loadCoreLarsConfig()
         .then(values => {
+            startFalkorDB();
             initializeLLMTabComponents(values);
             initializeEmbeddingModelTabComponents(values);
             initializeSystemPromptTabComponents(values);

@@ -2969,7 +2969,7 @@ def start_falkordb():
     print("\nStarting FalkorDB Docker container...\n")
     try:
         bring_graph_db_online()
-        return jsonify({"message": "FalkorDB Docker container started successfully"}), 200
+        return jsonify({"message": "FalkorDB Docker container started successfully", "success": True}), 200
     except Exception as e:
         return handle_api_error("Could not start FalkorDB Docker container, encountered error: ", e)
 
