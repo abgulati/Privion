@@ -185,7 +185,7 @@ body {
     width: 96px;
     height: auto;
     border-radius: 10px;
-    margin-bottom: 10px;
+    margin-bottom: 9px;
     box-shadow: 0 0 20px rgba(0, 0, 20, 0.7) !important;
     transition: box-shadow 0.3s ease;
 }
@@ -269,7 +269,7 @@ body {
 }
 
 .nav-item {
-    padding: 8px 8px 8px 18px;
+    padding: 8px 8px 8px 30px;
     text-decoration: none;
     font-size: 20px;
     color: #818181;
@@ -389,7 +389,7 @@ body {
 }
 
 .sidenav a {
-    padding: 8px 8px 8px 32px;
+    padding: 8px 8px 8px 25px;
     text-decoration: none;
     font-size: 25px;
     color: #818181;
@@ -468,6 +468,18 @@ body {
 .hamburger-new-chat-button {
     padding: 3px 0px 10px 45px;
     font-size: 21px;
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Space between icon, logo and text */
+}
+
+.new-chat-lgl-logo {
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    object-fit: cover;  /* Ensures the image maintains its aspect ratio */
+    margin-bottom: 5px;
+    margin-right: 5px;
 }
 
 .rename-chat-title-input {
@@ -700,26 +712,49 @@ body {
 }
 
 .waiting {
-    color: #f39c12;
+    /* color: #f39c12; */
+    color: #ffee68;
 }
 
 .success {
-    color: #2ecc71;
+    /* color: #2ecc71; */
+    color: #7dfd70;
 }
 
 .failure {
-    color: #e74c3c;
+    /* color: #e74c3c; */
+    color: #ff6e5f;
 }
 
-#overlay {
-    /* ... your existing styles ... */
-    backdrop-filter: blur(10px);
-    background-color: rgb(255, 255, 255, 0.7); /* This will add a white translucent background, adjust opacity as needed */
+.full_screen_status_overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgb(0,0,0,1);
+    z-index: 1000;
+}
+
+.full_screen_status_overlay_content {
+    /* font-family: "Playfair Display", serif; */
+    font-family: "Open Sans", sans-serif;
+    font-optical-sizing: auto;
+    font-style: normal;
+    font-size: 30px;
+    font-weight: 500;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
 }
 
 .llm-wrapper {
     position: relative;
-    margin-bottom: 2rem;
+    flex: 1;
+    padding: 10px 3px;
+    box-sizing: border-box;
 }
 
 .response-and-viewer-container {
@@ -736,6 +771,10 @@ body {
     .llm-wrapper {
         padding-right: 10px !important;
     }
+    .llm-response {
+        max-height: 73vh;
+        overflow-y: auto;
+    }
 }
 
 .pdf-viewer {
@@ -743,12 +782,6 @@ body {
     padding: 10px;
     padding-top: 0px;
     transform: translateY(-15px);
-    box-sizing: border-box;
-}
-
-.llm-wrapper {
-    flex: 1;
-    padding: 10px 3px;
     box-sizing: border-box;
 }
 
@@ -859,14 +892,18 @@ body {
 }
 
 .stream-info-box {
-    font-style: italic;
+    font-family: "Open Sans", sans-serif;
+    font-optical-sizing: auto;
+    font-style: normal;
+    font-size: 30px;
+    font-weight: 400;
 }
 
 .info-stream-container .stream-info-box {
     position: absolute;
     top: 100%;
     right: 0;
-    width: 500px;
+    width: 399px;
     max-height: 500px;
     background-color: rgba(23, 26, 27, 0.7); /*Alpha adjusted for transparency*/
     color: #D1CDC7;
@@ -1312,7 +1349,7 @@ a.list-group-item.list-group-item-action.active {
 /*SCROLLBAR STYLING - For Firefox:*/
 /* The syntax is scrollbar-color: <thumb color> <track color>; */
 body {
-    scrollbar-color: #464A4D #212324; 
+    scrollbar-color: #464A4D #212324;
     /*scrollbar-width: thin; /* Can be "auto", "thin", or "none" */
 }
 
@@ -1393,8 +1430,8 @@ body {
     display: flex;  /* Make this a flex container */
     flex-direction: column;  /* Stack children vertically */
     position: sticky;   
-    top: 20px; 
-    max-height: 80vh;
+    top: 1px; 
+    max-height: 85vh;
 }
 
 .tab-buttons {
