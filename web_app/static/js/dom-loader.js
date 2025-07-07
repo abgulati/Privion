@@ -1627,12 +1627,12 @@ function updateUIWithChatInfo(chat_id, llm_model) {
     document.getElementById('model_header').style.display = 'block';
     
     document.getElementById('ModelAndDBLoading').style.display = 'none';
-    document.getElementById('ReadyToChat').style.display = 'block';
+    // document.getElementById('ReadyToChat').style.display = 'block';
     
-    var timeoutDelayInMilliseconds = 1500; //1.5 seconds
-    setTimeout(function() {
-        document.getElementById('ReadyToChat').style.display = 'none';
-    }, timeoutDelayInMilliseconds);
+    // var timeoutDelayInMilliseconds = 1500; //1.5 seconds
+    // setTimeout(function() {
+    //     document.getElementById('ReadyToChat').style.display = 'none';
+    // }, timeoutDelayInMilliseconds);
 }
 
 
