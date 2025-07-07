@@ -848,7 +848,7 @@ body {
     margin-right: 10px;
     top: 0;
     width: max-content;
-    max-width: 345px;
+    max-width: 375px;
     background-color: rgba(23, 26, 27, 0.7); /*Alpha adjusted for transparency*/
     color: #D1CDC7;
     box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37); /*Match the glassmorphism box shadow*/
