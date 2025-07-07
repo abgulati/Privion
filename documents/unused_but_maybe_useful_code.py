@@ -5146,3 +5146,12 @@ def remove_embedded_links_from_llm_response(llm_response: str) -> str:
         return llm_response_without_embedded_links
     except Exception as e:
         handle_local_error("Could not remove embedded links from llm_response, encountered error: ", e)
+
+
+
+<div class="loader2" id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,1); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
+        <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo">
+        Processing New Document...
+    </div>
+</div>
