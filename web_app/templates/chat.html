@@ -84,7 +84,10 @@
             <a href="javascript:void(0)" class="sortbtn" onclick="sortNavItems()">&#8597;</a>
             <input type="text" class="chat-history-search-bar" id="chat-history-search-bar" oninput="filterChatHistoryItems(this.value)" placeholder="Search by Chat Title...">
             <div class="sidenav-content" id="sidenav-content">
-                <a href="#" id="dynamicChatLink" class="fas fa-plus hamburger-new-chat-button"> New Chat</a>
+                <a href="#" id="dynamicChatLink" class="fas fa-plus hamburger-new-chat-button">
+                    <img src="{{ url_for('static', filename='images/level_ground_labs_logo.jpeg') }}" class="new-chat-lgl-logo" alt="Level Ground Labs Logo">
+                    New Chat
+                </a>
             </div>
         </div>
 
@@ -157,16 +160,11 @@
             
         </div>
 
-        <div class="loader2" id="overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,1); z-index: 1000;">
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
-                <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo">
-                Processing New Document...
-            </div>
-        </div>
+        <!-- ### Overlays go here ### -->
 
-        <div id="UploadingLlmOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,1); z-index: 1000;">
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
-                <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo">
+        <div class="full_screen_status_overlay" id="UploadingLlmOverlay" style="display: none;">
+            <div class="full_screen_status_overlay_content">
+                <img src="{{ url_for('static', filename='images/level_ground_labs_logo.jpeg') }}" class="lars-logo" alt="Level Ground Labs Logo">
                 Uploading LLM to 'models' directory...
                 <div id="uploadProgress" style="display: none;">
                     <p>Upload Progress: <span id="progressPercentage">0%</span></p>
@@ -174,23 +172,23 @@
             </div>
         </div>
 
-        <div id="ModelAndDBLoading" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,1); z-index: 1000;">
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
-                <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo">
+        <div class="full_screen_status_overlay" id="ModelAndDBLoading" style="display: none;">
+            <div class="full_screen_status_overlay_content">
+                <img src="{{ url_for('static', filename='images/level_ground_labs_logo.jpeg') }}" class="lars-logo" alt="Level Ground Labs Logo">
                 Loading Core Backend...
             </div>
         </div>
 
-        <div id="ReadyToChat" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,1); z-index: 1000;">
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500;">
-                <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo">
+        <div class="full_screen_status_overlay" id="ReadyToChat" style="display: none;">
+            <div class="full_screen_status_overlay_content">
+                <img src="{{ url_for('static', filename='images/level_ground_labs_logo.jpeg') }}" class="lars-logo" alt="Level Ground Labs Logo">
                 All loaded up & ready to chat!
             </div>
         </div>
 
-        <div id="SavingHfWaitressSettings" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgb(0,0,0,1); z-index: 1000;">
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: 500; width: 80%; max-width: 1920px; text-align: center; max-height: 80vh; overflow-y: auto;">
-                <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo">
+        <div class="full_screen_status_overlay" id="SavingHfWaitressSettings" style="display: none;">
+            <div class="full_screen_status_overlay_content">
+                <img src="{{ url_for('static', filename='images/level_ground_labs_logo.jpeg') }}" class="lars-logo" alt="Level Ground Labs Logo">
                 Saving HF-Waitress Server Settings...
                 <div class="hf-model-loader-stream" id="hf-model-loader-stream">
                      <!-- ### Status updates appended here ### -->
