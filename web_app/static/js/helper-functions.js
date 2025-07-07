@@ -377,7 +377,7 @@ function hideLoader() {
 }
 
 function openNav() {
-    document.getElementById("sidenav").style.width = "275px";
+    document.getElementById("sidenav").style.width = "290px";
     document.getElementById("sidenav").style.left = "0";
 }
 
