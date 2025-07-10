@@ -2833,6 +2833,10 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
         
         for node in nodes_and_relationships['nodes']:
             try:
+                if not isinstance(node, dict):
+                    print(f"Skipping summary update for node in document {source_doc_name} - Invalid Type: Expected a dict, got {type(node).__name__}")
+                    continue
+                
                 name = str(node.get('name', ''))
                 node_type = str(node.get('type', ''))
                 summary_list = list(node.get('summary', []))    # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
@@ -2864,6 +2868,10 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
         
         for relationship in nodes_and_relationships['relationships']:
             try:
+                if not isinstance(relationship, dict):
+                    print(f"Skipping summary update for relationship in document {source_doc_name} - Invalid Type: Expected a dict, got {type(relationship).__name__}")
+                    continue
+                
                 source = str(relationship.get('source', ''))
                 target = str(relationship.get('target', ''))
                 relationship_type = str(relationship.get('relationship', ''))
