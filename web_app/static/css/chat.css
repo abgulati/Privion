@@ -182,7 +182,7 @@ body {
 }
 
 .lars-logo {
-    width: 96px;
+    width: 80px;
     height: auto;
     border-radius: 10px;
     margin-bottom: 9px;
@@ -741,7 +741,7 @@ body {
     font-family: "Open Sans", sans-serif;
     font-optical-sizing: auto;
     font-style: normal;
-    font-size: 30px;
+    font-size: 25px;
     font-weight: 500;
     position: absolute;
     top: 50%;
@@ -903,7 +903,7 @@ body {
     position: absolute;
     top: 100%;
     right: 0;
-    width: 399px;
+    width: 500px;
     max-height: 500px;
     background-color: rgba(23, 26, 27, 0.7); /*Alpha adjusted for transparency*/
     color: #D1CDC7;
