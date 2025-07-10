@@ -679,7 +679,16 @@ app.config['UPLOAD_FOLDER'] = upload_folder
 
 ############################------------File & Folder Management-------------###############################
 
-def load_json_file(file_path):
+def load_json_file(file_path: str) -> dict | None:
+    '''
+    - Loads a JSON file from the given file path.
+    - Returns:
+        - dict: The JSON data from the file, or None if the file does not exist or cannot be loaded.
+    - Returning None because:
+        - isinstance({}, dict) will return True so better to return None!
+        - It's more accurate to return None rather than an empty dict, as the former indicates that the file does not exist or cannot be loaded, 
+        while the latter might be misconstrued as indicating that the file exists but is empty.
+    '''
     if os.path.exists(file_path):
         try:
             with open(file_path, 'r') as file:
@@ -687,10 +696,15 @@ def load_json_file(file_path):
         except Exception as e:
             handle_local_error("Could not load JSON file, encountered error: ", e)
     else:
-        return None   # NOTE: isinstance({}, dict) will return True so better to return None!
+        return None
 
 
-def update_and_save_json_file(data, file_path):
+def update_and_save_json_file(data: dict, file_path: str) -> bool:
+    '''
+    - Updates a JSON file with the given data.
+    - Returns:
+        - bool: True if the file was updated and saved successfully, False otherwise.
+    '''
     current_cache = {}
     if os.path.exists(file_path):
         try:
@@ -709,7 +723,12 @@ def update_and_save_json_file(data, file_path):
     return True
 
 
-def overwrite_json_file(data, file_path):
+def overwrite_json_file(data: dict, file_path: str) -> bool:
+    '''
+    - Overwrites a JSON file with the given data.
+    - Returns:
+        - bool: True if the file was overwritten and saved successfully, False otherwise.
+    '''
     try:
         with open(file_path, 'w') as file:
             json.dump(data, file, indent=4)
@@ -2539,7 +2558,7 @@ def completions_stream():
 
 def set_global_exl2_dynamic_generator():
     try:
-        print("\n\nSetting global ExLlamaV2DynamicGenerator\n\n")
+        print("\nSetting global ExLlamaV2DynamicGenerator\n")
         exl2_dynamic_generator = ExLlamaV2DynamicGenerator(model = EXL2_MODEL, cache = EXL2_CACHE, tokenizer = EXL2_TOKENIZER)
         print("\nGenerator defined successfully\n")
         return exl2_dynamic_generator
@@ -2550,22 +2569,25 @@ def set_global_exl2_dynamic_generator():
 def get_exl2_gen_settings(request):
     try:
         config_data = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'knowledge_graph_cache_dir'])
-    except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting exl2-grapher, encountered error: ", e)
+        requested_max_new_tokens = config_data['max_new_tokens']    # safe value for return
+    except Exception as e:  # Not using `handle_local_error` as the necessary params may be in the request headers so why error out here?
+        handle_error_no_return("Could not read values from hf_config.json when attempting exl2-grapher, relying on request headers instead. Encountered error: ", e)
+        config_data = {}
 
     try:
         print("\nExLlamaV2Sampler.Settings In-Progress...\n")
         gen_settings = ExLlamaV2Sampler.Settings(
-            temperature = float(request.headers.get('X-Temperature', str(config_data['temperature']))),
-            top_k = int(request.headers.get('X-Top-K', str(config_data['top_k']))),
-            top_p = float(request.headers.get('X-Top-P', str(config_data['top_p'])))
+            temperature = float(request.headers.get('X-Temperature', str(config_data.get('temperature', '')))),
+            top_k = int(request.headers.get('X-Top-K', str(config_data.get('top_k', '')))),
+            top_p = float(request.headers.get('X-Top-P', str(config_data.get('top_p', ''))))
         )
-        requested_max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(config_data['max_new_tokens'])))
+        requested_max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens', ''))))
         print("\nExLlamaV2Sampler.Settings Defined Successfully\n")
     except Exception as e:
         handle_error_no_return("Could not set generation-arguments for exl2-grapher, proceeding without them. Encountered error: ", e)
+        gen_settings = None
 
-    return gen_settings, requested_max_new_tokens, config_data['knowledge_graph_cache_dir']
+    return gen_settings, requested_max_new_tokens, config_data.get('knowledge_graph_cache_dir', '/')
 
 
 @app.route('/exl2_stream', methods=['POST'])
@@ -2665,29 +2687,38 @@ def exl2_stream():
 ### Exl2 Graph Helper Functions ###
 
 def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
-    exl2_dynamic_generator = set_global_exl2_dynamic_generator()
-    job = ExLlamaV2DynamicJob(
-        input_ids= EXL2_TOKENIZER.encode(payload, add_bos=True),
-        max_new_tokens = max_new_tokens,
-        stop_conditions = [EXL2_TOKENIZER.eos_token_id],
-        gen_settings = gen_settings
-    )
-    exl2_dynamic_generator.enqueue(job)
+    try:    # Step 1: Create Exl2 Generator & Job
+        exl2_dynamic_generator = set_global_exl2_dynamic_generator()
+        job = ExLlamaV2DynamicJob(
+            input_ids= EXL2_TOKENIZER.encode(payload, add_bos=True),
+            max_new_tokens = max_new_tokens,
+            stop_conditions = [EXL2_TOKENIZER.eos_token_id],
+            gen_settings = gen_settings
+        )
+        exl2_dynamic_generator.enqueue(job)
+    except AssertionError as e:
+        handle_local_error(f"Could not create ExLlamaV2DynamicJob object for payload {payload} - likely due to insufficient cache. Ensure the `max_seq_len` is set to a value that allows for the entire payload to be processed. Encountered error: ", e)
+    except Exception as e:
+        handle_local_error(f"Could not create ExLlamaV2DynamicJob object for payload {payload}, encountered error: ", e)
 
-    full_response = ""
-    while exl2_dynamic_generator.num_remaining_jobs():
-        current_token = exl2_dynamic_generator.iterate()
-        
-        if len(current_token) == 1 and 'text' in current_token[0]:
-            full_response += current_token[0]['text']
-        
-        elif len(current_token) > 1:
-            for job in current_token:
-                if 'stage' in job and job['stage'] == 'streaming':
-                    if 'text' in job: 
-                        full_response += job['text']
+    try:    # Step 2: Iterate Over Jobs & Generate Response(s)
+        full_response = ""
+        while exl2_dynamic_generator.num_remaining_jobs():
+            current_token = exl2_dynamic_generator.iterate()
+            
+            if len(current_token) == 1 and 'text' in current_token[0]:
+                full_response += current_token[0]['text']
+            
+            elif len(current_token) > 1:
+                for job in current_token:
+                    if 'stage' in job and job['stage'] == 'streaming':
+                        if 'text' in job: 
+                            full_response += job['text']
 
-    return full_response
+        exl2_dynamic_generator = None    # release reference to the generator to help with garbage collection
+        return full_response
+    except Exception as e:
+        handle_local_error(f"Could not generate response for payload {payload}, encountered error: ", e)
 
 
 def get_request_payload_for_graph_entity_extraction(chunk_text: str):
@@ -2696,8 +2727,11 @@ def get_request_payload_for_graph_entity_extraction(chunk_text: str):
     return full_payload
 
 
-def core_dict_validation_logic_for_cache_reuse(extracted_dict: dict, validate_summary = False):
+def core_dict_validation_logic_for_cache_reuse(extracted_dict: dict, validate_summary: bool = False):
     try:
+        if not isinstance(extracted_dict, dict):
+            raise ValueError(f"Invalid dictionary validation request - expected a dict, got {type(extracted_dict).__name__}")
+
         # Check for required keys
         if 'nodes' not in extracted_dict or 'relationships' not in extracted_dict:
             raise ValueError("Missing required keys in extraction response: 'nodes' and/or 'relationships'")
@@ -2774,7 +2808,7 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
     It returns an updated dictionary comprising all nodes and relationships with their comprehensive summaries.
     '''
     try:
-
+        # STEP 1: Generate a comprehensive summary for the chunk covering all nodes and relationships
         try:
             comprehensive_summary_request_prompt = prompt_formatting_module.get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
             formatted_prompt = prompt_formatting_module.manually_format_prompt_with_prompt_template(
@@ -2787,10 +2821,11 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
             )
             full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
             full_response = prompt_formatting_module.trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n{Page Number(s): " + str(page_number_list) + "}\n\n"
-            print(f"\n\nfull_response:\n\n{full_response}\n\n")
+            # print(f"\n\nfull_response:\n\n{full_response}\n\n")
         except Exception as e:
-            handle_local_error(f"Could not get comprehensive summary from LLM, encountered error: ", e)
+            handle_local_error(f"Could not prepare comprehensive-summary query for document {source_doc_name}, encountered error: ", e)
 
+        # STEP 2: Update each node and relationship with the comprehensive summary. Create a new summary list or append to an existing summary list.
         summarized_nodes_and_relationships = {}
 
         processed_nodes = {}
@@ -2798,9 +2833,13 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
         
         for node in nodes_and_relationships['nodes']:
             try:
-                name = str(node['name'])
-                node_type = str(node['type'])
+                name = str(node.get('name', ''))
+                node_type = str(node.get('type', ''))
                 summary_list = list(node.get('summary', []))    # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
+
+                if name == '' or node_type == '':
+                    print(f"Skipping summary update for node in document {source_doc_name} because it's missing required fields: name={name}, type={node_type}")
+                    continue
                 
                 node_key = (name, node_type)
                 if node_key in processed_nodes:
@@ -2816,7 +2855,7 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
                 })
                 processed_nodes[node_key] = True
             except Exception as e:
-                handle_error_no_return(f"Could not update node {name} of type {node_type} with comprehensive summary, encountered error: ", e)
+                handle_error_no_return(f"Could not update node {name} of type {node_type} with comprehensive summary for document {source_doc_name}, encountered error: ", e)
 
         summarized_nodes_and_relationships['nodes'] = summarized_nodes
         
@@ -2825,10 +2864,14 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
         
         for relationship in nodes_and_relationships['relationships']:
             try:
-                source = str(relationship['source'])
-                target = str(relationship['target'])
-                relationship_type = str(relationship['relationship'])
+                source = str(relationship.get('source', ''))
+                target = str(relationship.get('target', ''))
+                relationship_type = str(relationship.get('relationship', ''))
                 summary_list = list(relationship.get('summary', []))
+
+                if source == '' or target == '' or relationship_type == '':
+                    print(f"Skipping summary update for relationship in document {source_doc_name} because it's missing required fields: source={source}, target={target}, relationship={relationship_type}")
+                    continue
 
                 relationship_key = (source, target, relationship_type)
                 if relationship_key in processed_relationships:
@@ -2845,14 +2888,14 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
                 })
                 processed_relationships[relationship_key] = True
             except Exception as e:
-                handle_error_no_return(f"Could not update relationship {source} -> {target} ({relationship_type}) with comprehensive summary, encountered error: ", e)
+                handle_error_no_return(f"Could not update relationship {source} -> {target} ({relationship_type}) with comprehensive summary for document {source_doc_name}, encountered error: ", e)
 
         summarized_nodes_and_relationships['relationships'] = summarized_relationships
 
         return summarized_nodes_and_relationships
 
     except Exception as e:
-        handle_local_error(f"Could not generate comprehensive summary, encountered error: ", e)
+        handle_local_error(f"Could not generate comprehensive summary for document {source_doc_name}, encountered error: ", e)
     
 ### End of Helper Functions ###
 
@@ -2901,26 +2944,29 @@ def exl2_grapher():
 
             cache_data_map = {}
             for chunk_number, chunk_data in chunk_entities.items():
-                print(f"\nExtracting entities and relationships for chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
+
+                source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
+                extraction_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_extraction_cache.json")
+                
+                print(f"\n\n\nExtracting entities and relationships from document {source_doc_name} - Processing chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
 
                 if not rag_response_mode:   # When responding to a query, we don't want to use the cache which is meant only for the file-processing step!
                     print("\nNon-response mode\n")
-
-                    source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
-                    extraction_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_extraction_cache.json")
                     
                     if source_doc_name not in cache_data_map:
+                        cached_data = None
                         try:
                             cached_data = load_json_file(extraction_cache_file_path)
-                            cache_data_map[source_doc_name] = {
-                                'data': cached_data if isinstance(cached_data, dict) else {},
-                                'file_path': extraction_cache_file_path
-                            }
                         except Exception as e:
-                            handle_error_no_return(f"Could not load nodes and relationships from cache file {extraction_cache_file_path}, proceeding to extract afresh. Encountered error: ", e)
+                            handle_error_no_return(f"Could not load extraction-cache file at path {extraction_cache_file_path} for document {source_doc_name}, proceeding to extract afresh. Encountered error: ", e)
+                        
+                        cache_data_map[source_doc_name] = {
+                            'data': cached_data if isinstance(cached_data, dict) else {},
+                            'file_path': extraction_cache_file_path
+                        }   # Because the next step expects `source_doc_name` to be a key in the `cache_data_map` dict!
                     
                     if reuse_graph_extraction_cache:
-                        print(f"\nChecking for existing cache of previously extracted nodes and relationships for chunk {chunk_number}...\n")
+                        print(f"\nChecking for existing cache of previously extracted nodes and relationships for chunk {chunk_number} of document {source_doc_name}...\n")
 
                         cache_entry = cache_data_map.get(source_doc_name)
                         cached_chunk_data = cache_entry.get('data', {}).get(chunk_number, {})
@@ -2930,12 +2976,13 @@ def exl2_grapher():
                             if cached_entry_validation_result is not None:
                                 chunk_entities[chunk_number]['entities_and_relationships'] = cached_chunk_data['entities_and_relationships']    # NOTE: Only the 'entities_and_relationships' key is updated in the chunk_entities dict received in the POST request!
                                 output_queue.put(chunk_entities[chunk_number])
-                                print(f"\nFound existing cache of previously extracted nodes and relationships for chunk {chunk_number}, returning cached data...\n")
+                                print(f"\nFound existing cache of previously extracted nodes and relationships for chunk {chunk_number} of document {source_doc_name}, returning cached data...\n")
                                 continue
                             else:
-                                print(f"\nCached data for chunk {chunk_number} failed validation, proceeding to extract afresh...\n")
+                                print(f"\nCached data for chunk {chunk_number} of document {source_doc_name} failed validation, proceeding to extract afresh...\n")
                     
                 try:
+                    print(f"\nAttempting to extract entities and relationships from chunk {chunk_number} of document {source_doc_name}...\n")
                     full_payload = get_request_payload_for_graph_entity_extraction(chunk_data['chunk_text'])
                     extraction_response_first_attempt = create_and_execute_exl2_job(payload=full_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
                     response_validation_result = validate_entity_extraction_response(extraction_response_first_attempt)
@@ -2943,7 +2990,7 @@ def exl2_grapher():
                     if response_validation_result['is_valid']:
                         full_response = response_validation_result['validated_response']
                     else:
-                        print("Chunk is too large, attempting to split and retry entity extraction...")
+                        print(f"Extraction response failed validation - Chunk is likely too large. Attempting to split and retry entity extraction for chunk {chunk_number} of document {source_doc_name}...")
 
                         '''
                         Split the chunk into two halves and retry entity extraction for each half.
@@ -2959,21 +3006,27 @@ def exl2_grapher():
                         def retry_entity_extraction(chunk_text, max_depth=5, current_depth=0):
                             # Prevent infinite recursion
                             if current_depth >= max_depth:
-                                print("Max depth reached, returning empty response")
+                                print(f"Max depth reached - could not extract all entities and relationships for chunk {chunk_number} of document {source_doc_name}. Returning empty response...")
                                 return {'nodes': [], 'relationships': []}
                             
                             # Prevent splitting text that's too small to be meaningful
                             if len(chunk_text.strip()) < 100:
-                                print("Chunk text too small, returning empty response")
+                                print(f"Chunk text too small - could not extract all entities and relationships for chunk {chunk_number} of document {source_doc_name}. Returning empty response...")
                                 return {'nodes': [], 'relationships': []}
                             
-                            payload = get_request_payload_for_graph_entity_extraction(chunk_text)
-                            response = create_and_execute_exl2_job(payload=payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-                            response_validation_result = validate_entity_extraction_response(response)
+                            try:
+                                payload = get_request_payload_for_graph_entity_extraction(chunk_text)
+                                response = create_and_execute_exl2_job(payload=payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+                                response_validation_result = validate_entity_extraction_response(response)
+                            except Exception as e:
+                                handle_error_no_return(f"Could not extract entities and relationships for sub-chunk of chunk {chunk_number} from document {source_doc_name}. Current recursive depth: {current_depth} of {max_depth}. Encountered error: ", e)
+                                return {'nodes': [], 'relationships': []}
                             
                             if response_validation_result['is_valid']:
+                                print(f"Recursive Entity Extraction Successful: Sub-chunk of chunk {chunk_number} from document {source_doc_name} successfully validated!")
                                 return response_validation_result['validated_response']
                             else:
+                                print(f"Sub-chunk still too large - continuing recursive extraction - attempt {current_depth + 1} of {max_depth} for chunk {chunk_number} of document {source_doc_name}...")
                                 # Split and recurse
                                 mid_point = len(chunk_text)//2
                                 recursive_response_1 = retry_entity_extraction(chunk_text[:mid_point], max_depth, current_depth + 1)
@@ -3004,12 +3057,12 @@ def exl2_grapher():
                         try:
                             update_and_save_json_file({chunk_number: chunk_entities[chunk_number]}, extraction_cache_file_path)
                             cache_data_map[source_doc_name]['data'][chunk_number] = chunk_entities[chunk_number]    # update in-memory cache as well to help with de-duplication
-                            print(f"\nSaved nodes and relationships extraction to cache file {extraction_cache_file_path} for chunk {chunk_number}\n")
+                            print(f"\nSaved identified nodes and relationships from chunk {chunk_number} of document {source_doc_name} to cache file at path {extraction_cache_file_path}\n")
                         except Exception as e:
-                            handle_error_no_return(f"Could not save extracted nodes and relationships to cache file in {knowledge_graph_cache_dir}, skipping. Encountered error: ", e)
+                            handle_error_no_return(f"Could not cache identified nodes and relationships from document {source_doc_name} to cache file at path {extraction_cache_file_path}, skipping. Encountered error: ", e)
                 
                 except Exception as e:
-                    handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number}, skipping. Encountered error: ", e)
+                    handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number} of document {source_doc_name}, skipping. Encountered error: ", e)
                     chunk_entities[chunk_number]['entities_and_relationships'] = {'nodes': [], 'relationships': []}     # Set empty or default value in case of complete failure
                     output_queue.put(chunk_entities[chunk_number])
 
@@ -3027,25 +3080,26 @@ def exl2_grapher():
             
             cache_data_map = {}
             for chunk_number, chunk_data in chunk_entities.items():
-                print_string = f"in chunk {chunk_number} of total {len(chunk_entities)} chunks"
-                print(f"\nGenerating comprehensive summaries for all nodes and relationships {print_string}...\n")
-                print(f"Timestamp: {datetime.datetime.now()}")
 
                 source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
                 summary_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_summary_cache.json")
 
+                print(f"\n\n\nGenerating summaries for document {source_doc_name} - Processing chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
+
                 if source_doc_name not in cache_data_map:
+                    cached_data = None
                     try:
                         cached_data = load_json_file(summary_cache_file_path)
-                        cache_data_map[source_doc_name] = {
-                            'data': cached_data if isinstance(cached_data, dict) else {},
-                            'file_path': summary_cache_file_path
-                        }
                     except Exception as e:
-                        handle_error_no_return(f"Could not load summary from cache file {summary_cache_file_path}, proceeding to generate afresh. Encountered error: ", e)
+                        handle_error_no_return(f"Could not load summary-cache file at path {summary_cache_file_path} for document {source_doc_name}, proceeding to generate afresh. Encountered error: ", e)
+                    
+                    cache_data_map[source_doc_name] = {
+                        'data': cached_data if isinstance(cached_data, dict) else {},
+                        'file_path': summary_cache_file_path
+                    }   # Because the next step expects `source_doc_name` to be a key in the `cache_data_map` dict!
                     
                 if reuse_graph_summary_cache:
-                    print(f"\nChecking for existing summary cache for chunk {chunk_number}...\n")
+                    print(f"\nChecking for existing summary cache for chunk {chunk_number} of document {source_doc_name}...\n")
 
                     cache_entry = cache_data_map.get(source_doc_name)
                     cached_chunk_data = cache_entry.get('data', {}).get(chunk_number, {})
@@ -3058,9 +3112,10 @@ def exl2_grapher():
                             print(f"\nFound existing summary cache for chunk {chunk_number}, returning cached data...\n")
                             continue
                         else:
-                            print(f"\nCached data for chunk {chunk_number} failed validation, proceeding to generate summary afresh...\n")
+                            print(f"\nCached data for chunk {chunk_number} from document {source_doc_name} failed validation, proceeding to generate summary afresh...\n")
                 
                 try:
+                    print(f"\nAttempting to generate comprehensive summaries for nodes and relationships identified in chunk {chunk_number} of document {source_doc_name}...\n")
                     summarized_nodes_and_relationships = process_nodes_and_relationships(
                         nodes_and_relationships=chunk_data['entities_and_relationships'],
                         chunk_text=chunk_data['chunk_text'],
@@ -3076,17 +3131,20 @@ def exl2_grapher():
                     try:
                         update_and_save_json_file({chunk_number: chunk_entities[chunk_number]}, summary_cache_file_path)
                         cache_data_map[source_doc_name]['data'][chunk_number] = chunk_entities[chunk_number]    # update in-memory cache as well to help with de-duplication
-                        print(f"\nSaved summary to cache file {summary_cache_file_path} for chunk {chunk_number}\n")
+                        print(f"\nSaved generated summary for chunk {chunk_number} of document {source_doc_name} to cache file at path {summary_cache_file_path}\n")
                     except Exception as e:
-                        handle_error_no_return(f"Could not save summary to cache file in {knowledge_graph_cache_dir}, skipping. Encountered error: ", e)
+                        handle_error_no_return(f"Could not cache summary for document {source_doc_name} to cache file at path {summary_cache_file_path}, skipping. Encountered error: ", e)
+                
                 except Exception as e:
-                    handle_error_no_return(f"Could not generate summary for nodes and relationships for chunk {chunk_number}, skipping. Encountered error: ", e)
+                    handle_error_no_return(f"Could not generate summary for nodes and relationships for chunk {chunk_number} from document {source_doc_name}, skipping. Encountered error: ", e)
+                    chunk_entities[chunk_number]['entities_and_relationships'] = chunk_data.get('entities_and_relationships', {'nodes': [], 'relationships': []}) if isinstance(chunk_data, dict) else {'nodes': [], 'relationships': []}   # Extra-safe resetting!
+                    output_queue.put(chunk_entities[chunk_number])
 
         except Exception as e:
             handle_error_no_return("Summary generation failed, encountered error: ", e)
         finally:
             output_queue.put(None)
-            print("\n\nLLM stream done, releasing semaphore\n\n")
+            print("\n\nLLM stream done, releasing semaphore\n\n")   # TODO: investigate hanging here - likely caused by (previously) uncaught exception in `create_and_execute_exl2_job` that led to unexpected behavior. Added error-handling, ready for re-test.
             llm_semaphore.release()
             stop_thread.set()
 
