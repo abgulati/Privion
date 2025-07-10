@@ -2742,10 +2742,18 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
 
     for node in nodes:
         try:
-            name = str(node['name'])
-            node_type = str(node['type'])
+            if not isinstance(node, dict):
+                print(f"Skipping node from document {source_document} - Invalid Type: Expected a dict, got {type(node).__name__}")
+                continue
+            
+            name = str(node.get('name', ''))
+            node_type = str(node.get('type', ''))
             updated_summary = list(node.get('summary', []))   # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
             
+            if name == '' or node_type == '':
+                print(f"Skipping node from document {source_document} because it's missing required fields: name={name}, type={node_type}")
+                continue
+
             node_key = (name, node_type)
             if node_key in processed_nodes:
                 # print(f"Skipping duplicate node {name} of type {node_type} in {selected_knowledge_domain} graph DB")
@@ -2797,11 +2805,19 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
 
     for relationship in relationships:
         try:
-            source = str(relationship['source'])
-            target = str(relationship['target'])
-            relationship_type = str(relationship['relationship'])            
+            if not isinstance(relationship, dict):
+                print(f"Skipping relationship from document {source_document} - Invalid Type: Expected a dict, got {type(relationship).__name__}")
+                continue
+
+            source = str(relationship.get('source', ''))
+            target = str(relationship.get('target', ''))
+            relationship_type = str(relationship.get('relationship', ''))
             updated_summary = list(relationship.get('summary', []))   # dict .get() method is safer than `if relationship['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
             
+            if source == '' or target == '' or relationship_type == '':
+                print(f"Skipping relationship from document {source_document} because it's missing required fields: source={source}, target={target}, relationship={relationship_type}")
+                continue
+
             relationship_key = (source, target, relationship_type)
             if relationship_key in processed_relationships:
                 # print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) in {selected_knowledge_domain} graph DB")
@@ -6595,8 +6611,16 @@ def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str 
     for count, node in enumerate(nodes):
         # print(f"Checking for existing summary for node {count+1} of {len(nodes)} {print_string}...")
         try:
-            name = str(node['name'])
-            node_type = str(node['type'])
+            if not isinstance(node, dict):
+                print(f"Skipping summary retrieval for node - Invalid Type: Expected a dict, got {type(node).__name__}")
+                continue
+
+            name = str(node.get('name', ''))
+            node_type = str(node.get('type', ''))
+
+            if name == '' or node_type == '':
+                print(f"Skipping summary retrieval for node because it's missing required fields: name={name}, type={node_type}")
+                continue
 
             node_key = (name, node_type)
 
@@ -6663,15 +6687,24 @@ def get_summary_and_source_documents_for_relationship(graph, source, target, rel
 
 
 def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, print_string: str = "", get_source_documents: bool = False):
+
     relationships_with_existing_summaries = []
     processed_relationships = {}    # Will de-duplicate relationships!
 
     for count, relationship in enumerate(relationships):
         # print(f"Checking for existing summary for relationship {count+1} of {len(relationships)} {print_string}...")
         try:
-            source = str(relationship['source'])
-            target = str(relationship['target'])
-            relationship_type = sanitize_names(str(relationship['relationship']).upper())   # Added as sanitize_names().upper() hence formatting here too!
+            if not isinstance(relationship, dict):
+                print(f"Skipping summary retrieval for relationship - Invalid Type: Expected a dict, got {type(relationship).__name__}")
+                continue
+
+            source = str(relationship.get('source', ''))
+            target = str(relationship.get('target', ''))
+            relationship_type = sanitize_names(str(relationship.get('relationship', '')).upper())   # Added as sanitize_names().upper() hence formatting here too!
+
+            if source == '' or target == '' or relationship_type == '':
+                print(f"Skipping summary retrieval for relationship because it's missing required fields: source={source}, target={target}, relationship={relationship_type}")
+                continue
 
             relationship_key = (source, target, relationship_type)
 
