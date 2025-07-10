@@ -160,7 +160,7 @@ def get_service_request_prompt(user_query:str):
 
 def manually_format_prompt_with_prompt_template(formatted_prompt:str, user_query:str, current_sequence_id:int, base_template:str, local_llm_chat_template_format:str, skip_system_prompt=False) -> str:
 
-    print(f"\n\nFormatting prompt for LMM with template format: {local_llm_chat_template_format}\n\n")
+    print(f"\nFormatting prompt for LMM with template format: {local_llm_chat_template_format}\n")
 
     if skip_system_prompt:
         base_template = ""
@@ -318,7 +318,7 @@ def append_eot_token_to_llm_response(local_llm_chat_template_format: str, llm_re
 
 
 def trim_response(response, start_substring, end_substring, include_start_substring=False, include_end_substring=False):
-    print("\n\nAttempting to trim response...\n\n")
+    print("\nAttempting to trim response...\n")
     try:
         if start_substring in response and end_substring in response:
             start_index = response.rindex(start_substring)  # Sometimes the model re-gurgitates multiple copies of the same dict in it's response
@@ -331,7 +331,7 @@ def trim_response(response, start_substring, end_substring, include_start_substr
             
             return response[start_index:end_index]
         else:
-            print(f"\nResponse does not contain start_substring: {start_substring} or end_substring: {end_substring}, returning unchanged response: {response}\n")
+            print(f"\nResponse does not contain start_substring: {start_substring} or end_substring: {end_substring}, returning unchanged response...\n")
             return response
     except Exception as e:
         print(f"Failed to trim response, encountered error: {e}")
