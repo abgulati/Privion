@@ -3118,6 +3118,7 @@ def exl2_grapher():
                     handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number} of document {source_doc_name}, skipping. Encountered error: ", e)
                     chunk_entities[chunk_number]['entities_and_relationships'] = {'nodes': [], 'relationships': []}     # Set empty or default value in case of complete failure
                     output_queue.put(chunk_entities[chunk_number])
+                    continue
 
         except Exception as e:
             handle_error_no_return(f"Could not extract entities and relationships, encountered error: ", e)
@@ -3169,6 +3170,13 @@ def exl2_grapher():
                 
                 try:
                     print(f"\nAttempting to generate comprehensive summaries for nodes and relationships identified in chunk {chunk_number} of document {source_doc_name}...\n")
+
+                    if chunk_data['entities_and_relationships']['nodes'] == [] and chunk_data['entities_and_relationships']['relationships'] == []:
+                        print(f"\nNo nodes or relationships to summarize for chunk {chunk_number} of document {source_doc_name}, skipping summary generation...\n")
+                        chunk_entities[chunk_number]['entities_and_relationships'] = chunk_data.get('entities_and_relationships', {'nodes': [], 'relationships': []}) if isinstance(chunk_data, dict) else {'nodes': [], 'relationships': []}   # Extra-safe resetting!
+                        output_queue.put(chunk_entities[chunk_number])
+                        continue
+
                     summarized_nodes_and_relationships = process_nodes_and_relationships(
                         nodes_and_relationships=chunk_data['entities_and_relationships'],
                         chunk_text=chunk_data['chunk_text'],
@@ -3192,6 +3200,7 @@ def exl2_grapher():
                     handle_error_no_return(f"Could not generate summary for nodes and relationships for chunk {chunk_number} from document {source_doc_name}, skipping. Encountered error: ", e)
                     chunk_entities[chunk_number]['entities_and_relationships'] = chunk_data.get('entities_and_relationships', {'nodes': [], 'relationships': []}) if isinstance(chunk_data, dict) else {'nodes': [], 'relationships': []}   # Extra-safe resetting!
                     output_queue.put(chunk_entities[chunk_number])
+                    continue
 
         except Exception as e:
             handle_error_no_return("Summary generation failed, encountered error: ", e)
