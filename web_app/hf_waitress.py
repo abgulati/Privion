@@ -2723,8 +2723,53 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
 
 def get_request_payload_for_graph_entity_extraction(chunk_text: str):
     chunk_payload = "Extract nodes and relationships from the following text:\n" + chunk_text + "\n<knowledge_graph>"
-    full_payload = f"<start_of_turn>user\n{chunk_payload}<end_of_turn>\n<start_of_turn>model\n"
+    full_payload = f"<start_of_turn>user\n{chunk_payload}<end_of_turn>\n<start_of_turn>model\n" # TODO: modify to use the prompt-formatting module, enabling support for multiple models! Will require specifying the exact output format needed.
     return full_payload
+
+
+def remove_blank_nodes_and_relationships(entities_and_relationships: dict):
+    '''
+    Filters out nodes and relationships with blank/empty required fields.
+    
+    Args:
+        entities_and_relationships: Pre-validated dict with 'nodes' and 'relationships' lists
+        
+    Returns:
+        Dict with filtered nodes and relationships
+        
+    Note:
+        Assumes input has already been validated by core_dict_validation_logic_for_cache_reuse()
+    '''
+    try:    # at this point, the entities_and_relationships has already been validated so we can directly iterate over the nodes and relationships
+
+        def is_valid_node(node: dict) -> bool:
+            """Check if node has non-empty required fields"""
+            return (str(node.get('name') or '').strip() and
+                    str(node.get('type') or '').strip())
+        
+            '''
+            NOTE - Works because:
+            1. A blank string evaluates to False in a boolean context
+            2. strip() is crucial for handling whitespace edge-cases like '    ' !
+            3. `name = str(node.get('name', ''))` will lead to an edge-case error, wherein an input like`{'name': None}` will result in a string 'None', causing the eval to incorrectly pass!
+            4. The above means a follow-on check like `name = '' if name is None else name` will never execute!
+            5. `str(node.get('name') or '').strip()` handles all edge-cases, as a valid value will be returned or a blank '' for empty/None values, with .strip() handling whitespaces.
+            '''
+
+        def is_valid_relationship(relationship: dict) -> bool:
+            """Check if relationship has non-empty required fields"""
+            return (str(relationship.get('source') or '').strip() and
+                    str(relationship.get('target') or '').strip() and
+                    str(relationship.get('relationship') or '').strip())
+
+        return {
+            'nodes': [node for node in entities_and_relationships['nodes'] if is_valid_node(node)],
+            'relationships': [relationship for relationship in entities_and_relationships['relationships'] if is_valid_relationship(relationship)]
+        }
+
+    except Exception as e:
+        handle_error_no_return(f"Could not remove blank nodes and relationships returning unchanged response. Encountered error: ", e)
+        return entities_and_relationships
 
 
 def core_dict_validation_logic_for_cache_reuse(extracted_dict: dict, validate_summary: bool = False):
@@ -2996,7 +3041,7 @@ def exl2_grapher():
                     response_validation_result = validate_entity_extraction_response(extraction_response_first_attempt)
                     
                     if response_validation_result['is_valid']:
-                        full_response = response_validation_result['validated_response']
+                        full_response = remove_blank_nodes_and_relationships(response_validation_result['validated_response'])  # remove-blank_nodes_and_relationships() will either return a cleaned-up dict, or the unchanged dict on error or if no changes were made!
                     else:
                         print(f"Extraction response failed validation - Chunk is likely too large. Attempting to split and retry entity extraction for chunk {chunk_number} of document {source_doc_name}...")
 
@@ -3032,7 +3077,7 @@ def exl2_grapher():
                             
                             if response_validation_result['is_valid']:
                                 print(f"Recursive Entity Extraction Successful: Sub-chunk of chunk {chunk_number} from document {source_doc_name} successfully validated!")
-                                return response_validation_result['validated_response']
+                                return remove_blank_nodes_and_relationships(response_validation_result['validated_response'])
                             else:
                                 print(f"Sub-chunk still too large - continuing recursive extraction - attempt {current_depth + 1} of {max_depth} for chunk {chunk_number} of document {source_doc_name}...")
                                 # Split and recurse
