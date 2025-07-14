@@ -2738,7 +2738,7 @@ def remove_blank_nodes_and_relationships(entities_and_relationships: dict):
         Dict with filtered nodes and relationships
         
     Note:
-        Assumes input has already been validated by core_dict_validation_logic_for_cache_reuse()
+        Assumes input has already been validated by core-dict_validation_logic_for_cache_reuse()
     '''
     try:    # at this point, the entities_and_relationships has already been validated so we can directly iterate over the nodes and relationships
 
@@ -3027,7 +3027,7 @@ def exl2_grapher():
 
                             cached_entry_validation_result = core_dict_validation_logic_for_cache_reuse(cached_chunk_data['entities_and_relationships'])
                             if cached_entry_validation_result is not None:
-                                chunk_entities[chunk_number]['entities_and_relationships'] = cached_chunk_data['entities_and_relationships']    # NOTE: Only the 'entities_and_relationships' key is updated in the chunk_entities dict received in the POST request!
+                                chunk_entities[chunk_number]['entities_and_relationships'] = remove_blank_nodes_and_relationships(cached_chunk_data['entities_and_relationships'])    # NOTE: Only the 'entities_and_relationships' key is updated in the chunk_entities dict received in the POST request!
                                 output_queue.put(chunk_entities[chunk_number])
                                 print(f"\nFound existing cache of previously extracted nodes and relationships for chunk {chunk_number} of document {source_doc_name}, returning cached data...\n")
                                 continue
@@ -3160,7 +3160,7 @@ def exl2_grapher():
 
                         cached_entry_validation_result = core_dict_validation_logic_for_cache_reuse(cached_chunk_data['entities_and_relationships'], validate_summary=True)
                         if cached_entry_validation_result is not None:
-                            chunk_entities[chunk_number]['entities_and_relationships'] = cached_chunk_data['entities_and_relationships']
+                            chunk_entities[chunk_number]['entities_and_relationships'] = remove_blank_nodes_and_relationships(cached_chunk_data['entities_and_relationships'])
                             output_queue.put(chunk_entities[chunk_number])
                             print(f"\nFound existing summary cache for chunk {chunk_number}, returning cached data...\n")
                             continue
