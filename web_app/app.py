@@ -2916,8 +2916,8 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
         print(f"\nStoring entities and relationships in {selected_knowledge_domain} graph DB\n")
         for chunk_number, chunk_data in chunks.items():
             try:
-                add_nodes_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['nodes'], graph, chunk_data['source_doc_name'], chunk_data['page_number'], chunk_data['summary'])
-                add_relationships_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['relationships'], graph, chunk_data['source_doc_name'], chunk_data['page_number'], chunk_data['summary'])
+                add_nodes_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['nodes'], graph, chunk_data['source_doc_name'], chunk_data['page_number'], chunk_data.get('summary', []))
+                add_relationships_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['relationships'], graph, chunk_data['source_doc_name'], chunk_data['page_number'], chunk_data.get('summary', []))
             except Exception as e:
                 handle_error_no_return(f"Could not store entities and relationships for chunk {chunk_number} in {selected_knowledge_domain} graph DB, encountered error: ", e)
     except Exception as e:
