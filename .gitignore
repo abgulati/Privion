@@ -7,6 +7,7 @@ config.json
 hf_config.json
 security_config.json
 *_config.json
+*_creds.json
 
 # Or to ignore ALL JSON files (use with caution):
 # *.json
@@ -29,8 +30,20 @@ Thumbs.db
 .DS_Store
 desktop.ini
 
+# dirs
+web_app/generated_images/
+web_app/gdrive_auth/
+web_app/exllamav2/
+web_app/graph-model-servers/graph-extraction-model-server/exllamav2/
+web_app/graph-model-servers/graph-summary-generator-server/exllamav2/
+
 # Generated images
+web_app/text_only_input_image.png
 # generated_images/
 # *.png
 # *.jpg
 # *.jpeg
+
+# docs
+documents/LARS-Training-1-DC.pptx
+documents/LARS-Training-1.pptx
