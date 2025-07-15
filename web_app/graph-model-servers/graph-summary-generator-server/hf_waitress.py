@@ -2846,7 +2846,15 @@ def validate_entity_extraction_response(extraction_response: str):
     return {'validated_response': extraction_response, 'is_valid': False}
 
 
-def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: str, source_doc_name: str, page_number_list: list, graph_summarizer_model_prompt_template_format: str = "", requested_max_new_tokens: int = 1000, gen_settings = None):
+def process_nodes_and_relationships(
+        nodes_and_relationships: dict,
+        chunk_text: str,
+        source_doc_name: str,
+        page_number_list: list,
+        graph_summarizer_model_prompt_template_format: str = "",
+        requested_max_new_tokens: int = 1000,
+        gen_settings = None
+    ):
     '''
     This function takes a dictionary containing nodes and relationships, and a chunk of text.
     It generates a comprehensive summary for the chunk covering all nodes and relationships, and saves the summary to every node and relationship.
@@ -2865,10 +2873,13 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
                 skip_system_prompt=True
             )
             full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+            print("Summary generated, post-processing...\n")
             full_response = prompt_formatting_module.trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n{Page Number(s): " + str(page_number_list) + "}\n\n"
-            # print(f"\n\nfull_response:\n\n{full_response}\n\n")
+            print("\nSummary generation completed for present document chunk, proceeding...\n")
+            return [str(full_response)]
         except Exception as e:
-            handle_local_error(f"Could not prepare comprehensive-summary query for document {source_doc_name}, encountered error: ", e)
+            handle_error_no_return(f"Could not prepare comprehensive-summary query for document {source_doc_name}, encountered error: ", e)
+            return [""]
 
         # STEP 2: Update each node and relationship with the comprehensive summary. Create a new summary list or append to an existing summary list.
         summarized_nodes_and_relationships = {}
@@ -2944,6 +2955,8 @@ def process_nodes_and_relationships(nodes_and_relationships: dict, chunk_text: s
                 handle_error_no_return(f"Could not update relationship {source} -> {target} ({relationship_type}) with comprehensive summary for document {source_doc_name}, encountered error: ", e)
 
         summarized_nodes_and_relationships['relationships'] = summarized_relationships
+
+        print("Updated all nodes and relationships with comprehensive summaries for present document chunk, proceeding...\n")
 
         return summarized_nodes_and_relationships
 
@@ -3173,11 +3186,12 @@ def exl2_grapher():
 
                     if chunk_data['entities_and_relationships']['nodes'] == [] and chunk_data['entities_and_relationships']['relationships'] == []:
                         print(f"\nNo nodes or relationships to summarize for chunk {chunk_number} of document {source_doc_name}, skipping summary generation...\n")
-                        chunk_entities[chunk_number]['entities_and_relationships'] = chunk_data.get('entities_and_relationships', {'nodes': [], 'relationships': []}) if isinstance(chunk_data, dict) else {'nodes': [], 'relationships': []}   # Extra-safe resetting!
+                        #chunk_entities[chunk_number]['entities_and_relationships'] = chunk_data.get('entities_and_relationships', {'nodes': [], 'relationships': []}) if isinstance(chunk_data, dict) else {'nodes': [], 'relationships': []}   # Extra-safe resetting!
+                        chunk_entities[chunk_number]['summary'] = []
                         output_queue.put(chunk_entities[chunk_number])
                         continue
 
-                    summarized_nodes_and_relationships = process_nodes_and_relationships(
+                    chunk_summary = process_nodes_and_relationships(
                         nodes_and_relationships=chunk_data['entities_and_relationships'],
                         chunk_text=chunk_data['chunk_text'],
                         source_doc_name=source_doc_name,
@@ -3186,7 +3200,8 @@ def exl2_grapher():
                         requested_max_new_tokens=requested_max_new_tokens,
                         gen_settings=gen_settings
                     )
-                    chunk_entities[chunk_number]['entities_and_relationships'] = summarized_nodes_and_relationships
+                    #chunk_entities[chunk_number]['entities_and_relationships'] = summarized_nodes_and_relationships
+                    chunk_entities[chunk_number]['summary'] = chunk_summary
                     output_queue.put(chunk_entities[chunk_number])
 
                     try:
@@ -3198,7 +3213,8 @@ def exl2_grapher():
                 
                 except Exception as e:
                     handle_error_no_return(f"Could not generate summary for nodes and relationships for chunk {chunk_number} from document {source_doc_name}, skipping. Encountered error: ", e)
-                    chunk_entities[chunk_number]['entities_and_relationships'] = chunk_data.get('entities_and_relationships', {'nodes': [], 'relationships': []}) if isinstance(chunk_data, dict) else {'nodes': [], 'relationships': []}   # Extra-safe resetting!
+                    #chunk_entities[chunk_number]['entities_and_relationships'] = chunk_data.get('entities_and_relationships', {'nodes': [], 'relationships': []}) if isinstance(chunk_data, dict) else {'nodes': [], 'relationships': []}   # Extra-safe resetting!
+                    chunk_entities[chunk_number]['summary'] = []
                     output_queue.put(chunk_entities[chunk_number])
                     continue
 

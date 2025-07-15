@@ -2710,7 +2710,7 @@ def summary_generator(chunk_entities=None):
         pass
 
 
-def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: FalkorDB, source_document: str = '', page_number: list = None):
+def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: FalkorDB, source_document: str = '', page_number: list = None, summary: list = []):
     '''
     We can define a default blank string as strings are immutable in Python, but cannot define a default blank list as lists are mutable!
 
@@ -2748,7 +2748,7 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
             
             name = str(node.get('name', ''))
             node_type = str(node.get('type', ''))
-            updated_summary = list(node.get('summary', []))   # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
+            #updated_summary = list(node.get('summary', []))   # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
             
             if name == '' or node_type == '':
                 print(f"Skipping node from document {source_document} because it's missing required fields: name={name}, type={node_type}")
@@ -2784,7 +2784,7 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
             """, {
                 'name': name.replace("'", ""),
                 'type': node_type.replace("'", ""),
-                'summary': updated_summary,
+                'summary': summary,
                 'source_document': source_document.replace("'", ""),
                 'page_number': page_number
             })
@@ -2797,7 +2797,7 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
             handle_error_no_return(f"Could NOT create node - name: {name}, type: {node_type} - in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
 
 
-def add_relationships_to_graph(selected_knowledge_domain: str, relationships: list, graph: FalkorDB, source_document: str = '', page_number: list = None):
+def add_relationships_to_graph(selected_knowledge_domain: str, relationships: list, graph: FalkorDB, source_document: str = '', page_number: list = None, summary: list = []):
     # print(f"\nStoring relationships to {selected_knowledge_domain} graph DB\n")
 
     processed_relationships = {}    # Format: {(source, target, relationship): True}
@@ -2812,7 +2812,7 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
             source = str(relationship.get('source', ''))
             target = str(relationship.get('target', ''))
             relationship_type = str(relationship.get('relationship', ''))
-            updated_summary = list(relationship.get('summary', []))   # dict .get() method is safer than `if relationship['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
+            #updated_summary = list(relationship.get('summary', []))   # dict .get() method is safer than `if relationship['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
             
             if source == '' or target == '' or relationship_type == '':
                 print(f"Skipping relationship from document {source_document} because it's missing required fields: source={source}, target={target}, relationship={relationship_type}")
@@ -2861,7 +2861,7 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
             """, {
                 'source_name': relationship['source'].replace("'", ""),
                 'target_name': relationship['target'].replace("'", ""),
-                'summary': updated_summary,
+                'summary': summary,
                 'source_document': source_document.replace("'", ""),
                 'page_number': page_number
             })
@@ -2916,8 +2916,8 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
         print(f"\nStoring entities and relationships in {selected_knowledge_domain} graph DB\n")
         for chunk_number, chunk_data in chunks.items():
             try:
-                add_nodes_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['nodes'], graph, chunk_data['source_doc_name'], chunk_data['page_number'])
-                add_relationships_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['relationships'], graph, chunk_data['source_doc_name'], chunk_data['page_number'])
+                add_nodes_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['nodes'], graph, chunk_data['source_doc_name'], chunk_data['page_number'], chunk_data['summary'])
+                add_relationships_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['relationships'], graph, chunk_data['source_doc_name'], chunk_data['page_number'], chunk_data['summary'])
             except Exception as e:
                 handle_error_no_return(f"Could not store entities and relationships for chunk {chunk_number} in {selected_knowledge_domain} graph DB, encountered error: ", e)
     except Exception as e:
