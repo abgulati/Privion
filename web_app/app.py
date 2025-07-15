@@ -6604,12 +6604,11 @@ def get_summary_and_source_documents_for_node(graph, name, node_type):
         return [], []
 
 
-def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str = "", get_source_documents: bool = False):
+def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, get_source_documents: bool = False):
     nodes_with_existing_summaries = []
     processed_nodes = {}    # Will de-duplicate nodes!
 
-    for count, node in enumerate(nodes):
-        # print(f"Checking for existing summary for node {count+1} of {len(nodes)} {print_string}...")
+    for _, node in enumerate(nodes):
         try:
             if not isinstance(node, dict):
                 print(f"Skipping summary retrieval for node - Invalid Type: Expected a dict, got {type(node).__name__}")
@@ -6623,7 +6622,6 @@ def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, print_string: str 
                 continue
 
             node_key = (name, node_type)
-
             if node_key in processed_nodes:
                 # print(f"Skipping duplicate node {name} of type {node_type} when checking for existing summaries in graph DB")
                 continue
@@ -6686,13 +6684,12 @@ def get_summary_and_source_documents_for_relationship(graph, source, target, rel
         return [], []
 
 
-def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, print_string: str = "", get_source_documents: bool = False):
+def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, get_source_documents: bool = False):
 
     relationships_with_existing_summaries = []
     processed_relationships = {}    # Will de-duplicate relationships!
 
-    for count, relationship in enumerate(relationships):
-        # print(f"Checking for existing summary for relationship {count+1} of {len(relationships)} {print_string}...")
+    for _, relationship in enumerate(relationships):
         try:
             if not isinstance(relationship, dict):
                 print(f"Skipping summary retrieval for relationship - Invalid Type: Expected a dict, got {type(relationship).__name__}")
@@ -6707,7 +6704,6 @@ def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, pr
                 continue
 
             relationship_key = (source, target, relationship_type)
-
             if relationship_key in processed_relationships:
                 # print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) when checking for existing summaries in graph DB")
                 continue
@@ -6745,40 +6741,35 @@ def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, pr
 
 def get_summaries_from_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB):
     '''
-    Receives a complete chunk_entities dict:
+    Receives a merged chunk_entities dict, which is the result of the merge-chunk_entities_for_graph_rag method:
 
     chunk_entities = {
-        '<graph_chunk_number>': {
-            '<entities_and_relationships>': '<node_relationships_dict>',
+        '0': {
+            '<entities_and_relationships>': '<complete_entities_and_relationships_dict>',
             '<chunk_text>': '<text>',
             '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
             '<source_doc_name>': '<name>'
         }
     }
 
-    And basis the 'chunk_text' and 'entities_and_relationships' for each `graph_chunk_number`:
-        1. Handles Summaries if applicable:
-            - Retrieves existing summaries for each node and relationship
-            - Generates a summary for each node and relationship. This sequence ensures highest throughput of summary-generation requests to the LLM as both the lookup for existing summaries and the storage to the GraphDB are handled completely seperately!
-        2. Stores the nodes and relationships in the graph DB
+    And for each node and relationship in the associated list in the 'entities_and_relationships' dict, we check for existing summaries in the GraphDB.
     '''
 
     print(f"\nStoring entities and relationships in {selected_knowledge_domain} graph DB\n")
 
     try:
-        # a. Get summaries for all nodes and relationships:
+        # Get summaries for all nodes and relationships:
         for chunk_number, chunk_data in chunk_entities.items():
-            print_string = f" in chunk {chunk_number} of total {len(chunk_entities)} chunks"
-            print(f"\nChecking for existing summaries for all nodes and relationships {print_string}...\n")
+            print(f"\nChecking for existing summaries for all nodes and relationships in chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
 
             try:
-                nodes_with_existing_summaries = get_summaries_for_all_nodes(nodes=chunk_data['entities_and_relationships']['nodes'], graph=graph, print_string=print_string, get_source_documents=True)
+                nodes_with_existing_summaries = get_summaries_for_all_nodes(nodes=chunk_data['entities_and_relationships']['nodes'], graph=graph, get_source_documents=True)
                 chunk_entities[chunk_number]['entities_and_relationships']['nodes'] = nodes_with_existing_summaries
             except Exception as e:
                 handle_error_no_return(f"Error checking for existing summaries for nodes, skipping chunk {chunk_number}. Encountered error: ", e)
 
             try:
-                relationships_with_existing_summaries = get_summaries_for_all_relationships(relationships=chunk_data['entities_and_relationships']['relationships'], graph=graph, print_string=print_string, get_source_documents=True)
+                relationships_with_existing_summaries = get_summaries_for_all_relationships(relationships=chunk_data['entities_and_relationships']['relationships'], graph=graph, get_source_documents=True)
                 chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = relationships_with_existing_summaries
             except Exception as e:
                 handle_error_no_return(f"Error checking for existing summaries for relationships, skipping chunk {chunk_number}. Encountered error: ", e)
@@ -6809,8 +6800,8 @@ def merge_chunk_entities_for_graph_rag(chunk_entities: dict) -> dict:
         ...
     }
 
-    And returns a merged chunk_entities dict, because all entities and relationships are extracted from RAG context, and 
-    merging will allow for de-duplication of nodes and relationships in the get_summary step.
+    And returns a merged chunk_entities dict, because all entities and relationships are extracted from RAG context (user-query + semantic & lexical search results),
+    and merging will allow for de-duplication of nodes and relationships in the get_summary step. For querying the GraphDB, we only need a de-duplicated list of nodes & relationships.
     '''
 
     # print(f"\n\nMerging chunk entities for graph RAG. Received chunk_entities: \n {chunk_entities}\n\n")
@@ -6924,10 +6915,10 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
         
         '<entities_and_relationships>': {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"},...], "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"},...]}
 
-    The various chunk_entities in the dict are then merged into a singular chunk_entity for querying the GraphDB to obtain summaries. 
+    The various chunk_entities in the dict are then merged into a singular chunk_entity for querying the GraphDB to obtain summaries (as we're only interested in a de-duplicated list of nodes & relationships for GraphDB-queries). 
     The merge_chunk_entities_for_graph_rag and get_summaries_from_graph_db methods are respectively used for this purpose.
 
-    The obtained summaries are deduplicated and formatted into a summary report via the get_summary_report method, and finally re-ranked and trimmed to obtain the final graphRAG context, which is then returned.
+    The obtained summaries are deduplicated and formatted into a summary report via the get-summary_report method, and finally re-ranked and trimmed to obtain the final graphRAG context, which is then returned.
     '''
     
     print(f"\n\nExecuting GraphRAG. Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
@@ -6951,7 +6942,7 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
         handle_local_error(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB, encountered error: ", e)
 
     try:
-        complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities=chunk_entities, rag_response_mode=True)  # RAG response mode = True
+        complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities=chunk_entities, rag_response_mode=True)
     except Exception as e:
         handle_local_error("Failed to extract entities and relationships from chunk entities, encountered error: ", e)
 
