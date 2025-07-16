@@ -2381,7 +2381,7 @@ def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payl
                         try:
                             if 'entities_and_relationships' in full_response[chunk_number] and isinstance(full_response[chunk_number]['entities_and_relationships'], str):
                                 '''
-                                While the received data is a dict, the value of the `entities_and_relationships` key itself may be returned as a string by exl2_grapher's extraction_task(), 
+                                While the received data is a dict, the value of the `entities_and_relationships` key itself may be returned as a string by exl2-grapher's extraction_task(), 
                                 so we need to convert it to a dict via ast.literal_eval().
                                 The summary_generation_task() on the other hand always returns a dict so we don't need to do anything.
 
@@ -2406,14 +2406,14 @@ def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payl
                     print(f"\nUnexpected Line Format: {line}\n")
 
         if not full_response:
-            print("\nWarning: No response from exl2_stream / exl2_grapher request\n")
+            print("\nWarning: No response from exl2-stream / exl2-grapher request\n")
             return None
 
         print("\nCompleted, returning response\n")
         return full_response
         
     except Exception as e:
-        handle_local_error("Failed request to exl2_stream or exl2_grapher APIs, encountered error: ", e)
+        handle_local_error("Failed request to exl2-stream or exl2-grapher APIs, encountered error: ", e)
 
 
 def graphing_request_response_handler(grapher_url, headers, payload):
@@ -2447,14 +2447,14 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
     except Exception as e:
         handle_local_error("Could not get graphing request params, encountered error: ", e)
 
-    if exl2_quantize_graph_model:   # invoke exl2_grapher API
+    if exl2_quantize_graph_model:   # invoke exl2-grapher API
         try:
             payload = json.dumps({"chunk_entities": chunk_entities, "extraction_mode": True, "rag_response_mode": rag_response_mode})
             full_response = hf_waitress_bulk_stream_request_response_handler(grapher_url, headers, payload)
             # print(f"\nExl2 Bulk-Graphing Response (Entities and Relationships):\n\n{full_response}\n")
             return full_response
         except Exception as e:
-            handle_local_error("Error with request to exl2_grapher API, encountered error: ", e)
+            handle_local_error("Error with request to exl2-grapher API, encountered error: ", e)
 
     else:   # invoke /completions
         '''
@@ -2699,7 +2699,7 @@ def summary_generator(chunk_entities=None):
                 # print(f"\nExl2 Bulk-Summary Generation Response:\n\n{full_response}\n")
                 return full_response
             except Exception as e:
-                handle_local_error("Error with request to exl2_grapher API, encountered error: ", e)
+                handle_local_error("Error with request to exl2-grapher API, encountered error: ", e)
 
         else:
             # TODO: Implement non-exl2 bulk-summary generation with /completions
@@ -6987,7 +6987,7 @@ def hf_waitress_streaming_request_response_handler(endpoint_url, headers, payloa
                     print(f"\nUnexpected Line Format: {line}\n")
 
         if not full_response:
-            print("\nWarning: No response from exl2_stream / exl2_grapher request\n")
+            print("\nWarning: No response from exl2-stream / exl2-grapher request\n")
             return None
 
         print("\nCompleted, returning response\n")
