@@ -3092,7 +3092,7 @@ def exl2_grapher():
 
                         cached_entry_validation_result = core_dict_validation_logic_for_cache_reuse(cached_chunk_data['entities_and_relationships'], validate_summary=True)
                         if cached_entry_validation_result is not None:
-                            chunk_entities[chunk_number]['entities_and_relationships'] = remove_blank_nodes_and_relationships(cached_chunk_data['entities_and_relationships'])
+                            chunk_entities[chunk_number]['summary'] = cached_chunk_data['summary']
                             output_queue.put(chunk_entities[chunk_number])
                             print(f"\nFound existing summary cache for chunk {chunk_number}, returning cached data...\n")
                             continue
@@ -3104,7 +3104,6 @@ def exl2_grapher():
 
                     if chunk_data['entities_and_relationships']['nodes'] == [] and chunk_data['entities_and_relationships']['relationships'] == []:
                         print(f"\nNo nodes or relationships to summarize for chunk {chunk_number} of document {source_doc_name}, skipping summary generation...\n")
-                        #chunk_entities[chunk_number]['entities_and_relationships'] = chunk_data.get('entities_and_relationships', {'nodes': [], 'relationships': []}) if isinstance(chunk_data, dict) else {'nodes': [], 'relationships': []}   # Extra-safe resetting!
                         chunk_entities[chunk_number]['summary'] = []
                         output_queue.put(chunk_entities[chunk_number])
                         continue
@@ -3118,7 +3117,6 @@ def exl2_grapher():
                         requested_max_new_tokens=requested_max_new_tokens,
                         gen_settings=gen_settings
                     )
-                    #chunk_entities[chunk_number]['entities_and_relationships'] = summarized_nodes_and_relationships
                     chunk_entities[chunk_number]['summary'] = chunk_summary
                     output_queue.put(chunk_entities[chunk_number])
 
@@ -3131,7 +3129,6 @@ def exl2_grapher():
                 
                 except Exception as e:
                     handle_error_no_return(f"Could not generate summary for nodes and relationships for chunk {chunk_number} from document {source_doc_name}, skipping. Encountered error: ", e)
-                    #chunk_entities[chunk_number]['entities_and_relationships'] = chunk_data.get('entities_and_relationships', {'nodes': [], 'relationships': []}) if isinstance(chunk_data, dict) else {'nodes': [], 'relationships': []}   # Extra-safe resetting!
                     chunk_entities[chunk_number]['summary'] = []
                     output_queue.put(chunk_entities[chunk_number])
                     continue
