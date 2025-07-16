@@ -2899,11 +2899,11 @@ def exl2_grapher():
     }
     '''
 
-    print("\n\nexl2_grapher route triggered - attempting to acquire LLM semaphore\n\n")
+    print("\n\nexl2-grapher route triggered - attempting to acquire LLM semaphore\n\n")
 
     llm_semaphore.acquire()
 
-    print("\nLLM semaphore acquired by /exl2_grapher\n")
+    print("\nLLM semaphore acquired by /exl2-grapher\n")
 
     try:
         chunk_entities = request.json.get('chunk_entities')
@@ -2917,7 +2917,7 @@ def exl2_grapher():
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
         llm_semaphore.release()
-        return handle_api_error("Could not read POST-request messages for /exl2_grapher, encountered error: ", e)
+        return handle_api_error("Could not read POST-request messages for /exl2-grapher, encountered error: ", e)
 
     stop_thread = threading.Event()
     output_queue = queue.Queue()
@@ -3151,7 +3151,7 @@ def exl2_grapher():
         
         yield f"event: END\ndata: \"null\"\n\n"
 
-        print("\n/exl2_grapher done\n")
+        print("\n/exl2-grapher done\n")
 
     if extraction_mode:
         thread = threading.Thread(target=extraction_task)
@@ -3159,7 +3159,7 @@ def exl2_grapher():
         thread = threading.Thread(target=summary_generation_task)
     else:
         llm_semaphore.release()
-        return handle_api_error("Invalid request mode for /exl2_grapher. Must specify either 'extraction_mode' or 'summary_generation_mode'.")
+        return handle_api_error("Invalid request mode for /exl2-grapher. Must specify either 'extraction_mode' or 'summary_generation_mode'.")
 
     thread.start()
 
