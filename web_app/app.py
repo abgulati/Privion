@@ -790,7 +790,12 @@ def load_json_file(file_path):
         return None   # NOTE: isinstance({}, dict) will return True so better to return None!
 
 
-def update_and_save_json_file(data, file_path):
+def update_and_save_json_file(data: dict, file_path: str) -> bool:
+    '''
+    - Updates a JSON file with the given data.
+    - Returns:
+        - bool: True if the file was updated and saved successfully, False otherwise.
+    '''
     current_cache = {}
     if os.path.exists(file_path):
         try:
@@ -2359,7 +2364,7 @@ def hf_waitress_non_streaming_request_response_handler(endpoint_url, headers, pa
         handle_local_error("Failed /completions request to extract entities and relationships from chunk, encountered error: ", e)
 
 
-def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payload):
+def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payload, cache_filepath: str = None):
     print(f"\nHF-Waitress Bulk-Stream Request Response Handler Invoked\n")
     try:
         response = requests.post(endpoint_url, headers=headers, data=payload, stream=True)
@@ -2395,6 +2400,13 @@ def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payl
                                 full_response[chunk_number]['entities_and_relationships'] = ast.literal_eval(full_response[chunk_number]['entities_and_relationships'])
                         except Exception as e:
                             handle_error_no_return("Failed to literal_eval entities_and_relationships, skipping. Encountered error: ", e)
+
+                        if cache_filepath is not None:  # Will be None when `extract-all_entities_and_relationships()` is invoked with rag-response_mode set to True
+                            try:
+                                update_and_save_json_file({chunk_number: full_response[chunk_number]}, cache_filepath)
+                                print(f"\nSaved graph-components for chunk {chunk_number} to cache file at path {cache_filepath}\n")
+                            except Exception as e:
+                                handle_error_no_return(f"Could not cache graph-components for chunk {chunk_number} to cache file at path {cache_filepath}, skipping. Encountered error: ", e)
                         
                         chunk_number += 1
                     
@@ -2426,7 +2438,7 @@ def graphing_request_response_handler(grapher_url, headers, payload):
         handle_local_error("Failed /completions request to extract entities and relationships from chunk, encountered error: ", e)
 
 
-def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mode: bool = False) -> dict:
+def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mode: bool = False, cache_filepath: str = None) -> dict:
     '''
     Appends the `entities_and_relationships` key to each chunk_entities dict, returning the following structure:
 
@@ -2450,7 +2462,7 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
     if exl2_quantize_graph_model:   # invoke exl2-grapher API
         try:
             payload = json.dumps({"chunk_entities": chunk_entities, "extraction_mode": True, "rag_response_mode": rag_response_mode})
-            full_response = hf_waitress_bulk_stream_request_response_handler(grapher_url, headers, payload)
+            full_response = hf_waitress_bulk_stream_request_response_handler(grapher_url, headers, payload, cache_filepath)
             # print(f"\nExl2 Bulk-Graphing Response (Entities and Relationships):\n\n{full_response}\n")
             return full_response
         except Exception as e:
@@ -2667,7 +2679,7 @@ def bring_graph_summarizer_model_online():  # Launch HF-Waitress instance with g
     return False
 
 
-def summary_generator(chunk_entities=None):
+def summary_generator_for_graph_db(chunk_entities=None, cache_filepath: str = None):
     print("\nGenerating summaries...\n")
 
     if chunk_entities is None:
@@ -2695,7 +2707,7 @@ def summary_generator(chunk_entities=None):
 
             try:
                 payload = json.dumps({"chunk_entities": chunk_entities, "graph_summarizer_model_prompt_template_format": graph_summarizer_model_prompt_template_format, "summary_generation_mode": True})
-                full_response = hf_waitress_bulk_stream_request_response_handler(summarizer_url, headers, payload)
+                full_response = hf_waitress_bulk_stream_request_response_handler(summarizer_url, headers, payload, cache_filepath)
                 # print(f"\nExl2 Bulk-Summary Generation Response:\n\n{full_response}\n")
                 return full_response
             except Exception as e:
@@ -2890,7 +2902,7 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
     And basis the 'chunk_text' and 'entities_and_relationships' for each `graph_chunk_number`:
         1. Handles summary generation if applicable: 
             - Summaries are generated for a given chunk basis the entities and relationships identified within it. 
-            - The updated chunk_entities dict is then stored to the `summaries_filepath` for persistence and re-use before being stored in the graph DB.
+            - The updated chunk_entities dict is then stored to the `summaries-filepath` cache file for persistence and re-use before being stored in the graph DB.
         2. Stores the nodes and relationships in the graph DB.
     '''
 
@@ -2899,11 +2911,7 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
         if not skip_summary_generation:
 
             try:
-                chunks = summary_generator(chunk_entities=chunk_entities)
-                try:
-                    overwrite_json_file(chunks, summaries_filepath)
-                except Exception as e:
-                    handle_error_no_return(f"Error saving summaries to file, they will have to be re-generated in the future if this document is re-processed. Encountered error: ", e)
+                chunks = summary_generator_for_graph_db(chunk_entities=chunk_entities, cache_filepath=summaries_filepath)
             except Exception as e:
                 handle_error_no_return(f"Error generating summaries for nodes and relationships, proceeding without new summaries. Encountered error: ", e)
                 chunks = chunk_entities
@@ -3262,7 +3270,7 @@ def graph_generator(chunks, input_file):
         
         '<entities_and_relationships>': {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"},...], "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"},...]}
 
-    The final `chunk_entities` dict is then passed to the `store_entities_and_relationships_in_graph_db()` function which will invoke the summary generator if applicable, and then store the entities and relationships in the GraphDB.
+    The final `chunk_entities` dict is then passed to the `store-entities_and_relationships_in_graph_db()` function which will invoke the summary generator if applicable, and then store the entities and relationships in the GraphDB.
 
     Future TODO: Split work across multiple instances of the Graphing Model and Summarizer LLM. Requires minimum two GPUs.
     '''
@@ -3302,11 +3310,7 @@ def graph_generator(chunks, input_file):
             handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
 
         try:
-            complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities)
-            try:
-                overwrite_json_file(complete_chunk_entities, entities_and_relationships_filepath)
-            except Exception as e:
-                handle_error_no_return("Could not save entities and relationships to file, encountered error: ", e)
+            complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities=chunk_entities, cache_filepath=entities_and_relationships_filepath)
         except Exception as e:
             handle_local_error("Failed to extract entities and relationships from chunk entities, encountered error: ", e)
     
