@@ -2558,7 +2558,7 @@ def completions_stream():
 
 def set_global_exl2_dynamic_generator():
     try:
-        print("\nSetting global ExLlamaV2DynamicGenerator\n")
+        print("\nDefining ExLlamaV2DynamicGenerator\n")
         exl2_dynamic_generator = ExLlamaV2DynamicGenerator(model = EXL2_MODEL, cache = EXL2_CACHE, tokenizer = EXL2_TOKENIZER)
         print("\nGenerator defined successfully\n")
         return exl2_dynamic_generator
@@ -2702,6 +2702,7 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
         handle_local_error(f"Could not create ExLlamaV2DynamicJob object for payload {payload}, encountered error: ", e)
 
     try:    # Step 2: Iterate Over Jobs & Generate Response(s)
+        print("\nProcessing Exl2 Job...\n")
         full_response = ""
         while exl2_dynamic_generator.num_remaining_jobs():
             current_token = exl2_dynamic_generator.iterate()
@@ -2861,107 +2862,24 @@ def process_nodes_and_relationships(
     It returns an updated dictionary comprising all nodes and relationships with their comprehensive summaries.
     '''
     try:
-        # STEP 1: Generate a comprehensive summary for the chunk covering all nodes and relationships
-        try:
-            comprehensive_summary_request_prompt = prompt_formatting_module.get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
-            formatted_prompt = prompt_formatting_module.manually_format_prompt_with_prompt_template(
-                formatted_prompt="",
-                user_query=comprehensive_summary_request_prompt,
-                current_sequence_id=0,
-                base_template="",
-                local_llm_chat_template_format=graph_summarizer_model_prompt_template_format,
-                skip_system_prompt=True
-            )
-            full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-            print("Summary generated, post-processing...\n")
-            full_response = prompt_formatting_module.trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n{Page Number(s): " + str(page_number_list) + "}\n\n"
-            print("\nSummary generation completed for present document chunk, proceeding...\n")
-            return [str(full_response)]
-        except Exception as e:
-            handle_error_no_return(f"Could not prepare comprehensive-summary query for document {source_doc_name}, encountered error: ", e)
-            return [""]
-
-        # STEP 2: Update each node and relationship with the comprehensive summary. Create a new summary list or append to an existing summary list.
-        summarized_nodes_and_relationships = {}
-
-        processed_nodes = {}
-        summarized_nodes = []
-        
-        for node in nodes_and_relationships['nodes']:
-            try:
-                if not isinstance(node, dict):
-                    print(f"Skipping summary update for node in document {source_doc_name} - Invalid Type: Expected a dict, got {type(node).__name__}")
-                    continue
-                
-                name = str(node.get('name', ''))
-                node_type = str(node.get('type', ''))
-                summary_list = list(node.get('summary', []))    # dict .get() method is safer than `if node['summary']` because it provides a default value if the key doesn't exist and handles NoneType errors gracefully!
-
-                if name == '' or node_type == '':
-                    print(f"Skipping summary update for node in document {source_doc_name} because it's missing required fields: name={name}, type={node_type}")
-                    continue
-                
-                node_key = (name, node_type)
-                if node_key in processed_nodes:
-                    print(f"Skipping duplicate node {name} of type {node_type}")
-                    continue
-
-                summary_list.append(full_response)
-                summary_list = list(set(summary_list)) # de-duplicate summary_list
-                summarized_nodes.append({
-                    'name': name,
-                    'type': node_type,
-                    'summary':summary_list
-                })
-                processed_nodes[node_key] = True
-            except Exception as e:
-                handle_error_no_return(f"Could not update node {name} of type {node_type} with comprehensive summary for document {source_doc_name}, encountered error: ", e)
-
-        summarized_nodes_and_relationships['nodes'] = summarized_nodes
-        
-        processed_relationships = {}
-        summarized_relationships = []
-        
-        for relationship in nodes_and_relationships['relationships']:
-            try:
-                if not isinstance(relationship, dict):
-                    print(f"Skipping summary update for relationship in document {source_doc_name} - Invalid Type: Expected a dict, got {type(relationship).__name__}")
-                    continue
-                
-                source = str(relationship.get('source', ''))
-                target = str(relationship.get('target', ''))
-                relationship_type = str(relationship.get('relationship', ''))
-                summary_list = list(relationship.get('summary', []))
-
-                if source == '' or target == '' or relationship_type == '':
-                    print(f"Skipping summary update for relationship in document {source_doc_name} because it's missing required fields: source={source}, target={target}, relationship={relationship_type}")
-                    continue
-
-                relationship_key = (source, target, relationship_type)
-                if relationship_key in processed_relationships:
-                    print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type})")
-                    continue
-
-                summary_list.append(full_response)
-                summary_list = list(set(summary_list)) # de-duplicate summary_list
-                summarized_relationships.append({
-                    'source': source,
-                    'target': target,
-                    'relationship': relationship_type,
-                    'summary':summary_list
-                })
-                processed_relationships[relationship_key] = True
-            except Exception as e:
-                handle_error_no_return(f"Could not update relationship {source} -> {target} ({relationship_type}) with comprehensive summary for document {source_doc_name}, encountered error: ", e)
-
-        summarized_nodes_and_relationships['relationships'] = summarized_relationships
-
-        print("Updated all nodes and relationships with comprehensive summaries for present document chunk, proceeding...\n")
-
-        return summarized_nodes_and_relationships
-
+        comprehensive_summary_request_prompt = prompt_formatting_module.get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
+        formatted_prompt = prompt_formatting_module.manually_format_prompt_with_prompt_template(
+            formatted_prompt="",
+            user_query=comprehensive_summary_request_prompt,
+            current_sequence_id=0,
+            base_template="",
+            local_llm_chat_template_format=graph_summarizer_model_prompt_template_format,
+            skip_system_prompt=True
+        )
+        full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+        print("Summary generated, post-processing...\n")
+        full_response = prompt_formatting_module.trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n{Page Number(s): " + str(page_number_list) + "}\n\n"
+        print("\nSummary generation completed for present document chunk, proceeding...\n")
+        return [str(full_response)]
     except Exception as e:
-        handle_local_error(f"Could not generate comprehensive summary for document {source_doc_name}, encountered error: ", e)
+        handle_error_no_return(f"Could not prepare comprehensive-summary query for document {source_doc_name}, encountered error: ", e)
+        return [""]
+
     
 ### End of Helper Functions ###
 
@@ -3222,7 +3140,7 @@ def exl2_grapher():
             handle_error_no_return("Summary generation failed, encountered error: ", e)
         finally:
             output_queue.put(None)
-            print("\n\nLLM stream done, releasing semaphore\n\n")   # TODO: investigate hanging here - likely caused by (previously) uncaught exception in `create_and_execute_exl2_job` that led to unexpected behavior. Added error-handling, ready for re-test.
+            print("\n\nLLM stream done, releasing semaphore\n\n")   # TODO: investigate hanging here - likely caused by (previously) uncaught exception in `create-and_execute_exl2_job` that led to unexpected behavior. Added error-handling, ready for re-test.
             llm_semaphore.release()
             stop_thread.set()
 
