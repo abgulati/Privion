@@ -1,4 +1,5 @@
 accelerate>=1.7.0
+blobfile>=3.0.0
 chromadb>=1.0.12
 diffusers>=0.33.1
 docling>=2.36.1
@@ -23,6 +24,7 @@ requests>=2.32.3
 sentence_transformers>=4.1.0
 transformers>=4.52.4
 tokenizers>=0.21.1
+tiktoken>=0.9.0
 triton
 tqdm>=4.67.1
 google-api-python-client>=2.171.0
