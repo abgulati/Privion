@@ -112,7 +112,6 @@ function loadCoreLarsConfig() {
         'docling_cuda_use_flash_attention_2',
         'docling_num_threads',
         'local_llm_chat_template_format',
-        'exl2_prompt_template_format',
         'force_enable_rag',
         'force_disable_rag',
         'enable_graph_rag',
@@ -140,7 +139,6 @@ function loadCoreLarsConfig() {
         'reuse_graph_summary_cache_with_validation',
         'graph_summarizer_model',
         'graph_summarizer_model_list',
-        'graph_summarizer_model_prompt_template_format',
         'exl2_quantize_graph_summarizer_model',
         'exl2_quantize_graph_summarizer_model_bpw',
         'minimum_free_vram_for_graph_summarizer_model',
@@ -212,9 +210,8 @@ function loadCoreLarsConfig() {
 }
 
 
-function initializeLocalLLMServerDropdown(local_llm_server, exl2_prompt_template_format) {
+function initializeLocalLLMServerDropdown(local_llm_server) {
     const llmServerDd = document.getElementById('local_llm_server_select_dropdown');
-
     for (let option of llmServerDd.options) {
         if (option.value == local_llm_server) {
             option.selected = true;
@@ -224,15 +221,6 @@ function initializeLocalLLMServerDropdown(local_llm_server, exl2_prompt_template
 
     document.getElementById('llama_cpp_div').style.display = local_llm_server === 'llama-cpp' ? 'block' : 'none';
     document.getElementById('hf_waitress_div').style.display = local_llm_server === 'hf-waitress' ? 'block' : 'none';
-
-    const hfExl2PromptTemplateFormat = document.getElementById('hf_waitress_exl2_prompt_template_format_choice');
-
-    for (let option of hfExl2PromptTemplateFormat.options) {
-        if (option.value == exl2_prompt_template_format) {
-            option.selected = true;
-            break;
-        }
-    }
 }
 
 
@@ -654,18 +642,6 @@ function initializeLLMTemplateDropdown(local_llm_chat_template_format) {
 }
 
 
-function initializeGraphSummarizerPromptTemplateDropdown(graph_summarizer_model_prompt_template_format) {
-    const graphSummarizerPromptTemplateDd = document.getElementById('graph_summarizer_prompt_template_format_choice');
-    
-    for (let option of graphSummarizerPromptTemplateDd.options) {
-        if (option.value == graph_summarizer_model_prompt_template_format) {
-            option.selected = true;
-            break;
-        }
-    }
-}
-
-
 function initializeGPURadioButtons(use_gpu) {
     document.getElementById('gpu_radio_yes').checked = use_gpu;
     document.getElementById('gpu_radio_no').checked = !use_gpu;
@@ -993,7 +969,7 @@ function initializeHfwUrlComponents(hf_waitress_serving_url, hf_waitress_access_
 
 
 function initializeLLMTabComponents(values) {
-    initializeLocalLLMServerDropdown(values.local_llm_server, values.exl2_prompt_template_format);
+    initializeLocalLLMServerDropdown(values.local_llm_server);
     initializeModelDropdown(values.model_choice);   
     initializeLLMTemplateDropdown(values.local_llm_chat_template_format);
     initializeGPURadioButtons(values.use_gpu);
@@ -1350,7 +1326,6 @@ function initializeGraphRAGTabComponents(values) {
     document.getElementById('graph_extractor_server_port').value = values.graph_model_server_port;
 
     // Summarizer Model Settings:
-    initializeGraphSummarizerPromptTemplateDropdown(values.graph_summarizer_model_prompt_template_format);
     document.getElementById('reuse_graph_summarization_cache_checkbox').checked = values.reuse_graph_summary_cache_with_validation;
     document.getElementById('validate_graph_summarization_cache_checkbox').checked = values.reuse_graph_summary_cache_with_validation;
     document.getElementById('graph_summarizer_exl2_yes').checked = String(values.exl2_quantize_graph_summarizer_model).toLowerCase() === 'true';

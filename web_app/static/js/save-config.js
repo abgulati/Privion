@@ -29,7 +29,6 @@ function getLlmConfig() {
             config.hf_waitress_serving_url = document.getElementById('HfwServingUrl').value;
             config.hf_waitress_access_url = document.getElementById('HfwAccessUrl').value;
             config.hf_waitress_server_port = parseInt(document.getElementById('HfwPort').value);
-            config.exl2_prompt_template_format = document.getElementById('hf_waitress_exl2_prompt_template_format_choice').value;
         }
     } else if (useApiRadioButton.checked) {
         config.model_choice = document.getElementById('llmApiDropdown').value;
@@ -156,7 +155,6 @@ function getGraphRAGConfig() {
 
         // Summarizer Settings:
         'graph_summarizer_model': document.getElementById('graph-summarizer-custom-dropdown-selected-value').textContent,
-        'graph_summarizer_model_prompt_template_format': document.getElementById('graph_summarizer_prompt_template_format_choice').value,
         'reuse_graph_summary_cache_without_validation': reuse_graph_summary_cache_without_validation,
         'reuse_graph_summary_cache_with_validation': reuse_graph_summary_cache_with_validation,
         'exl2_quantize_graph_summarizer_model': document.getElementById('graph_summarizer_exl2_yes').checked,
