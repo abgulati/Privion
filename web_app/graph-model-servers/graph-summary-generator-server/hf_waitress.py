@@ -85,6 +85,7 @@ VISION_MODEL = None
 EXL2_MODEL = None
 EXL2_TOKENIZER = None
 EXL2_CACHE = None
+AUTO_TOKENIZER = None
 
 STOP_GENERATION = False
 llm_semaphore = threading.Semaphore(1)
@@ -905,7 +906,7 @@ def shutdown_pipe():
 
 def shutdown_exl2():
     print("\n\nShutting down ExLlamaV2 model\n\n")
-    global EXL2_CACHE, EXL2_TOKENIZER, EXL2_MODEL
+    global EXL2_CACHE, EXL2_TOKENIZER, EXL2_MODEL, AUTO_TOKENIZER
 
     if EXL2_MODEL:
         try:
@@ -936,6 +937,16 @@ def shutdown_exl2():
             handle_error_no_return("Could not free ExLlamaV2 tokenizer, encountered error: ", e)
         finally:
             EXL2_TOKENIZER = None
+
+    if AUTO_TOKENIZER:
+        try:
+            print("Attempting to free AutoTokenizer")
+            del AUTO_TOKENIZER
+            print("AutoTokenizer freed successfully")
+        except Exception as e:
+            handle_error_no_return("Could not free AutoTokenizer, encountered error: ", e)
+        finally:
+            AUTO_TOKENIZER = None
         
     print("\n\nExLlamaV2 cleanup complete\n\n")
 
@@ -1630,7 +1641,7 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
         read_return = read_config(['transformer_models_folder'])
         transformer_models_folder = str(read_return['transformer_models_folder'])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting to exllama_bpw_quantize_model(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when attempting to exllama-bpw_quantize_model(), encountered error: ", e)
 
     try:
         temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
@@ -1641,7 +1652,7 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
         os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)   # Create parent directory structure - final `{exl2_bpw}bpw` directory will be created by ExLlamaV2 converter
     except Exception as e:
         safe_remove_folder_from_filepath(temp_dir)
-        handle_local_error("Could not create directory to store quantized model when attempting to exllama_bpw_quantize_model(), encountered error: ", e)
+        handle_local_error("Could not create directory to store quantized model when attempting to exllama-bpw_quantize_model(), encountered error: ", e)
 
     if os.path.exists(quantized_model_path):
         print(f"\nQuantized model for {model_id} already exists. Skipping quantization.\n")
@@ -1730,7 +1741,7 @@ def define_exllama_generator_components(quantized_model_path: os.PathLike, exl2_
 
     try:
         print(f"\nLoading model...\n")
-        EXL2_MODEL.load_autosplit(EXL2_CACHE)
+        EXL2_MODEL.load_autosplit(EXL2_CACHE, progress=True)
         print("\nModel loaded with autosplit successfully\n")
     except Exception as e:
         handle_local_error("Could not load ExLlamaV2 model with autosplit, encountered error: ", e)
@@ -1784,6 +1795,13 @@ def load_exllama_pipeline():
         define_exllama_generator_components(quantized_model_path, exl2_no_flash_attn)
     except Exception as e:
         handle_local_error(f"Error loading ExLlamaV2 quantized model from {quantized_model_path}. Encountered error: ", e)
+
+    try:
+        global AUTO_TOKENIZER
+        AUTO_TOKENIZER = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)    # Using Transformers' AutoTokenizer as ExLlamaV2's ExLlamaV2Tokenizer does not contain an equivalent apply_chat_template() method!
+        print(f"\nTransformers-AutoTokenizer loaded successfully for automatic prompt-formatting for model {model_id} with the ExLlamaV2 pipeline\n")
+    except Exception as e:
+        handle_local_error(f"Error loading AutoTokenizer for {model_id}. Encountered error: ", e)
 
     print("\n\nExLlamaV2 Pipeline Loaded Successfully!\n\n")
     return True
@@ -2601,9 +2619,11 @@ def exl2_stream():
 
     try:
         data = request.json
-        messages = str(data)
+        if isinstance(data, str):   # must convert to a list
+            data = json.loads(data)
+        messages = data.get('messages', [])
         gen_settings, max_new_tokens, _  = get_exl2_gen_settings(request)
-        print(f"\nRead request - message received: {messages}\n")
+        # print(f"\nRead request - message received: {messages}\n")
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for exl2-stream, encountered error: ", e)
@@ -2613,11 +2633,18 @@ def exl2_stream():
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
+    
+    try:
+        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+        # print(f"\nTokenized messages: {tokenized_messages}\n")
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
 
     try:
         print("\nCreating ExLlamaV2DynamicJob Object...\n")
         job = ExLlamaV2DynamicJob(
-            input_ids= EXL2_TOKENIZER.encode(messages, add_bos=True),
+            input_ids= EXL2_TOKENIZER.encode(tokenized_messages, add_bos=True),
             max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
             stop_conditions = [EXL2_TOKENIZER.eos_token_id],
             gen_settings = gen_settings
@@ -2723,9 +2750,12 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
 
 
 def get_request_payload_for_graph_entity_extraction(chunk_text: str):
-    chunk_payload = "Extract nodes and relationships from the following text:\n" + chunk_text + "\n<knowledge_graph>"
-    full_payload = f"<start_of_turn>user\n{chunk_payload}<end_of_turn>\n<start_of_turn>model\n" # TODO: modify to use the prompt-formatting module, enabling support for multiple models! Will require specifying the exact output format needed.
-    return full_payload
+    try:
+        chunk_payload = "Extract nodes and relationships from the following text:\n" + chunk_text + "\n<knowledge_graph>"
+        full_payload = AUTO_TOKENIZER.apply_chat_template([{"role": "user", "content": chunk_payload}], add_generation_prompt=True, tokenize=False)
+        return full_payload
+    except Exception as e:
+        handle_local_error(f"Could not get request payload for graph entity extraction, encountered error: ", e)
 
 
 def remove_blank_nodes_and_relationships(entities_and_relationships: dict):
@@ -2852,7 +2882,6 @@ def process_nodes_and_relationships(
         chunk_text: str,
         source_doc_name: str,
         page_number_list: list,
-        graph_summarizer_model_prompt_template_format: str = "",
         requested_max_new_tokens: int = 1000,
         gen_settings = None
     ):
@@ -2863,14 +2892,7 @@ def process_nodes_and_relationships(
     '''
     try:
         comprehensive_summary_request_prompt = prompt_formatting_module.get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
-        formatted_prompt = prompt_formatting_module.manually_format_prompt_with_prompt_template(
-            formatted_prompt="",
-            user_query=comprehensive_summary_request_prompt,
-            current_sequence_id=0,
-            base_template="",
-            local_llm_chat_template_format=graph_summarizer_model_prompt_template_format,
-            skip_system_prompt=True
-        )
+        formatted_prompt = AUTO_TOKENIZER.apply_chat_template([{"role": "user", "content": comprehensive_summary_request_prompt}], add_generation_prompt=True, tokenize=False)
         full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
         print("Summary generated, post-processing...\n")
         full_response = prompt_formatting_module.trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n{Page Number(s): " + str(page_number_list) + "}\n\n"
@@ -2910,7 +2932,6 @@ def exl2_grapher():
         extraction_mode = request.json.get('extraction_mode', False)
         summary_generation_mode = request.json.get('summary_generation_mode', False)
         rag_response_mode = request.json.get('rag_response_mode', False)
-        graph_summarizer_model_prompt_template_format = request.json.get('graph_summarizer_model_prompt_template_format', None)
         gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
         reuse_graph_extraction_cache = str(request.headers.get('X-Reuse-Extraction-Cache', str(read_config(['reuse_graph_extraction_cache'])['reuse_graph_extraction_cache']).lower())).lower() == 'true'
         reuse_graph_summary_cache = str(request.headers.get('X-Reuse-Summary-Cache', str(read_config(['reuse_graph_summary_cache'])['reuse_graph_summary_cache']).lower())).lower() == 'true'
@@ -3113,7 +3134,6 @@ def exl2_grapher():
                         chunk_text=chunk_data['chunk_text'],
                         source_doc_name=source_doc_name,
                         page_number_list=chunk_data['page_number'],
-                        graph_summarizer_model_prompt_template_format=graph_summarizer_model_prompt_template_format,
                         requested_max_new_tokens=requested_max_new_tokens,
                         gen_settings=gen_settings
                     )
@@ -3180,7 +3200,7 @@ def health():
     with reader_semaphore:
     
         try:
-            if PIPE is None and (EXL2_MODEL is None or EXL2_CACHE is None or EXL2_TOKENIZER is None):
+            if PIPE is None and (EXL2_MODEL is None or EXL2_CACHE is None or EXL2_TOKENIZER is None or AUTO_TOKENIZER is None):
                 return jsonify(status="error", message="Model not loaded"), 503 # Service Unavailable
             
             model_info = {}
