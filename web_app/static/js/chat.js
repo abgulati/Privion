@@ -390,7 +390,8 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
         hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
 
-        rawBodyJSONStringified = JSON.stringify(formattedPrompt);
+        rawBodyJSONObj = JSON.parse(formattedPrompt);                                
+        rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
     } else {
         console.log("Invoking completions_stream");
         const hfWaitress_URL = getHfwUrl();
@@ -673,7 +674,7 @@ async function requestFormattedPrompt(regeneration_request=false, regenerate_wit
         const {do_rag, stream_session_id, formatted_user_prompt, responseIDs, server_type} = handleSetupResponse(data);
         if (!regeneration_request) { appendStreamSessionIdToUserMessage(uniqueId, stream_session_id); }
 
-        // 2- fetchEventStream()
+        // 2- fetch EventStream()
         const chatContainer = document.getElementById('chat-area');
         const totalContent = await fetchEventStream(server_type, formatted_user_prompt, responseIDs.responseContentID, chatContainer, file);
 
