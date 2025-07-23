@@ -353,7 +353,6 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'llm_filter_citations':True,
                 'local_llm_model_type':'llama',
                 'local_llm_chat_template_format':'llama3',
-                'exl2_prompt_template_format':'raw',
                 'local_llm_context_length':8192,
                 'local_llm_max_new_tokens':2048,
                 'local_llm_gpu_layers':47,
@@ -440,7 +439,6 @@ def read_config(keys, default_value=None, filename='config.json'):
                     "open-thoughts/OpenThinker-32B"
                 ],
                 'graph_summarizer_model':'google/gemma-2-2b-it',
-                'graph_summarizer_model_prompt_template_format':'gemma2',
                 'graph_summarizer_server_port':9071,
                 'graph_summarizer_access_url':'localhost',
                 'quantize_graph_summarizer_model':'n',
@@ -2698,15 +2696,13 @@ def summary_generator_for_graph_db(chunk_entities=None, cache_filepath: str = No
         summarizer_url = ""
         if exl2:
 
-            graph_summarizer_model_prompt_template_format = read_config(['graph_summarizer_model_prompt_template_format'])['graph_summarizer_model_prompt_template_format']
-
             try:
                 summarizer_url, headers, _ = get_request_params_for_graph_summarizer_model()
             except Exception as e:
                 handle_local_error("Could not get graphing request params, encountered error: ", e)
 
             try:
-                payload = json.dumps({"chunk_entities": chunk_entities, "graph_summarizer_model_prompt_template_format": graph_summarizer_model_prompt_template_format, "summary_generation_mode": True})
+                payload = json.dumps({"chunk_entities": chunk_entities, "summary_generation_mode": True})
                 full_response = hf_waitress_bulk_stream_request_response_handler(summarizer_url, headers, payload, cache_filepath)
                 # print(f"\nExl2 Bulk-Summary Generation Response:\n\n{full_response}\n")
                 return full_response
@@ -6081,13 +6077,11 @@ def get_formatted_prompt_from_history_db(chat_id, sequence_id):
     return formatted_prompt
 
 
-def read_config_for_hf_waitress_prompt_formatting() -> tuple[bool, str, bool, bool]:
+def read_config_for_hf_waitress_prompt_formatting() -> tuple[bool, bool]:
     try:
-        exl2 = read_hf_config(['exl2'])['exl2']
-        exl2_prompt_template_format = read_config(['exl2_prompt_template_format'])['exl2_prompt_template_format']
         vision = read_hf_config(['vision'])['vision']
         flux_diffusers = read_hf_config(['flux_diffusers'])['flux_diffusers']
-        return exl2, exl2_prompt_template_format, vision, flux_diffusers
+        return vision, flux_diffusers
     except Exception as e:
         handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
 
@@ -6097,12 +6091,9 @@ def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_
     print("\n\nFormatting prompt for hf-waitress\n\n")
 
     try:
-        exl2, exl2_prompt_template_format, vision, flux_diffusers = read_config_for_hf_waitress_prompt_formatting()
+        vision, flux_diffusers = read_config_for_hf_waitress_prompt_formatting()
     except Exception as e:
         handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
-
-    if exl2:
-        return(prompt_formatting_module.manually_format_prompt_with_prompt_template(formatted_prompt, user_query, current_sequence_id, system_prompt, exl2_prompt_template_format, skip_system_prompt))
 
     try:
     
@@ -6160,7 +6151,7 @@ def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_
 
                     formatted_prompt = str(first_prompt_json)
     except Exception as e:
-        handle_error_no_return("Could not format prompt for hf-waitress in method format_prompt_for_hf_waitress, encountered error: ", e)
+        handle_error_no_return("Could not format prompt for hf-waitress in method format-prompt_for_hf_waitress, encountered error: ", e)
 
     return formatted_prompt
 
@@ -6285,10 +6276,10 @@ def prepare_special_model_response(formatted_prompt:str, user_query:str, current
 
 def reject_rag() -> dict:
     try:
-        write_config({'do_rag':False})
+        write_config({'do_rag':False, 'perform_graph_rag':False})
         return {"success": True}
     except Exception as e:
-        handle_error_no_return("Could not default do_rag to False in method reject_rag, encountered error: ", e)
+        handle_error_no_return("Could not default do_rag to False in method reject-rag, encountered error: ", e)
         return {"success": False}
 
 
@@ -6300,7 +6291,7 @@ def prepare_for_quick_response(current_sequence_id:int, regeneration_request:boo
 
 
 def get_formatted_prompt_for_setup_for_local_llm_response(chat_id:int, current_sequence_id:int) -> str:
-    print("\n\nGetting formatted prompt for setup_for_local_llm_response\n\n")
+    print("\n\nGetting formatted prompt for setup-for_local_llm_response\n\n")
     formatted_prompt = ""
     if current_sequence_id > 0:    # get the last prompt so we can continue the completions
         formatted_prompt = get_formatted_prompt_from_history_db(chat_id, current_sequence_id)
@@ -6368,7 +6359,7 @@ def handle_special_model_case(local_llm_server:str, current_sequence_id:int, fil
             print(f"Returning quick-return formatted_user_prompt: {response['formatted_user_prompt']}")
             return new_local_llm_server, jsonify(response)
         except Exception as e:
-            handle_local_error("Could not prepare special model response in method setup_for_local_llm_response, encountered error: ", e)
+            handle_local_error("Could not prepare special model response in method setup-for_local_llm_response, encountered error: ", e)
     
     if vision: 
         return 'hfw-vision', None
@@ -7196,7 +7187,7 @@ def search_knowledge_base(user_query:str, embedding_function:str, force_enable_r
         except Exception as e:
             handle_error_no_return("Could not execute graph RAG, encountered error: ", e)
     else:
-        write_config({'perform_graph_rag': False})  # In-case the LLM elected to use GraphRAG but the user has explicitly disabled it, we need to set perform_graph_rag to False to avoid any issues downstream!
+        write_config({'perform_graph_rag': False})  # In-case the LLM elected to use GraphRAG but the user has explicitly disabled it, we need to set perform-graph_rag to False to avoid any issues downstream!
 
     return docs, do_rag, graph_rag_context
 
@@ -7220,12 +7211,12 @@ def setup_for_local_llm_response():
         formatted_history_prompt = get_formatted_prompt_for_setup_for_local_llm_response(int(chat_id), int(current_sequence_id) if not regeneration_request else int(current_sequence_id) - 1) # if regeneration_request, we must act as if the current sequence id does not exist in the history db when formatting the prompt!
         if formatted_history_prompt == "": current_sequence_id = 0
     except Exception as e:
-        return handle_api_error("Could not get formatted_history_prompt from history db in method setup_for_local_llm_response, encountered error: ", e)
+        return handle_api_error("Could not get formatted_history_prompt from history db in method setup-for_local_llm_response, encountered error: ", e)
     
     try:
         local_llm_server, special_response = handle_special_model_case(config['local_llm_server'], current_sequence_id, file_attached, stream_session_id, user_query, formatted_history_prompt, regeneration_request)
     except Exception as e:
-        return handle_api_error("Error determining appropriate model type and server for setup_for_local_llm_response: ", e)
+        return handle_api_error("Error determining appropriate model type and server for setup-for_local_llm_response: ", e)
     
     if special_response is not None:    # If a special model response is returned, quick-return here
         print(f"Returning special model response: {special_response}")
@@ -7242,7 +7233,7 @@ def setup_for_local_llm_response():
         (config['force_disable_rag'] or regenerate_with_citations_force_disabled), 
         int(config['filter_top_k_results_by_reranking']), int(config['fetch_top_k_results_from_vectordb']))
     except Exception as e:
-        return handle_api_error("Could not process vector search in method setup_for_local_llm_response, encountered error: ", e)
+        return handle_api_error("Could not process vector search in method setup-for_local_llm_response, encountered error: ", e)
 
     try:    # Write do_rag to config and prepare RAG context if necessary
         # print(f'Do RAG? {do_rag}')
@@ -7490,13 +7481,11 @@ def get_request_parameters_for_get_references(request: Request) -> tuple[str, st
 
 def read_config_for_get_references() -> tuple[str, str, str, str, bool]:
     try:
-        read_return = read_config(['local_llm_server', 'upload_folder', 'local_llm_chat_template_format', 'exl2_prompt_template_format', 'perform_graph_rag'])
+        read_return = read_config(['local_llm_server', 'local_llm_chat_template_format', 'perform_graph_rag'])
         local_llm_server = read_return['local_llm_server']
-        upload_folder = read_return['upload_folder']
         local_llm_chat_template_format = read_return['local_llm_chat_template_format']
-        exl2_prompt_template_format = read_return['exl2_prompt_template_format']
         perform_graph_rag = str(read_return['perform_graph_rag']).lower() == 'true'
-        return local_llm_server, upload_folder, local_llm_chat_template_format, exl2_prompt_template_format, perform_graph_rag
+        return local_llm_server, local_llm_chat_template_format, perform_graph_rag
     except Exception as e:
         handle_local_error("Could not read config.json in method read_config_for_get_references(), encountered error: ", e)
 
@@ -7507,8 +7496,7 @@ def get_references():
     print("\n\nStoring History Post-Response -- Determining if Citations are Necessary\n\n")
 
     try:
-        local_llm_server, upload_folder, local_llm_chat_template_format, exl2_prompt_template_format, perform_graph_rag = read_config_for_get_references()
-        exl2 = read_hf_config(['exl2'])['exl2']
+        local_llm_server, local_llm_chat_template_format, perform_graph_rag = read_config_for_get_references()
     except Exception as e:
         return handle_api_error("Missing values in config.json when attempting to get_references. Error: ", e)
 
@@ -7531,16 +7519,14 @@ def get_references():
         if flux_diffusers:
             do_rag = False
         else:
-            if exl2:
-                if perform_graph_rag:
-                    try:
-                        last_context_index = formatted_user_prompt.rindex("The following context might be helpful in answering the user query above.")
-                        formatted_user_prompt = formatted_user_prompt[:last_context_index]
-                    except Exception as e:
-                        handle_error_no_return("Trimming RAG context unnecessary, skipping. Encountered error: ", e)
-                formatted_user_prompt += prompt_formatting_module.append_eot_token_to_llm_response(exl2_prompt_template_format, llm_response)
-            else:
-                formatted_user_prompt = get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response)
+            if perform_graph_rag:
+                try:
+                    last_context_index = formatted_user_prompt.rindex("The following context might be helpful in answering the user query above.")
+                    graph_context_trimmed_prompt = formatted_user_prompt[:last_context_index]
+                    formatted_user_prompt = graph_context_trimmed_prompt + '"}]}'   # proper closing of the JSON array
+                except Exception as e:
+                    handle_error_no_return("Trimming RAG context unnecessary, skipping. Encountered error: ", e)
+            formatted_user_prompt = get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response)
 
     if not do_rag:
         print("\n\nRAG Citations unnecessary, storing chat history and returning\n\n")
