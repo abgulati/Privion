@@ -5139,7 +5139,9 @@ def llama_cpp_server_starter():
         cpp_app = ['llama-server', '-m', cpp_model, '-ngl', str(local_llm_gpu_layers), '-c', str(local_llm_context_length), '-n', str(local_llm_max_new_tokens), '--host', '0.0.0.0']
 
         if platform.system() == 'Windows':
-            LLAMA_CPP_PROCESS = subprocess.Popen(cpp_app, creationflags=subprocess.CREATE_NEW_CONSOLE)  # Windows only! Comment when containerizing or deploying to Linux/MacOS!
+            #LLAMA_CPP_PROCESS = subprocess.Popen(cpp_app, creationflags=subprocess.CREATE_NEW_CONSOLE)  # Windows only! Comment when containerizing or deploying to Linux/MacOS!
+            windows_command = f'start cmd /k "{cpp_app}"'  # /c - closes window after command finishes, /k - keeps window open (useful for debugging)
+            LLAMA_CPP_PROCESS = subprocess.Popen(windows_command, shell=True)
         else:           
             # Platform & container agnostic:
             with open('llama_cpp_server_output_log.txt', 'w') as f:
@@ -5265,7 +5267,9 @@ def hf_waitress_server_starter(hard_reboot_required = False):
 
     try:
         if platform.system() == 'Windows':
-            subprocess.Popen(full_command, creationflags=subprocess.CREATE_NEW_CONSOLE)   #Popen is non-blocking, so the server will keep running in the background
+            windows_command = f'start cmd /c "{full_command}"'  # /c - closes window after command finishes, /k - keeps window open (useful for debugging)
+            subprocess.Popen(windows_command, shell=True) 
+
         else:
             # Platform & container agnostic - On Linux/Unix, you need to explicitly provide the arguments as a list to avoid shell interpretation issues:
             command_list = [base_command]  # 'python3'
@@ -5276,7 +5280,7 @@ def hf_waitress_server_starter(hard_reboot_required = False):
                 command_list.extend(launch_args.split())
             
             with open('hf_waitress_output_log.txt', 'w') as f:
-                subprocess.Popen(command_list)
+                subprocess.Popen(command_list, shell=True)
 
     except Exception as e:
         return handle_api_error(f"Could not launch HF-Waitress process in directory: {os.getcwd()}, encountered error: ", e)
