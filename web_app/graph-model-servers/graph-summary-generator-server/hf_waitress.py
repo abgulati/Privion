@@ -93,9 +93,15 @@ config_writer_semaphore = threading.Semaphore(1)
 error_logging_semaphore = threading.Semaphore(1)
 reader_semaphore = threading.Semaphore(3)
 
+###---Complete List of HF-Transformers Environment Variables: https://huggingface.co/docs/huggingface_hub/en/package_reference/environment_variables
+
 # os.environ['HUGGINGFACE_HUB_CACHE'] = transformer_models_folder
 # os.environ['TRANSFORMERS_CACHE'] = transformer_models_folder
 # os.environ['HF_HOME'] = transformer_models_folder
+os.environ['HF_HUB_ENABLE_EMERGENCY_RETRY'] = 'true'
+os.environ['HF_HUB_EMERGENCY_RETRY_WAIT_TIME'] = '10'
+os.environ['HF_XET_HIGH_PERFORMANCE'] = 'true'
+os.environ['HF_HUB_DISABLE_XET'] = 'true'
 
 #########################------------------------------------------------###############################
 
@@ -1110,6 +1116,7 @@ def parse_arguments():
         exl2_bpw = float(read_return['exl2_bpw'])
         exl2_cache_type = str(read_return['exl2_cache_type'])
         exl2_max_seq_len = int(read_return['exl2_max_seq_len'])
+        exl2_force_regenerate_measurement = str(read_return['exl2_force_regenerate_measurement']).lower() == 'true'
         flux_low_vram_optimizations = str(read_return['flux_low_vram_optimizations']).lower() == 'true'
         load_quantized_flux = str(read_return['load_quantized_flux']).lower() == 'true'
         quantize = str(read_return['quantize'])
@@ -1171,7 +1178,7 @@ def parse_arguments():
         # ExLlamaV2:
         parser.add_argument("--exl2", action="store_true", default=False, help="Add this flag when loading models via ExLlamaV2. Defaults to False.")
         parser.add_argument("--exl2_bpw", type=float, default=exl2_bpw, help="Specify the bpw to be used when quantizing ExLlamaV2 models. Remembers previously set value and falls-back to 3.0 as the default.")
-        parser.add_argument("--exl2_force_regenerate_measurement", action="store_true", default=False, help="Add this flag required to re-generate the measurement file for ExLlamaV2 models. Defaults to False.")
+        parser.add_argument("--exl2_force_regenerate_measurement", action="store_true", default=exl2_force_regenerate_measurement, help="Add this flag required to re-generate the measurement file for ExLlamaV2 models. Defaults to False.")
         parser.add_argument("--exl2_cache_type", type=str, default=exl2_cache_type, help="Specify the cache type to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to full ExLlamaV2Cache as the default.")
         parser.add_argument("--exl2_max_seq_len", type=int, default=exl2_max_seq_len, help="Specify the max sequence length (context size) to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to 2048 as the default.")
         parser.add_argument("--exl2_no_flash_attn", action="store_true", default=False, help="Use this flag to disable Flash Attention 2 for ExLlamaV2 models. Defaults to False.")
@@ -1595,18 +1602,16 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
         transformer_models_folder = str(read_return['transformer_models_folder'])
         exl2_force_regenerate_measurement = str(read_return['exl2_force_regenerate_measurement']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting to generate_exllama_measurement_file_for_model(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when attempting to generate-exllama_measurement_file_for_model(), encountered error: ", e)
 
     try:
         temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
-        safe_remove_folder_from_filepath(temp_dir)  # remove previous temp-converter-files to prevent Permission Errors!
         os.makedirs(temp_dir, exist_ok=True)
 
         measurement_file_path = os.path.join(transformer_models_folder, model_id, "exllama-measurements-file", "measurement.json")
         os.makedirs(os.path.dirname(measurement_file_path), exist_ok=True)
     except Exception as e:
-        safe_remove_folder_from_filepath(temp_dir)
-        handle_local_error("Could not create measurement file directory when attempting to generate_exllama_measurement_file_for_model(), encountered error: ", e)
+        handle_local_error("Could not create measurement file directory when attempting to generate-exllama_measurement_file_for_model(), encountered error: ", e)
     
     if os.path.exists(measurement_file_path) and not exl2_force_regenerate_measurement:
         print(f"\nMeasurement file for {model_id} already exists. Skipping measurement file generation.\n")
@@ -1626,9 +1631,8 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
         print(f"\nRunning ExLlamaV2 measurement file generator for {model_id}...\n")
         subprocess.run(command, check=True) # check=True ensures that the command will raise an exception if it fails
         print(f"\nExLlamaV2 measurement file generator for {model_id} completed successfully!\n")
-        safe_remove_folder_from_filepath(temp_dir)
     except Exception as e:
-        safe_remove_folder_from_filepath(temp_dir)
+        safe_remove_folder_from_filepath(temp_dir)  # Since measurement-generation errored out, restarting afresh by clearing the temp dir is safer
         handle_local_error("Could not run ExLlamaV2 measurement file generator, encountered error: ", e)
 
     return measurement_file_path
@@ -1645,13 +1649,11 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
 
     try:
         temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
-        safe_remove_folder_from_filepath(temp_dir)  # remove previous temp-converter-files to prevent Permission Errors!
         os.makedirs(temp_dir, exist_ok=True)
 
         quantized_model_path = os.path.join(transformer_models_folder, model_id, "exl2-qaunts", f"{exl2_bpw}bpw")
         os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)   # Create parent directory structure - final `{exl2_bpw}bpw` directory will be created by ExLlamaV2 converter
     except Exception as e:
-        safe_remove_folder_from_filepath(temp_dir)
         handle_local_error("Could not create directory to store quantized model when attempting to exllama-bpw_quantize_model(), encountered error: ", e)
 
     if os.path.exists(quantized_model_path):
@@ -1674,9 +1676,9 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
         print(f"\nRunning ExLlamaV2 bpw quantizer for {model_id}...\n")
         subprocess.run(command, check=True) # check=True ensures that the command will raise an exception if it fails
         print(f"\nExLlamaV2 Conversion of {model_id} to {exl2_bpw}bpw completed successfully!\n")
-        safe_remove_folder_from_filepath(temp_dir)  # to free space and prevent Permission Errors!
+        safe_remove_folder_from_filepath(temp_dir)  # conversion completed, deleting temp dir to free space
     except Exception as e:
-        safe_remove_folder_from_filepath(temp_dir)  # to prevent Permission Errors!
+        safe_remove_folder_from_filepath(temp_dir)  # Since conversion errored out, restarting afresh by clearing the temp dir is safer
         handle_local_error("Could not run ExLlamaV2 bpw quantizer, encountered error: ", e)
 
     return quantized_model_path
@@ -1799,7 +1801,7 @@ def load_exllama_pipeline():
     try:
         global AUTO_TOKENIZER
         AUTO_TOKENIZER = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)    # Using Transformers' AutoTokenizer as ExLlamaV2's ExLlamaV2Tokenizer does not contain an equivalent apply_chat_template() method!
-        print(f"\nTransformers-AutoTokenizer loaded successfully for automatic prompt-formatting for model {model_id} with the ExLlamaV2 pipeline\n")
+        print("\nTransformers-AutoTokenizer configured successfully for automated prompt-formatting\n")
     except Exception as e:
         handle_local_error(f"Error loading AutoTokenizer for {model_id}. Encountered error: ", e)
 
