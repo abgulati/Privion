@@ -1805,6 +1805,16 @@ def load_exllama_pipeline():
     except Exception as e:
         handle_local_error(f"Error loading AutoTokenizer for {model_id}. Encountered error: ", e)
 
+    try:
+        print(f"Model's context-length (max_seq_len) is: {EXL2_MODEL.config.max_seq_len}")
+    except Exception as e:
+        handle_error_no_return("Could not determine the model's context-length (max_seq_len), encountered error: ", e)
+    
+    try:
+        print(f"Model's context-length (max_input_len per forward-pass) is: {EXL2_MODEL.config.max_input_len}")
+    except Exception as e:
+        handle_error_no_return("Could not determine the model's context-length (max_input_len), encountered error: ", e)
+
     print("\n\nExLlamaV2 Pipeline Loaded Successfully!\n\n")
     return True
 
