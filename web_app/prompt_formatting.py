@@ -58,6 +58,21 @@ def get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk):
     """
 
 
+def get_minimal_query_for_summary(chunk):
+    return f"""For the purpose of creating a Graph Database, nodes and relations were extracted from the below chunk of text. Keeping this in mind, can you provide a concise (under 3000 words) summary, in the style of a report detailing crucial information and insights, for the text_chunk expounding on any nodes and relationships that may be present? Thank you!
+    
+    <text_chunk>
+    {chunk}
+    </text_chunk>
+
+
+    Output format:
+    {{
+        "summary": "Your concise summary report (under 3000 words) here"
+    }}
+    """
+
+
 def get_user_query_for_node_summary(name, node_type, summary, chunk):
 
     if summary == "":
