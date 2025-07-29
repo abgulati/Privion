@@ -2586,10 +2586,69 @@ def completions_stream():
     return Response(generate(), content_type='text/event-stream')
 
 
-def set_global_exl2_dynamic_generator():
+def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
+    """
+    Checks if a given prompt fits within the max context length of the model.
+
+    A model's max context length sets a hard-limit on how large a prompt can be.
+    No input (prompt + generation) can exceed this value. If it does, the models' attention layers cannot process it correctly.
+    Accordingly, ExLlamaV2 will discard or ignore extra tokens, processing only upto N tokens.
+    This auto-truncation can lead to unexpected responses for long prompts, which is problematic.
+    Thus the need to check if the prompt fits within the max context length.
+
+    Args:
+        prompt: The prompt to check the context length of.
+
+    Returns:
+        True if the prompt fits within the max context length, False otherwise.
+    """
+
+    print(f"\n\nChecking if exl2-prompt fits within max context length...\n\n")
     try:
-        print("\nDefining ExLlamaV2DynamicGenerator\n")
-        exl2_dynamic_generator = ExLlamaV2DynamicGenerator(model = EXL2_MODEL, cache = EXL2_CACHE, tokenizer = EXL2_TOKENIZER)
+        prompt_tokens = EXL2_TOKENIZER.encode(prompt, encode_special_tokens=True)
+        # print(f"\n\nPrompt tokens shape: {prompt_tokens.shape}\n\n") # Outputs the tensor's shape (dimensions): torch.Size([<batch_size>, <num_tokens_in_prompt>]), example: torch.Size([1, 602])
+        # shape[-1] "gives the shape of the last dimension", prompt_tokens.shape is multi-dimentional of shape [<batch_size>, <num_tokens_in_prompt>]
+        # so -1, the last dimention = num_tokens_in_prompt
+        
+        if prompt_tokens.shape[-1] <= EXL2_MODEL.config.max_seq_len:   # max_seq_len is the max context length of the model
+            print(f"\n\nPrompt fits within max context length\n\n")
+            return True
+        else:
+            print(f"\n\nPrompt does not fit within max context length\n\n")
+            return False
+    except Exception as e:
+        handle_error_no_return(f"Could not check if exl2-prompt fits within max context length, enabling auto-truncation as a fallback. Encountered error: ", e)
+        return True
+
+
+def set_global_exl2_dynamic_generator(batch_mode: bool = False):
+    """
+    Defines and returns an ExLlamaV2DynamicGenerator object.
+    The generator object's cache builds up over time which is why it's best to create a new generator object for new chat requests as they may eb from different users.
+
+    Args:
+        batch_mode: Whether to use batch mode. Default is False.
+
+    Returns:
+        The ExLlamaV2DynamicGenerator object.
+    """
+
+    try:
+        if batch_mode:
+            print("\nDefining ExLlamaV2DynamicGenerator in batch mode\n")
+            max_batch_size = read_config(['max_batch_size'])
+            max_tokens_per_sequence = read_config(['max_tokens_per_sequence'])
+            exl2_dynamic_generator = ExLlamaV2DynamicGenerator(
+                model = EXL2_MODEL,
+                cache = EXL2_CACHE,
+                tokenizer = EXL2_TOKENIZER,
+                max_batch_size = max_batch_size,
+                max_q_size = max_tokens_per_sequence
+            )
+        else:
+            print("\nDefining ExLlamaV2DynamicGenerator in single-sequence mode\n")
+            exl2_dynamic_generator = ExLlamaV2DynamicGenerator(model = EXL2_MODEL, cache = EXL2_CACHE, tokenizer = EXL2_TOKENIZER)
+        
         print("\nGenerator defined successfully\n")
         return exl2_dynamic_generator
     except Exception as e:
@@ -2597,6 +2656,7 @@ def set_global_exl2_dynamic_generator():
 
 
 def get_exl2_gen_settings(request):
+
     try:
         config_data = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'knowledge_graph_cache_dir'])
         requested_max_new_tokens = config_data['max_new_tokens']    # safe value for return
@@ -2618,6 +2678,57 @@ def get_exl2_gen_settings(request):
         gen_settings = None
 
     return gen_settings, requested_max_new_tokens, config_data.get('knowledge_graph_cache_dir', '/')
+
+
+def exl2_test_encoding_logic(tokenized_messages: str):
+    """
+    Tests the encoding logic of the ExLlamaV2Tokenizer object.
+
+    Args:
+        tokenized_messages: The tokenized messages to test the encoding logic of.
+
+    Returns:
+        None.
+
+    Example Output:
+    
+    Tokenized messages: <|im_start|>system<|im_sep|>You are a helpful assistant.<|im_end|><|im_start|>user<|im_sep|>Hi!<|im_end|><|im_start|>assistant<|im_sep|>
+
+    Case 1 -- encode_special_tokens=False: Template tags not properly encoded:
+    ["systemYou are a helpful assistant.userHi!assistant"]
+
+    Case 2 -- encode_special_tokens=True: Template tags properly encoded:
+    ["<|im_start|>system<|im_sep|>You are a helpful assistant.<|im_end|><|im_start|>user<|im_sep|>Hi!<|im_end|><|im_start|>assistant<|im_sep|>"]
+
+    Case 3 -- add_bos=True: Unwanted extra Beginning-of-String (BOS) token <|endoftext|> added at the beginning! NOTE - encode_special_tokens defaults to False but Template tags properly encoded!
+    ["<|endoftext|><|im_start|>system<|im_sep|>You are a helpful assistant.<|im_end|><|im_start|>user<|im_sep|>Hi!<|im_end|><|im_start|>assistant<|im_sep|>"]
+
+    Case 4 -- add_eos=True: Unwanted extra End-of-String (EOS) token <|im_end|> added at the end! NOTE - encode_special_tokens defaults to False but Template tags properly encoded!
+    ["<|im_start|>system<|im_sep|>You are a helpful assistant.<|im_end|><|im_start|>user<|im_sep|>Hi!<|im_end|><|im_start|>assistant<|im_sep|><|im_end|>"]
+
+    Case 5 -- add_bos=True, encode_special_tokens=True, add_eos=True: Unwanted extras at both ends!:
+    ["<|endoftext|><|im_start|>system<|im_sep|>You are a helpful assistant.<|im_end|><|im_start|>user<|im_sep|>Hi!<|im_end|><|im_start|>assistant<|im_sep|><|im_end|>"]
+    """
+    try:
+        exl2_donot_encode_special_tokens = EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=False)
+        exl2_encode_special_tokens = EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True)
+        exl2_add_bos = EXL2_TOKENIZER.encode(tokenized_messages, add_bos=True)
+        exl2_add_eos = EXL2_TOKENIZER.encode(tokenized_messages, add_eos=True)
+        exl2_add_all = EXL2_TOKENIZER.encode(tokenized_messages, add_bos=True, encode_special_tokens=True, add_eos=True)
+
+        decoded_exl2_donot_encode_special_tokens = EXL2_TOKENIZER.decode(exl2_donot_encode_special_tokens, decode_special_tokens=False)
+        decoded_exl2_encode_special_tokens = EXL2_TOKENIZER.decode(exl2_encode_special_tokens, decode_special_tokens=True)
+        decoded_exl2_add_bos = EXL2_TOKENIZER.decode(exl2_add_bos, decode_special_tokens=True)
+        decoded_exl2_add_eos = EXL2_TOKENIZER.decode(exl2_add_eos, decode_special_tokens=True)
+        decoded_exl2_add_all = EXL2_TOKENIZER.decode(exl2_add_all, decode_special_tokens=True)
+
+        print(f"EXL2-TOKENIZER.encode(encode_special_tokens=False): {decoded_exl2_donot_encode_special_tokens}\n")
+        print(f"EXL2-TOKENIZER.encode(encode_special_tokens=True): {decoded_exl2_encode_special_tokens}\n")
+        print(f"EXL2-TOKENIZER.encode(add_bos=True): {decoded_exl2_add_bos}\n")
+        print(f"EXL2-TOKENIZER.encode(add_eos=True): {decoded_exl2_add_eos}\n")
+        print(f"EXL2-TOKENIZER.encode(add_bos=True, encode_special_tokens=True, add_eos=True): {decoded_exl2_add_all}\n")
+    except Exception as e:
+        handle_error_no_return("Could not test-encode messages for exl2-stream, encountered error: ", e)
 
 
 @app.route('/exl2_stream', methods=['POST'])
@@ -2649,23 +2760,29 @@ def exl2_stream():
     try:
         tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
         # print(f"\nTokenized messages: {tokenized_messages}\n")
+        # exl2_test_encoding_logic(tokenized_messages)
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
+    
+    if not exl2_prompt_fits_within_max_context_length(tokenized_messages):
+        return handle_api_error("Prompt does not fit within max context length, enabling auto-truncation as a fallback. Encountered error: ", e)
 
     try:
-        print("\nCreating ExLlamaV2DynamicJob Object...\n")
+        # print(f"AUTO_TOKENIZER.eos_token_id: {AUTO_TOKENIZER.eos_token_id}")
+        # print(f"EXL2_TOKENIZER.eos_token_id: {EXL2_TOKENIZER.eos_token_id}")
+        print("\nCreating ExLlamaV2-DynamicJob Object...\n")
         job = ExLlamaV2DynamicJob(
-            input_ids= EXL2_TOKENIZER.encode(tokenized_messages, add_bos=True),
+            input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
             max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
-            stop_conditions = [EXL2_TOKENIZER.eos_token_id],
+            stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id],
             gen_settings = gen_settings
         )
         exl2_dynamic_generator.enqueue(job)
-        print("\nExLlamaV2DynamicJob Defined & Enqueued Successfully\n")
+        print("\nExLlamaV2-DynamicJob Defined & Enqueued Successfully\n")
     except Exception as e:
         llm_semaphore.release()
-        return handle_api_error("Could not create ExLlamaV2DynamicJob object for exl2-stream, encountered error: ", e)
+        return handle_api_error("Could not create ExLlamaV2-DynamicJob object for exl2-stream, encountered error: ", e)
 
     stop_thread = threading.Event()
     output_queue = queue.Queue()
@@ -2729,16 +2846,16 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
     try:    # Step 1: Create Exl2 Generator & Job
         exl2_dynamic_generator = set_global_exl2_dynamic_generator()
         job = ExLlamaV2DynamicJob(
-            input_ids= EXL2_TOKENIZER.encode(payload, add_bos=True),
+            input_ids= EXL2_TOKENIZER.encode(payload, encode_special_tokens=True),
             max_new_tokens = max_new_tokens,
-            stop_conditions = [EXL2_TOKENIZER.eos_token_id],
+            stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id],
             gen_settings = gen_settings
         )
         exl2_dynamic_generator.enqueue(job)
     except AssertionError as e:
-        handle_local_error(f"Could not create ExLlamaV2DynamicJob object for payload {payload} - likely due to insufficient cache. Ensure the `max_seq_len` is set to a value that allows for the entire payload to be processed. Encountered error: ", e)
+        handle_local_error(f"Could not create ExLlamaV2-DynamicJob object for payload {payload} - likely due to insufficient cache. Ensure the `max_seq_len` is set to a value that allows for the entire payload to be processed. Encountered error: ", e)
     except Exception as e:
-        handle_local_error(f"Could not create ExLlamaV2DynamicJob object for payload {payload}, encountered error: ", e)
+        handle_local_error(f"Could not create ExLlamaV2-DynamicJob object for payload {payload}, encountered error: ", e)
 
     try:    # Step 2: Iterate Over Jobs & Generate Response(s)
         print("\nProcessing Exl2 Job...\n")
@@ -2905,7 +3022,19 @@ def process_nodes_and_relationships(
     try:
         comprehensive_summary_request_prompt = prompt_formatting_module.get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
         formatted_prompt = AUTO_TOKENIZER.apply_chat_template([{"role": "user", "content": comprehensive_summary_request_prompt}], add_generation_prompt=True, tokenize=False)
-        full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+        
+        if exl2_prompt_fits_within_max_context_length(formatted_prompt):
+            full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+        else:   # No errors are raised if the prompt is larger than the max context length because it'll be auto-truncated which we don't want so best to handle manually!
+            minimal_summary_request_prompt = prompt_formatting_module.get_minimal_query_for_summary(chunk_text)
+            formatted_prompt = AUTO_TOKENIZER.apply_chat_template([{"role": "user", "content": minimal_summary_request_prompt}], add_generation_prompt=True, tokenize=False)
+            
+            if exl2_prompt_fits_within_max_context_length(formatted_prompt):
+                full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+            else:
+                handle_error_no_return(f"Could not generate comprehensive summary for chunk of document {source_doc_name} - too long even with minimal data! Encountered error: ", e)
+                return [""]
+        
         print("Summary generated, post-processing...\n")
         full_response = prompt_formatting_module.trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n{Page Number(s): " + str(page_number_list) + "}\n\n"
         print("\nSummary generation completed for present document chunk, proceeding...\n")
@@ -3001,6 +3130,14 @@ def exl2_grapher():
                 try:
                     print(f"\nAttempting to extract entities and relationships from chunk {chunk_number} of document {source_doc_name}...\n")
                     full_payload = get_request_payload_for_graph_entity_extraction(chunk_data['chunk_text'])
+                    
+                    if not exl2_prompt_fits_within_max_context_length(full_payload):
+                        handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number} of document {source_doc_name} - prompt too long! Encountered error: ", e)
+                        blank_response = {'nodes': [], 'relationships': []}
+                        chunk_entities[chunk_number]['entities_and_relationships'] = blank_response
+                        output_queue.put(chunk_entities[chunk_number])
+                        continue
+                    
                     extraction_response_first_attempt = create_and_execute_exl2_job(payload=full_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
                     response_validation_result = validate_entity_extraction_response(extraction_response_first_attempt)
                     
