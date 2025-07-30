@@ -3126,17 +3126,12 @@ def exl2_graph_extractor():
                     print(f"\nAttempting to extract entities and relationships from chunk {chunk_number} of document {source_doc_name}...\n")
                     full_payload = get_request_payload_for_graph_entity_extraction(chunk_data['chunk_text'])
                     
-                    if not exl2_prompt_fits_within_max_context_length(full_payload):
-                        handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number} of document {source_doc_name} - prompt too long! Encountered error: ", e)
-                        blank_response = {'nodes': [], 'relationships': []}
-                        chunk_entities[chunk_number]['entities_and_relationships'] = blank_response
-                        output_queue.put(chunk_entities[chunk_number])
-                        continue
+                    response_validation_result = None
+                    if exl2_prompt_fits_within_max_context_length(full_payload):
+                        extraction_response_first_attempt = create_and_execute_exl2_job(payload=full_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+                        response_validation_result = validate_entity_extraction_response(extraction_response_first_attempt)
                     
-                    extraction_response_first_attempt = create_and_execute_exl2_job(payload=full_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-                    response_validation_result = validate_entity_extraction_response(extraction_response_first_attempt)
-                    
-                    if response_validation_result['is_valid']:
+                    if response_validation_result is not None and response_validation_result['is_valid']:
                         full_response = remove_blank_nodes_and_relationships(response_validation_result['validated_response'])  # remove-blank_nodes_and_relationships() will either return a cleaned-up dict, or the unchanged dict on error or if no changes were made!
                     else:
                         print(f"Extraction response failed validation - Chunk is likely too large. Attempting to split and retry entity extraction for chunk {chunk_number} of document {source_doc_name}...")
