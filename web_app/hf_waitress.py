@@ -2932,7 +2932,7 @@ def remove_blank_nodes_and_relationships(entities_and_relationships: dict):
         return entities_and_relationships
 
 
-def core_dict_validation_logic_for_cache_reuse(extracted_dict: dict, validate_summary: bool = False):
+def core_dict_validation_logic_for_cache_reuse(extracted_dict: dict):
     try:
         if not isinstance(extracted_dict, dict):
             raise ValueError(f"Invalid dictionary validation request - expected a dict, got {type(extracted_dict).__name__}")
@@ -2950,14 +2950,6 @@ def core_dict_validation_logic_for_cache_reuse(extracted_dict: dict, validate_su
             raise ValueError("Expected all elements in 'nodes' list to be dicts.")
         if not all(isinstance(relationship, dict) for relationship in extracted_dict['relationships']):
             raise ValueError("Expected all elements in 'relationships' list to be dicts.")
-        
-        if validate_summary:    # Ensure that the summary key in the nodes and relationships dict is not a blank string, list, or None
-            for node in extracted_dict['nodes']:
-                if node.get('summary') is None or not isinstance(node.get('summary'), list) or len(node.get('summary')) == 0:
-                    raise ValueError(f"Expected 'summary' to be a non-empty list, got {type(node.get('summary')).__name__}")
-            for relationship in extracted_dict['relationships']:
-                if relationship.get('summary') is None or not isinstance(relationship.get('summary'), list) or len(relationship.get('summary')) == 0:
-                    raise ValueError(f"Expected 'summary' to be a non-empty list, got {type(relationship.get('summary')).__name__}")
 
         return extracted_dict
 
@@ -3078,23 +3070,29 @@ def exl2_graph_extractor():
 
     stop_thread = threading.Event()
     output_queue = queue.Queue()
+    cache_queue = queue.Queue()
 
     def extraction_task():
 
-        try:
+        def load_and_fire_off_cache():
+            '''
+            Checks if any entries in the received chunk_entities dict are present in the local cache.
+            If so, the cached data is streamed back right-away, leaving only the tasks to be processed by the LLM.
+            This ensures maximum GPU utilization as each iteration purely executes the LLM task, without checking for / saving to cache which can be very I/O expensive for large files! 
+            '''
 
-            cache_data_map = {}
+            cache_data_map = {}     # declaring here in-case multiple source-doc_names are present in the chunk_entities dict!
+            new_chunks_for_llm = [] # we add to this instead of deleting from the chunck_entities dict as "Filter & Return" is a superior design pattern to "Iterate & Mutate"
+            # In the latter, a shared structure (chunk_entities) outside the scope of the function is mutated, which is not thread-safe!
+
             for chunk_number, chunk_data in chunk_entities.items():
-
-                source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
-                extraction_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_extraction_cache.json")
-                
-                print(f"\n\n\nExtracting entities and relationships from document {source_doc_name} - Processing chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
-
-                if not rag_response_mode:   # When responding to a query, we don't want to use the cache which is meant only for the file-processing step!
-                    print("\nNon-response mode\n")
+                try:
+                    source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
+                    
+                    print(f"\nChecking for existing cache of previously extracted nodes and relationships for chunk {chunk_number} of document {source_doc_name}...\n")
                     
                     if source_doc_name not in cache_data_map:
+                        extraction_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_extraction_cache.json")
                         cached_data = None
                         try:
                             cached_data = load_json_file(extraction_cache_file_path)
@@ -3106,24 +3104,50 @@ def exl2_graph_extractor():
                             'file_path': extraction_cache_file_path
                         }   # Because the next step expects `source_doc_name` to be a key in the `cache_data_map` dict!
                     
-                    if reuse_graph_extraction_cache:
-                        print(f"\nChecking for existing cache of previously extracted nodes and relationships for chunk {chunk_number} of document {source_doc_name}...\n")
-
-                        cache_entry = cache_data_map.get(source_doc_name)
-                        cached_chunk_data = cache_entry.get('data', {}).get(chunk_number, {})
-                        if cached_chunk_data.get('entities_and_relationships') is not None:
-
-                            cached_entry_validation_result = core_dict_validation_logic_for_cache_reuse(cached_chunk_data['entities_and_relationships'])
-                            if cached_entry_validation_result is not None:
-                                chunk_entities[chunk_number]['entities_and_relationships'] = remove_blank_nodes_and_relationships(cached_chunk_data['entities_and_relationships'])    # NOTE: Only the 'entities_and_relationships' key is updated in the chunk_entities dict received in the POST request!
-                                output_queue.put(chunk_entities[chunk_number])
-                                print(f"\nFound existing cache of previously extracted nodes and relationships for chunk {chunk_number} of document {source_doc_name}, returning cached data...\n")
-                                continue
-                            else:
-                                print(f"\nCached data for chunk {chunk_number} of document {source_doc_name} failed validation, proceeding to extract afresh...\n")
                     
+                    cached_chunk_data = cache_data_map.get(source_doc_name, {}).get('data', {}).get(chunk_number, {})
+                    
+                    if cached_chunk_data and cached_chunk_data.get('entities_and_relationships'):
+                        validation_result = core_dict_validation_logic_for_cache_reuse(cached_chunk_data['entities_and_relationships'])
+                        
+                        if validation_result is not None:
+                            # Path 1: Valid cache found. Use it and DO NOT add to the list.
+                            chunk_entities[chunk_number]['entities_and_relationships'] = remove_blank_nodes_and_relationships(cached_chunk_data['entities_and_relationships'])    # NOTE: Only the 'entities_and_relationships' key is updated in the chunk_entities dict received in the POST request!
+                            output_queue.put(chunk_entities[chunk_number])
+                            print(f"\nFound existing cache of previously extracted nodes and relationships for chunk {chunk_number} of document {source_doc_name}, returning cached data...\n")
+                        else:
+                            # Path 2: Cache found but is invalid. Add to list for reprocessing.
+                            new_chunks_for_llm.append(chunk_number)
+                            print(f"\nCached data for chunk {chunk_number} of document {source_doc_name} failed validation, proceeding to extract afresh...\n")
+                    else:
+                        # Path 3: No cache entry exists for this chunk. Add to list.
+                        new_chunks_for_llm.append(chunk_number)
+                
+                except Exception as e:
+                    # Path 4: A generic error occurred. Default to reprocessing for safety.
+                    handle_error_no_return(f"Error processing cache for chunk {chunk_number} of document {source_doc_name}, will be processed afresh for safety. Encountered error: ", e)
+                    new_chunks_for_llm.append(chunk_number)
+
+            return new_chunks_for_llm
+                
+        try:
+
+            entries_to_process = list(chunk_entities.keys())    # Default to all chunks entries
+            
+            if reuse_graph_extraction_cache and not rag_response_mode:   # When responding to a query, we don't want to use the cache which is meant only for the file-processing step!
                 try:
-                    print(f"\nAttempting to extract entities and relationships from chunk {chunk_number} of document {source_doc_name}...\n")
+                    entries_to_process = load_and_fire_off_cache()  # If any entries were previously cached, those are returned and only new entries are processed by the LLM
+                except Exception as e:
+                    handle_error_no_return(f"Error processing cache, proceeding to process all chunks afresh. Encountered error: ", e)
+                    entries_to_process = list(chunk_entities.keys())
+
+            for count, chunk_number in enumerate(entries_to_process):
+                chunk_data = chunk_entities[chunk_number]
+
+                try:
+                    source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
+
+                    print(f"\nAttempting to extract entities and relationships from chunk {chunk_number} of document {source_doc_name}...processing item {count + 1} of total {len(entries_to_process)} items...\n")
                     full_payload = get_request_payload_for_graph_entity_extraction(chunk_data['chunk_text'])
                     
                     response_validation_result = None
@@ -3136,18 +3160,18 @@ def exl2_graph_extractor():
                     else:
                         print(f"Extraction response failed validation - Chunk is likely too large. Attempting to split and retry entity extraction for chunk {chunk_number} of document {source_doc_name}...")
 
-                        '''
-                        Split the chunk into two halves and retry entity extraction for each half.
-                        Recursively repeat until valid responses are obtained.
-                        The reason for this design is that the model may have been overwhelmed by the chunk size, and relying on the overlap is not robust enough for two reasons:
-                            1. It may not be a big enough overlap for offsetting to help.
-                            2. By trimming both the leading and trailing overlap, imagine the scenario for consecutive chunks that fail to process:
-                                Say a chunk fails so you remove the overlap, which includes the last 300 chars as those are expected to be the first 300 chars of the next chunk anyways.
-                                Now if the next chunk also fails, and you remove the leading and trailing overlap, you have outright lost those 300 chars and never even processed them!
-                        The best way to mitigate this is via clever recursion!
-                        '''
-
                         def retry_entity_extraction(chunk_text, max_depth=5, current_depth=0):
+                            '''
+                            Splits the chunk into two halves and retries entity extraction for each half.
+                            Recursively repeats until valid responses are obtained.
+                            The reason for this design is that the model may have been overwhelmed by the chunk size, and relying on the overlap is not robust enough for two reasons:
+                                1. It may not be a big enough overlap for offsetting to help.
+                                2. By trimming both the leading and trailing overlap, imagine the scenario for consecutive chunks that fail to process:
+                                    a) Say a chunk fails so you remove the overlap, which includes the last 300 chars as those are expected to be the first 300 chars of the next chunk anyways.
+                                    b) Now if the next chunk also fails, and you remove the leading and trailing overlap, you have outright lost those 300 chars and never even processed them!
+                            The best way to mitigate this is via clever recursion!
+                            '''
+                            
                             # Prevent infinite recursion
                             if current_depth >= max_depth:
                                 print(f"Max depth reached - could not extract all entities and relationships for chunk {chunk_number} of document {source_doc_name}. Returning empty response...")
@@ -3196,35 +3220,59 @@ def exl2_graph_extractor():
 
                     chunk_entities[chunk_number]['entities_and_relationships'] = full_response
                     output_queue.put(chunk_entities[chunk_number])
-
-                    if not rag_response_mode:   # save on-disk cache only for file-processing mode!
-                        try:
-                            update_and_save_json_file({chunk_number: chunk_entities[chunk_number]}, extraction_cache_file_path)
-                            cache_data_map[source_doc_name]['data'][chunk_number] = chunk_entities[chunk_number]    # update in-memory cache as well to help with de-duplication
-                            print(f"\nSaved identified nodes and relationships from chunk {chunk_number} of document {source_doc_name} to cache file at path {extraction_cache_file_path}\n")
-                        except Exception as e:
-                            handle_error_no_return(f"Could not cache identified nodes and relationships from document {source_doc_name} to cache file at path {extraction_cache_file_path}, skipping. Encountered error: ", e)
-                
+                    if not rag_response_mode:
+                        cache_queue.put({chunk_number: chunk_entities[chunk_number]})
+            
                 except Exception as e:
                     handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number} of document {source_doc_name}, skipping. Encountered error: ", e)
                     chunk_entities[chunk_number]['entities_and_relationships'] = {'nodes': [], 'relationships': []}     # Set empty or default value in case of complete failure
                     output_queue.put(chunk_entities[chunk_number])
+                    if not rag_response_mode:
+                        cache_queue.put({chunk_number: chunk_entities[chunk_number]})
                     continue
 
         except Exception as e:
             handle_error_no_return(f"Could not extract entities and relationships, encountered error: ", e)
         finally:
+            # Signal the client-facing stream to stop. This always runs.
             output_queue.put(None)
+
+            # ONLY signal the caching thread to stop IF it was started.
+            if not rag_response_mode:
+                cache_queue.put(None)
+            
             print("\n\nLLM stream done, releasing semaphore\n\n")
             llm_semaphore.release()
             stop_thread.set()
+
+
+    def save_to_local_cache(line):
+        try:
+            for chunk_number, chunk_data in line.items():
+                source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
+                extraction_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_extraction_cache.json")
+                update_and_save_json_file({chunk_number: chunk_data}, extraction_cache_file_path)
+                print(f"\nSaved identified nodes and relationships from chunk {chunk_number} of document {source_doc_name} to cache file at path {extraction_cache_file_path}\n")
+        except Exception as e:
+            handle_error_no_return(f"Could not cache identified nodes and relationships from document {source_doc_name} to cache file at path {extraction_cache_file_path}, skipping. Encountered error: ", e)
+
+    
+    def caching_thread():
+        while True:
+            line =  cache_queue.get()
+            if line is None:
+                print("\nNone read, breaking and stopping cache-thread\n")
+                break
+            save_to_local_cache(line)
+
+        print("\n\nCaching complete\n\n")
 
 
     def generate():
         while True:
             line = output_queue.get()
             if line is None:
-                print("\nNone read, breaking and stopping thread\n")
+                print("\nNone read, breaking and stopping task-thread\n")
                 break
             yield f"data: {json.dumps(line)}\n\n"
         
@@ -3232,8 +3280,12 @@ def exl2_graph_extractor():
 
         print("\n/exl2-graph-extractor done\n")
 
-    thread = threading.Thread(target=extraction_task)
-    thread.start()
+    task_thread = threading.Thread(target=extraction_task)
+    task_thread.start()
+
+    if not rag_response_mode:
+        cache_thread = threading.Thread(target=caching_thread)
+        cache_thread.start()
 
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
@@ -3271,49 +3323,81 @@ def exl2_graph_summarizer():
 
     stop_thread = threading.Event()
     output_queue = queue.Queue()
+    cache_queue = queue.Queue()
 
     def summary_generation_task():
 
-        try:
+        def load_and_fire_off_cache():
+            '''
+            Checks if any entries in the received chunk_entities dict are present in the local cache.
+            If so, the cached data is streamed back right-away, leaving only the tasks to be processed by the LLM.
+            This ensures maximum GPU utilization as each iteration purely executes the LLM task, without checking for / saving to cache which can be very I/O expensive for large files! 
+            '''
             
-            cache_data_map = {}
+            cache_data_map = {}     # declaring here in-case multiple source-doc_names are present in the chunk_entities dict!
+            new_chunks_for_llm = [] # we add to this instead of deleting from the chunck_entities dict as "Filter & Return" is a superior design pattern to "Iterate & Mutate"
+            # In the latter, a shared structure (chunk_entities) outside the scope of the function is mutated, which is not thread-safe!
+
             for chunk_number, chunk_data in chunk_entities.items():
+                try:
+                    source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
 
-                source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
-                summary_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_summary_cache.json")
-
-                print(f"\n\n\nGenerating summaries for document {source_doc_name} - Processing chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
-
-                if source_doc_name not in cache_data_map:
-                    cached_data = None
-                    try:
-                        cached_data = load_json_file(summary_cache_file_path)
-                    except Exception as e:
-                        handle_error_no_return(f"Could not load summary-cache file at path {summary_cache_file_path} for document {source_doc_name}, proceeding to generate afresh. Encountered error: ", e)
-                    
-                    cache_data_map[source_doc_name] = {
-                        'data': cached_data if isinstance(cached_data, dict) else {},
-                        'file_path': summary_cache_file_path
-                    }   # Because the next step expects `source_doc_name` to be a key in the `cache_data_map` dict!
-                    
-                if reuse_graph_summary_cache:
                     print(f"\nChecking for existing summary cache for chunk {chunk_number} of document {source_doc_name}...\n")
 
-                    cache_entry = cache_data_map.get(source_doc_name)
-                    cached_chunk_data = cache_entry.get('data', {}).get(chunk_number, {})
-                    if cached_chunk_data.get('entities_and_relationships') is not None:
+                    if source_doc_name not in cache_data_map:
+                        summary_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_summary_cache.json")
+                        cached_data = None
+                        try:
+                            cached_data = load_json_file(summary_cache_file_path)
+                        except Exception as e:
+                            handle_error_no_return(f"Could not load summary-cache file at path {summary_cache_file_path} for document {source_doc_name}, proceeding to generate afresh. Encountered error: ", e)
+                        
+                        cache_data_map[source_doc_name] = {
+                            'data': cached_data if isinstance(cached_data, dict) else {},
+                            'file_path': summary_cache_file_path
+                        }   # Because the next step expects `source_doc_name` to be a key in the `cache_data_map` dict!
+                        
+                    cached_chunk_data = cache_data_map.get(source_doc_name, {}).get('data', {}).get(chunk_number, {})
 
-                        cached_entry_validation_result = core_dict_validation_logic_for_cache_reuse(cached_chunk_data['entities_and_relationships'], validate_summary=True)
-                        if cached_entry_validation_result is not None:
+                    if cached_chunk_data and 'summary' in cached_chunk_data:
+                        
+                        if cached_chunk_data['summary'] is not None and isinstance(cached_chunk_data['summary'], list) and len(cached_chunk_data['summary']) > 0:
+                            # Path 1: Valid cache found. Use it and DO NOT add to the list.
                             chunk_entities[chunk_number]['summary'] = cached_chunk_data['summary']
                             output_queue.put(chunk_entities[chunk_number])
                             print(f"\nFound existing summary cache for chunk {chunk_number}, returning cached data...\n")
-                            continue
                         else:
+                            # Path 2: Cache found but is invalid. Add to list for reprocessing.
+                            new_chunks_for_llm.append(chunk_number)
                             print(f"\nCached data for chunk {chunk_number} from document {source_doc_name} failed validation, proceeding to generate summary afresh...\n")
+                    else:
+                        # Path 3: No cache entry exists for this chunk. Add to list.
+                        new_chunks_for_llm.append(chunk_number)
                 
+                except Exception as e:
+                    # Path 4: A generic error occurred. Default to reprocessing for safety.
+                    handle_error_no_return(f"Error processing cache for chunk {chunk_number} of document {source_doc_name}, will be processed afresh for safety. Encountered error: ", e)
+                    new_chunks_for_llm.append(chunk_number)
+                
+            return new_chunks_for_llm
+
+        try:
+            entries_to_process = list(chunk_entities.keys())    # Default to all chunks entries
+
+            if reuse_graph_summary_cache:
                 try:
-                    print(f"\nAttempting to generate comprehensive summaries for nodes and relationships identified in chunk {chunk_number} of document {source_doc_name}...\n")
+                    entries_to_process = load_and_fire_off_cache()  # If any entries were previously cached, those are returned and only new entries are processed by the LLM
+                except Exception as e:
+                    handle_error_no_return(f"Error processing cache, proceeding to process all chunks afresh. Encountered error: ", e)
+                    entries_to_process = list(chunk_entities.keys())
+                
+            for count, chunk_number in enumerate(entries_to_process):
+                chunk_data = chunk_entities[chunk_number]
+
+                try:
+                    source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
+
+                    print(f"\nAttempting to generate a summary report for chunk {chunk_number} of document {source_doc_name}...processing item {count + 1} of total {len(entries_to_process)} items...\n")
 
                     if chunk_data['entities_and_relationships']['nodes'] == [] and chunk_data['entities_and_relationships']['relationships'] == []:
                         print(f"\nNo nodes or relationships to summarize for chunk {chunk_number} of document {source_doc_name}, skipping summary generation...\n")
@@ -3329,36 +3413,55 @@ def exl2_graph_summarizer():
                         requested_max_new_tokens=requested_max_new_tokens,
                         gen_settings=gen_settings
                     )
+                    
                     chunk_entities[chunk_number]['summary'] = chunk_summary
                     output_queue.put(chunk_entities[chunk_number])
-
-                    try:
-                        update_and_save_json_file({chunk_number: chunk_entities[chunk_number]}, summary_cache_file_path)
-                        cache_data_map[source_doc_name]['data'][chunk_number] = chunk_entities[chunk_number]    # update in-memory cache as well to help with de-duplication
-                        print(f"\nSaved generated summary for chunk {chunk_number} of document {source_doc_name} to cache file at path {summary_cache_file_path}\n")
-                    except Exception as e:
-                        handle_error_no_return(f"Could not cache summary for document {source_doc_name} to cache file at path {summary_cache_file_path}, skipping. Encountered error: ", e)
+                    cache_queue.put({chunk_number: chunk_entities[chunk_number]})
                 
                 except Exception as e:
                     handle_error_no_return(f"Could not generate summary for nodes and relationships for chunk {chunk_number} from document {source_doc_name}, skipping. Encountered error: ", e)
                     chunk_entities[chunk_number]['summary'] = []
                     output_queue.put(chunk_entities[chunk_number])
+                    cache_queue.put({chunk_number: chunk_entities[chunk_number]})
                     continue
 
         except Exception as e:
             handle_error_no_return("Summary generation failed, encountered error: ", e)
         finally:
             output_queue.put(None)
+            cache_queue.put(None)
             print("\n\nLLM stream done, releasing semaphore\n\n")   # TODO: investigate hanging here - likely caused by (previously) uncaught exception in `create-and_execute_exl2_job` that led to unexpected behavior. Added error-handling, ready for re-test.
             llm_semaphore.release()
             stop_thread.set()
+
+
+    def save_to_local_cache(line):
+        try:
+            for chunk_number, chunk_data in line.items():
+                source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
+                summary_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_summary_cache.json")
+                update_and_save_json_file({chunk_number: chunk_data}, summary_cache_file_path)
+                print(f"\nSaved generated summary for chunk {chunk_number} of document {source_doc_name} to cache file at path {summary_cache_file_path}\n")
+        except Exception as e:
+            handle_error_no_return(f"Could not cache summary for document {source_doc_name} to cache file at path {summary_cache_file_path}, skipping. Encountered error: ", e)
+
+
+    def caching_thread():
+        while True:
+            line =  cache_queue.get()
+            if line is None:
+                print("\nNone read, breaking and stopping cache-thread\n")
+                break
+            save_to_local_cache(line)
+        
+        print("\n\nCaching complete\n\n")
 
 
     def generate():
         while True:
             line = output_queue.get()
             if line is None:
-                print("\nNone read, breaking and stopping thread\n")
+                print("\nNone read, breaking and stopping task-thread\n")
                 break
             yield f"data: {json.dumps(line)}\n\n"
         
@@ -3366,8 +3469,11 @@ def exl2_graph_summarizer():
 
         print("\n/exl2-graph-summarizer done\n")
 
-    thread = threading.Thread(target=summary_generation_task)
-    thread.start()
+    task_thread = threading.Thread(target=summary_generation_task)
+    task_thread.start()
+
+    cache_thread = threading.Thread(target=caching_thread)
+    cache_thread.start()
 
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
