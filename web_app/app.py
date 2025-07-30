@@ -4496,16 +4496,19 @@ def insert_into_staging_db(doc_info: dict, skip_check: bool = False):
     return True
 
 
-def perform_post_bulk_upload_cleanup():
+def perform_post_bulk_upload_cleanup(data_queue: queue.Queue = None):
     # 1. Shutdown the graph summarizer model - while the summarizer model is being shutdown after use, we don't terminate the graph-extraction model as it's used for GraphRAG responses!
     try:
         config_data = read_config(['graph_summarizer_access_url', 'graph_summarizer_server_port', 'graph_model_access_url', 'graph_model_server_port'])
         summarizer_url = f"http://{config_data['graph_summarizer_access_url']}:{config_data['graph_summarizer_server_port']}"
+        if data_queue is not None: data_queue.put(f"Shutting down graph summarizer model at URL {summarizer_url}... | waiting")
         response = utils.shutdown_waitress_server(summarizer_url)
         if isinstance(response, dict) and response.get('success', False):
             print(f"\nSuccessfully shut down graph summarizer model at URL {summarizer_url}\n")
+            if data_queue is not None: data_queue.put(f"Successfully shut down graph summarizer model at URL {summarizer_url} | success")
         else:
             handle_error_no_return(f"\nCould not shut down graph summarizer model at URL {summarizer_url}, proceeding regardless...\n")
+            if data_queue is not None: data_queue.put(f"Error shutting down graph summarizer model at URL {summarizer_url} | failure")
     except Exception as e:
         handle_error_no_return("Could not shutdown graph summarizer model, encountered error: ", e)
 
@@ -4513,6 +4516,7 @@ def perform_post_bulk_upload_cleanup():
     try:
         read_return = read_config(['local_llm_server'])
         server_to_start = read_return['local_llm_server']
+        if data_queue is not None: data_queue.put(f"Checking if {server_to_start} chat-LLM server is online... | waiting")
     except Exception as e:
         handle_error_no_return("Server-side error, could not read local_llm_server from config.json, encountered error: ", e)
     
@@ -4522,6 +4526,7 @@ def perform_post_bulk_upload_cleanup():
             if not utils.is_local_server_online(hf_waitress_base_url)['server_online']: # This means the main chat server was likely shut due to insufficient VRAM, so we should also shut down the graph-extraction model
 
                 print("\nMain LLM server offline, shutting down graph-extraction model and attempting restart of chat server...\n")
+                if data_queue is not None: data_queue.put(f"LLM server offline, attempting restart... | waiting")
                 graph_model_base_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
                 response = utils.shutdown_waitress_server(graph_model_base_url)
                 if isinstance(response, dict) and response.get('success'):
@@ -4532,25 +4537,32 @@ def perform_post_bulk_upload_cleanup():
                 server_starter_response = hf_waitress_server_starter()
                 if server_starter_response is not None and server_starter_response.get('success'):
                     print("\nSuccessfully started HF-Waitress Chat server\n")
+                    if data_queue is not None: data_queue.put(f"Successfully started HF-Waitress Chat server | success")
                     return True
                 else:
                     handle_error_no_return(f"\nCould not start HF-Waitress server, proceeding regardless...\n")
+                    if data_queue is not None: data_queue.put(f"Error starting HF-Waitress Chat server | failure")
 
             else:
                 print("\nHF-Waitress chat server already online\n")
+                if data_queue is not None: data_queue.put(f"HF-Waitress chat server is online | success")
                 return True
         
         elif server_to_start == 'llama-cpp':
             server_starter_response = llama_cpp_server_starter()
             if server_starter_response is not None and server_starter_response.get('success'):
                 print("\nSuccessfully started llama-cpp Chat server\n")
+                if data_queue is not None: data_queue.put(f"Successfully started llama-cpp Chat server | success")
                 return True
             else:
                 handle_error_no_return(f"\nCould not start llama-cpp server, proceeding regardless...\n")
+                if data_queue is not None: data_queue.put(f"Error starting llama-cpp Chat server | failure")
         else:
             handle_error_no_return(f"Invalid local LLM server choice: {server_to_start}")
+            if data_queue is not None: data_queue.put(f"Invalid local LLM server choice: {server_to_start} | failure")
     except Exception as e:
         handle_error_no_return("Could not start local LLM server post-document upload, encountered error: ", e)
+        if data_queue is not None: data_queue.put(f"Error starting local LLM server post-document upload | failure")
 
     return True
 
@@ -4575,7 +4587,7 @@ def bulk_upload_files_to_rag_and_records_databases(docs_to_upload: list[dict], d
                 handle_error_no_return(f"Could not upload {doc.get('document_name_and_extension', 'Unknown document name')} to RAG & Records databases, skipping this document. Encountered error: ", e)
             if data_queue is not None: data_queue.put(f"Completed processing file {count + 1} of {len(docs_to_upload)}! | success")
     finally:    # Cleanup!
-        perform_post_bulk_upload_cleanup()
+        perform_post_bulk_upload_cleanup(data_queue)
 
     return True
 
@@ -5285,8 +5297,8 @@ def hf_waitress_server_starter(hard_reboot_required = False):
     except Exception as e:
         return handle_api_error(f"Could not launch HF-Waitress process in directory: {os.getcwd()}, encountered error: ", e)
 
-    timeout = 5   # seconds
-    attempts = 120  # 120 * 5 = 600 seconds = 10 minutes
+    timeout = 3   # seconds
+    attempts = 200  # 200 * 3 = 600 seconds = 10 minutes
 
     try:
         for _ in range(attempts):
