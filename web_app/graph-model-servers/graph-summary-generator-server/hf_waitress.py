@@ -2611,10 +2611,10 @@ def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
         # so -1, the last dimention = num_tokens_in_prompt
         
         if prompt_tokens.shape[-1] <= EXL2_MODEL.config.max_seq_len:   # max_seq_len is the max context length of the model
-            print(f"\n\nPrompt fits within max context length\n\n")
+            print(f"\n\nPrompt fits within context-window\n\n")
             return True
         else:
-            print(f"\n\nPrompt does not fit within max context length\n\n")
+            print(f"\n\nPrompt does not fit within max context length: {prompt_tokens.shape[-1]} > {EXL2_MODEL.config.max_seq_len}\n\n")
             return False
     except Exception as e:
         handle_error_no_return(f"Could not check if exl2-prompt fits within max context length, enabling auto-truncation as a fallback. Encountered error: ", e)
@@ -3377,6 +3377,8 @@ def exl2_graph_summarizer():
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
 
+
+######################################################----End Exl2-Graph Logic----########################################################
 
 
 @app.route('/health')
