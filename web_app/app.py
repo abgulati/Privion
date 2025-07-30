@@ -2330,7 +2330,7 @@ def get_request_params_for_graph_entity_extraction_model(rag_response_mode: bool
         grapher_url += "/completions"
     else:
         headers['Connection'] = 'keep-alive'
-        grapher_url += "/exl2_grapher"
+        grapher_url += "/exl2_graph_extractor"
 
     return grapher_url, headers, exl2_quantize_graph_model
 
@@ -2459,7 +2459,7 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
 
     if exl2_quantize_graph_model:   # invoke exl2-grapher API
         try:
-            payload = json.dumps({"chunk_entities": chunk_entities, "extraction_mode": True, "rag_response_mode": rag_response_mode})
+            payload = json.dumps({"chunk_entities": chunk_entities, "rag_response_mode": rag_response_mode})
             full_response = hf_waitress_bulk_stream_request_response_handler(grapher_url, headers, payload, cache_filepath)
             # print(f"\nExl2 Bulk-Graphing Response (Entities and Relationships):\n\n{full_response}\n")
             return full_response
@@ -2603,7 +2603,7 @@ def get_request_params_for_graph_summarizer_model():
         graph_summarizer_url += "/completions"
     else:
         headers['Connection'] = 'keep-alive'
-        graph_summarizer_url += "/exl2_grapher"
+        graph_summarizer_url += "/exl2_graph_summarizer"
 
     return graph_summarizer_url, headers, exl2_quantize_graph_summarizer_model
 
@@ -2702,7 +2702,7 @@ def summary_generator_for_graph_db(chunk_entities=None, cache_filepath: str = No
                 handle_local_error("Could not get graphing request params, encountered error: ", e)
 
             try:
-                payload = json.dumps({"chunk_entities": chunk_entities, "summary_generation_mode": True})
+                payload = json.dumps({"chunk_entities": chunk_entities})
                 full_response = hf_waitress_bulk_stream_request_response_handler(summarizer_url, headers, payload, cache_filepath)
                 # print(f"\nExl2 Bulk-Summary Generation Response:\n\n{full_response}\n")
                 return full_response
