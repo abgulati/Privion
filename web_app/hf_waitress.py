@@ -2611,10 +2611,10 @@ def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
         # so -1, the last dimention = num_tokens_in_prompt
         
         if prompt_tokens.shape[-1] <= EXL2_MODEL.config.max_seq_len:   # max_seq_len is the max context length of the model
-            print(f"\n\nPrompt fits within max context length\n\n")
+            print(f"\n\nPrompt fits within context-window\n\n")
             return True
         else:
-            print(f"\n\nPrompt does not fit within max context length\n\n")
+            print(f"\n\nPrompt does not fit within max context length: {prompt_tokens.shape[-1]} > {EXL2_MODEL.config.max_seq_len}\n\n")
             return False
     except Exception as e:
         handle_error_no_return(f"Could not check if exl2-prompt fits within max context length, enabling auto-truncation as a fallback. Encountered error: ", e)
@@ -3047,8 +3047,8 @@ def process_nodes_and_relationships(
 ### End of Helper Functions ###
 
 
-@app.route('/exl2_grapher', methods=['POST'])
-def exl2_grapher():
+@app.route('/exl2_graph_extractor', methods=['POST'])
+def exl2_graph_extractor():
     '''
     Appends the `entities_and_relationships` key to each chunk_entities dict, returning the following structure:
 
@@ -3062,24 +3062,19 @@ def exl2_grapher():
     }
     '''
 
-    print("\n\nexl2-grapher route triggered - attempting to acquire LLM semaphore\n\n")
-
+    print("\n\nexl2-graph-extractor route triggered - attempting to acquire LLM semaphore\n\n")
     llm_semaphore.acquire()
-
-    print("\nLLM semaphore acquired by /exl2-grapher\n")
+    print("\nLLM semaphore acquired by /exl2-graph-extractor\n")
 
     try:
         chunk_entities = request.json.get('chunk_entities')
-        extraction_mode = request.json.get('extraction_mode', False)
-        summary_generation_mode = request.json.get('summary_generation_mode', False)
         rag_response_mode = request.json.get('rag_response_mode', False)
         gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
         reuse_graph_extraction_cache = str(request.headers.get('X-Reuse-Extraction-Cache', str(read_config(['reuse_graph_extraction_cache'])['reuse_graph_extraction_cache']).lower())).lower() == 'true'
-        reuse_graph_summary_cache = str(request.headers.get('X-Reuse-Summary-Cache', str(read_config(['reuse_graph_summary_cache'])['reuse_graph_summary_cache']).lower())).lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
         llm_semaphore.release()
-        return handle_api_error("Could not read POST-request messages for /exl2-grapher, encountered error: ", e)
+        return handle_api_error("Could not read POST-request messages for /exl2-graph-extractor, encountered error: ", e)
 
     stop_thread = threading.Event()
     output_queue = queue.Queue()
@@ -3229,6 +3224,59 @@ def exl2_grapher():
             llm_semaphore.release()
             stop_thread.set()
 
+
+    def generate():
+        while True:
+            line = output_queue.get()
+            if line is None:
+                print("\nNone read, breaking and stopping thread\n")
+                break
+            yield f"data: {json.dumps(line)}\n\n"
+        
+        yield f"event: END\ndata: \"null\"\n\n"
+
+        print("\n/exl2-graph-extractor done\n")
+
+    thread = threading.Thread(target=extraction_task)
+    thread.start()
+
+    print("\n\nInferencing Begins!\n\n")
+    return Response(generate(), content_type='text/event-stream')
+
+
+
+@app.route('/exl2_graph_summarizer', methods=['POST'])
+def exl2_graph_summarizer():
+    '''
+    Generates and appends the `summary` key to each entry in the chunk_entities dict, returning the following structure:
+
+    chunk_entities = {
+        '<graph_chunk_number>': {
+            '<entities_and_relationships>': '<node_relationships_dict>',
+            '<chunk_text>': '<text>',
+            '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
+            '<source_doc_name>': '<name>',
+            '<summary>': '<summary_text>'
+        }
+    }
+    '''
+
+    print("\n\nexl2-graph-summarizer route triggered - attempting to acquire LLM semaphore\n\n")
+    llm_semaphore.acquire()
+    print("\nLLM semaphore acquired by /exl2-graph-summarizer\n")
+
+    try:
+        chunk_entities = request.json.get('chunk_entities')
+        gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
+        reuse_graph_summary_cache = str(request.headers.get('X-Reuse-Summary-Cache', str(read_config(['reuse_graph_summary_cache'])['reuse_graph_summary_cache']).lower())).lower() == 'true'
+        # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not read POST-request messages for /exl2-graph-summarizer, encountered error: ", e)
+
+    stop_thread = threading.Event()
+    output_queue = queue.Queue()
+
     def summary_generation_task():
 
         try:
@@ -3310,6 +3358,7 @@ def exl2_grapher():
             llm_semaphore.release()
             stop_thread.set()
 
+
     def generate():
         while True:
             line = output_queue.get()
@@ -3320,21 +3369,16 @@ def exl2_grapher():
         
         yield f"event: END\ndata: \"null\"\n\n"
 
-        print("\n/exl2-grapher done\n")
+        print("\n/exl2-graph-summarizer done\n")
 
-    if extraction_mode:
-        thread = threading.Thread(target=extraction_task)
-    elif summary_generation_mode:
-        thread = threading.Thread(target=summary_generation_task)
-    else:
-        llm_semaphore.release()
-        return handle_api_error("Invalid request mode for /exl2-grapher. Must specify either 'extraction_mode' or 'summary_generation_mode'.")
-
+    thread = threading.Thread(target=summary_generation_task)
     thread.start()
 
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
 
+
+######################################################----End Exl2-Graph Logic----########################################################
 
 
 @app.route('/health')
