@@ -3341,6 +3341,8 @@ def exl2_graph_summarizer():
     cache_queue = queue.Queue()
 
     def summary_generation_task():
+        # BATCH_SIZE can be tuned based on memory and performance testing.
+        BATCH_SIZE = 1000
 
         def load_and_fire_off_cache():
             '''
@@ -3397,6 +3399,7 @@ def exl2_graph_summarizer():
             return new_chunks_for_llm
 
         try:
+            # --- PHASE 1: DETERMINE FULL WORKLOAD ---
             entries_to_process = list(chunk_entities.keys())    # Default to all chunks entries
 
             if reuse_graph_summary_cache:
@@ -3405,40 +3408,53 @@ def exl2_graph_summarizer():
                 except Exception as e:
                     handle_error_no_return(f"Error processing cache, proceeding to process all chunks afresh. Encountered error: ", e)
                     entries_to_process = list(chunk_entities.keys())
-                
-            for count, chunk_number in enumerate(entries_to_process):
-                chunk_data = chunk_entities[chunk_number]
+            
+            # --- PHASE 2 & 3: BATCH AND EXECUTE ---
+            total_entry_count = len(entries_to_process)
+            processed_entries = 0
+            print(f"\nBeginning LLM processing for {total_entry_count} chunks in batches of {BATCH_SIZE}...\n")
 
-                try:
-                    source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
+            for i in range(0, len(entries_to_process), BATCH_SIZE):
+                batch_keys = entries_to_process[i:i + BATCH_SIZE]   # Get the keys for the current batch
 
-                    print(f"\nAttempting to generate a summary report for chunk {chunk_number} of document {source_doc_name}...processing item {count + 1} of total {len(entries_to_process)} items...\n")
+                batch_chunk_entities = {key: chunk_entities[key] for key in batch_keys} # CRITICAL STEP: Create a small, temporary dictionary for this batch ONLY - avoids slow lookups on massive chunk_entities dicts!
 
-                    if chunk_data['entities_and_relationships']['nodes'] == [] and chunk_data['entities_and_relationships']['relationships'] == []:
-                        print(f"\nNo nodes or relationships to summarize for chunk {chunk_number} of document {source_doc_name}, skipping summary generation...\n")
+                print(f"\nProcessing batch {i//BATCH_SIZE + 1} of {len(entries_to_process)//BATCH_SIZE + 1}...\n")
+
+                for chunk_number, chunk_data in batch_chunk_entities.items():
+
+                    try:
+                        source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
+
+                        print(f"\nAttempting to generate a summary report for chunk {chunk_number} of document {source_doc_name}...processing item {processed_entries + 1} of total {total_entry_count} items...\n")
+
+                        if chunk_data['entities_and_relationships']['nodes'] == [] and chunk_data['entities_and_relationships']['relationships'] == []:
+                            print(f"\nNo nodes or relationships to summarize for chunk {chunk_number} of document {source_doc_name}, skipping summary generation...\n")
+                            chunk_entities[chunk_number]['summary'] = []
+                            output_queue.put(chunk_entities[chunk_number])
+                            continue
+
+                        chunk_summary = process_nodes_and_relationships(
+                            nodes_and_relationships=chunk_data['entities_and_relationships'],
+                            chunk_text=chunk_data['chunk_text'],
+                            source_doc_name=source_doc_name,
+                            page_number_list=chunk_data['page_number'],
+                            requested_max_new_tokens=requested_max_new_tokens,
+                            gen_settings=gen_settings
+                        )
+                        
+                        chunk_entities[chunk_number]['summary'] = chunk_summary
+                        output_queue.put(chunk_entities[chunk_number])
+                        cache_queue.put({chunk_number: chunk_entities[chunk_number]})
+                        
+                        processed_entries += 1
+                    
+                    except Exception as e:
+                        handle_error_no_return(f"Could not generate summary for nodes and relationships for chunk {chunk_number} from document {source_doc_name}, skipping. Encountered error: ", e)
                         chunk_entities[chunk_number]['summary'] = []
                         output_queue.put(chunk_entities[chunk_number])
+                        cache_queue.put({chunk_number: chunk_entities[chunk_number]})
                         continue
-
-                    chunk_summary = process_nodes_and_relationships(
-                        nodes_and_relationships=chunk_data['entities_and_relationships'],
-                        chunk_text=chunk_data['chunk_text'],
-                        source_doc_name=source_doc_name,
-                        page_number_list=chunk_data['page_number'],
-                        requested_max_new_tokens=requested_max_new_tokens,
-                        gen_settings=gen_settings
-                    )
-                    
-                    chunk_entities[chunk_number]['summary'] = chunk_summary
-                    output_queue.put(chunk_entities[chunk_number])
-                    cache_queue.put({chunk_number: chunk_entities[chunk_number]})
-                
-                except Exception as e:
-                    handle_error_no_return(f"Could not generate summary for nodes and relationships for chunk {chunk_number} from document {source_doc_name}, skipping. Encountered error: ", e)
-                    chunk_entities[chunk_number]['summary'] = []
-                    output_queue.put(chunk_entities[chunk_number])
-                    cache_queue.put({chunk_number: chunk_entities[chunk_number]})
-                    continue
 
         except Exception as e:
             handle_error_no_return("Summary generation failed, encountered error: ", e)
