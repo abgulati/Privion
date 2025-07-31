@@ -3151,7 +3151,67 @@ def exl2_graph_extractor():
             for i in range(0, len(entries_to_process), BATCH_SIZE):
                 batch_keys = entries_to_process[i:i + BATCH_SIZE]   # Get the keys for the current batch
 
-                batch_chunk_entities = {key: chunk_entities[key] for key in batch_keys} # CRITICAL STEP: Create a small, temporary dictionary for this batch ONLY - avoids slow lookups on massive chunk_entities dicts!
+                batch_chunk_entities = {key: chunk_entities[key] for key in batch_keys} # CRITICAL STEP: Create a small, temporary dictionary for this batch ONLY - Details below:
+                '''
+                Technical Note: Optimizing the GPU Processing Pipeline
+                
+                1. Executive Summary:
+                
+                The initial implementation of the data processing method suffered from severe performance bottlenecks, causing GPU utilization to drop to near-zero between processing items in large jobs (>1000 items). 
+                This led to poor performance, low cost-efficiency, and unnecessary hardware stress. 
+                
+                Through a two-phase optimization process, we addressed these issues, resulting in a sustained GPU utilization of ~75% when using Gemma2-2B on large workloads. Larger models will likely see a higher utilization.
+                
+                The two primary bottlenecks identified and solved were:
+                1. Disk I/O Contention: Heavy file I/O for caching was performed sequentially within the main processing loop.
+                2. CPU Cache Misses: Iterating over a very large central dictionary (chunk_entities) caused constant stalls in the CPU pipeline as it waited for data to be fetched from slow system RAM.
+
+                The processing cycle was dramatically improved:
+
+                Previously: Stall (cache-miss) -> Prepare -> GPU Work -> Stall (File I/O) -> Repeat
+                Phase 1: Stall (cache-miss) -> Prepare -> GPU Work -> Repeat
+                Phase 2: Prepare -> GPU Work -> Repeat
+
+                
+                2. Phase 1: Decoupling I/O with a Producer-Consumer Architecture
+
+                The most apparent bottleneck was that disk caching operations were blocking the main thread.
+
+                + Problem: The original loop would process a chunk, save the result to an on-disk cache, and then move to the next chunk. This heavy file I/O stalled the entire pipeline.
+                
+                + Solution: We implemented a "producer-consumer-consumer" pattern. The main processing thread (producer) now places results onto two separate queues. 
+                One queue feeds the client response stream (consumer 1), and a new, dedicated thread handles all disk-caching operations (consumer 2).
+                
+                + Result: This dramatically improved performance, but a significant bottleneck remained. GPU utilization still dropped to ~20% between items, indicating that I/O was not the only issue.
+
+                
+                3. Phase 2: Solving CPU Cache Misses with Batching
+                
+                While dictionary lookups in Python are algorithmically O(1), this theoretical speed is only realized if the data is readily available to the CPU.
+                
+                + The Deeper Problem: Poor Data Locality. The central chunk_entities dictionary was often too large to fit into the CPU's fast cache. When iterating, moving from one item to the next 
+                required the CPU to fetch data from a new, distant location in main RAM. This is a cache miss, and it stalls the CPU, preventing it from preparing the next job for the GPU. 
+                The GPU would finish its work and sit idle, waiting.
+                
+                + The Solution: Cache Warming via Batching. Instead of iterating over the entire dictionary at once, we now process it in small, manageable batches (e.g., 1000 items):
+                    ```
+                    batch_chunk_entities = {key: chunk_entities[key] for key in batch_keys}
+                        for chunk_number, chunk_data in batch_chunk_entities.items():
+                    ```
+
+                    The initial dictionary comprehension pulls all the necessary data for the upcoming batch into the CPU's fast cache at once. The subsequent "hot loop" then operates on this localized data, 
+                    resulting in consistent cache hits. The CPU can prepare the next GPU task instantly, eliminating the pipeline stall.
+
+                
+                4. Final Benefits:
+
+                This two-pronged approach ensures the GPU is fed a continuous, uninterrupted stream of data, leading to significant real-world benefits:
+                    + Maximum Performance: Job completion time is drastically reduced.
+                    + Improved Cost-Efficiency: We extract the maximum value from GPU resources by keeping them active.
+                    + Increased Hardware Lifespan: Steady-state operation avoids the voltage fluctuations and thermal cycles of a bursty, inconsistent workload.
+
+                Highly likely all this would have been missed if we were using one of AMD's X3D CPUs from the get-go!
+                '''
 
                 print(f"\nProcessing batch {i//BATCH_SIZE + 1} of {len(entries_to_process)//BATCH_SIZE + 1}...\n")
 
@@ -3417,7 +3477,7 @@ def exl2_graph_summarizer():
             for i in range(0, len(entries_to_process), BATCH_SIZE):
                 batch_keys = entries_to_process[i:i + BATCH_SIZE]   # Get the keys for the current batch
 
-                batch_chunk_entities = {key: chunk_entities[key] for key in batch_keys} # CRITICAL STEP: Create a small, temporary dictionary for this batch ONLY - avoids slow lookups on massive chunk_entities dicts!
+                batch_chunk_entities = {key: chunk_entities[key] for key in batch_keys} # CRITICAL STEP: Create a small, temporary dictionary for this batch ONLY - Details in exl2_graph_extractor() above!
 
                 print(f"\nProcessing batch {i//BATCH_SIZE + 1} of {len(entries_to_process)//BATCH_SIZE + 1}...\n")
 
