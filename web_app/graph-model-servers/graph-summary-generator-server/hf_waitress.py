@@ -3073,6 +3073,8 @@ def exl2_graph_extractor():
     cache_queue = queue.Queue()
 
     def extraction_task():
+        # BATCH_SIZE can be tuned based on memory and performance testing.
+        BATCH_SIZE = 1000
 
         def load_and_fire_off_cache():
             '''
@@ -3131,7 +3133,7 @@ def exl2_graph_extractor():
             return new_chunks_for_llm
                 
         try:
-
+            # --- PHASE 1: DETERMINE FULL WORKLOAD ---
             entries_to_process = list(chunk_entities.keys())    # Default to all chunks entries
             
             if reuse_graph_extraction_cache and not rag_response_mode:   # When responding to a query, we don't want to use the cache which is meant only for the file-processing step!
@@ -3141,95 +3143,104 @@ def exl2_graph_extractor():
                     handle_error_no_return(f"Error processing cache, proceeding to process all chunks afresh. Encountered error: ", e)
                     entries_to_process = list(chunk_entities.keys())
 
-            for count, chunk_number in enumerate(entries_to_process):
-                chunk_data = chunk_entities[chunk_number]
+            # --- PHASE 2 & 3: BATCH AND EXECUTE ---
+            print(f"\nBeginning LLM processing for {len(entries_to_process)} chunks in batches of {BATCH_SIZE}...\n")
 
-                try:
-                    source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
+            for i in range(0, len(entries_to_process), BATCH_SIZE):
+                batch_keys = entries_to_process[i:i + BATCH_SIZE]   # Get the keys for the current batch
 
-                    print(f"\nAttempting to extract entities and relationships from chunk {chunk_number} of document {source_doc_name}...processing item {count + 1} of total {len(entries_to_process)} items...\n")
-                    full_payload = get_request_payload_for_graph_entity_extraction(chunk_data['chunk_text'])
-                    
-                    response_validation_result = None
-                    if exl2_prompt_fits_within_max_context_length(full_payload):
-                        extraction_response_first_attempt = create_and_execute_exl2_job(payload=full_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-                        response_validation_result = validate_entity_extraction_response(extraction_response_first_attempt)
-                    
-                    if response_validation_result is not None and response_validation_result['is_valid']:
-                        full_response = remove_blank_nodes_and_relationships(response_validation_result['validated_response'])  # remove-blank_nodes_and_relationships() will either return a cleaned-up dict, or the unchanged dict on error or if no changes were made!
-                    else:
-                        print(f"Extraction response failed validation - Chunk is likely too large. Attempting to split and retry entity extraction for chunk {chunk_number} of document {source_doc_name}...")
+                batch_chunk_entities = {key: chunk_entities[key] for key in batch_keys} # CRITICAL STEP: Create a small, temporary dictionary for this batch ONLY - avoids slow lookups on massive chunk_entities dicts!
 
-                        def retry_entity_extraction(chunk_text, max_depth=5, current_depth=0):
-                            '''
-                            Splits the chunk into two halves and retries entity extraction for each half.
-                            Recursively repeats until valid responses are obtained.
-                            The reason for this design is that the model may have been overwhelmed by the chunk size, and relying on the overlap is not robust enough for two reasons:
-                                1. It may not be a big enough overlap for offsetting to help.
-                                2. By trimming both the leading and trailing overlap, imagine the scenario for consecutive chunks that fail to process:
-                                    a) Say a chunk fails so you remove the overlap, which includes the last 300 chars as those are expected to be the first 300 chars of the next chunk anyways.
-                                    b) Now if the next chunk also fails, and you remove the leading and trailing overlap, you have outright lost those 300 chars and never even processed them!
-                            The best way to mitigate this is via clever recursion!
-                            '''
-                            
-                            # Prevent infinite recursion
-                            if current_depth >= max_depth:
-                                print(f"Max depth reached - could not extract all entities and relationships for chunk {chunk_number} of document {source_doc_name}. Returning empty response...")
-                                return {'nodes': [], 'relationships': []}
-                            
-                            # Prevent splitting text that's too small to be meaningful
-                            if len(chunk_text.strip()) < 100:
-                                print(f"Chunk text too small - could not extract all entities and relationships for chunk {chunk_number} of document {source_doc_name}. Returning empty response...")
-                                return {'nodes': [], 'relationships': []}
-                            
-                            try:
-                                payload = get_request_payload_for_graph_entity_extraction(chunk_text)
-                                response = create_and_execute_exl2_job(payload=payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
-                                response_validation_result = validate_entity_extraction_response(response)
-                            except Exception as e:
-                                handle_error_no_return(f"Could not extract entities and relationships for sub-chunk of chunk {chunk_number} from document {source_doc_name}. Current recursive depth: {current_depth} of {max_depth}. Encountered error: ", e)
-                                return {'nodes': [], 'relationships': []}
-                            
-                            if response_validation_result['is_valid']:
-                                print(f"Recursive Entity Extraction Successful: Sub-chunk of chunk {chunk_number} from document {source_doc_name} successfully validated!")
-                                return remove_blank_nodes_and_relationships(response_validation_result['validated_response'])
-                            else:
-                                print(f"Sub-chunk still too large - continuing recursive extraction - attempt {current_depth + 1} of {max_depth} for chunk {chunk_number} of document {source_doc_name}...")
-                                # Split and recurse
-                                mid_point = len(chunk_text)//2
-                                recursive_response_1 = retry_entity_extraction(chunk_text[:mid_point], max_depth, current_depth + 1)
-                                recursive_response_2 = retry_entity_extraction(chunk_text[mid_point:], max_depth, current_depth + 1)
+                print(f"\nProcessing batch {i//BATCH_SIZE + 1} of {len(entries_to_process)//BATCH_SIZE + 1}...\n")
 
-                                # Properly merge the lists within the dictionaries
-                                merged_response = {
-                                    'nodes': recursive_response_1.get('nodes', []) + recursive_response_2.get('nodes', []),
-                                    'relationships': recursive_response_1.get('relationships', []) + recursive_response_2.get('relationships', [])
-                                }
-                                return merged_response
+                for chunk_number, chunk_data in batch_chunk_entities.items():
 
-                        # Split and recurse
-                        large_chunk_text = chunk_data['chunk_text']
-                        mid_point = len(large_chunk_text)//2
-                        response_1 = retry_entity_extraction(large_chunk_text[:mid_point])   # Floor division will round down to the nearest integer, thus handling odd-length chunks
-                        response_2 = retry_entity_extraction(large_chunk_text[mid_point:])
+                    try:
+                        source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
+
+                        print(f"\nAttempting to extract entities and relationships from chunk {chunk_number} of document {source_doc_name}...processing item {count + 1} of total {len(entries_to_process)} items...\n")
+                        full_payload = get_request_payload_for_graph_entity_extraction(chunk_data['chunk_text'])
                         
-                        full_response = {
-                            'nodes': response_1.get('nodes', []) + response_2.get('nodes', []),
-                            'relationships': response_1.get('relationships', []) + response_2.get('relationships', [])
-                        }
+                        response_validation_result = None
+                        if exl2_prompt_fits_within_max_context_length(full_payload):
+                            extraction_response_first_attempt = create_and_execute_exl2_job(payload=full_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+                            response_validation_result = validate_entity_extraction_response(extraction_response_first_attempt)
+                        
+                        if response_validation_result is not None and response_validation_result['is_valid']:
+                            full_response = remove_blank_nodes_and_relationships(response_validation_result['validated_response'])  # remove-blank_nodes_and_relationships() will either return a cleaned-up dict, or the unchanged dict on error or if no changes were made!
+                        else:
+                            print(f"Extraction response failed validation - Chunk is likely too large. Attempting to split and retry entity extraction for chunk {chunk_number} of document {source_doc_name}...")
 
-                    chunk_entities[chunk_number]['entities_and_relationships'] = full_response
-                    output_queue.put(chunk_entities[chunk_number])
-                    if not rag_response_mode:
-                        cache_queue.put({chunk_number: chunk_entities[chunk_number]})
-            
-                except Exception as e:
-                    handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number} of document {source_doc_name}, skipping. Encountered error: ", e)
-                    chunk_entities[chunk_number]['entities_and_relationships'] = {'nodes': [], 'relationships': []}     # Set empty or default value in case of complete failure
-                    output_queue.put(chunk_entities[chunk_number])
-                    if not rag_response_mode:
-                        cache_queue.put({chunk_number: chunk_entities[chunk_number]})
-                    continue
+                            def retry_entity_extraction(chunk_text, max_depth=5, current_depth=0):
+                                '''
+                                Splits the chunk into two halves and retries entity extraction for each half.
+                                Recursively repeats until valid responses are obtained.
+                                The reason for this design is that the model may have been overwhelmed by the chunk size, and relying on the overlap is not robust enough for two reasons:
+                                    1. It may not be a big enough overlap for offsetting to help.
+                                    2. By trimming both the leading and trailing overlap, imagine the scenario for consecutive chunks that fail to process:
+                                        a) Say a chunk fails so you remove the overlap, which includes the last 300 chars as those are expected to be the first 300 chars of the next chunk anyways.
+                                        b) Now if the next chunk also fails, and you remove the leading and trailing overlap, you have outright lost those 300 chars and never even processed them!
+                                The best way to mitigate this is via clever recursion!
+                                '''
+                                
+                                # Prevent infinite recursion
+                                if current_depth >= max_depth:
+                                    print(f"Max depth reached - could not extract all entities and relationships for chunk {chunk_number} of document {source_doc_name}. Returning empty response...")
+                                    return {'nodes': [], 'relationships': []}
+                                
+                                # Prevent splitting text that's too small to be meaningful
+                                if len(chunk_text.strip()) < 100:
+                                    print(f"Chunk text too small - could not extract all entities and relationships for chunk {chunk_number} of document {source_doc_name}. Returning empty response...")
+                                    return {'nodes': [], 'relationships': []}
+                                
+                                try:
+                                    payload = get_request_payload_for_graph_entity_extraction(chunk_text)
+                                    response = create_and_execute_exl2_job(payload=payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
+                                    response_validation_result = validate_entity_extraction_response(response)
+                                except Exception as e:
+                                    handle_error_no_return(f"Could not extract entities and relationships for sub-chunk of chunk {chunk_number} from document {source_doc_name}. Current recursive depth: {current_depth} of {max_depth}. Encountered error: ", e)
+                                    return {'nodes': [], 'relationships': []}
+                                
+                                if response_validation_result['is_valid']:
+                                    print(f"Recursive Entity Extraction Successful: Sub-chunk of chunk {chunk_number} from document {source_doc_name} successfully validated!")
+                                    return remove_blank_nodes_and_relationships(response_validation_result['validated_response'])
+                                else:
+                                    print(f"Sub-chunk still too large - continuing recursive extraction - attempt {current_depth + 1} of {max_depth} for chunk {chunk_number} of document {source_doc_name}...")
+                                    # Split and recurse
+                                    mid_point = len(chunk_text)//2
+                                    recursive_response_1 = retry_entity_extraction(chunk_text[:mid_point], max_depth, current_depth + 1)
+                                    recursive_response_2 = retry_entity_extraction(chunk_text[mid_point:], max_depth, current_depth + 1)
+
+                                    # Properly merge the lists within the dictionaries
+                                    merged_response = {
+                                        'nodes': recursive_response_1.get('nodes', []) + recursive_response_2.get('nodes', []),
+                                        'relationships': recursive_response_1.get('relationships', []) + recursive_response_2.get('relationships', [])
+                                    }
+                                    return merged_response
+
+                            # Split and recurse
+                            large_chunk_text = chunk_data['chunk_text']
+                            mid_point = len(large_chunk_text)//2
+                            response_1 = retry_entity_extraction(large_chunk_text[:mid_point])   # Floor division will round down to the nearest integer, thus handling odd-length chunks
+                            response_2 = retry_entity_extraction(large_chunk_text[mid_point:])
+                            
+                            full_response = {
+                                'nodes': response_1.get('nodes', []) + response_2.get('nodes', []),
+                                'relationships': response_1.get('relationships', []) + response_2.get('relationships', [])
+                            }
+
+                        chunk_entities[chunk_number]['entities_and_relationships'] = full_response
+                        output_queue.put(chunk_entities[chunk_number])
+                        if not rag_response_mode:
+                            cache_queue.put({chunk_number: chunk_entities[chunk_number]})
+                
+                    except Exception as e:
+                        handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number} of document {source_doc_name}, skipping. Encountered error: ", e)
+                        chunk_entities[chunk_number]['entities_and_relationships'] = {'nodes': [], 'relationships': []}     # Set empty or default value in case of complete failure
+                        output_queue.put(chunk_entities[chunk_number])
+                        if not rag_response_mode:
+                            cache_queue.put({chunk_number: chunk_entities[chunk_number]})
+                        continue
 
         except Exception as e:
             handle_error_no_return(f"Could not extract entities and relationships, encountered error: ", e)
