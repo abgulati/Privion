@@ -3144,7 +3144,9 @@ def exl2_graph_extractor():
                     entries_to_process = list(chunk_entities.keys())
 
             # --- PHASE 2 & 3: BATCH AND EXECUTE ---
-            print(f"\nBeginning LLM processing for {len(entries_to_process)} chunks in batches of {BATCH_SIZE}...\n")
+            total_entry_count = len(entries_to_process)
+            processed_entries = 0
+            print(f"\nBeginning LLM processing for {total_entry_count} chunks in batches of {BATCH_SIZE}...\n")
 
             for i in range(0, len(entries_to_process), BATCH_SIZE):
                 batch_keys = entries_to_process[i:i + BATCH_SIZE]   # Get the keys for the current batch
@@ -3158,7 +3160,7 @@ def exl2_graph_extractor():
                     try:
                         source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
 
-                        print(f"\nAttempting to extract entities and relationships from chunk {chunk_number} of document {source_doc_name}...processing item {count + 1} of total {len(entries_to_process)} items...\n")
+                        print(f"\nAttempting to extract entities and relationships from chunk {chunk_number} of document {source_doc_name}...processing item {processed_entries + 1} of total {total_entry_count} items...\n")
                         full_payload = get_request_payload_for_graph_entity_extraction(chunk_data['chunk_text'])
                         
                         response_validation_result = None
@@ -3233,6 +3235,8 @@ def exl2_graph_extractor():
                         output_queue.put(chunk_entities[chunk_number])
                         if not rag_response_mode:
                             cache_queue.put({chunk_number: chunk_entities[chunk_number]})
+
+                        processed_entries += 1
                 
                     except Exception as e:
                         handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number} of document {source_doc_name}, skipping. Encountered error: ", e)
