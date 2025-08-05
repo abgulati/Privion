@@ -669,6 +669,12 @@ body {
     color: #327DFF;
 }
 
+.upload-llm-btn {
+    margin-right: 7px; /* adjust as needed */
+    height: auto;
+    width: 199px !important;
+}
+
 .upload-file-btn {
     margin-right: 7px; /* adjust as needed */
     height: 41px !important;
