@@ -261,7 +261,19 @@ def write_config(config_updates, filename='config.json'):
         handle_local_error("Could not update config.json, encountered error: ", e)
      
     return {'success': True, 'restart_required':restart_required}
-            
+
+
+def safe_write_config(config_updates):
+    '''
+    Wrapper for write-config() that handles errors silently.
+    Directly invoke write-config() instead of this method anytime a write-specific error must be raised!
+    '''
+    try:
+        return write_config(config_updates)
+    except Exception as e:
+        handle_error_no_return("Could not write to config.json, encountered error: ", e)
+        return {'success': False, 'restart_required': False}
+
 
 # Method to read from config.json | input- list of keys to be read from config.json; output- dict of key:value pairs; MANAGE DEFAULTS HERE!
 def read_config(keys, default_value=None, filename='config.json'):
@@ -558,15 +570,8 @@ def read_config(keys, default_value=None, filename='config.json'):
             return_dict[key] = default_value
             update_config_dict[key] = default_value
 
-    if update_config_dict:
-        # Write Defaults
-        try:
-            write_config(update_config_dict)
-        except Exception as e:
-            handle_error_no_return("Could not write defaults to config.json. Encountered error: ", e)
+    if update_config_dict: safe_write_config(update_config_dict)   # write defaults to config.json
     
-    ##print(f"return_dict: {return_dict}")
-
     return return_dict
 
 
@@ -3393,7 +3398,7 @@ def whoosh_embed_and_graph_doc_chunks(input_file):
         return chunk_sz, chunk_olp
 
 
-def determine_sequence_id_for_chat(chat_id):
+def determine_sequence_id_for_chat(chat_id: int) -> int:
 
     print(f"\n\nDetermining sequence ID for chat with chat_id: {chat_id}")
 
@@ -3401,7 +3406,7 @@ def determine_sequence_id_for_chat(chat_id):
         read_return = read_config(['sqlite_history_db'])
         sqlite_history_db = read_return['sqlite_history_db']
     except Exception as e:
-        handle_local_error("Missing keys in config.json for method determine_sequence_id_for_chat(). Error: ", e)
+        handle_local_error("Missing keys in config.json for method determine-sequence_id_for_chat(). Error: ", e)
 
     # Connect to or create the DB
     try:
@@ -3419,15 +3424,26 @@ def determine_sequence_id_for_chat(chat_id):
         # This is because the SQLite3 module can have trouble recognizing single-item tuples as tuples, so a trailing comma helps alleviate this! 
 
         result = cursor.fetchone()
-        current_sequence_id = result[0]     # 'result' will be a list, so extract the first value
+        current_sequence_id = int(result[0])     # 'result' will be a list, so extract the first value
+
+        print(f"Current max sequence_id for chat_id: {chat_id} is: {current_sequence_id}")
+        return current_sequence_id  # returning current max sequence_id, this will be incremented by 1 when a new response is stored to the db
         
     except Exception as e:
         handle_local_error("Could not determine sequence ID for storage to chat history DB, encountered error: ", e)
 
-    return int(current_sequence_id) # returning current max sequence_id, this will be incremented by 1 when a new response is stored to the db
 
-
-def store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query, model_response_for_history_db, fully_formatted_prompt, local_llm_server, local_llm_chat_template_format):
+def store_to_chat_history_db(
+        chat_id: str,
+        sequence_id: str,
+        stream_session_id: str,
+        user_query: str,
+        user_query_html: str,
+        model_response_for_history_db: str,
+        fully_formatted_prompt: str,
+        local_llm_server: str,
+        local_llm_chat_template_format: str
+    ) -> tuple[str, str]:
 
     print(f"\n\nStoring chat history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}")
 
@@ -3437,7 +3453,7 @@ def store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, 
         local_llm_server = read_return['local_llm_server']
         model_choice = read_return['model_choice']
     except Exception as e:
-        handle_local_error("Missing keys in config.json for method store_local_llm_chat_history_to_db. Error: ", e)
+        handle_local_error("Missing keys in config.json for method store-local_llm_chat_history_to_db. Error: ", e)
 
     if local_llm_server == "hf-waitress":
         model_choice = read_hf_config(['model_id'])['model_id']
@@ -3456,8 +3472,8 @@ def store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, 
             handle_local_error("Could not determine latest chat ID, encountered error: ", e)
     
     try:
-        prev_sequence_id = determine_sequence_id_for_chat(chat_id)
-        sequence_id = prev_sequence_id + 1
+        prev_max_sequence_id = determine_sequence_id_for_chat(int(chat_id))
+        sequence_id = prev_max_sequence_id + 1
     except Exception as e:
         handle_local_error("Could not determine sequence ID for storage to chat history DB, encountered error: ", e)
 
@@ -3465,11 +3481,40 @@ def store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, 
         current_datetime = datetime.datetime.now()
         formatted_datetime = current_datetime.strftime('%d %b %Y - %I:%M %p %Z')
     except Exception as e:
-        return handle_api_error("Could not obtain timestamp in store_local_llm_chat_history_to_db, encountered error: ", e)
+        return handle_api_error("Could not obtain timestamp in store-local_llm_chat_history_to_db, encountered error: ", e)
 
     try:
         # Store conversation history into DB
-        cursor.execute("INSERT INTO chat_history (chat_id, sequence_id, stream_session_id, user_query, llm_response, llm_model, prompt_template, local_llm_server, prompt_template_format, date_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (int(chat_id), int(sequence_id), str(stream_session_id), user_query, model_response_for_history_db, model_choice, str(fully_formatted_prompt), str(local_llm_server), str(local_llm_chat_template_format), str(formatted_datetime)))
+        cursor.execute('''
+            INSERT INTO chat_history (
+                chat_id,
+                sequence_id,
+                stream_session_id,
+                user_query,
+                user_query_html,
+                llm_response,
+                llm_model,
+                prompt_template,
+                local_llm_server, 
+                prompt_template_format,
+                date_time
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                int(chat_id),
+                int(sequence_id),
+                str(stream_session_id),
+                str(user_query), 
+                str(user_query_html),
+                str(model_response_for_history_db),
+                str(model_choice),
+                str(fully_formatted_prompt),
+                str(local_llm_server),
+                str(local_llm_chat_template_format),
+                str(formatted_datetime)
+            )
+        )
         conn.commit()
         print(f"\n\nInserted chat history into DB with chat_id: {chat_id}\n\n")
     except Exception as e:
@@ -4606,11 +4651,7 @@ def move_file_to_upload_dir(staged_filename: str, staged_filepath: str):
 
 
 def enable_kosmos_vram_offloading():
-    try:
-        write_config({'kosmos_offload_vram': True})
-        return True
-    except Exception as e:
-        handle_error_no_return("Could not enable Kosmos VRAM offloading, encountered error: ", e)
+    return safe_write_config({'kosmos_offload_vram': True})['success']
 
 
 def disable_kosmos_vram_offloading():
@@ -5664,49 +5705,12 @@ def load_chat_history_list():
     return jsonify({'success': True, 'history_list': history_list})
 
 
-@app.route('/load_chat_history', methods=['POST'])
-def load_chat_history():
-
-    print("loading chat history")
-
+def generate_user_message_html(user_message: str, user_message_html: str, stream_session_id: str, chat_id: int, sequence_id: int) -> str:
     try:
-        read_return = read_config(['sqlite_history_db'])
-        sqlite_history_db = read_return['sqlite_history_db']
-    except Exception as e:
-        handle_local_error("Missing sqlite_history_db in config.json in method load_chat_history. Error: ", e)
-
-    try:
-        chat_id_for_history_search = request.form['chat_id']
-        chat_id = request.form['chat_id']
-    except Exception as e:
-        return handle_api_error("Could not retrieve Chat ID from request form, encountered error: ", e)
-
-    try:
-        conn = sqlite3.connect(sqlite_history_db)
-        c = conn.cursor()
-    except Exception as e:
-        return handle_api_error("Could not connect to chat history database, encountered error: ", e)
-
-    sequence_id_for_history_search = 1
-    retrieve_history = True
-    chat_history = []
-    old_chat_model = ""
-
-    while(retrieve_history):
-
-        try:
-            c.execute("SELECT user_query FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (int(chat_id_for_history_search), int(sequence_id_for_history_search)))
-            result = c.fetchone()
-            user_message = str(result[0])
-
-            c.execute("SELECT stream_session_id FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (int(chat_id_for_history_search), int(sequence_id_for_history_search)))
-            stream_session_id = c.fetchone()
-            stream_session_id = str(stream_session_id[0])
-
+        if not user_message_html or user_message_html == "" or user_message_html == "None" or user_message_html == "null":
             user_message = user_message.strip('\n')
-
             user_message = f'''
-            <div class="user-message glassmorphism" data-stream-session-id="{stream_session_id}" data-chat-id="{chat_id_for_history_search}" data-sequence-id="{sequence_id_for_history_search}">
+            <div class="user-message glassmorphism" data-stream-session-id="{stream_session_id}" data-chat-id="{chat_id}" data-sequence-id="{sequence_id}">
                 {user_message}
                 <div class="regenerate-menu">
                     <i class="fas fa-ellipsis-v"></i>
@@ -5719,45 +5723,31 @@ def load_chat_history():
                 </div>
             </div>
             '''
+            return user_message
+        else:
+            return user_message_html
+    except Exception as e:
+        handle_local_error("Could not generate user message HTML, encountered error: ", e)
 
-            chat_history.append(user_message)
 
-            c.execute("SELECT llm_response FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (int(chat_id_for_history_search), int(sequence_id_for_history_search)))
-            result = c.fetchone()
-            result = str(result[0])
-
-            result_parts = result.split("pdf_pane_data=",1)
-            llm_response = f'<div class="response-and-viewer-container" data-stream-session-id="{stream_session_id}"><div class="llm-wrapper"> <div class="llm-response">' + result_parts[0]
-
-        except Exception as e:
-            return handle_api_error("Could not retrieve chat history, encountered error: ", e)
-        
+def generate_llm_response_html(llm_response: str, stream_session_id: str, user_rating: str, chat_id: int, sequence_id: int) -> str:
+    try:
+        result_parts = llm_response.split("pdf_pane_data=",1)
+        llm_response = f'<div class="response-and-viewer-container" data-stream-session-id="{stream_session_id}"><div class="llm-wrapper"> <div class="llm-response">' + result_parts[0]
         llm_response = llm_response.strip('\n')
         llm_response = llm_response.replace('\n\n', '<br><br>')
         llm_response = llm_response.replace('\n', '<br>')
-        
-        try:
-            c.execute("SELECT user_rating FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (int(chat_id_for_history_search), int(sequence_id_for_history_search)))
-            result = c.fetchone()
-        except Exception as e:
-            handle_error_no_return("Could not fetch user rating, encountered error: ", e)
 
         response_rated = False
-        user_rating_for_history_chat = None
-
-        if result[0]:
-            response_rated = True
-            try:
-                user_rating_for_history_chat = int(result[0])
-                #print(f'rating exists: {user_rating_for_history_chat}')
-            except Exception as e:
-                handle_error_no_return("Could not retrieve integer value of user rating, encountered error: ", e)
-
+        if user_rating and (isinstance(user_rating, str) or isinstance(user_rating, int)):
+            user_rating = int(user_rating)
+            if user_rating > 0:
+                response_rated = True
 
         # Using string-join to avoid newline characters \n's appearing in the HTML output as <br>'s !:
         llm_rating_html_parts = [
             '<br>',
-            f'<div class="star-rating" data-rated={response_rated} rating-chat-id={chat_id_for_history_search} rating-sequence-id={sequence_id_for_history_search}>',
+            f'<div class="star-rating" data-rated={response_rated} rating-chat-id={chat_id} rating-sequence-id={sequence_id}>',
             '<i class="far fa-star" data-rate="1"></i>',
             '<i class="far fa-star" data-rate="2"></i>',
             '<i class="far fa-star" data-rate="3"></i>',
@@ -5769,9 +5759,9 @@ def load_chat_history():
         ]
         llm_rating = ''.join(llm_rating_html_parts)
 
-        if user_rating_for_history_chat:
-            rating_parts = llm_rating.split("far", user_rating_for_history_chat)
-            if len(rating_parts) <= user_rating_for_history_chat:
+        if response_rated:
+            rating_parts = llm_rating.split("far", user_rating)
+            if len(rating_parts) <= user_rating:
                 llm_rating = "fas".join(rating_parts)
             else:
                 llm_rating = "fas".join(rating_parts[:-1]) + "fas" + "far".join(rating_parts[-1:])
@@ -5785,48 +5775,82 @@ def load_chat_history():
             llm_response = llm_response.replace('\n\n', '<br><br>')
             llm_response = llm_response.replace('\n', '<br>')
 
-        chat_history.append(llm_response)
+        return llm_response
+    except Exception as e:
+        handle_local_error("Could not generate LLM response HTML, encountered error: ", e)
 
-        # Increment sequence ID for next iteration:
-        sequence_id_for_history_search += 1
 
-        # But first, check to see if next sequence exists!
+@app.route('/load_chat_history', methods=['POST'])
+def load_chat_history():
+
+    print("loading chat history")
+
+    try:
+        read_return = read_config(['sqlite_history_db'])
+        sqlite_history_db = read_return['sqlite_history_db']
+    except Exception as e:
+        return("Missing sqlite_history_db in config.json in method load-chat_history. Error: ", e)
+
+    try:
+        chat_id = int(request.form['chat_id'])
+    except Exception as e:
+        return handle_api_error("Could not retrieve Chat ID from request form, encountered error: ", e)
+
+    try:
+        conn = sqlite3.connect(sqlite_history_db)
+        c = conn.cursor()
+    except Exception as e:
+        return handle_api_error("Could not connect to chat history database, encountered error: ", e)
+
+    sequence_id_for_history_search = 1
+    chat_history = []
+    old_chat_model = "" # Will be set to the last model used for the given chat_id
+
+    while True:
+
         try:
-            c.execute("SELECT EXISTS(SELECT 1 FROM chat_history WHERE chat_id = ? AND sequence_id = ?)", (int(chat_id_for_history_search), int(sequence_id_for_history_search)))
-            exists = c.fetchone()[0]
-        except Exception as e:
-            return handle_api_error("Could not determine if next sequence exists in chat history DB, encountered error: ", e)
+            c.execute('''
+                SELECT user_query, user_query_html, stream_session_id, llm_model, llm_response, user_rating FROM chat_history 
+                WHERE chat_id = ? AND sequence_id = ?
+                ''',
+                (chat_id, sequence_id_for_history_search)
+            )
+            result = c.fetchone()
+            if result is None:  # No more history to retrieve, so break out of the while loop
+                c.close()
+                conn.close()
+                break
             
-        if not exists:  # Fetch last used LLM
-            sequence_id = sequence_id_for_history_search - 1
-            retrieve_history = False
             try:
-                c.execute("SELECT llm_model FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (chat_id, sequence_id))
-                result = c.fetchone()
-                old_chat_model = str(result[0])
+                user_message, user_message_html, stream_session_id, old_chat_model, llm_response, user_rating = result # list unpacking as result is a tuple
+                chat_history.append(generate_user_message_html(user_message, user_message_html, stream_session_id, chat_id, sequence_id_for_history_search))
+                chat_history.append(generate_llm_response_html(llm_response, stream_session_id, user_rating, chat_id, sequence_id_for_history_search))
             except Exception as e:
-                handle_error_no_return("Could not determine previously used LLM in chat, encountered error: ", e)
-            c.close()
+                handle_error_no_return(f"Could not retrieve chat history for chat with chat_id: {chat_id} and sequence_id: {sequence_id_for_history_search}, skipping. Encountered error: ", e)
+
+            sequence_id_for_history_search += 1 # Increment sequence ID for next iteration
+        
+        except Exception as e:
+            return handle_api_error("Could not retrieve chat history, encountered error: ", e)
 
     print(f'\n\nChat history loaded for chat with model: {old_chat_model}\n\n')
 
     try:
         sequence_id = determine_sequence_id_for_chat(chat_id)
-        print(f"Sequence ID determined: {sequence_id}")
     except Exception as e:
-        return handle_api_error("Could not determine sequence_id, encountered error: ", e)  
+        return handle_api_error("Could not determine sequence_id, encountered error: ", e)
 
     return jsonify({'success': True, 'chat_history': chat_history, 'old_chat_model': old_chat_model, 'sequence_id': sequence_id})
 
 
-def determine_latest_chat_id(c):
+def determine_latest_chat_id(c: sqlite3.Cursor) -> int:
     print("Determining chat ID")
     c.execute("SELECT COALESCE(MAX(chat_id), 0) FROM chat_history") # "The COALESCE function accepts two or more arguments and returns the first non-null argument."
     result = c.fetchone()
-    max_chat_id = result[0]
-    new_chat_id = max_chat_id + 1
-    print(f"Chat ID determined: {new_chat_id}")
-    return new_chat_id
+    max_chat_id = int(result[0])
+    new_max_chat_id = max_chat_id + 1
+    print(f"Chat ID determined: {new_max_chat_id}")
+    return new_max_chat_id
 
 
 @app.route('/init_chat_history_db')
@@ -5856,6 +5880,7 @@ def init_chat_history_db():
                         sequence_id INTEGER,
                         stream_session_id TEXT,
                         user_query TEXT,
+                        user_query_html TEXT,
                         llm_response TEXT,
                         user_rating INTEGER,
                         llm_model TEXT, 
@@ -5873,9 +5898,10 @@ def init_chat_history_db():
 
     try:
         add_column_if_not_exists(c, 'chat_history', 'chat_id', 'INTEGER')
-        add_column_if_not_exists(c, 'chat_history', 'sequence_id', 'TEXT')
+        add_column_if_not_exists(c, 'chat_history', 'sequence_id', 'INTEGER')
         add_column_if_not_exists(c, 'chat_history', 'stream_session_id', 'TEXT')
         add_column_if_not_exists(c, 'chat_history', 'user_query', 'TEXT')
+        add_column_if_not_exists(c, 'chat_history', 'user_query_html', 'TEXT')
         add_column_if_not_exists(c, 'chat_history', 'llm_response', 'TEXT')
         add_column_if_not_exists(c, 'chat_history', 'user_rating', 'INTEGER')
         add_column_if_not_exists(c, 'chat_history', 'llm_model', 'TEXT')
@@ -5947,7 +5973,22 @@ def delete_messages():
     return jsonify({'success': True})
 
 
-def update_llm_response_in_history_db(chat_id: int, stream_session_id: str, user_query: str, llm_response: str) -> tuple[datetime.datetime, int]:
+def update_record_in_history_db(
+        chat_id: str,
+        stream_session_id: str,
+        user_query: str,
+        user_query_html: str,
+        llm_response: str
+    ) -> tuple[datetime.datetime, str]:
+    '''
+    Updates a record in the chat history DB for the given stream_session_id.
+    Also, determines the sequence ID of the updated record and deletes any subsequent chat history for the given chat_id.
+    This is because the chat template is updated with each new message, and the subsequent chat history is no longer relevant.
+
+    Returns:
+        formatted_datetime: str
+        chat_id: int
+    '''
 
     print(f"Updating LLM response in chat history DB for chat_id: {chat_id} and stream_session_id: {stream_session_id}")
 
@@ -5955,7 +5996,7 @@ def update_llm_response_in_history_db(chat_id: int, stream_session_id: str, user
         read_return = read_config(['sqlite_history_db'])
         sqlite_history_db = read_return['sqlite_history_db']
     except Exception as e:
-        handle_local_error("Missing sqlite_history_db in config.json in method update_llm_response_in_history_db. Error: ", e)
+        handle_local_error("Missing sqlite_history_db in config.json in method update-llm_response_in_history_db. Error: ", e)
 
     # Connect to chat_history.db to determine appropriate chat_id
     try:
@@ -5968,11 +6009,11 @@ def update_llm_response_in_history_db(chat_id: int, stream_session_id: str, user
         current_datetime = datetime.datetime.now()
         formatted_datetime = current_datetime.strftime('%d %b %Y - %I:%M %p %Z')
     except Exception as e:
-        return handle_api_error("Could not obtain timestamp in update_llm_response_in_history_db, encountered error: ", e)
+        return handle_api_error("Could not obtain timestamp in update-llm_response_in_history_db, encountered error: ", e)
     
     # Update the LLM response in the chat history DB for the given stream_session_id:
     try:
-        c.execute("UPDATE chat_history SET user_query = ?, llm_response = ?, date_time = ? WHERE stream_session_id = ?", (user_query, llm_response, formatted_datetime, stream_session_id))
+        c.execute("UPDATE chat_history SET user_query = ?, user_query_html = ?, llm_response = ?, date_time = ? WHERE stream_session_id = ?", (user_query, user_query_html, llm_response, formatted_datetime, stream_session_id))
         conn.commit()
     except Exception as e:
         handle_local_error("Could not update LLM response in chat history DB, encountered error: ", e)
@@ -5983,7 +6024,7 @@ def update_llm_response_in_history_db(chat_id: int, stream_session_id: str, user
         sequence_id = result[0]
         delete_chat_history_for_chat_id_from_sequence_id(c, conn, chat_id, sequence_id)
     except Exception as e:
-        handle_local_error("Could not determine sequence_id / delete chat history in update_llm_response_in_history_db, encountered error: ", e)
+        handle_local_error("Could not determine sequence_id / delete chat history in update-llm_response_in_history_db, encountered error: ", e)
     
     conn.close()
 
@@ -6314,7 +6355,7 @@ def get_formatted_prompt_for_setup_for_local_llm_response(chat_id:int, current_s
     return formatted_prompt
 
 
-def read_request_data_for_response_setup(request: Request) -> tuple[str, str, str, int, bool, bool, bool, bool]:
+def read_request_data_for_response_setup(request: Request) -> tuple[str, str, str, str, bool, bool, bool, bool]:
     stream_session_id = request.json.get('stream_session_id')
     user_query = request.json.get('user_query')
     chat_id = request.json.get('chat_id')
@@ -6339,18 +6380,21 @@ def get_full_prompt_for_server(local_llm_server: str, formatted_history_prompt: 
 
 def get_base_values_for_setup_for_local_llm_response(stream_session_id:str, chat_id:str, sequence_id:str, regeneration_request:bool) -> tuple[str, str, int]:
     if regeneration_request:
-        print(f"\nSetting defaults for regeneration for request ID {stream_session_id}\n")
+        if stream_session_id is None or stream_session_id == "":
+            return handle_local_error("Could not process regeneration-request in get-base_values_for_setup_for_local_llm_response, encountered error: ", ValueError("stream_session_id is blank."))
+        
+        print(f"\nSetting defaults for regeneration for request ID: {stream_session_id}\n")
         key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
         current_sequence_id = int(sequence_id)
         return stream_session_id, key_for_vector_results, current_sequence_id
     
     try:
-        current_sequence_id = determine_sequence_id_for_chat(chat_id)
+        current_sequence_id = determine_sequence_id_for_chat(int(chat_id))
         new_stream_session_id, key_for_vector_results = get_session_id_and_vector_key()
         print(f"Current Chat ID: {chat_id} & Sequence ID: {current_sequence_id}")
         return new_stream_session_id, key_for_vector_results, current_sequence_id
     except Exception as e:
-        return handle_api_error("Error determining sequence_id and/or getting session_id and vector_key in get_base_values_for_setup_for_local_llm_response, encountered error: ", e)
+        handle_local_error("Error determining sequence_id and/or getting session_id and vector_key in get-base_values_for_setup_for_local_llm_response, encountered error: ", e)
 
 
 def handle_special_model_case(local_llm_server:str, current_sequence_id:int, file_attached:bool, stream_session_id:str, user_query:str, formatted_history_prompt:str, regeneration_request:bool) -> tuple[str, Response]:
@@ -7119,18 +7163,19 @@ def determine_response_service(user_query:str):
     
     try:
         selected_service = parse_service_response(full_response)
-        print(f"\nLLM selected service: {selected_service}\n")
+        print(f"\nLLM selected service: {selected_service}\n")  # Will be a dict with a single key: 'service' and a value as per those in get-service_request_prompt() above
     except Exception as e:
         handle_error_no_return("Could not parse service response, encountered error: ", e)
         selected_service = {'service': 'RAG'}
 
     try:
-        service_name = selected_service.get('service', 'RAG').lower().strip()
+        service_name = selected_service.get('service', 'RAG').lower().strip()   # safe fallback to RAG, since this is a RAG app!
         print(f"\nService name: {service_name}\n")
-        config = VALID_SERVICES.get(service_name, DEFAULT_CONFIG)
-        write_config(config)
-        print(f"\nConfig: {config}\n")
-        return config['do_rag']
+        llm_set_rag_config = VALID_SERVICES.get(service_name, DEFAULT_CONFIG)   # return default_config if service_name is not in valid_services (both defined above)
+        
+        safe_write_config(llm_set_rag_config)    # will update both do_rag and perform_graph_rag keys in config.json
+        print(f"\nConfig: {llm_set_rag_config}\n")
+        return llm_set_rag_config['do_rag']
     except Exception as e:
         handle_error_no_return("Could not determine service selected by the LLM, defaulting to use Naive RAG. Encountered error: ", e)
         return DEFAULT_CONFIG['do_rag']
@@ -7147,11 +7192,12 @@ def search_knowledge_base(user_query:str, embedding_function:str, force_enable_r
         do_rag = determine_response_service(user_query)
     except Exception as e:
         handle_error_no_return("Could not determine response service, defaulting to use Naive RAG. Encountered error: ", e)
+        safe_write_config(DEFAULT_CONFIG)   # update, at minimum, the do_rag and perform_graph_rag keys in config.json
         do_rag = DEFAULT_CONFIG['do_rag']
     
     if force_enable_rag:
         print("\n\nFORCE_ENABLE_RAG True, force enabling RAG and returning\n\n")
-        do_rag = True   # We don't check this earlier as if force_enable_rag is True, we also want to determine if GraphRAG should be performed! We only set it to True here to ensure force_enable_rag takes precedence over the LLM's selection.
+        do_rag = True   # We don't check this earlier as we also want to determine if GraphRAG should be performed! We only set it to True here to ensure force_enable_rag's do_rag setting takes precedence over the LLM's selection.
 
     if do_rag is False:
         print("Do RAG is False, returning...")
@@ -7203,7 +7249,7 @@ def search_knowledge_base(user_query:str, embedding_function:str, force_enable_r
         except Exception as e:
             handle_error_no_return("Could not execute graph RAG, encountered error: ", e)
     else:
-        write_config({'perform_graph_rag': False})  # In-case the LLM elected to use GraphRAG but the user has explicitly disabled it, we need to set perform-graph_rag to False to avoid any issues downstream!
+        safe_write_config({'perform_graph_rag': False})  # In-case the LLM elected to use GraphRAG but the user has explicitly disabled it, we need to set perform-graph_rag to False to avoid any issues downstream!
 
     return docs, do_rag, graph_rag_context
 
@@ -7218,10 +7264,9 @@ def setup_for_local_llm_response():
     try:    # Read config and request data, determine base values while handling regeneration case
         config = read_config_for_setup_for_local_llm_response()
         stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled = read_request_data_for_response_setup(request)
-        QUERIES[stream_session_id] = user_query     # Store the query associated with the ID
         stream_session_id, key_for_vector_results, current_sequence_id = get_base_values_for_setup_for_local_llm_response(stream_session_id, chat_id, sequence_id, regeneration_request)
     except Exception as e:
-        return handle_api_error("Error getting base values for setup_for_streaming_response, encountered error: ", e)
+        return handle_api_error("Error getting base values for setup-for_local_llm_response, encountered error: ", e)
 
     try:    # Get formatted prompt from history db
         formatted_history_prompt = get_formatted_prompt_for_setup_for_local_llm_response(int(chat_id), int(current_sequence_id) if not regeneration_request else int(current_sequence_id) - 1) # if regeneration_request, we must act as if the current sequence id does not exist in the history db when formatting the prompt!
@@ -7251,10 +7296,8 @@ def setup_for_local_llm_response():
     except Exception as e:
         return handle_api_error("Could not process vector search in method setup-for_local_llm_response, encountered error: ", e)
 
-    try:    # Write do_rag to config and prepare RAG context if necessary
-        # print(f'Do RAG? {do_rag}')
-        write_config({'do_rag':do_rag})
-        if do_rag:    # Add similarity search results for RAG if necessary!
+    try:
+        if do_rag:    # Add RAG results to user-query if necessary!
             QUERIES[key_for_vector_results] = docs
             user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference useful documents by name and specific page numbers in your response:\n"
             if graph_rag_context is not None:
@@ -7263,12 +7306,12 @@ def setup_for_local_llm_response():
                 user_query += f"{docs}"
     except Exception as e:
         reject_rag()
-        handle_error_no_return("Could not write do_rag or prepare RAG context during setup_for_streaming_response, encountered error: ", e)
+        handle_error_no_return("Could not write do_rag or prepare RAG context during setup-for_local_llm_response, encountered error: ", e)
 
     try:    # Get full prompt for server
         formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, formatted_history_prompt, user_query, current_sequence_id, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
     except Exception as e:
-        return handle_api_error("Could not get formatted_updated_prompt in method setup_for_streaming_response, encountered error: ", e)
+        return handle_api_error("Could not get formatted_updated_prompt in method setup-for_local_llm_response, encountered error: ", e)
 
     if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1
     return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
@@ -7307,7 +7350,7 @@ def save_pdf_to_download_dir(doc_name: str, stream_session_id: str):
         upload_folder = read_return['upload_folder']
         highlighted_pdfs_path = read_return['highlighted_docs']
     except Exception as e:
-        handle_local_error("Missing upload_folder in config.json for method save_pdf_to_download_dir. Error: ", e)
+        handle_local_error("Missing upload_folder in config.json for method save-pdf_to_download_dir. Error: ", e)
 
     try:
         doc_name_without_extension = os.path.splitext(doc_name)[0]
@@ -7473,26 +7516,32 @@ def determine_if_flux_diffusers_is_enabled() -> bool:
 
 
 def get_vector_results_for_get_references(stream_session_id: str) -> tuple[list[Document], bool]:
+    '''
+    The do_rag key in config.json may have been reset by other requests, so by tracking a specific requests RAG results via the queries dict,
+    we can be certain if RAG was perform for this query or not. While it's easier to simply store a boolean indicating this in the queries dict for a given 
+    stream-session-id, we store the actual RAG results for a query in case it may be needed anywhere downstream, such as for storing seperately to the chat history DB, etc.
+    '''
     try:
         key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
         docs = QUERIES.pop(key_for_vector_results, None)
         return docs, docs is not None
     except Exception as e:
-        handle_local_error("Could not get vector results for stream_session_id in method get_vector_results_for_get_references(), encountered error: ", e)
+        handle_local_error("Could not get vector results for stream_session_id in method get-vector_results_for_get_references(), encountered error: ", e)
 
 
-def get_request_parameters_for_get_references(request: Request) -> tuple[str, str, str, str, str, str, bool, bool]:
+def get_request_parameters_for_get_references(request: Request) -> tuple[str, str, str, str, str, str, str, bool]:
     try:
         stream_session_id = request.json['stream_session_id']
         user_query = request.json['user_query']
+        user_query_html = request.json['user_query_html']
         llm_response = request.json['llm_response']
         formatted_user_prompt = request.json['formatted_user_prompt']
         chat_id = request.json['chat_id']
         sequence_id = request.json['sequence_id']
         regeneration_request = request.json['regeneration_request']
-        return stream_session_id, user_query, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request
+        return stream_session_id, user_query, user_query_html, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request
     except Exception as e:
-        handle_local_error("Could not read request content in method get_request_parameters_for_get_references(), encountered error: ", e)
+        handle_local_error("Could not read request content in method get-request_parameters_for_get_references(), encountered error: ", e)
 
 
 def read_config_for_get_references() -> tuple[str, str, str, str, bool]:
@@ -7517,15 +7566,15 @@ def get_references():
         return handle_api_error("Missing values in config.json when attempting to get_references. Error: ", e)
 
     try:
-        stream_session_id, user_query, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request = get_request_parameters_for_get_references(request)
+        stream_session_id, user_query, user_query_html, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request = get_request_parameters_for_get_references(request)
     except Exception as e:
         return handle_api_error("Could not read request content in method get_references, encountered error: ", e)
 
-    do_rag = False
+    do_rag = False  # check docstring in function call below for details on this aspect
     try:
-        docs, do_rag = get_vector_results_for_get_references(stream_session_id)
+        _, do_rag = get_vector_results_for_get_references(stream_session_id)
     except Exception as e:
-        handle_error_no_return("Error determining if RAG was used in method get_references - Could not check the QUERIES dict. Proceeding without RAG. Encountered error: ", e)
+        handle_error_no_return("Error determining if RAG was used in method get_references - Could not check the queries dict. Proceeding without RAG. Encountered error: ", e)
 
     if local_llm_server == 'llama-cpp':
         formatted_user_prompt += prompt_formatting_module.append_eot_token_to_llm_response(local_llm_chat_template_format, llm_response)
@@ -7548,9 +7597,9 @@ def get_references():
         print("\n\nRAG Citations unnecessary, storing chat history and returning\n\n")
         try:
             if not regeneration_request:
-                stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+                stored_datetime, chat_id = store_to_chat_history_db(chat_id, sequence_id, stream_session_id, user_query, user_query_html, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
             else:
-                stored_datetime, chat_id = update_llm_response_in_history_db(chat_id, stream_session_id, user_query, llm_response)
+                stored_datetime, chat_id = update_record_in_history_db(chat_id, stream_session_id, user_query, user_query_html, llm_response)
         except Exception as e:
             handle_error_no_return("Could not store or update chat history DB in get_references(), encountered error: ", e)
         return jsonify({'success': True, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
@@ -7559,7 +7608,7 @@ def get_references():
     print("\n\nFetching Citations\n\n")
 
     pdf_section_html = None
-    llm_response_with_citation_links = llm_response
+    llm_response_with_citation_links = llm_response #fallback!
     try:
         llm_response_with_citation_links, pdf_section_html = add_citations_and_pdf_browser_to_llm_response(llm_response, stream_session_id)
     except Exception as e:
@@ -7572,9 +7621,9 @@ def get_references():
 
     try:
         if not regeneration_request:
-            stored_datetime, chat_id = store_local_llm_chat_history_to_db(chat_id, sequence_id, stream_session_id, user_query, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+            stored_datetime, chat_id = store_to_chat_history_db(chat_id, sequence_id, stream_session_id, user_query, user_query_html, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
         else:
-            stored_datetime, chat_id = update_llm_response_in_history_db(chat_id, stream_session_id, user_query, model_response_for_history_db)
+            stored_datetime, chat_id = update_record_in_history_db(chat_id, stream_session_id, user_query, user_query_html, model_response_for_history_db)
     except Exception as e:
         handle_error_no_return("Could not store or update chat history DB in get_references(), encountered error: ", e)
 
