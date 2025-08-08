@@ -107,9 +107,17 @@ function createUserMessageHTML(userInputForHtml){
     const uniqueId = getUniqueId();
     const current_chat_id = getChatId();
     const chatArea = document.getElementById('chat-area');
-    chatArea.innerHTML += `
+
+    // Create a temporary container to build the new element
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = `
         <div class="user-message glassmorphism" data-unique-id="${uniqueId}" data-chat-id="${current_chat_id}">
-            ${userInputForHtml}
+            <i class="fas fa-chevron-right tool-chain-toggle"></i>
+            <div class="user-query-content">${userInputForHtml}</div>
+            <div class="tool-chain-trace">
+                <!-- Trace items will be added dynamically -->
+            </div>
+            
             <div class="regenerate-menu">
                 <i class="fas fa-ellipsis-v"></i>
                 <div class="regenerate-menu-options">
@@ -121,27 +129,61 @@ function createUserMessageHTML(userInputForHtml){
             </div>
         </div>
     `;
+
+    const userMessageElement = tempDiv.firstElementChild;
+    
+    // Initialize the traceManager and attach it to the element
+    const traceManager = new ToolChainTraceManager(userMessageElement);
+    userMessageElement._traceManager = traceManager;
+
+    // Append the fully constructed element to the chat area without destroying anything
+    chatArea.appendChild(userMessageElement);
+
+    /*
+    It's critical to create the HTML for both, the user query and the response container in appendResponseContainerToChatArea() via appendChild() and not via innerHTML += because
+    in the latter case, the entire chat area is destroyed and recreated, as the browser browser doesn't just add the new element. It performs these steps:
+        1. Reads the entire existing HTML of the chat-area into a string.
+        2. Appends your new HTML string to it.
+        3. Destroys all the old elements inside chat-area and replaces them by parsing the new, combined string from scratch.
+    
+    This means that the original user-message element, which our traceManager is being attached to below, will be destroyed and recreated every time you add
+    the LLM's response container. The traceManager instance in memory will then be trying to add new trace items to a DOM element that no longer exists on the page, 
+    rendering it uselessly non-functional.
+    
+    And as noted in appendContentToResponse(), it's also highly inefficient!
+     */
+
     return uniqueId;
 }
 
 function updateChatAreaWithUserInput(userInputForHtml) {
+    /*
+    The uniqueId is used primarily to set the data-chat-id, data-sequence-id and data-stream-session-id attributes on the user-message element by the methods immediately below.
+    These methods leverage querySelector to find the user-message element by the uniqueId, and then set the attributes on it.
+    For regeneration requests, these attributes are already set to the correct chat-id & stream-session-id, so they needen't be set again.
+    This is why appendChatIdToUserMessage() & appendStreamSessionIdToUserMessage() are only called if (!regeneration_request).
+    However, the sequence-id does need to be reset even for regen requests, because regenerating a response deletes any prior messages for the sake of the chat template, 
+    thus the sequence ID will need to be reset in any case where the regenration request is for any message other than the latest one.
+    In this case, the stream-session-id is for the regen request is obtained by a call to the prepareAttributeForUserMessage() method, which
+    is called by a click event listener set at DOM load by initializeRegenerateResponseButton(). 
+    */
     const uniqueId = createUserMessageHTML(userInputForHtml);
     appendLoadingAnimation();
     return uniqueId;
 }
 
 function appendChatIdToUserMessage(uniqueId, chat_id) {
-    const userMessageElement = document.querySelector(`[data-unique-id="${uniqueId}"]`);
+    const userMessageElement = document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
     userMessageElement.setAttribute('data-chat-id', chat_id);
 }
 
 function appendStreamSessionIdToUserMessage(uniqueId, stream_session_id) {
-    const userMessageElement = document.querySelector(`[data-unique-id="${uniqueId}"]`);
+    const userMessageElement = document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
     userMessageElement.setAttribute('data-stream-session-id', stream_session_id);
 }
 
 function appendSequenceIdToUserMessage(uniqueId, stream_session_id, regeneration_request, sequence_id) {
-    const userMessageElement = regeneration_request ? document.querySelector(`[data-stream-session-id="${stream_session_id}"]`) : document.querySelector(`[data-unique-id="${uniqueId}"]`);
+    const userMessageElement = regeneration_request ? document.querySelector(`.user-message[data-stream-session-id="${stream_session_id}"]`) : document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
     userMessageElement.setAttribute('data-sequence-id', sequence_id);
 }
 
@@ -188,14 +230,23 @@ function setupLLMResponse(userInput, file_attached, current_chat_id, regeneratio
 }
 
 function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, responseContentID, stream_session_id) {
+    // Not called again for regen requests, as the response container is already present in the chat area.
     const chatArea = document.getElementById('chat-area');
-    chatArea.innerHTML += `
-        <div class="response-and-viewer-container" id="${masterWrapperID}" data-stream-session-id="${stream_session_id}">
-            <div class="llm-wrapper" style="display:none;" id="${responseWrapperID}">
-                <div class="llm-response" id="${responseContentID}"></div>
-            </div>
+    
+    // Create the new element without using innerHTML on the main chat area - SEE COMMENT IN create-UserMessageHTML() TO UNDERSTAND WHY!
+    const responseContainer = document.createElement('div');
+    responseContainer.className = 'response-and-viewer-container';
+    responseContainer.id = masterWrapperID;
+    responseContainer.setAttribute('data-stream-session-id', stream_session_id);
+    responseContainer.innerHTML = `
+        <div class="llm-wrapper" style="display:none;" id="${responseWrapperID}">
+            <div class="llm-response" id="${responseContentID}"></div>
         </div>
     `;
+
+    // Append the new container. This does NOT destroy the existing user-message element and it's associated traceManager.
+    chatArea.appendChild(responseContainer);
+
     document.getElementById(responseWrapperID).style.display  = 'block';
     scrollChatAreaToBottom();
 }
@@ -648,7 +699,7 @@ async function getReferences(do_rag, params, responseContentID, masterWrapperID,
 
         handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, params.stream_session_id, user_message_html_unique_id, params.regeneration_request);
     } catch (error) {
-        errorHandler("fetching relevant reference material", "getReferences()", String(error));
+        errorHandler("fetching relevant reference material", "get-References()", String(error));
     }
 }
 
@@ -659,29 +710,38 @@ async function requestFormattedPrompt(regeneration_request=false, regenerate_wit
     const current_chat_id = getChatId();
     const {userInput, file} = getUserInput();
     const userInputForHtml = regeneration_request ? userInput : formatTabsAndSpaces(userInput); // Old input need-not be re-formatted!
-    const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);
+    const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);  // The use of the uniqueId is explained in the docstring of update-ChatAreaWithUserInput().
+    
+    const userMessageElement = regeneration_request ? document.querySelector(`.user-message[data-stream-session-id="${regen_stream_session_id}"]`) : document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
+    const traceManager = userMessageElement._traceManager;  // created and stored in the userMessageElement at time of create-UserMessageHTML()!
+    
     if (regeneration_request) { resetResponseAndViewerContainerWithStreamSessionId(regen_stream_session_id); }
 
     let file_attached = false;
     if (file) { file_attached = true; }
 
     try {
-        // 1- setup_for_local_llm_response
+        // 1- setup-for_local_llm_response
+        traceManager.startStep("Analyzing Query & Executing Search Tools as Required...");
         const response = await setupLLMResponse(userInput, file_attached, current_chat_id, regeneration_request, regen_stream_session_id, regen_sequence_id, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled);
+        
+        traceManager.startStep("Data Prepared - Reaching out to the LLM for a Response...");
         const data = await response.json();
         data.user_message_html_unique_id = uniqueId;
         data.regeneration_request = regeneration_request;
         const {do_rag, stream_session_id, formatted_user_prompt, responseIDs, server_type} = handleSetupResponse(data);
         if (!regeneration_request) { appendStreamSessionIdToUserMessage(uniqueId, stream_session_id); }
 
-        // 2- fetch EventStream()
+        // 2- fetch-EventStream()
+        traceManager.startStep('Generating Response...');
         const chatContainer = document.getElementById('chat-area');
         const totalContent = await fetchEventStream(server_type, formatted_user_prompt, responseIDs.responseContentID, chatContainer, file);
 
         console.log("llm_response post stream: ", totalContent);
 
-        // 3- getReferences()
+        // 3- get-References()
         if (do_rag) {
+            traceManager.startStep('Fetching Document References...');
             displayProcessingStatus('Fetching any references...');
         }
 
@@ -690,6 +750,7 @@ async function requestFormattedPrompt(regeneration_request=false, regenerate_wit
             'sequence_id': getSequenceId(),
             'stream_session_id': stream_session_id,
             'user_query': userInputForHtml,
+            'user_query_html': userMessageElement.outerHTML,
             'llm_response': totalContent,
             'formatted_user_prompt': formatted_user_prompt,
             'regeneration_request': regeneration_request,
@@ -698,8 +759,15 @@ async function requestFormattedPrompt(regeneration_request=false, regenerate_wit
 
         await getReferences(do_rag, getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);
 
+        // Complete final step
+        traceManager.completeCurrentStep();
+
     } catch (error) {
-        errorHandler("chatting with the LLM", "requestFormattedPrompt()", String(error.message))
+        // Stop timer on error
+        if (traceManager) {
+            traceManager.completeCurrentStep();
+        }
+        errorHandler("chatting with the LLM", "request-FormattedPrompt()", String(error.message))
     } finally {
         enableSendButton();
         displayProcessingStatus(false);
@@ -848,6 +916,17 @@ document.getElementById('chat-area').addEventListener('click', function(e) {
                 errorHandler("storing the user's rating", "/store_user_rating", String(error.message))
             });
         // }
+    }
+
+    if(e.target.classList.contains('tool-chain-toggle')) {
+        const userMessage = e.target.closest('.user-message');
+        if (userMessage) {
+            const trace = userMessage.querySelector('.tool-chain-trace');
+            if (trace) {
+                trace.classList.toggle('expanded');
+                e.target.classList.toggle('expanded');
+            }
+        }
     }
 });
 
