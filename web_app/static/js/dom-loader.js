@@ -24,18 +24,21 @@ function initializeRegenerateResponseButton() {
         if (e.target.classList.contains('regenerate-option')) {
             const userMessageDiv = e.target.closest('.user-message');
             const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
+            clearToolChainToggle(streamSessionId);
             requestFormattedPrompt(true, false, false, streamSessionId, sequenceId);    // Request the formatted prompt
             deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
             appendLoadingAnimation(userMessageDiv);
         } else if (e.target.classList.contains('regenerate-with-citations-enabled-option')) {
             const userMessageDiv = e.target.closest('.user-message');
             const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
+            clearToolChainToggle(streamSessionId);
             requestFormattedPrompt(true, true, false, streamSessionId, sequenceId);    // Request the formatted prompt
             deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
             appendLoadingAnimation(userMessageDiv);
         } else if (e.target.classList.contains('regenerate-with-citations-disabled-option')) {
             const userMessageDiv = e.target.closest('.user-message');
             const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
+            clearToolChainToggle(streamSessionId);
             requestFormattedPrompt(true, false, true, streamSessionId, sequenceId);    // Request the formatted prompt
             deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
             appendLoadingAnimation(userMessageDiv);
