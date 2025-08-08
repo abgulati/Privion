@@ -205,18 +205,7 @@ function resetResponseAndViewerContainerWithStreamSessionId(streamSessionId) {
 function getUserMessageByStreamSessionId(stream_session_id) {
     const messageElement = document.querySelector(`.user-message[data-stream-session-id="${stream_session_id}"]`);
     if (!messageElement) return null;
-    
-    // Clone the element to work with
-    const clonedElement = messageElement.cloneNode(true);
-    
-    // Remove the regenerate menu div to get just the user text
-    const menuElement = clonedElement.querySelector('.regenerate-menu');
-    if (menuElement) {
-        clonedElement.removeChild(menuElement);
-    }
-    
-    // Return the remaining innerHTML which will be the user's message
-    return clonedElement.innerHTML.trim();
+    return messageElement.querySelector('.user-query-content').textContent.trim();
 }
 // ... existing code ...
 
@@ -242,6 +231,13 @@ function deleteChatAreaElements(currentElement) {
         }
     }
     elementsToDelete.forEach(element => element.remove());
+}
+
+function clearToolChainToggle(streamSessionId) {
+    const toolChainTrace = document.querySelector(`.user-message[data-stream-session-id="${streamSessionId}"] .tool-chain-trace`);
+    if (toolChainTrace) {
+        toolChainTrace.replaceChildren();
+    }
 }
 
 function deleteChatAreaElementsFromCurrentElement(currentElement) {
@@ -639,10 +635,33 @@ function loadChatHistory(chatID, chatTitle) {
             document.getElementById('old_model_header').style.display = 'block';
 
             chat_history_data = data.chat_history
-            console.log(data)
 
             for (let i = 0; i < chat_history_data.length; i++) {
-                document.getElementById('chat-area').innerHTML += chat_history_data[i]
+                
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = chat_history_data[i];
+                const toolChainTrace = tempDiv.querySelector('.tool-chain-trace');
+                const toolChainToggle = tempDiv.querySelector('.tool-chain-toggle');
+                
+                if (toolChainTrace) {   // user-message element with tool-trace history - must instantiate traceManager object
+                    
+                    // Apply styling changes as at the time of saving the user-message HTML (when the call to /get_references was made), the tool-chain-trace was expanded!
+                    toolChainTrace.classList.remove('expanded');
+
+                    if (toolChainToggle) {
+                        toolChainToggle.classList.toggle('expanded');
+                    }
+
+                    // Initialize the traceManager and attach it to the element
+                    const userMessageElement = tempDiv.firstElementChild;
+                    const traceManager = new ToolChainTraceManager(userMessageElement);
+                    userMessageElement._traceManager = traceManager;
+
+                    // Append the fully constructed element to the chat area without destroying anything
+                    document.getElementById('chat-area').appendChild(userMessageElement);
+                } else {
+                    document.getElementById('chat-area').insertAdjacentHTML('beforeend', chat_history_data[i]);
+                }
             }
 
             var defaultTabs = document.getElementsByClassName("defaultTabs");
