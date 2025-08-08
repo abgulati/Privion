@@ -591,6 +591,7 @@ body {
     margin-bottom: 0.5rem; /* Spacing between messages */
     background-color: #2F2F2F;
     padding: 0.77rem;
+    padding-left: 35px; /* Space for the tool-chain-toggle icon */
     border-radius: 9px;
     color: white;
     transition: margin-bottom 0.3s ease;
@@ -605,6 +606,74 @@ body {
 
 .user-message:has(.regenerate-menu:hover) {
     margin-bottom: 150px;
+}
+
+.tool-chain-toggle {
+    position: absolute;
+    left: 12px;
+    top: 19px;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+    font-size: 16px;
+}
+
+.tool-chain-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+.tool-chain-trace {
+    display: none; /* Hidden by default */
+    /* background-color: #1c1c1c; */
+    background-color: #212529;
+    border-radius: 5px;
+    
+    padding: 10px;
+    /* padding: 15px 0.77rem 15px 35px; */
+
+    /* margin-top: 15px; */
+    margin: 13px -0.67rem -0.67rem -33px;
+
+    font-size: 14px; /* Slightly smaller */
+    text-align: left;
+}
+
+.tool-chain-trace.expanded {
+    display: block;
+}
+
+.tool-chain-trace-item {
+    font-family: "Inter", sans-serif;
+    display: flex;
+    justify-content: space-between;
+    padding: 15px 0;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+    /* border-bottom: 1px solid #333; */
+}
+
+.tool-chain-trace-item:last-child {
+    border-bottom: none;
+}
+
+.tool-chain-trace-item .timer {
+    font-family: monospace;
+    color: #a0a0a0;
+}
+
+.tool-chain-trace-item.active {
+    opacity: 1;
+    font-weight: bold;
+}
+
+.tool-chain-trace-item.completed {
+    opacity: 0.8;
+    /* color: #4CAF50; */
+    color: #0df0b3c7
+}
+
+.tool-chain-trace-item.active .timer {
+    color: #2196F3;
+    font-weight: bold;
 }
 
 .llm-response {
