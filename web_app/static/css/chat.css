@@ -10,6 +10,13 @@ body {
     background-attachment: fixed; /* Keeps the background image fixed while scrolling */
 }
 
+.hljs {
+    color: darkseagreen !important;
+    background-color: black !important;
+    border-radius: 11px !important;
+    border: thin solid darkcyan !important;
+}
+
 .app-title-playfair {
     font-family: "Playfair Display", serif;
     font-optical-sizing: auto;

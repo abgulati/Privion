@@ -5733,10 +5733,8 @@ def generate_user_message_html(user_message: str, user_message_html: str, stream
 def generate_llm_response_html(llm_response: str, stream_session_id: str, user_rating: str, chat_id: int, sequence_id: int) -> str:
     try:
         result_parts = llm_response.split("pdf_pane_data=",1)
-        llm_response = f'<div class="response-and-viewer-container" data-stream-session-id="{stream_session_id}"><div class="llm-wrapper"> <div class="llm-response">' + result_parts[0]
+        llm_response = f'<div class="response-and-viewer-container" data-stream-session-id="{stream_session_id}"><div class="llm-wrapper" id="ResponseWrapper{stream_session_id}"><div class="llm-response" id="ResponseContent{stream_session_id}">' + result_parts[0]
         llm_response = llm_response.strip('\n')
-        llm_response = llm_response.replace('\n\n', '<br><br>')
-        llm_response = llm_response.replace('\n', '<br>')
 
         response_rated = False
         if user_rating and (isinstance(user_rating, str) or isinstance(user_rating, int)):
@@ -5744,10 +5742,10 @@ def generate_llm_response_html(llm_response: str, stream_session_id: str, user_r
             if user_rating > 0:
                 response_rated = True
 
-        # Using string-join to avoid newline characters \n's appearing in the HTML output as <br>'s !:
+        # Using string-join to avoid newline characters \n's appearing in the HTML output as breakline tags !:
         llm_rating_html_parts = [
             '<br>',
-            f'<div class="star-rating" data-rated={response_rated} rating-chat-id={chat_id} rating-sequence-id={sequence_id}>',
+            f'<div class="star-rating" data-rated={response_rated} data-rating-chat-id={chat_id} data-rating-sequence-id={sequence_id}>',
             '<i class="far fa-star" data-rate="1"></i>',
             '<i class="far fa-star" data-rate="2"></i>',
             '<i class="far fa-star" data-rate="3"></i>',
@@ -5772,8 +5770,6 @@ def generate_llm_response_html(llm_response: str, stream_session_id: str, user_r
             llm_response += result_parts[1]
             llm_response += "</div>"
             llm_response = llm_response.strip('\n')
-            llm_response = llm_response.replace('\n\n', '<br><br>')
-            llm_response = llm_response.replace('\n', '<br>')
 
         return llm_response
     except Exception as e:
@@ -7318,7 +7314,8 @@ def setup_for_local_llm_response():
 
 
 def final_cleanup_of_llm_response(llm_response: str) -> str:
-    pattern = r'\s*<br>\s+<br>\s*<br>\s*'    # Replace multiple <br> tags with a single <br> tag; \r?\n means optional carriage return and/or newline
+    # NOTE: This is no longer needed as the Markdown renderer handles this for us!
+    pattern = r'\s*<br>\s+<br>\s*<br>\s*'    # Replace multiple breakline tags with a single one; \r?\n means optional carriage return and/or newline
     llm_response = re.sub(pattern, '<br><br>', llm_response)
     llm_response = llm_response.strip()
     return llm_response
@@ -7483,6 +7480,7 @@ def add_citations_and_pdf_browser_to_llm_response(llm_response: str, stream_sess
         except Exception as e:
             handle_error_no_return("Could not process citation, the LLM may have mis-spelled the document name, skipping. Encountered error: ", e)
             continue
+    final_llm_response = llm_response_without_embedded_links.strip()
 
     try:
         pdf_section_html = construct_citation_html(pdf_tab_buttons_set, pdf_tab_content_set, stream_session_id) if len(urls) > 0 else None
@@ -7490,13 +7488,7 @@ def add_citations_and_pdf_browser_to_llm_response(llm_response: str, stream_sess
         handle_error_no_return("Could not construct citation html, returning blank. Encountered error: ", e)
         pdf_section_html = None
 
-    try:
-        llm_response_with_citations_cleaned = final_cleanup_of_llm_response(llm_response_without_embedded_links.strip())
-    except Exception as e:
-        handle_error_no_return("Could not clean up llm_response_without_embedded_links, skipping. Encountered error: ", e)
-        llm_response_with_citations_cleaned = llm_response_without_embedded_links.strip()
-
-    return llm_response_with_citations_cleaned, pdf_section_html
+    return final_llm_response, pdf_section_html
 
 
 def prepare_model_response_for_storage_to_history_db(download_link_html: str, llm_response: str) -> str:
@@ -7563,18 +7555,18 @@ def get_references():
     try:
         local_llm_server, local_llm_chat_template_format, perform_graph_rag = read_config_for_get_references()
     except Exception as e:
-        return handle_api_error("Missing values in config.json when attempting to get_references. Error: ", e)
+        return handle_api_error("Missing values in config.json when attempting to get-references. Error: ", e)
 
     try:
         stream_session_id, user_query, user_query_html, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request = get_request_parameters_for_get_references(request)
     except Exception as e:
-        return handle_api_error("Could not read request content in method get_references, encountered error: ", e)
+        return handle_api_error("Could not read request content in method get-references, encountered error: ", e)
 
     do_rag = False  # check docstring in function call below for details on this aspect
     try:
         _, do_rag = get_vector_results_for_get_references(stream_session_id)
     except Exception as e:
-        handle_error_no_return("Error determining if RAG was used in method get_references - Could not check the queries dict. Proceeding without RAG. Encountered error: ", e)
+        handle_error_no_return("Error determining if RAG was used in method get-references - Could not check the queries dict. Proceeding without RAG. Encountered error: ", e)
 
     if local_llm_server == 'llama-cpp':
         formatted_user_prompt += prompt_formatting_module.append_eot_token_to_llm_response(local_llm_chat_template_format, llm_response)
@@ -7601,7 +7593,7 @@ def get_references():
             else:
                 stored_datetime, chat_id = update_record_in_history_db(chat_id, stream_session_id, user_query, user_query_html, llm_response)
         except Exception as e:
-            handle_error_no_return("Could not store or update chat history DB in get_references(), encountered error: ", e)
+            handle_error_no_return("Could not store or update chat history DB in get-references(), encountered error: ", e)
         return jsonify({'success': True, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
     
 
@@ -7617,7 +7609,7 @@ def get_references():
     try:
         model_response_for_history_db = prepare_model_response_for_storage_to_history_db(pdf_section_html, llm_response_with_citation_links)
     except Exception as e:
-        handle_error_no_return("Could not prep data to store to chat history DB in get_references(), encountered error: ", e)
+        handle_error_no_return("Could not prep data to store to chat history DB in get-references(), encountered error: ", e)
 
     try:
         if not regeneration_request:
@@ -7625,7 +7617,7 @@ def get_references():
         else:
             stored_datetime, chat_id = update_record_in_history_db(chat_id, stream_session_id, user_query, user_query_html, model_response_for_history_db)
     except Exception as e:
-        handle_error_no_return("Could not store or update chat history DB in get_references(), encountered error: ", e)
+        handle_error_no_return("Could not store or update chat history DB in get-references(), encountered error: ", e)
 
     return jsonify({'success': True, 'response': llm_response_with_citation_links, 'pdf_frame':pdf_section_html, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
 

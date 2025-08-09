@@ -66,6 +66,94 @@ function cleanStreamedContent(dataObj) {
 }
 
 
+// ###################---------------LLM Markdown Rendering Pipeline---------------###################
+
+// Markdown + sanitize + syntax highlight pipeline
+const md = window.markdownit({
+    html: true,       // False will block raw HTML from models
+    linkify: true,
+    breaks: true,      // respect single newlines as <br> (nice for chat)
+    highlight: (str, lang) => {
+    try {
+        if (lang && window.hljs.getLanguage(lang)) {
+            const out = window.hljs.highlight(str, { language: lang, ignoreIllegals: true }).value;
+            return `<pre><code class="hljs language-${lang}">${out}</code></pre>`;
+        }
+    } catch(e) {}
+    const esc = md.utils.escapeHtml(str);
+    return `<pre><code class="hljs">${esc}</code></pre>`;
+    }
+});
+
+// Split source into normal Markdown vs <think> blocks, render each safely
+function renderMarkdownWithThink(markdown) {
+    const src = String(markdown || "");
+    const re = /<think>([\s\S]*?)<\/think>/gi;
+    let m, last = 0, html = "";
+    while ((m = re.exec(src)) !== null) {
+      if (m.index > last) html += md.render(src.slice(last, m.index));
+      const inner = md.render(m[1] || "");
+      html += `<details class="llm-think"><summary>Reasoning</summary><div class="llm-think-body">${inner}</div></details>`;
+      last = re.lastIndex;
+    }
+    if (last < src.length) html += md.render(src.slice(last));
+    return html;
+  }
+
+
+function renderMarkdownInto(el, markdownText) {
+    const unsafe = renderMarkdownWithThink(markdownText);
+
+    // NOTE: Bypassing for now as our citation-link formatting gets mucked up
+    // const safe = DOMPurify.sanitize(unsafe, {
+    //   ADD_TAGS: ['details', 'summary'],
+    //   ADD_ATTR: ['open'] // optional if you ever set it
+    // });
+    // el.innerHTML = safe;
+    el.innerHTML = unsafe;
+
+    // Open external links in new tabs; keep in-window citations intact
+    el.querySelectorAll('a[href]:not(.citation-link)').forEach(a => {
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener');
+    });
+  }
+
+// Streaming state: accumulate raw text and re-render at a low frequency
+const streamState = new Map(); // sessionId -> { buffer: string, scheduled: boolean }
+
+function getSessionIdFromResponseContentID(responseContentID) {
+    // ResponseContent<stream_session_id>
+    return String(responseContentID).replace(/^ResponseContent/, '');
+}
+
+function appendStreamChunkAndRender(responseContentID, chunk) {
+    const sessionId = getSessionIdFromResponseContentID(responseContentID);
+    const state = streamState.get(sessionId) || { buffer: '', scheduled: false };
+    state.buffer += (chunk || '');
+    streamState.set(sessionId, state);
+
+    if (!state.scheduled) {
+        state.scheduled = true;
+        setTimeout(() => {
+        const el = document.getElementById(responseContentID);
+        if (el) renderMarkdownInto(el, state.buffer);
+        state.scheduled = false;
+        handleAutoScroll(document.getElementById('chat-area'));
+        }, 80); // ~12 FPS; tune as needed
+    }
+}
+
+function finalizeStreamRender(responseContentID) {
+    const sessionId = getSessionIdFromResponseContentID(responseContentID);
+    const state = streamState.get(sessionId);
+    if (!state) return;
+    const el = document.getElementById(responseContentID);
+    if (el) renderMarkdownInto(el, state.buffer);
+}
+
+// ###################---------------END OF LLM Markdown Rendering Pipeline---------------###################
+
 function hideWelcomeScreen() {
     const welcomeScreen = document.getElementById('welcome-screen');
     if (welcomeScreen) {
@@ -140,7 +228,7 @@ function createUserMessageHTML(userInputForHtml){
     chatArea.appendChild(userMessageElement);
 
     /*
-    It's critical to create the HTML for both, the user query and the response container in appendResponseContainerToChatArea() via appendChild() and not via innerHTML += because
+    It's critical to create the HTML for both, the user query and the response container in append-ResponseContainerToChatArea() via appendChild() and not via innerHTML += because
     in the latter case, the entire chat area is destroyed and recreated, as the browser browser doesn't just add the new element. It performs these steps:
         1. Reads the entire existing HTML of the chat-area into a string.
         2. Appends your new HTML string to it.
@@ -299,6 +387,7 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
         const reader = response.body.getReader();   // To handle the Fetch API's 'Response' object when involving a ReadableStream.  By calling getReader(), a 'ReadableStreamDefaultReader' object is obtained
         let totalContent = '';  //String to accumulate content
         let receivedComplete = false;
+        let loaderHidden = false;
 
         // Function to process each text chunk
         async function processChunk() {
@@ -316,16 +405,25 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
                 
                 messages.forEach(message => {
                     if (message.startsWith('data: ')) {
+                        
+                        if (!loaderHidden) {
+                            removeLoadingAnimation();
+                            loaderHidden = true;
+                        }
+                        
                         const jsonStr = message.slice(6);   // remove 6 chars to get rid of the 'data: ' prefix!
                         try {
                             const dataObj = JSON.parse(jsonStr);
+                            const streamedText = dataObj.content || "";
+                            appendStreamChunkAndRender(responseContentID, streamedText);
+                            
                             //console.log(dataObj.content);   // Log only the content
-                            let streamed_content = dataObj.content.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>'); // /g - global - replace throughout string, not just the first occurance
+                            // let streamed_content = dataObj.content.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>'); // /g - global - replace throughout string, not just the first occurance
 
-                            if (shouldAppendContent(streamed_content)) {
-                                totalContent += streamed_content;
-                                appendContentToResponse(responseContentID, streamed_content);
-                            }
+                            // if (shouldAppendContent(streamed_content)) {
+                            //     totalContent += streamed_content;
+                            //     appendContentToResponse(responseContentID, streamed_content);
+                            // }
 
                             handleAutoScroll(chatContainer);
 
@@ -339,7 +437,8 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
                 });
 
                 if (receivedComplete) {
-                    document.getElementById(responseContentID).innerHTML = cleanStreamedContent(totalContent);  // Refresh innerHTML to ensure formatting of HTML tags is properly applied
+                    //document.getElementById(responseContentID).innerHTML = cleanStreamedContent(totalContent);  // Refresh innerHTML to ensure formatting of HTML tags is properly applied
+                    finalizeStreamRender(responseContentID);
                     break;
                 }
             }
@@ -484,6 +583,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         let hfwTotalContent = '';
         if (file) { hfwTotalContent += document.getElementById(responseContentID).innerHTML + '<br>'; } // Ensure the file download link generated above is appended to hfwTotalContent!
         let hfwReceivedComplete = false;
+        let loaderHidden = false;
 
         async function hfwProcessChunk() {
             while (true) {
@@ -499,32 +599,57 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
                 messages.forEach(message => {
                     
                     if (message.startsWith('data: ')) {
-                        const jsonStr = message.slice(7, -1);   // remove first 7 and last 1 chars to get rid of the 'data: "' prefix and " suffix!
+                        // const jsonStr = message.slice(7, -1);   // remove first 7 and last 1 chars to get rid of the 'data: "' prefix and " suffix!
 
-                        // console.log("message: ", message);
-                        try {
-                            let dataObj = String(jsonStr);
-                            if (dataObj == "null") {
-                                dataObj = "";
-                            }
-                            const streamed_content = cleanStreamedContent(dataObj);
+                        // // console.log("message: ", message);
+                        // try {
+                        //     let dataObj = String(jsonStr);
+                        //     if (dataObj == "null") {
+                        //         dataObj = "";
+                        //     }
+                        //     const streamed_content = cleanStreamedContent(dataObj);
 
-                            hfwTotalContent += streamed_content;
-                            appendContentToResponse(responseContentID, streamed_content);
+                        //     hfwTotalContent += streamed_content;
+                        //     appendContentToResponse(responseContentID, streamed_content);
 
-                            handleAutoScroll(chatContainer);
+                        //     handleAutoScroll(chatContainer);
 
-                        } catch (error) {
-                            console.error('Error parsing message: ', error);
+                        // } catch (error) {
+                        //     console.error('Error parsing message: ', error);
+                        // }
+
+                        if (!loaderHidden) {
+                            removeLoadingAnimation();
+                            loaderHidden = true;
                         }
+
+                        const payload = message.slice(6).trim();    // remove the 'data: ' prefix but keep the quoted string for JSON.parse to decode
+                        let chunkText = "";
+                        try{
+                            chunkText = JSON.parse(payload);    // payload is usually a quoted JSON string with escapes; JSON.parse decodes \n, \t, \uXXXX safely
+                            //chunkText = chunkText.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        } catch {   // Fallback: strip outer quotes if present
+                            chunkText = payload.replace(/^"/, '').replace(/"$/, '');
+                            //chunkText = chunkText.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        }
+
+                        if (chunkText == "null") {
+                            console.log("Received null payload");
+                            hfwReceivedComplete = true;
+                        } else {
+                            appendStreamChunkAndRender(responseContentID, chunkText);
+                            hfwTotalContent += chunkText;
+                            handleAutoScroll(chatContainer);
+                        }
+
                     } else if (message.startsWith('event: END') || message.startsWith('data: null')) {
-                        console.log("Received null message from hf-waitress - stream complete");
                         hfwReceivedComplete = true;
                     }
                 });
 
                 if (hfwReceivedComplete) {
-                    document.getElementById(responseContentID).innerHTML = cleanStreamedContent(hfwTotalContent);   // Refresh innerHTML to ensure formatting of HTML tags is properly applied
+                    // document.getElementById(responseContentID).innerHTML = cleanStreamedContent(hfwTotalContent);   // Refresh innerHTML to ensure formatting of HTML tags is properly applied
+                    finalizeStreamRender(responseContentID);
                     break;
                 }
             }
@@ -649,16 +774,15 @@ function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapper
     console.log("get_references data: ", data);
 
     if (do_rag && data.response != "" && data.response != null) {
-        // document.getElementById(responseContentID).innerHTML += `
-        // </br> 
-        // ${data.response}
-        // ` 
-        document.getElementById(responseContentID).innerHTML = `${data.response}` 
+        document.getElementById(responseContentID).innerHTML = `${data.response}`;
+        const state = `${data.response}`;
+        streamState.set(stream_session_id, { buffer: state, scheduled: false });
+        finalizeStreamRender(responseContentID);
     }
     
     document.getElementById(responseContentID).innerHTML += `
     <br>
-    <div class="star-rating" data-rated="False" rating-chat-id=${current_chat_id} rating-sequence-id=${latest_sequence_id}>
+    <div class="star-rating" data-rated="False" data-rating-chat-id=${current_chat_id} data-rating-sequence-id=${latest_sequence_id}>
         <i class="far fa-star" data-rate="1"></i>
         <i class="far fa-star" data-rate="2"></i>
         <i class="far fa-star" data-rate="3"></i>
@@ -881,8 +1005,8 @@ document.getElementById('chat-area').addEventListener('click', function(e) {
         // if(starContainer.getAttribute('data-rated') === "False") {
             
             let rate = e.target.getAttribute('data-rate');
-            let chat_id = starContainer.getAttribute('rating-chat-id');
-            let sequence_id = starContainer.getAttribute('rating-sequence-id');
+            let chat_id = starContainer.getAttribute('data-rating-chat-id');
+            let sequence_id = starContainer.getAttribute('data-rating-sequence-id');
 
             for(let i = 0; i < 5; i++) {
                 // reset star
