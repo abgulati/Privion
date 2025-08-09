@@ -188,7 +188,6 @@ function getUserMessageContent(element) {
 }
 
 function resetResponseAndViewerContainerWithStreamSessionId(streamSessionId) {
-    //appendLoadingAnimation();
     const responseAndViewerContainer = document.querySelector(`.response-and-viewer-container[data-stream-session-id="${streamSessionId}"]`);
     if (responseAndViewerContainer) {
         responseAndViewerContainer.id = `MasterWrapper${streamSessionId}`;
@@ -642,6 +641,7 @@ function loadChatHistory(chatID, chatTitle) {
                 tempDiv.innerHTML = chat_history_data[i];
                 const toolChainTrace = tempDiv.querySelector('.tool-chain-trace');
                 const toolChainToggle = tempDiv.querySelector('.tool-chain-toggle');
+                const responseAndViewerContainer = tempDiv.querySelector('.response-and-viewer-container');
                 
                 if (toolChainTrace) {   // user-message element with tool-trace history - must instantiate traceManager object
                     
@@ -661,6 +661,18 @@ function loadChatHistory(chatID, chatTitle) {
                     document.getElementById('chat-area').appendChild(userMessageElement);
                 } else {
                     document.getElementById('chat-area').insertAdjacentHTML('beforeend', chat_history_data[i]);
+
+                    if (responseAndViewerContainer) {
+                        const streamSessionId = responseAndViewerContainer.getAttribute('data-stream-session-id');
+                        const llmResponseContainer = responseAndViewerContainer.querySelector('.llm-response');
+
+                        if (llmResponseContainer) {
+                            const state = llmResponseContainer.innerHTML; // textContent will lose the star-rating div!
+                            const responseContentID = `ResponseContent${streamSessionId}`;
+                            streamState.set(streamSessionId, { buffer: state, scheduled: false });
+                            finalizeStreamRender(responseContentID);
+                        }
+                    }
                 }
             }
 
