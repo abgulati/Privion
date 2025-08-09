@@ -7313,14 +7313,6 @@ def setup_for_local_llm_response():
     return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
 
 
-def final_cleanup_of_llm_response(llm_response: str) -> str:
-    # NOTE: This is no longer needed as the Markdown renderer handles this for us!
-    pattern = r'\s*<br>\s+<br>\s*<br>\s*'    # Replace multiple breakline tags with a single one; \r?\n means optional carriage return and/or newline
-    llm_response = re.sub(pattern, '<br><br>', llm_response)
-    llm_response = llm_response.strip()
-    return llm_response
-
-
 def construct_citation_html(pdf_tab_buttons_set: set[str], pdf_tab_content_set: set[str], stream_session_id: str) -> str:
     try:
         pdf_section_html = f'<div class="pdf-viewer-container" id="stream{stream_session_id}PdfPane">'
