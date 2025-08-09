@@ -5155,3 +5155,220 @@ def remove_embedded_links_from_llm_response(llm_response: str) -> str:
         Processing New Document...
     </div>
 </div>
+
+
+
+async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer) {
+    const url = "http://localhost:8080/completion";
+    const requestData = {
+        prompt: formattedPrompt,
+        stream: true,
+        temperature: parseFloat(document.getElementById('tempSlider').value),
+        top_k: parseInt(document.getElementById('topkSlider').value),
+        top_p: parseFloat(document.getElementById('toppSlider').value),
+        min_p: parseFloat(document.getElementById('minpSlider').value),
+        n_keep: parseInt(document.getElementById('nkeepSlider').value)
+    };
+
+    try {
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+        });
+
+        scrollChatAreaToBottom();
+
+        const reader = response.body.getReader();   // To handle the Fetch API's 'Response' object when involving a ReadableStream.  By calling getReader(), a 'ReadableStreamDefaultReader' object is obtained
+        let totalContent = '';  //String to accumulate content
+        let receivedComplete = false;
+
+        // Function to process each text chunk
+        async function processChunk() {
+            let partialData = '';   // Holds partially received JSON strings
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    console.log("Stream complete");
+                    break;
+                }
+
+                const textChunk = new TextDecoder("utf-8").decode(value);   //When reading a stream with 'ReadableStreamDefaultReader', Uint8Array binary-data objects are received. TextDecoder decodes these byte streams into human readable text strings. UTF-8 encodes all possible chars in Unicode, and is the std text encoding in most network comms, thus is used here.
+                const messages = textChunk.split('\n'); //one streamed data-message at a time, newlines are standard for seperating SSE-messages which may arrive bunched-up in chunks or partially
+                
+                messages.forEach(message => {
+                    if (message.startsWith('data: ')) {
+                        const jsonStr = message.slice(6);   // remove 6 chars to get rid of the 'data: ' prefix!
+                        try {
+                            const dataObj = JSON.parse(jsonStr);
+                            //console.log(dataObj.content);   // Log only the content
+                            let streamed_content = dataObj.content.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>'); // /g - global - replace throughout string, not just the first occurance
+
+                            if (shouldAppendContent(streamed_content)) {
+                                totalContent += streamed_content;
+                                appendContentToResponse(responseContentID, streamed_content);
+                            }
+
+                            handleAutoScroll(chatContainer);
+
+                            if (dataObj.stop) {
+                                receivedComplete = true;
+                            }
+                        } catch (error) {
+                            console.error('Error parsing JSON: ', error);
+                        }
+                    }
+                });
+
+                if (receivedComplete) {
+                    document.getElementById(responseContentID).innerHTML = cleanStreamedContent(totalContent);  // Refresh innerHTML to ensure formatting of HTML tags is properly applied
+                    break;
+                }
+            }
+        }
+
+        await processChunk();   // processChunk() is an async-Fn and thus returns a promise. Here, via await, we pause execution until the promise is resolved or rejected.
+        return totalContent;
+
+    } catch (error) {
+        errorHandler("fetching llama.cpp event-streaming response", "localhost:8080/completions", String(error))
+    }
+}
+
+
+
+async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer, file=null) {
+    let url;
+    let hfwHeaders = new Headers();
+    let formdata = null;
+    let rawBodyJSONStringified = null;
+
+    const vision = getVision();
+    const exl2 = getExl2();
+    console.log("vision: ", vision, "typeof:", typeof vision);
+    console.log("exl2: ", exl2, "typeof:", typeof exl2);
+    if (vision === "true") {
+        console.log("Invoking vision_stream");
+        const hfWaitress_URL = getHfwUrl();
+        url = `${hfWaitress_URL}/vision_stream`;
+
+        hfwHeaders = new Headers();
+        hfwHeaders.append("X-DPI", "300");
+        hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
+
+        formdata = new FormData();
+
+        const parsedPrompt = JSON.parse(formattedPrompt);
+        formdata.append("messages", JSON.stringify(parsedPrompt.messages));
+        if (file) { formdata.append("file", file); }
+    } else if (exl2 === "true") {
+        console.log("Invoking exl2_stream");
+        const hfWaitress_URL = getHfwUrl();
+        url = `${hfWaitress_URL}/exl2_stream`;
+
+        hfwHeaders = new Headers();
+        hfwHeaders.append("Content-Type", "application/json");
+        hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
+        hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
+        hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
+        hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
+
+        rawBodyJSONObj = JSON.parse(formattedPrompt);                                
+        rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
+    } else {
+        console.log("Invoking completions_stream");
+        const hfWaitress_URL = getHfwUrl();
+        url = `${hfWaitress_URL}/completions_stream`;
+
+        hfwHeaders = new Headers();
+        hfwHeaders.append("Content-Type", "application/json");
+        hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
+        hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
+        hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
+        hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
+        hfwHeaders.append("X-Min-P", document.getElementById('HfwMinpSlider').value);
+        hfwHeaders.append("X-Do-Sample", document.getElementById('HfwTempSlider').value > 0 ? "True" : "False");
+        
+        rawBodyJSONObj = JSON.parse(formattedPrompt);                                
+        rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
+    }
+    
+    try {
+
+        const request_body = vision === "true" ? formdata : rawBodyJSONStringified;
+        // console.log("request_body: ", request_body);
+
+        const hfwResponse = await fetch(url, {
+            method: 'POST',
+            headers: hfwHeaders,
+            body: request_body,
+            redirect: 'follow'
+        }); // due to the async-await syntax, the fetch() call returns a promise, and we await its resolution here.
+
+        if (file) {
+            const downloadContainer = createDownloadContainerForFile(file.name);
+            document.getElementById(responseContentID).appendChild(downloadContainer);
+        }
+
+        document.getElementById('chat-area').scrollTop = document.getElementById('chat-area').scrollHeight;     //Scroll to the bottom of the page
+
+        const hfwReader = hfwResponse.body.getReader();
+        let hfwTotalContent = '';
+        if (file) { hfwTotalContent += document.getElementById(responseContentID).innerHTML + '<br>'; } // Ensure the file download link generated above is appended to hfwTotalContent!
+        let hfwReceivedComplete = false;
+
+        async function hfwProcessChunk() {
+            while (true) {
+                const { done, value } = await hfwReader.read();
+                if (done) {
+                    console.log("HF-Waitress Stream complete");
+                    break;
+                }
+                
+                const textChunk = new TextDecoder("utf-8").decode(value);
+                const messages = textChunk.split('\n');
+                
+                messages.forEach(message => {
+                    
+                    if (message.startsWith('data: ')) {
+                        const jsonStr = message.slice(7, -1);   // remove first 7 and last 1 chars to get rid of the 'data: "' prefix and " suffix!
+
+                        // console.log("message: ", message);
+                        try {
+                            let dataObj = String(jsonStr);
+                            if (dataObj == "null") {
+                                dataObj = "";
+                            }
+                            const streamed_content = cleanStreamedContent(dataObj);
+
+                            hfwTotalContent += streamed_content;
+                            appendContentToResponse(responseContentID, streamed_content);
+
+                            handleAutoScroll(chatContainer);
+
+                        } catch (error) {
+                            console.error('Error parsing message: ', error);
+                        }
+                    } else if (message.startsWith('event: END') || message.startsWith('data: null')) {
+                        console.log("Received null message from hf-waitress - stream complete");
+                        hfwReceivedComplete = true;
+                    }
+                });
+
+                if (hfwReceivedComplete) {
+                    document.getElementById(responseContentID).innerHTML = cleanStreamedContent(hfwTotalContent);   // Refresh innerHTML to ensure formatting of HTML tags is properly applied
+                    break;
+                }
+            }
+        }
+
+        await hfwProcessChunk();
+        return hfwTotalContent;
+
+    } catch (error) {
+        errorHandler("fetching event-streaming response", "HF-Waitress/completions_stream", String(error));
+    }
+
+}
