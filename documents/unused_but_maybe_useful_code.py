@@ -5157,6 +5157,48 @@ def remove_embedded_links_from_llm_response(llm_response: str) -> str:
 </div>
 
 
+function cleanStreamedContent(dataObj) {
+    // console.log("dataObj: ", dataObj);
+
+    dataObj = dataObj.replace(/\\u[\dA-F]{4}/gi, function(match) {
+        return String.fromCharCode(parseInt(match.replace(/\\u/g, ''), 16));
+    });
+    // Explanation:
+    // 0. This exists to handle the issue of unicode characters in the streamed response, which break the HTML.
+    // 1. The regular expression /\\u[\dA-F]{4}/gi matches a sequence of characters that starts with "\\u" followed by exactly four hexadecimal digits (\d for digits, A-F for uppercase letters).
+    // 2. The "gi" flags are used for global and case-insensitive matching.
+    // 3. The function(match) { ... } is an arrow function (An arrow function expression has a shorter syntax and lexically binds the 'this' value) that takes the matched string and converts it back to a character using the parseInt function.
+    // 4. parseInt(..., 16) uses replace to remove the "\\u" prefix and convert the remaining 4-digit hexadecimal string to a decimal number, using the 16 argument to specify base 16.
+    // 5. String.fromCharCode() converts the decimal number integer (now a Unicode code point) back to the corresponding character.
+
+    let streamed_content = dataObj;
+
+    // The robust parsing below is necessary as the LLM sees HTML <br> tags on subsequent questions, because it sees it's prior responses formatted as HTML!
+    // First, decode any HTML entities that might already be present - /g implies global: replace throughout string, not just the first occurance
+    streamed_content = streamed_content.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+    // Then, replace newlines with <br> tags
+    streamed_content = streamed_content.replace(/\\n\\n/g, '<br><br>')
+                                    .replace(/\\n/g, '<br>')
+                                    .replace(/\n\n/g, '<br><br>')
+                                    .replace(/\n/g, '<br>');
+
+    // Replace tabs with spaces
+    streamed_content = streamed_content.replace(/\\t/g, '    ');
+
+    // Finally, encode HTML special characters, but preserve <br> tags
+    // Important to process the less-than and greater-than entities so we can escape other HTML elements the LLM puts out - primarily <think>...</think> tags!
+    streamed_content = streamed_content.replace(/</g, '&lt;')
+                                    .replace(/>/g, '&gt;')
+                                    .replace(/&lt;br&gt;/g, '<br>');
+
+    // Replace <br> tags with <br>
+    // streamed_content = streamed_content.replace(/&/g, '&amp;').replace(/&lt;br&gt;/g, '<br>');
+
+    // console.log("streamed_content: ", streamed_content);
+    return streamed_content;
+}
+
 
 async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer) {
     const url = "http://localhost:8080/completion";
