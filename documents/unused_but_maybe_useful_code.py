@@ -5414,3 +5414,11 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
     }
 
 }
+
+
+def final_cleanup_of_llm_response(llm_response: str) -> str:
+    # NOTE: This is no longer needed as the Markdown renderer handles this for us!
+    pattern = r'\s*<br>\s+<br>\s*<br>\s*'    # Replace multiple breakline tags with a single one; \r?\n means optional carriage return and/or newline
+    llm_response = re.sub(pattern, '<br><br>', llm_response)
+    llm_response = llm_response.strip()
+    return llm_response
