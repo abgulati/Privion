@@ -6263,26 +6263,31 @@ def get_session_id_and_vector_key() -> tuple[str, str]:
 
 
 def read_config_for_setup_for_local_llm_response() -> dict:
-    read_return = read_config([
-        'local_llm_server',
-        'force_enable_rag', 
-        'force_disable_rag', 
-        'local_llm_chat_template_format', 
-        'base_template',
-        'fetch_top_k_results_from_vectordb', 
-        'filter_top_k_results_by_reranking', 
-        'skip_system_prompt'
-    ])
-    return {
-        'force_enable_rag': read_return['force_enable_rag'],
-        'force_disable_rag': read_return['force_disable_rag'],
-        'local_llm_chat_template_format': read_return['local_llm_chat_template_format'],
-        'base_template': read_return['base_template'],
-        'local_llm_server': read_return['local_llm_server'],
-        'fetch_top_k_results_from_vectordb': read_return['fetch_top_k_results_from_vectordb'],
-        'filter_top_k_results_by_reranking': read_return['filter_top_k_results_by_reranking'],
-        'skip_system_prompt': str(read_return['skip_system_prompt']).lower() == 'true'
-    }
+    try:
+        read_return = read_config([
+            'local_llm_server',
+            'selected_embedding_model',
+            'force_enable_rag', 
+            'force_disable_rag', 
+            'local_llm_chat_template_format', 
+            'base_template',
+            'fetch_top_k_results_from_vectordb', 
+            'filter_top_k_results_by_reranking', 
+            'skip_system_prompt'
+        ])
+        return {
+            'force_enable_rag': read_return['force_enable_rag'],
+            'selected_embedding_model': read_return['selected_embedding_model'],
+            'force_disable_rag': read_return['force_disable_rag'],
+            'local_llm_chat_template_format': read_return['local_llm_chat_template_format'],
+            'base_template': read_return['base_template'],
+            'local_llm_server': read_return['local_llm_server'],
+            'fetch_top_k_results_from_vectordb': read_return['fetch_top_k_results_from_vectordb'],
+            'filter_top_k_results_by_reranking': read_return['filter_top_k_results_by_reranking'],
+            'skip_system_prompt': str(read_return['skip_system_prompt']).lower() == 'true'
+        }
+    except Exception as e:
+        handle_local_error("Could not read config for setup-for_local_llm_response, encountered error: ", e)
 
 
 def read_request_data_for_setup_for_local_llm_response(request: Request) -> tuple[str, str, bool]:
@@ -6300,16 +6305,16 @@ def read_hf_waitress_multimodal_config() -> tuple[bool, bool]:
             str(hf_read_return['vision']).lower() == 'true'
         )
     except Exception as e:
-        handle_error_no_return("Could not determine if flux_diffusers or vision model in method read_hf_waitress_multimodal_config, encountered error: ", e)
+        handle_error_no_return("Could not determine if flux_diffusers or vision model in method read-hf_waitress_multimodal_config, encountered error: ", e)
         return False, False
 
 
-def prepare_special_model_response(formatted_prompt:str, user_query:str, current_sequence_id:int, new_sequence_id:int, stream_session_id:str, local_llm_server:str) -> dict:
+def prepare_quick_response_for_special_model(full_prompt:str, user_query:str, current_sequence_id:int, new_sequence_id:int, stream_session_id:str, local_llm_server:str) -> dict:
     print("\n\nPreparing special model response\n\n")
     try:
         is_diffusers = local_llm_server == 'hfw-diffusers'
         formatted_prompt = format_prompt_for_hf_waitress(
-            formatted_prompt="" if is_diffusers else formatted_prompt, 
+            formatted_prompt="" if is_diffusers else full_prompt, 
             user_query=user_query, 
             current_sequence_id=0 if is_diffusers else current_sequence_id, 
             system_prompt="",  
@@ -6324,7 +6329,7 @@ def prepare_special_model_response(formatted_prompt:str, user_query:str, current
             "server_type":local_llm_server
         }
     except Exception as e:
-        handle_local_error("Could not prepare special model response in method prepare_special_model_response, encountered error: ", e)
+        handle_local_error("Could not prepare special model response in method prepare-special_model_response, encountered error: ", e)
 
 
 def reject_rag() -> dict:
@@ -6338,17 +6343,22 @@ def reject_rag() -> dict:
 
 def prepare_for_quick_response(current_sequence_id:int, regeneration_request:bool) -> int:
     print("Invoking quick-return route for hfw-diffusers or hfw-vision(file_attached)")
-    if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1
+    if not regeneration_request or current_sequence_id == 0:
+        # if regeneration_request is True, we only increment the sequence ID if it's 0, else it stays the same. For regular requests with sequence_id > 0, we increment it by 1 as usual.
+        current_sequence_id = int(current_sequence_id) + 1
     reject_rag()
     return current_sequence_id
 
 
-def get_formatted_prompt_for_setup_for_local_llm_response(chat_id:int, current_sequence_id:int) -> str:
-    print("\n\nGetting formatted prompt for setup-for_local_llm_response\n\n")
-    formatted_prompt = ""
-    if current_sequence_id > 0:    # get the last prompt so we can continue the completions
-        formatted_prompt = get_formatted_prompt_from_history_db(chat_id, current_sequence_id)
-    return formatted_prompt
+def get_full_llm_prompt_with_history(chat_id:int, current_sequence_id:int) -> tuple[int, str]:
+    try:
+        print("\n\nGetting formatted prompt for setup-for_local_llm_response\n\n")
+        formatted_prompt = ""
+        if current_sequence_id > 0:    # get the last prompt so we can continue the completions
+            formatted_prompt = get_formatted_prompt_from_history_db(chat_id, current_sequence_id)
+        return current_sequence_id, formatted_prompt
+    except Exception as e:
+        handle_local_error("Could not get formatted prompt in method get-full_llm_prompt_with_history, encountered error: ", e)
 
 
 def read_request_data_for_response_setup(request: Request) -> tuple[str, str, str, str, bool, bool, bool, bool]:
@@ -6363,18 +6373,18 @@ def read_request_data_for_response_setup(request: Request) -> tuple[str, str, st
     return stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled
 
 
-def get_full_prompt_for_server(local_llm_server: str, formatted_history_prompt: str, user_query: str, current_sequence_id: int, base_template: str, local_llm_chat_template_format: str, skip_system_prompt: bool) -> str:
+def get_full_prompt_for_server(local_llm_server: str, full_prompt: str, user_query: str, current_sequence_id: int, base_template: str, local_llm_chat_template_format: str, skip_system_prompt: bool) -> str:
     if local_llm_server == 'llama-cpp':
-        formatted_updated_prompt = prompt_formatting_module.manually_format_prompt_with_prompt_template(formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
+        formatted_updated_prompt = prompt_formatting_module.manually_format_prompt_with_prompt_template(full_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
     elif local_llm_server == 'hf-waitress':
-        formatted_updated_prompt = format_prompt_for_hf_waitress(formatted_history_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
+        formatted_updated_prompt = format_prompt_for_hf_waitress(full_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
     elif local_llm_server == 'hfw-vision':
-        formatted_updated_prompt = format_prompt_for_hf_waitress(formatted_history_prompt, user_query, current_sequence_id, "", True)  # No base_template for hfw-vision
+        formatted_updated_prompt = format_prompt_for_hf_waitress(full_prompt, user_query, current_sequence_id, "", True)  # No base_template for hfw-vision
     # print("Returning formatted_prompt: ", formatted_updated_prompt)
     return formatted_updated_prompt
 
 
-def get_base_values_for_setup_for_local_llm_response(stream_session_id:str, chat_id:str, sequence_id:str, regeneration_request:bool) -> tuple[str, str, int]:
+def get_ids_for_setup_for_local_llm_response(stream_session_id:str, chat_id:str, sequence_id:str, regeneration_request:bool) -> tuple[str, str, int]:
     if regeneration_request:
         if stream_session_id is None or stream_session_id == "":
             return handle_local_error("Could not process regeneration-request in get-base_values_for_setup_for_local_llm_response, encountered error: ", ValueError("stream_session_id is blank."))
@@ -6393,7 +6403,7 @@ def get_base_values_for_setup_for_local_llm_response(stream_session_id:str, chat
         handle_local_error("Error determining sequence_id and/or getting session_id and vector_key in get-base_values_for_setup_for_local_llm_response, encountered error: ", e)
 
 
-def handle_special_model_case(local_llm_server:str, current_sequence_id:int, file_attached:bool, stream_session_id:str, user_query:str, formatted_history_prompt:str, regeneration_request:bool) -> tuple[str, Response]:
+def handle_special_model_case(local_llm_server:str, current_sequence_id:int, file_attached:bool, stream_session_id:str, user_query:str, full_prompt:str, regeneration_request:bool) -> tuple[str, Response]:
     print("\nChecking if special handling for multi-modal models is required...\n")
     if local_llm_server != 'hf-waitress':   #if llama.cpp
         return local_llm_server, None
@@ -6404,13 +6414,13 @@ def handle_special_model_case(local_llm_server:str, current_sequence_id:int, fil
         new_sequence_id = prepare_for_quick_response(current_sequence_id, regeneration_request)
         new_local_llm_server='hfw-diffusers' if flux_diffusers else 'hfw-vision'    # 'hfw-vision' since a file is attached for visual analysis!
         try:
-            response = prepare_special_model_response(
+            response = prepare_quick_response_for_special_model(
                 local_llm_server=new_local_llm_server,
                 stream_session_id=stream_session_id,
                 user_query=user_query,
                 current_sequence_id=current_sequence_id,
                 new_sequence_id=new_sequence_id,
-                formatted_prompt=formatted_history_prompt
+                full_prompt=full_prompt
             )
             print(f"Returning quick-return formatted_user_prompt: {response['formatted_user_prompt']}")
             return new_local_llm_server, jsonify(response)
@@ -6423,11 +6433,11 @@ def handle_special_model_case(local_llm_server:str, current_sequence_id:int, fil
     return local_llm_server, None   # Likely hf-waitress, but not multi-modal (hfw-diffusers or hfw-vision)
 
 
-def handle_force_disabled_rag(local_llm_server:str, formatted_history_prompt:str, user_query:str, current_sequence_id:int, stream_session_id:str, regeneration_request:bool, base_template:str, local_llm_chat_template_format:str, skip_system_prompt:bool) -> Response:
+def handle_force_disabled_rag(local_llm_server:str, full_prompt:str, user_query:str, current_sequence_id:int, stream_session_id:str, regeneration_request:bool, base_template:str, local_llm_chat_template_format:str, skip_system_prompt:bool) -> Response:
     print(f"\nForce disabling RAG for request ID {stream_session_id}\n")
     reject_rag()
     try:
-        formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, formatted_history_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
+        formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, full_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
     except Exception as e:
         return handle_api_error("Could not get formatted_updated_prompt in method setup_for_streaming_response, encountered error: ", e)
     if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1
@@ -7177,12 +7187,8 @@ def determine_response_service(user_query:str):
         return DEFAULT_CONFIG['do_rag']
 
 
-def search_knowledge_base(user_query:str, embedding_function:str, force_enable_rag:bool, force_disable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int, ) -> tuple[list[Document], bool]:
+def search_knowledge_base(user_query:str, embedding_function:str, force_enable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int) -> tuple[list[Document], bool]:
     print("Searching knowledge base")
-
-    if force_disable_rag:
-        print("\n\nFORCE_DISABLE_RAG True, force disabling RAG and returning\n\n")
-        return [], False, None
 
     try:
         do_rag = determine_response_service(user_query)
@@ -7259,19 +7265,18 @@ def setup_for_local_llm_response():
 
     try:    # Read config and request data, determine base values while handling regeneration case
         config = read_config_for_setup_for_local_llm_response()
-        stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled = read_request_data_for_response_setup(request)
-        stream_session_id, key_for_vector_results, current_sequence_id = get_base_values_for_setup_for_local_llm_response(stream_session_id, chat_id, sequence_id, regeneration_request)
+        stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled = read_request_data_for_response_setup(request) # stream_session_id = None if not regeneration_request, final value determined below!
+        stream_session_id, key_for_vector_results, current_sequence_id = get_ids_for_setup_for_local_llm_response(stream_session_id, chat_id, sequence_id, regeneration_request)
     except Exception as e:
         return handle_api_error("Error getting base values for setup-for_local_llm_response, encountered error: ", e)
 
-    try:    # Get formatted prompt from history db
-        formatted_history_prompt = get_formatted_prompt_for_setup_for_local_llm_response(int(chat_id), int(current_sequence_id) if not regeneration_request else int(current_sequence_id) - 1) # if regeneration_request, we must act as if the current sequence id does not exist in the history db when formatting the prompt!
-        if formatted_history_prompt == "": current_sequence_id = 0
+    try:    # Get full prompt including history from history-db
+        current_sequence_id, full_prompt = get_full_llm_prompt_with_history(int(chat_id), int(current_sequence_id) if not regeneration_request else int(current_sequence_id) - 1) # if regeneration_request, then go back one sequence id!
     except Exception as e:
-        return handle_api_error("Could not get formatted_history_prompt from history db in method setup-for_local_llm_response, encountered error: ", e)
+        return handle_api_error("Could not get full prompt from history db in method setup-for_local_llm_response, encountered error: ", e)
     
     try:
-        local_llm_server, special_response = handle_special_model_case(config['local_llm_server'], current_sequence_id, file_attached, stream_session_id, user_query, formatted_history_prompt, regeneration_request)
+        local_llm_server, special_response = handle_special_model_case(config['local_llm_server'], current_sequence_id, file_attached, stream_session_id, user_query, full_prompt, regeneration_request)
     except Exception as e:
         return handle_api_error("Error determining appropriate model type and server for setup-for_local_llm_response: ", e)
     
@@ -7280,14 +7285,13 @@ def setup_for_local_llm_response():
         return special_response
     
     if config['force_disable_rag'] or regenerate_with_citations_force_disabled:
-        return handle_force_disabled_rag(local_llm_server, formatted_history_prompt, user_query, current_sequence_id, stream_session_id, regeneration_request, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
+        return handle_force_disabled_rag(local_llm_server, full_prompt, user_query, current_sequence_id, stream_session_id, regeneration_request, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
+    
+    print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n") 
             
     try:    # RAG Routine Begins: Perform semantic search on the vector DB, lexical search on the whoosh index, combine and rerank results and determine if RAG is necessary
-        print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n") 
-        selected_embedding_model = read_config(['selected_embedding_model'])['selected_embedding_model']
-        docs, do_rag, graph_rag_context = search_knowledge_base(user_query, selected_embedding_model,
+        docs, do_rag, graph_rag_context = search_knowledge_base(user_query, config['selected_embedding_model'],
         (config['force_enable_rag'] or regenerate_with_citations_force_enabled), 
-        (config['force_disable_rag'] or regenerate_with_citations_force_disabled), 
         int(config['filter_top_k_results_by_reranking']), int(config['fetch_top_k_results_from_vectordb']))
     except Exception as e:
         return handle_api_error("Could not process vector search in method setup-for_local_llm_response, encountered error: ", e)
@@ -7305,7 +7309,7 @@ def setup_for_local_llm_response():
         handle_error_no_return("Could not write do_rag or prepare RAG context during setup-for_local_llm_response, encountered error: ", e)
 
     try:    # Get full prompt for server
-        formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, formatted_history_prompt, user_query, current_sequence_id, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
+        formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, full_prompt, user_query, current_sequence_id, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
     except Exception as e:
         return handle_api_error("Could not get formatted_updated_prompt in method setup-for_local_llm_response, encountered error: ", e)
 
