@@ -112,7 +112,6 @@ function appendLoadingAnimation(regenrationUserMessage = null) {
     `;
 
     if (lastUserMessage) {
-        console.log("appending loading animation after last user message");
         lastUserMessage.insertAdjacentElement('afterend', loadingContainer);
     } else {
         chatArea.appendChild(loadingContainer);
@@ -244,7 +243,6 @@ function deleteChatAreaElementsFromCurrentElement(currentElement) {
     while (currentElement) {
         if (currentElement.matches('.user-message') || currentElement.matches('.response-and-viewer-container')) {
             elementsToDelete.push(currentElement);
-            console.log("currentElement: ", currentElement);
         }
         if (currentElement.nextElementSibling) {
             currentElement = currentElement.nextElementSibling;
@@ -341,6 +339,7 @@ function errorHandler(attempted_action, error_generator, error_message) {
     document.getElementById('SavingHfWaitressSettings').style.display = 'none';
     hideLoader();
     hideStreamSpinner();
+    removeLoadingAnimation();
 }
 
 const forceEnableRagCheckbox = document.getElementById('force_enable_rag_checkbox');
@@ -430,7 +429,6 @@ function sortNavItems() {
 
 
 function openTab(evt, tabName, streamSessionId) {
-    console.log("Openning clicked tab");
     var i, tabcontent, tabbuttons;
     tabcontent = document.getElementsByClassName("tab-content");
     for (i = 0; i < tabcontent.length; i++) {
@@ -885,11 +883,7 @@ function clearGoogleDriveTable() {
 
 
 function populateDocsLoadedTable() {
-
-    console.log("Populating docs loaded table");
-    
     let formData = new FormData();
-
     formData.append('selected_knowledge_domain', document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent);
     formData.append('selected_embedding_model', document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent);
 
