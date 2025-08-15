@@ -5422,3 +5422,134 @@ def final_cleanup_of_llm_response(llm_response: str) -> str:
     llm_response = re.sub(pattern, '<br><br>', llm_response)
     llm_response = llm_response.strip()
     return llm_response
+
+
+
+##############---Old setup_for_local_llm_response Code ---##############
+
+def search_knowledge_base(user_query:str, embedding_function:str, force_enable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int) -> tuple[list[Document], bool]:
+    print("Searching knowledge base")
+
+    try:
+        llm_set_rag_config = determine_response_service(user_query, force_enable_rag)
+        do_rag = llm_set_rag_config['do_rag']
+    except Exception as e:
+        handle_error_no_return("Could not determine response service, defaulting to use Naive RAG. Encountered error: ", e)
+        safe_write_config(DEFAULT_CONFIG)   # update, at minimum, the do_rag and perform_graph_rag keys in config.json
+        do_rag = DEFAULT_CONFIG['do_rag']
+
+    if do_rag is False:
+        print("Do RAG is False, returning...")
+        return [], False, None
+
+    print("Do RAG is True, continuing...")
+    filtered_docs = []
+    try:
+        docs_list_with_cosine_distance = search_vector_db(user_query, embedding_function, int(fetch_top_k_results_from_vectordb))
+        filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc,score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of a Document object and a float score!
+    except Exception as e:
+        handle_error_no_return("Could not perform vector search to determine do_rag when attempting to search-knowledge-base, encountered error: ", e)
+
+    whoosh_results = []
+    try:
+        whoosh_results = search_whoosh_index(user_query)
+    except Exception as e:
+        handle_error_no_return("Could not perform whoosh search to determine do_rag when attempting to search-knowledge-base, encountered error: ", e)
+
+    combined_docs = []
+    try:
+        combined_docs = combine_and_deduplicate_search_results(whoosh_results, filtered_docs)   # Combine the whoosh and vector results
+    except Exception as e:
+        handle_error_no_return("Could not combine and deduplicate search results, skipping. Encountered error: ", e)
+        combined_docs = filtered_docs
+
+    if not combined_docs:   # i.e. if blank
+        print("No documents for citations, returning...")
+        return [], False, None
+
+    try:
+        docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
+    except Exception as e:
+        handle_error_no_return("Could not rerank search results, skipping. Encountered error: ", e)
+        docs = combined_docs
+    
+    # do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
+    
+    perform_graph_rag = read_config(['perform_graph_rag'])['perform_graph_rag']
+    enable_graph_rag = read_config(['enable_graph_rag'])['enable_graph_rag']
+
+    graph_rag_context = None
+    if perform_graph_rag and do_rag and enable_graph_rag:   # All conditions must be met for GraphRAG to be performed!
+        try:
+            graph_rag_context, reranked_summaries_list_descending = execute_graph_rag(user_query, docs)
+            if reranked_summaries_list_descending != []:
+                return reranked_summaries_list_descending, do_rag, graph_rag_context
+        except Exception as e:
+            handle_error_no_return("Could not execute graph RAG, encountered error: ", e)
+    else:
+        safe_write_config({'perform_graph_rag': False})  # In-case the LLM elected to use GraphRAG but the user has explicitly disabled it, we need to set perform-graph_rag to False to avoid any issues downstream!
+
+    return docs, do_rag, graph_rag_context
+
+@app.route('/setup_for_local_llm_response', methods=['POST'])
+def setup_for_local_llm_response():
+    print("\n\nSetting up for local LLM response\n\n")
+
+    global QUERIES
+    do_rag = True
+
+    try:    # Read config and request data, determine base values while handling regeneration case
+        config = read_config_for_llm_response_setup()
+        stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled = read_request_data_for_setup_response(request) # stream_session_id = None if not regeneration_request, final value determined below!
+        stream_session_id, key_for_vector_results, current_sequence_id = get_ids_for_llm_response_setup(stream_session_id, chat_id, sequence_id, regeneration_request)
+    except Exception as e:
+        return handle_api_error("Error getting base values for setup-for_local_llm_response, encountered error: ", e)
+
+    try:    # Get full prompt including history from history-db
+        current_sequence_id, full_prompt = get_full_llm_prompt_with_history(int(chat_id), int(current_sequence_id) if not regeneration_request else int(current_sequence_id) - 1) # if regeneration_request, then go back one sequence id!
+    except Exception as e:
+        return handle_api_error("Could not get full prompt from history db in method setup-for_local_llm_response, encountered error: ", e)
+    
+    try:
+        local_llm_server, special_response = handle_special_model_case(config['local_llm_server'], current_sequence_id, file_attached, stream_session_id, user_query, full_prompt, regeneration_request)
+    except Exception as e:
+        return handle_api_error("Error determining appropriate model type and server for setup-for_local_llm_response: ", e)
+    
+    if special_response is not None:    # If a special model response is returned, quick-return here
+        print(f"Returning special model response: {special_response}")
+        return special_response
+    
+    if config['force_disable_rag'] or regenerate_with_citations_force_disabled:
+        return handle_force_disabled_rag(local_llm_server, full_prompt, user_query, current_sequence_id, stream_session_id, regeneration_request, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
+    
+    print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n") 
+            
+    try:    # RAG Routine Begins: Perform semantic search on the vector DB, lexical search on the whoosh index, combine and rerank results and determine if RAG is necessary
+        docs, do_rag, graph_rag_context = search_knowledge_base(user_query, config['selected_embedding_model'],
+        (config['force_enable_rag'] or regenerate_with_citations_force_enabled), 
+        int(config['filter_top_k_results_by_reranking']), int(config['fetch_top_k_results_from_vectordb']))
+    except Exception as e:
+        return handle_api_error("Could not process vector search in method setup-for_local_llm_response, encountered error: ", e)
+
+    try:
+        if do_rag:    # Add RAG results to user-query if necessary!
+            QUERIES[key_for_vector_results] = docs
+            user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference useful documents by name and specific page numbers in your response:\n"
+            if graph_rag_context is not None:
+                user_query += f"{graph_rag_context}"
+            else:
+                user_query += f"{docs}"
+    except Exception as e:
+        reject_rag()
+        handle_error_no_return("Could not write do_rag or prepare RAG context during setup-for_local_llm_response, encountered error: ", e)
+
+    try:    # Get full prompt for server
+        formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, full_prompt, user_query, current_sequence_id, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
+    except Exception as e:
+        return handle_api_error("Could not get formatted_updated_prompt in method setup-for_local_llm_response, encountered error: ", e)
+
+    if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1
+    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
+
+
+##############---End of Old setup_for_local_llm_response Code ---##############
