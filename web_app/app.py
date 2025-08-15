@@ -6110,7 +6110,7 @@ def get_formatted_prompt_from_history_db(chat_id, sequence_id):
         read_return = read_config(['sqlite_history_db'])
         sqlite_history_db = read_return['sqlite_history_db']
     except Exception as e:
-        handle_error_no_return("Missing keys in config.json for method get_formatted_prompt_from_history_db(). Error: ", e)
+        handle_error_no_return("Missing keys in config.json for method get-formatted_prompt_from_history_db(). Error: ", e)
 
     # Connect to or create the DB
     try:
@@ -6252,17 +6252,20 @@ def combine_and_deduplicate_search_results(whoosh_results, vector_results):
     return combined_results
 
 
-def get_session_id_and_vector_key() -> tuple[str, str]:
+def get_session_id_and_vector_key(reusable_ssid:str = None) -> tuple[str, str]:
     '''
-    # Generate a unique session ID using universally Unique Identifier via the uuid4() method, wherein the randomness of the result is dependent on the randomness of the underlying operating system's random number generator
+    # Generates a unique session ID using universally Unique Identifier via the uuid4() method, wherein the randomness of the result is dependent on the randomness of the underlying operating system's random number generator
     # UUI is a standard used for creating unique strings that have a very high likelihood of being unique across all time and space, for ex: f47ac10b-58cc-4372-a567-0e02b2c3d479
     '''
-    stream_session_id = str(uuid.uuid4())
-    key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
-    return stream_session_id, key_for_vector_results
+    try:
+        stream_session_id = str(uuid.uuid4()) if reusable_ssid is None else reusable_ssid
+        key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
+        return stream_session_id, key_for_vector_results
+    except Exception as e:
+        handle_local_error("Could not generate stream_session_id with UUID4, encountered error: ", e)
 
 
-def read_config_for_setup_for_local_llm_response() -> dict:
+def read_config_for_llm_response_setup() -> dict:
     try:
         read_return = read_config([
             'local_llm_server',
@@ -6323,7 +6326,7 @@ def prepare_quick_response_for_special_model(full_prompt:str, user_query:str, cu
         return {
             "success": True, 
             "stream_session_id": stream_session_id,
-            "do_rag": False, 
+            "llm_set_rag_config": DISABLED_CONFIG,
             "formatted_user_prompt": formatted_prompt, 
             "sequence_id":new_sequence_id, 
             "server_type":local_llm_server
@@ -6344,33 +6347,49 @@ def reject_rag() -> dict:
 def prepare_for_quick_response(current_sequence_id:int, regeneration_request:bool) -> int:
     print("Invoking quick-return route for hfw-diffusers or hfw-vision(file_attached)")
     if not regeneration_request or current_sequence_id == 0:
-        # if regeneration_request is True, we only increment the sequence ID if it's 0, else it stays the same. For regular requests with sequence_id > 0, we increment it by 1 as usual.
+        # Increment the seqID only for regular requests (as seqID stays the same when regenerating a response), or if it's currently 0.
         current_sequence_id = int(current_sequence_id) + 1
     reject_rag()
     return current_sequence_id
 
 
-def get_full_llm_prompt_with_history(chat_id:int, current_sequence_id:int) -> tuple[int, str]:
+def get_full_llm_prompt_with_history(chat_id:int, current_sequence_id:int) -> str:
     try:
         print("\n\nGetting formatted prompt for setup-for_local_llm_response\n\n")
         formatted_prompt = ""
         if current_sequence_id > 0:    # get the last prompt so we can continue the completions
             formatted_prompt = get_formatted_prompt_from_history_db(chat_id, current_sequence_id)
-        return current_sequence_id, formatted_prompt
+        return formatted_prompt
     except Exception as e:
         handle_local_error("Could not get formatted prompt in method get-full_llm_prompt_with_history, encountered error: ", e)
 
 
-def read_request_data_for_response_setup(request: Request) -> tuple[str, str, str, str, bool, bool, bool, bool]:
-    stream_session_id = request.json.get('stream_session_id')
-    user_query = request.json.get('user_query')
-    chat_id = request.json.get('chat_id')
-    sequence_id = request.json.get('sequence_id')
-    file_attached = request.json.get('file_attached')
-    regeneration_request = request.json.get('regeneration_request')
-    regenerate_with_citations_force_enabled = request.json.get('regenerate_with_citations_force_enabled')
-    regenerate_with_citations_force_disabled = request.json.get('regenerate_with_citations_force_disabled')
-    return stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled
+def read_request_data_for_setup_response(request: Request) -> tuple[str, str, str, str, bool, bool, bool, bool]:
+    try:
+        stream_session_id = request.json.get('stream_session_id')   # stream_session_id = None if not regeneration_request
+        user_query = request.json.get('user_query')
+        chat_id = request.json.get('chat_id')
+        sequence_id = request.json.get('sequence_id')   # sequence_id = None if not regeneration_request, only provided to specify which message in the chat to regenerate for
+        file_attached = request.json.get('file_attached')
+        regeneration_request = request.json.get('regeneration_request')
+        regenerate_with_citations_force_enabled = request.json.get('regenerate_with_citations_force_enabled')
+        regenerate_with_citations_force_disabled = request.json.get('regenerate_with_citations_force_disabled')
+        return stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled
+    except Exception as e:
+        handle_local_error("Could not read request data for query-setup API, encountered error: ", e)
+
+
+def read_request_data_for_tools_response(request: Request) -> tuple[str, str, str, dict]:
+    try:
+        stream_session_id = request.json.get('stream_session_id')   # stream_session_id = same as generated by determine service_and_ids_for_query in call 1
+        user_query = request.json.get('user_query')
+        chat_id = request.json.get('chat_id')
+        llm_set_rag_config = request.json.get('llm_set_rag_config')
+        regeneration_request = request.json.get('regeneration_request')
+        sequence_id = request.json.get('sequence_id')
+        return stream_session_id, user_query, chat_id, llm_set_rag_config, regeneration_request, sequence_id
+    except Exception as e:
+        handle_local_error("Could not read request data for tool-invocation API, encountered error: ", e)
 
 
 def get_full_prompt_for_server(local_llm_server: str, full_prompt: str, user_query: str, current_sequence_id: int, base_template: str, local_llm_chat_template_format: str, skip_system_prompt: bool) -> str:
@@ -6384,19 +6403,30 @@ def get_full_prompt_for_server(local_llm_server: str, full_prompt: str, user_que
     return formatted_updated_prompt
 
 
-def get_ids_for_setup_for_local_llm_response(stream_session_id:str, chat_id:str, sequence_id:str, regeneration_request:bool) -> tuple[str, str, int]:
+def get_ids_for_llm_response_setup(stream_session_id:str, chat_id:str, sequence_id:str = None, regeneration_request:bool = False, reuse_ssid:bool = False) -> tuple[str, str, int]:
+    '''
+    Determines and assigns the stream_session_id, key_for_vector_results and current_sequence_id keys for any query received from the client. Every query has a unique stream_session_id.\n
+    Handles two cases:
+        - Regenration requests:
+            - The client sends the stream_session_id and sequence_id of the message to regenerate.
+            - The key_for_vector_results is set afresh basis the stream_session_id, while the stream_session_id and sequence_id themselves are returned unchanged.
+        - Regular requests:
+            - The client sends the chat_id.
+            - The stream_session_id is generated afresh, and the key_for_vector_results is set subsequently.
+            - The sequence_id is determined by obtaining the present max sequence_id for the given chat_id, and will be incremented by 1 at a later stage (after the chat history is fetched and the prompt template is applied) before returning to the client.
+    '''
     if regeneration_request:
-        if stream_session_id is None or stream_session_id == "":
-            return handle_local_error("Could not process regeneration-request in get-base_values_for_setup_for_local_llm_response, encountered error: ", ValueError("stream_session_id is blank."))
+        if stream_session_id is None or stream_session_id == "" or sequence_id is None:
+            return handle_local_error("Could not process regeneration-request in get-base_values_for_setup_for_local_llm_response, encountered error: ", ValueError("stream_session_id is blank or sequence_id is None."))
         
         print(f"\nSetting defaults for regeneration for request ID: {stream_session_id}\n")
         key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
-        current_sequence_id = int(sequence_id)
+        current_sequence_id = int(sequence_id)  # return unchanged sequence_id for regeneration_request. 
         return stream_session_id, key_for_vector_results, current_sequence_id
     
     try:
-        current_sequence_id = determine_sequence_id_for_chat(int(chat_id))
-        new_stream_session_id, key_for_vector_results = get_session_id_and_vector_key()
+        current_sequence_id = determine_sequence_id_for_chat(int(chat_id))  # sequence_id received in the request is ignored. NOTE: this will obtain the present max seqID, not the new max which is present_max + 1! This is so that the present chat history is fetched correctly in the next step.
+        new_stream_session_id, key_for_vector_results = get_session_id_and_vector_key(stream_session_id if reuse_ssid else None)
         print(f"Current Chat ID: {chat_id} & Sequence ID: {current_sequence_id}")
         return new_stream_session_id, key_for_vector_results, current_sequence_id
     except Exception as e:
@@ -6422,7 +6452,6 @@ def handle_special_model_case(local_llm_server:str, current_sequence_id:int, fil
                 new_sequence_id=new_sequence_id,
                 full_prompt=full_prompt
             )
-            print(f"Returning quick-return formatted_user_prompt: {response['formatted_user_prompt']}")
             return new_local_llm_server, jsonify(response)
         except Exception as e:
             handle_local_error("Could not prepare special model response in method setup-for_local_llm_response, encountered error: ", e)
@@ -6440,8 +6469,8 @@ def handle_force_disabled_rag(local_llm_server:str, full_prompt:str, user_query:
         formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, full_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
     except Exception as e:
         return handle_api_error("Could not get formatted_updated_prompt in method setup_for_streaming_response, encountered error: ", e)
-    if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1
-    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": False, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
+    if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1 # Increment the seqID only for regular requests (as seqID stays the same when regenerating a response), or if it's currently 0.
+    return jsonify({"success": True, "stream_session_id": stream_session_id, "llm_set_rag_config": DISABLED_CONFIG, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
 
 
 def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results_from_vectordb: int):
@@ -7143,14 +7172,16 @@ VALID_SERVICES = {
 }
 
 DEFAULT_CONFIG = {'do_rag': True, 'perform_graph_rag': False}
+DISABLED_CONFIG = {'do_rag': False, 'perform_graph_rag': False}
 
 
-def determine_response_service(user_query:str):
+def determine_response_service(user_query:str, force_enable_rag:bool = False) -> dict:
     """
-    Determines which service should handle the user query.
+    Determines which service should handle the user query. Accepts args to override the LLM's selection.
     
     Args:
         user_query: The user's input query
+        force_enable_rag: If True, will force enable RAG and return the RAG config
         
     Returns:
         dict: Configuration for the selected service with 'do_rag' and 'perform_graph_rag' settings
@@ -7178,38 +7209,26 @@ def determine_response_service(user_query:str):
         service_name = selected_service.get('service', 'RAG').lower().strip()   # safe fallback to RAG, since this is a RAG app!
         print(f"\nService name: {service_name}\n")
         llm_set_rag_config = VALID_SERVICES.get(service_name, DEFAULT_CONFIG)   # return default_config if service_name is not in valid_services (both defined above)
-        
-        safe_write_config(llm_set_rag_config)    # will update both do_rag and perform_graph_rag keys in config.json
-        print(f"\nConfig: {llm_set_rag_config}\n")
-        return llm_set_rag_config['do_rag']
+        print(f"\nLLM Set Config: {llm_set_rag_config}\n")
     except Exception as e:
         handle_error_no_return("Could not determine service selected by the LLM, defaulting to use Naive RAG. Encountered error: ", e)
-        return DEFAULT_CONFIG['do_rag']
-
-
-def search_knowledge_base(user_query:str, embedding_function:str, force_enable_rag:bool, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int) -> tuple[list[Document], bool]:
-    print("Searching knowledge base")
-
-    try:
-        do_rag = determine_response_service(user_query)
-    except Exception as e:
-        handle_error_no_return("Could not determine response service, defaulting to use Naive RAG. Encountered error: ", e)
-        safe_write_config(DEFAULT_CONFIG)   # update, at minimum, the do_rag and perform_graph_rag keys in config.json
-        do_rag = DEFAULT_CONFIG['do_rag']
+        llm_set_rag_config = DEFAULT_CONFIG
     
     if force_enable_rag:
         print("\n\nFORCE_ENABLE_RAG True, force enabling RAG and returning\n\n")
-        do_rag = True   # We don't check this earlier as we also want to determine if GraphRAG should be performed! We only set it to True here to ensure force_enable_rag's do_rag setting takes precedence over the LLM's selection.
+        llm_set_rag_config['do_rag'] = True   # We don't check this earlier as we also want to determine if GraphRAG should be performed! We only set it to True here to ensure force_enable_rag's do_rag setting takes precedence over the LLM's selection.
+    
+    safe_write_config(llm_set_rag_config)
+    return llm_set_rag_config
 
-    if do_rag is False:
-        print("Do RAG is False, returning...")
-        return [], False, None
 
-    print("Do RAG is True, continuing...")
+def execute_search_tools_on_query(user_query:str, embedding_function:str, llm_set_config:dict, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int) -> tuple[list[Document], bool]:
+    print("Searching knowledge base")
+
     filtered_docs = []
     try:
         docs_list_with_cosine_distance = search_vector_db(user_query, embedding_function, int(fetch_top_k_results_from_vectordb))
-        filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc,score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of a Document object and a float score!
+        filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc, score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of a Document object and a float score!
     except Exception as e:
         handle_error_no_return("Could not perform vector search to determine do_rag when attempting to search-knowledge-base, encountered error: ", e)
 
@@ -7227,95 +7246,141 @@ def search_knowledge_base(user_query:str, embedding_function:str, force_enable_r
         combined_docs = filtered_docs
 
     if not combined_docs:   # i.e. if blank
-        print("No documents for citations, setting do_rag to False")
-        do_rag = False
-        return [], do_rag, None
+        print("No documents for citations, returning...")
+        return [], False, None
 
     try:
         docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
     except Exception as e:
         handle_error_no_return("Could not rerank search results, skipping. Encountered error: ", e)
         docs = combined_docs
-    
-    # do_rag = determine_do_rag(user_query, docs, force_enable_rag, force_disable_rag)
-    
-    perform_graph_rag = read_config(['perform_graph_rag'])['perform_graph_rag']
+        
+    perform_graph_rag = llm_set_config['perform_graph_rag']
     enable_graph_rag = read_config(['enable_graph_rag'])['enable_graph_rag']
 
     graph_rag_context = None
-    if perform_graph_rag and do_rag and enable_graph_rag:   # All conditions must be met for GraphRAG to be performed!
+    if perform_graph_rag and llm_set_config['do_rag'] and enable_graph_rag:   # All conditions must be met for GraphRAG to be performed!
         try:
             graph_rag_context, reranked_summaries_list_descending = execute_graph_rag(user_query, docs)
             if reranked_summaries_list_descending != []:
-                return reranked_summaries_list_descending, do_rag, graph_rag_context
+                return reranked_summaries_list_descending, llm_set_config['do_rag'], graph_rag_context
         except Exception as e:
             handle_error_no_return("Could not execute graph RAG, encountered error: ", e)
     else:
         safe_write_config({'perform_graph_rag': False})  # In-case the LLM elected to use GraphRAG but the user has explicitly disabled it, we need to set perform-graph_rag to False to avoid any issues downstream!
 
-    return docs, do_rag, graph_rag_context
+    return docs, llm_set_config['do_rag'], graph_rag_context
 
 
-@app.route('/setup_for_local_llm_response', methods=['POST'])
-def setup_for_local_llm_response():
-    print("\n\nSetting up for local LLM response\n\n")
 
-    global QUERIES
-    do_rag = True
+@app.route('/determine_service_and_ids_for_query', methods=['POST'])
+def determine_service_and_ids_for_query():
+    '''
+    This is the first API invoked when a user submits a query via the Privion/LARS frontend.\n
+    Main goal is to to determine the sequence_id and stream_session_id to be assigned to the query, handle any special cases and lastly, query the LLM to determine the appropriate search-service/tools to best respond to the user.\n
+    One of two downstream outcomes:
+        - No further search-tools are needed, either because force_disable_rag is True, or there's a special case (vision/diffusers image-gen model) or of course, in case the LLM determined that no search-tools are needed! Or,
+        - Further processing (RAG) is required, and the client must make another request to actually execute the search.
+
+    We want to ensure that in the case of the former, the client has all the required information to proceed to the next step thus we have some redundancy.\n
+    For instance in case another request is necessary, the sequence_id determination and chat-history loading / prompt template application must be redone by invoke-tools_for_query().
+    '''
+    print("\n\nDetermining service and ids for query\n\n")
 
     try:    # Read config and request data, determine base values while handling regeneration case
-        config = read_config_for_setup_for_local_llm_response()
-        stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled = read_request_data_for_response_setup(request) # stream_session_id = None if not regeneration_request, final value determined below!
-        stream_session_id, key_for_vector_results, current_sequence_id = get_ids_for_setup_for_local_llm_response(stream_session_id, chat_id, sequence_id, regeneration_request)
+        config = read_config_for_llm_response_setup()
+        stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled = read_request_data_for_setup_response(request)
+        stream_session_id, _, current_sequence_id = get_ids_for_llm_response_setup(stream_session_id, chat_id, sequence_id, regeneration_request)
     except Exception as e:
-        return handle_api_error("Error getting base values for setup-for_local_llm_response, encountered error: ", e)
+        return handle_api_error("Error getting base values for determine-service_and_ids_for_query, encountered error: ", e)
 
     try:    # Get full prompt including history from history-db
-        current_sequence_id, full_prompt = get_full_llm_prompt_with_history(int(chat_id), int(current_sequence_id) if not regeneration_request else int(current_sequence_id) - 1) # if regeneration_request, then go back one sequence id!
+        full_prompt = get_full_llm_prompt_with_history(int(chat_id), int(current_sequence_id) if not regeneration_request else int(current_sequence_id) - 1) # if regeneration_request, then go back one sequence id!
+        if full_prompt == "": current_sequence_id = 0   # An empty prompt implies regeneration of the first message in a chat, so we set the sequence_id to 0 for applying the prompt template from scratch. It'll be incremented before final return.
     except Exception as e:
-        return handle_api_error("Could not get full prompt from history db in method setup-for_local_llm_response, encountered error: ", e)
+        return handle_api_error("Could not get full prompt from history db in method determine-service_and_ids_for_query, encountered error: ", e)
     
     try:
         local_llm_server, special_response = handle_special_model_case(config['local_llm_server'], current_sequence_id, file_attached, stream_session_id, user_query, full_prompt, regeneration_request)
+        if special_response is not None:    # If a special model response is returned, quick-return here
+            return special_response
     except Exception as e:
-        return handle_api_error("Error determining appropriate model type and server for setup-for_local_llm_response: ", e)
+        return handle_api_error("Error determining appropriate model type and server for determine-service_and_ids_for_query: ", e)
     
-    if special_response is not None:    # If a special model response is returned, quick-return here
-        print(f"Returning special model response: {special_response}")
-        return special_response
-    
-    if config['force_disable_rag'] or regenerate_with_citations_force_disabled:
+    if (config['force_disable_rag'] or regenerate_with_citations_force_disabled):
         return handle_force_disabled_rag(local_llm_server, full_prompt, user_query, current_sequence_id, stream_session_id, regeneration_request, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
     
-    print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n") 
-            
-    try:    # RAG Routine Begins: Perform semantic search on the vector DB, lexical search on the whoosh index, combine and rerank results and determine if RAG is necessary
-        docs, do_rag, graph_rag_context = search_knowledge_base(user_query, config['selected_embedding_model'],
-        (config['force_enable_rag'] or regenerate_with_citations_force_enabled), 
-        int(config['filter_top_k_results_by_reranking']), int(config['fetch_top_k_results_from_vectordb']))
-    except Exception as e:
-        return handle_api_error("Could not process vector search in method setup-for_local_llm_response, encountered error: ", e)
+    print(f"\n\nSpecial cases addressed, determining service and returning\n\n")
 
     try:
-        if do_rag:    # Add RAG results to user-query if necessary!
+        llm_set_rag_config = determine_response_service(user_query, (config['force_enable_rag'] or regenerate_with_citations_force_enabled))
+    except Exception as e:
+        handle_error_no_return("Could not determine response service, defaulting to use Naive RAG. Encountered error: ", e)
+        safe_write_config(DEFAULT_CONFIG)
+        llm_set_rag_config = DEFAULT_CONFIG
+
+    try:    
+        formatted_updated_prompt = None # In case RAG or other additional preparation is needed, the client must make another request to obtain the final query, so it won't be set here.
+        if llm_set_rag_config == DISABLED_CONFIG:   # On the other hand, if no further preparation is needed, the client need not make another request to obtain the final query, so set final here.
+            formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, full_prompt, user_query, current_sequence_id, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])  # Get full prompt for server
+            # NOTE: seq_id should be incremented later (done below) as the prompt must be formatted accordingly if this is the first message in a chat! 
+    except Exception as e:
+        return handle_api_error("Could not get formatted_updated_prompt in method determine-service_and_ids_for_query, encountered error: ", e)
+
+    if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1 # Increment the seqID only for regular requests (as seqID stays the same when regenerating a response), or if it's currently 0.
+    return jsonify({"success": True, "stream_session_id": stream_session_id, "llm_set_rag_config": llm_set_rag_config, "formatted_user_prompt":formatted_updated_prompt, "sequence_id": current_sequence_id, "server_type": local_llm_server})
+    
+
+@app.route('/invoke_tools_for_query', methods=['POST'])
+def invoke_tools_for_query():
+    '''
+    This API is only to be invoked if in the previous step, the LLM determined that RAG/other tools are necessary.\n
+    The client is basically saying, "Hey here's the user query and the RAG config that was deemed necessary, along with the stream_session_id and sequence_id that have already been assigned to this query. Please execute the search and return the full & final prompt."\n
+    The sequence ID sent by the client is used in case this is a regeneration request, as the chat history need only be fetched upto that sequence ID, and the prompt template applied accordingly.\n
+    In case of a regular request, the sequence ID is redetermined anyways due to the way the get-ids_for_llm_response_setup() works, so the received value is ignored, which is not a problem. The client-sent value is only used in case of regeneration requests.\n
+    The logic behind decrementing and incrementing the sequence-ID stays the same as in determine-service_and_ids_for_query():
+        - Increment: By 1 for regular requests, or if it's currently 0 before returning to the client.
+        - Decrement: Only in case of regeneration requests, to fetch the chat history upto the provided sequence ID non-inclusively.
+    '''
+    print("\n\nInvoking tools for query\n\n")
+
+    try:
+        config = read_config_for_llm_response_setup()
+        stream_session_id, user_query, chat_id, llm_set_rag_config, regeneration_request, sequence_id = read_request_data_for_tools_response(request)
+        stream_session_id, key_for_vector_results, current_sequence_id = get_ids_for_llm_response_setup(stream_session_id = stream_session_id, chat_id = chat_id, sequence_id = sequence_id, regeneration_request = regeneration_request, reuse_ssid = True)
+    except Exception as e:
+        return handle_api_error("Error getting base values for invoke-tools_for_query, encountered error: ", e)
+    
+    try:    # Get full prompt including history from history-db
+        full_prompt = get_full_llm_prompt_with_history(int(chat_id), int(current_sequence_id) if not regeneration_request else int(current_sequence_id) - 1)
+        if full_prompt == "": current_sequence_id = 0   # An empty prompt implies regeneration of the first message in a chat, so we set the sequence_id to 0 for applying the prompt template from scratch. It'll be incremented before final return.
+    except Exception as e:
+        return handle_api_error("Could not get full prompt from history db in method invoke-tools_for_query, encountered error: ", e)
+    
+    print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n")
+            
+    try:    # RAG Routine Begins: Perform semantic search on the vector DB, lexical search on the whoosh index, combine and rerank results
+        docs, do_rag, graph_rag_context = execute_search_tools_on_query(user_query, config['selected_embedding_model'], llm_set_rag_config, int(config['filter_top_k_results_by_reranking']), int(config['fetch_top_k_results_from_vectordb']))
+    except Exception as e:
+        return handle_api_error("Could not execute RAG tools, encountered error: ", e)
+
+    try:
+        if do_rag and docs:    # Add RAG results to user-query if necessary! Check docstring in get-vector_results_for_get_references for more details.
+            global QUERIES
             QUERIES[key_for_vector_results] = docs
             user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference useful documents by name and specific page numbers in your response:\n"
-            if graph_rag_context is not None:
-                user_query += f"{graph_rag_context}"
-            else:
-                user_query += f"{docs}"
+            user_query += f"{graph_rag_context}" if (graph_rag_context and len(graph_rag_context) > 0) else f"{docs}"
     except Exception as e:
-        reject_rag()
-        handle_error_no_return("Could not write do_rag or prepare RAG context during setup-for_local_llm_response, encountered error: ", e)
-
-    try:    # Get full prompt for server
-        formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, full_prompt, user_query, current_sequence_id, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
+        handle_error_no_return("Could not process RAG results, encountered error: ", e)   # No need to reject-rag as get-vector_results_for_get_references() handles any issues.
+    
+    try:    # Get full prompt for server - NOTE: seq_id should be incremented later as the prompt must be formatted accordingly if this is the first message in a chat!
+        formatted_updated_prompt = get_full_prompt_for_server(config['local_llm_server'], full_prompt, user_query, current_sequence_id, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
     except Exception as e:
-        return handle_api_error("Could not get formatted_updated_prompt in method setup-for_local_llm_response, encountered error: ", e)
+        return handle_api_error("Could not get formatted_updated_prompt in method invoke-tools_for_query, encountered error: ", e)
 
     if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1
-    return jsonify({"success": True, "stream_session_id": stream_session_id, "do_rag": do_rag, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
-
+    return jsonify({"success": True, "reused_stream_session_id": stream_session_id, "tool_formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "reconfirmed_server_type":config['local_llm_server']})
+    
 
 def construct_citation_html(pdf_tab_buttons_set: set[str], pdf_tab_content_set: set[str], stream_session_id: str) -> str:
     try:

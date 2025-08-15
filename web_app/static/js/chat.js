@@ -138,6 +138,16 @@ function initializePromptRequest() {
     displayProcessingStatus('Reading documents...');
 }
 
+function handleServiceSelectionMessage(llm_set_rag_config, traceManager) {
+    if (llm_set_rag_config['do_rag'] && !llm_set_rag_config['perform_graph_rag']) {
+        traceManager.startStep("The LLM has Elected to Use Search-Tools. Executing Tech Stack: RAG - Semantic & Lexical Search with Re-Ranking & Filtering...");
+    } else if (llm_set_rag_config['do_rag'] && llm_set_rag_config['perform_graph_rag']) {
+        traceManager.startStep("The LLM has Elected to Use Deep Research Mode. Executing Tech Stack: RAG [Semantic & Lexical Search] + GraphRAG [In-Depth Analysis] with Re-Ranking & Filtering...");
+    } else {
+        traceManager.startStep("The LLM has Elected to Respond Directly - No Tools Required...");
+    }
+}
+
 function handleAutoScroll(chatContainer) {
     const scrollThreshold = 100; //100px towards the bottom
     const isNearBottom =  chatContainer.scrollHeight - chatContainer.clientHeight - chatContainer.scrollTop < scrollThreshold;   //by calculating this way, we're finding the difference between the total height of the chat area including the invisble part that's overflown (scrollHeight), the visible height of the chat area (clientHeight), and how far down the chat area has been scrolled (scrollTop). If less than the threshold, auto-scroll engages!
@@ -267,11 +277,28 @@ function appendContentToResponse(responseContentID, content) {
 
 
 function setupLLMResponse(userInput, file_attached, current_chat_id, regeneration_request, regen_stream_session_id, regen_sequence_id, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled) { //no need to async-await here as fetch() inherently returns a promise, so by returning fetch() directly we're providing the same Promise that the async function with await would return.
-    return fetch('/setup_for_local_llm_response', {
+    return fetch('/determine_service_and_ids_for_query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({'user_query': userInput, 'chat_id': current_chat_id, 'file_attached': file_attached, 'regeneration_request': regeneration_request, 'stream_session_id': regen_stream_session_id, 'sequence_id': regen_sequence_id, 'regenerate_with_citations_force_enabled': regenerate_with_citations_force_enabled, 'regenerate_with_citations_force_disabled': regenerate_with_citations_force_disabled})
     });
+}
+
+function invokeTools(stream_session_id, userInput, current_chat_id, llm_set_rag_config, regeneration_request, sequence_id) {
+    return fetch('/invoke_tools_for_query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({'stream_session_id': stream_session_id, 'user_query': userInput, 'chat_id': current_chat_id, 'llm_set_rag_config': llm_set_rag_config, 'regeneration_request': regeneration_request, 'sequence_id': sequence_id})
+    });
+}
+
+async function handleToolUse(stream_session_id, userInput, current_chat_id, llm_set_rag_config, regeneration_request, uniqueId, sequence_id_from_previous_request) {
+    const invoke_tools_response = await invokeTools(stream_session_id, userInput, current_chat_id, llm_set_rag_config, regeneration_request, sequence_id_from_previous_request);
+    const invoke_tools_data = await invoke_tools_response.json();
+    const {reused_stream_session_id, tool_formatted_user_prompt, sequence_id, reconfirmed_server_type} = invoke_tools_data;
+    setSequenceId(sequence_id);
+    appendSequenceIdToUserMessage(uniqueId, stream_session_id, regeneration_request, sequence_id);
+    return {reused_stream_session_id, tool_formatted_user_prompt, reconfirmed_server_type};
 }
 
 function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, responseContentID, stream_session_id) {
@@ -297,12 +324,10 @@ function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, r
 }
 
 function handleSetupResponse(data) {
-    const {do_rag, stream_session_id, formatted_user_prompt, sequence_id, server_type} = data;   // using object-destructuring (ES6-2015) to extract and set specific values from the data object in a single step!
+    const {llm_set_rag_config, stream_session_id, formatted_user_prompt, sequence_id, server_type} = data;   // using object-destructuring (ES6-2015) to extract and set specific values from the data object in a single step!
+    const {do_rag, perform_graph_rag} = llm_set_rag_config;
+    const tool_use = (do_rag || perform_graph_rag) ? true : false;
 
-    console.log("do_rag: ", do_rag);
-    console.log("stream_session_id: ", stream_session_id);
-    console.log("formatted_user_prompt: ", formatted_user_prompt);
-    console.log("server_type: ", server_type);
     setSequenceId(sequence_id);
     appendSequenceIdToUserMessage(data.user_message_html_unique_id, stream_session_id, data.regeneration_request, sequence_id);
 
@@ -315,7 +340,7 @@ function handleSetupResponse(data) {
     if (!data.regeneration_request) { appendResponseContainerToChatArea(responseIDs.masterWrapperID, responseIDs.responseWrapperID, responseIDs.responseContentID, stream_session_id); }
     displayProcessingStatus('Generating...');
 
-    return { do_rag, stream_session_id, formatted_user_prompt, responseIDs, server_type };
+    return { tool_use, llm_set_rag_config, stream_session_id, formatted_user_prompt, responseIDs, sequence_id, server_type };
 }
 
 
@@ -459,8 +484,6 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
 
     const vision = getVision();
     const exl2 = getExl2();
-    console.log("vision: ", vision, "typeof:", typeof vision);
-    console.log("exl2: ", exl2, "typeof:", typeof exl2);
     if (vision === "true") {
         console.log("Invoking vision_stream");
         const hfWaitress_URL = getHfwUrl();
@@ -561,7 +584,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
                         }
 
                         if (chunkText == "null") {
-                            console.log("Received null payload");
+                            console.log("Stream Complete - Received null payload");
                             hfwReceivedComplete = true;
                         } else {
                             appendStreamChunkAndRender(responseContentID, chunkText);
@@ -697,8 +720,6 @@ function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapper
         }
     }
 
-    console.log("get_references data: ", data);
-
     if (do_rag && data.response != "" && data.response != null) {
         document.getElementById(responseContentID).innerHTML = `${data.response}`;
         const state = `${data.response}`;
@@ -772,25 +793,28 @@ async function requestFormattedPrompt(regeneration_request=false, regenerate_wit
 
     try {
         // 1- setup-for_local_llm_response
-        traceManager.startStep("Analyzing Query & Executing Search Tools as Required...");
-        const response = await setupLLMResponse(userInput, file_attached, current_chat_id, regeneration_request, regen_stream_session_id, regen_sequence_id, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled);
+        traceManager.startStep("Analyzing Query & Determining Required Tools and Settings...");
+        const setup_response = await setupLLMResponse(userInput, file_attached, current_chat_id, regeneration_request, regen_stream_session_id, regen_sequence_id, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled);
+        const setup_data = await setup_response.json();
+        setup_data.user_message_html_unique_id = uniqueId;
+        setup_data.regeneration_request = regeneration_request;
+        const {tool_use, llm_set_rag_config, stream_session_id, formatted_user_prompt, responseIDs, sequence_id, server_type} = handleSetupResponse(setup_data);
         
-        traceManager.startStep("Data Prepared - Reaching out to the LLM for a Response...");
-        const data = await response.json();
-        data.user_message_html_unique_id = uniqueId;
-        data.regeneration_request = regeneration_request;
-        const {do_rag, stream_session_id, formatted_user_prompt, responseIDs, server_type} = handleSetupResponse(data);
-        if (!regeneration_request) { appendStreamSessionIdToUserMessage(uniqueId, stream_session_id); }
+        let final_stream_session_id = stream_session_id, final_formatted_user_prompt = formatted_user_prompt, final_server_type = server_type;
+        handleServiceSelectionMessage(llm_set_rag_config, traceManager);
+
+        // 1b- invoke-tools_if_necessitated_by_llm
+        tool_use && ({reused_stream_session_id: final_stream_session_id, tool_formatted_user_prompt: final_formatted_user_prompt, reconfirmed_server_type: final_server_type} = await handleToolUse(stream_session_id, userInput, current_chat_id, llm_set_rag_config, regeneration_request, uniqueId, sequence_id));
+
+        if (!regeneration_request) { appendStreamSessionIdToUserMessage(uniqueId, final_stream_session_id); }
 
         // 2- fetch-EventStream()
         traceManager.startStep('Generating Response...');
         const chatContainer = document.getElementById('chat-area');
-        const totalContent = await fetchEventStream(server_type, formatted_user_prompt, responseIDs.responseContentID, chatContainer, file);
-
-        console.log("llm_response post stream: ", totalContent);
+        const totalContent = await fetchEventStream(final_server_type, final_formatted_user_prompt, responseIDs.responseContentID, chatContainer, file);
 
         // 3- get-References()
-        if (do_rag) {
+        if (tool_use) {
             traceManager.startStep('Fetching Document References...');
             displayProcessingStatus('Fetching any references...');
         }
@@ -798,16 +822,16 @@ async function requestFormattedPrompt(regeneration_request=false, regenerate_wit
         const getReferencesParams = {
             'chat_id':current_chat_id,
             'sequence_id': getSequenceId(),
-            'stream_session_id': stream_session_id,
+            'stream_session_id': final_stream_session_id,
             'user_query': userInputForHtml,
             'user_query_html': userMessageElement.outerHTML,
             'llm_response': totalContent,
-            'formatted_user_prompt': formatted_user_prompt,
+            'formatted_user_prompt': final_formatted_user_prompt,
             'regeneration_request': regeneration_request,
             'regenerate_with_citations_force_enabled': regenerate_with_citations_force_enabled
         };
 
-        await getReferences(do_rag, getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);
+        await getReferences(tool_use, getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);
 
         // Complete final step
         traceManager.completeCurrentStep();
