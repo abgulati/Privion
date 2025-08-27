@@ -44,7 +44,7 @@ def empty_cuda_cache():
         return True
 
 
-def safe_empty_cuda_cache(timeout=10):
+def safe_empty_cuda_cache(timeout:int=10):
     '''
     - Calls `empty_cuda_cache` in a separate process with a timeout.
     - CANNOT use concurrent.futures's ThreadPoolExecutor nor ProcessPoolExecutor as neither gurantess termination and the former even risks holding the GIL hostage. Details:
@@ -100,7 +100,24 @@ def safe_empty_cuda_cache(timeout=10):
         print("\nReturning without emptying CUDA cache\n")
 
 
-def is_local_server_online(server_base_url):
+def is_local_server_online(server_base_url:str) -> dict:
+    '''
+    Checks if a local server is online.
+
+    Args:
+        server_base_url: The base URL of the server to check
+
+    Returns:
+        dict: A dictionary containing:
+            'server_available': True if the server is available, False otherwise
+            'server_online': True if the server is online, False otherwise
+            'loading_model': True if the server is loading a model, False otherwise
+            'status_code': The HTTP status code of the response
+
+    Raises:
+        Exception: If the server could not be checked, or if an error occurs during the process
+    '''
+
     server_health_url = server_base_url + '/health'
     print(f"\n\nChecking server status at URL: {server_health_url}\n\n")
 
@@ -140,53 +157,95 @@ def is_local_server_online(server_base_url):
         return {"server_available":False, "server_online":False, "loading_model":False, "status_code":500}
 
 
-def shutdown_waitress_server(base_url = 'http://localhost:9069'):
-    try:
-        print(f"\n\nShutting down HF-Waitress server at: {base_url}\n\n")
+def shutdown_waitress_server(base_url:str='http://localhost:9069') -> dict:
+    '''
+    Shuts down an HF-Waitress server.
 
+    Args:
+        base_url: The base URL of the server to shut down
+
+    Returns:
+        dict: A dictionary containing:
+            'success': True if the server was shutdown, False otherwise
+            'message': A message describing the result
+            'was_offline': True if the server was already offline, False otherwise
+
+    Raises:
+        Exception: If the server could not be shutdown, or if an error occurs during the process
+    '''
+    print(f"\n\nShutting down HF-Waitress server at: {base_url}\n\n")
+    try:
         if is_local_server_online(base_url)['server_online']:
             url = f"{base_url}/shutdown_hf_waitress"
             payload = ""
             headers = {}
             response = requests.post(url, data=payload, headers=headers)
+            print("\nHF-Waitress server successfully shutdown\n")
             return {"success":response.json()['success'], "message":response.json()['message'], "was_offline":False}
         else:
+            print("\nHF-Waitress server is already offline at the specified URL.\n")
             return {"success":True, "message":"HF-Waitress server is already offline at the specified URL.", "was_offline":True}
+    
     except Exception as e:
+        print(f"\n\nCould not shutdown HF-Waitress server, encountered error: {e}\n\n")
         return {"success":False, "message":f"Could not shutdown HF-Waitress server, encountered error: {e}", "was_offline":False}
     
 
-def send_ctrl_c_to_process(process):
+def send_ctrl_c_to_process(process:subprocess.Popen) -> dict:
+    '''
+    Sends a Ctrl+C termination signal to a process.
+
+    Args:
+        process: The process to send the Ctrl+C signal to
+
+    Returns:
+        dict: A dictionary containing:
+            'success': True if the process was terminated, False otherwise
+            'message': A message describing the result
+            'was_offline': True if the process was already offline, False otherwise
+    '''
+
     try:
         if process.poll() is None:  # check if process is still running via poll(), which returns None if a process is still running 
             if platform.system() == 'Windows':
                 process.send_signal(signal.CTRL_BREAK_EVENT)
             else:
                 process.send_signal(signal.SIGINT)
+            
             try:
-                # Wait a bit for the process to terminate gracefully:
-                process.wait(timeout=3)
+                process.wait(timeout=3) # Wait a bit for the process to terminate gracefully
             except subprocess.TimeoutExpired:
                 print("\n\nProcess did not terminate within timeout, will be force-killed.\n\n")
                 process.kill()  # Sends 'SIGKILL' on Unix-like to force-kill immediately / 'TerminateProcess' on Windows which still allows for graceful termination
                 process.wait()
-                if process.poll() is not None:
-                    print("\n\nProcess has been killed successfully.\n\n")
-                else:
-                    raise Exception("\n\nProcess still running after force kill attempt.\n\n")
+            
+            if process.poll() is not None:
+                print("\n\nProcess terminated successfully.\n\n")
+                return {'success': True, 'message': f"Successfully terminated process: {process}", 'was_offline':False}
+            else:
+                raise Exception("\n\nProcess still running after force kill attempt.\n\n")
+        else:
+            return {'success': True, 'message': f"Confirmed process {process} is not running.", 'was_offline':True}
+    
     except Exception as e:
-        raise Exception(f"Could not force-kill process, encountered error: {e}")
+        err_msg = f"Could not force-kill process, encountered error: {e}"
+        return {'success': False, 'message': err_msg, 'was_offline':False}
 
 
-def terminate_local_llm_server_process(process):
-    try:
-        # process.terminate() sends 'SIGTERM' on Unix-like systems / 'TerminateProcess' on Windows, allows for graceful termination
-        # process.wait()
-        send_ctrl_c_to_process(process)
-        if process.poll() is not None:  # process has indeed terminated
-            print("\n\nProcess terminated gracefully.\n\n")
-    except Exception as e:
-        raise Exception(f"Failed to terminate local LLM server process, encountered error: {e}")
+def shutdown_local_llm_server_process(process:subprocess.Popen) -> dict:
+    '''
+    Provides a wrapper around `send-ctrl_c_to_process` to serve as a similar interface to `shutdown_waitress_server`.\n
+    `send-ctrl_c_to_process` ensures the process is terminated and the result is returned, and handles any errors gracefully.\n
+    This method will typically be used to shutdown command-line LLM servers without a dedicated shutdown API, such as llama.cpp.\n
+
+    Args:
+        process: The process to shutdown
+
+    Returns:
+
+        dict: generated by `send_ctrl_c_to_process`
+    '''
+    return send_ctrl_c_to_process(process)
 
 
 def get_nvidia_gpu_info():
@@ -245,21 +304,32 @@ def get_nvidia_gpu_info():
 
     except Exception as e:
         print(f"Error initializing NVML or getting GPU info: {e}")
-        return []
+        return [], 0
     finally:
-        # Shutdown NVML (important!)
         try:
-            nvmlShutdown()
+            nvmlShutdown()  # Shutdown NVML (important!)
         except Exception:
-            # This can happen if nvmlInit() failed
-            pass
+            pass    # This can happen if nvmlInit() failed
 
     return gpu_info_list, math.ceil(total_free_memory_mib)
 
 
-def ensure_minimum_free_vram(vram_amount_mib=5120, shutdown_server_at_url_to_make_room=['http://localhost:9069']):
+def ensure_minimum_free_vram(vram_amount_mib:int=5120, shutdown_server_at_url_to_make_room:list[str]=['http://localhost:9069']) -> dict:
     '''
-    Receives a request to ensure a certain amount of free VRAM, and a list of servers to shut down if necessary, in order of priority.
+    Handles requests to ensure a certain amount of free VRAM.
+
+    Args:
+        vram_amount_mib: The amount of free VRAM to ensure (in MiB)
+        shutdown_server_at_url_to_make_room: A list of server URLs to shut down if necessary, in order of priority
+
+    Returns:
+        dict: A dictionary containing:
+            'success': True if the minimum free VRAM was ensured, False otherwise
+            'message': A message describing the result
+            'was_offline': True if the server was already offline, False otherwise
+
+    Raises:
+        Exception: If the minimum free VRAM was not ensured, or if an error occurs during the process
     '''
     try:
         _, total_free_memory_mib = get_nvidia_gpu_info()
@@ -291,5 +361,6 @@ def ensure_minimum_free_vram(vram_amount_mib=5120, shutdown_server_at_url_to_mak
             except Exception as e:
                 raise Exception(f"Could not ensure minimum free GPU VRAM, encountered error: {e}")
     except Exception as e:
-        raise Exception(f"Could not ensure minimum free GPU VRAM, encountered error: {e}")
+        err_msg = f"Could not ensure minimum free GPU VRAM, encountered error: {e}"
+        return {'success': False, 'message': err_msg, 'was_offline':False}
 
