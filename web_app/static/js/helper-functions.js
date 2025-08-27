@@ -1188,7 +1188,7 @@ function checkLocalLLMServerStatus() {
         }
     })
     .catch(error => {
-        errorHandler("checking local LLM server status", "checkLocalLLMServerStatus()", String(error.message))
+        errorHandler("checking local LLM server status", "check-LocalLLMServerStatus()", String(error.message))
     });
 }
 
