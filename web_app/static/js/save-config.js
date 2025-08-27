@@ -360,7 +360,7 @@ function saveConfigToServer(config) {
         return false;   // Return false to indicate that a restart is not required
     })
     .catch(error => {
-        errorHandler("writing to config.json", "/config_writer_api", String(error.message));
+        errorHandler("writing to config.json", "/config-writer_api", String(error.message));
         return false;   // Return false to indicate that a restart is not required
     });
 }
@@ -527,7 +527,7 @@ function handleHfWaitressChanges(hf_config) {
             resolve();  // ...which is resolved here!
         })
         .catch(error => {
-            errorHandler("handling HF-Waitress Server changes", "handleHfWaitressChanges", String(error.message));
+            errorHandler("handling HF-Waitress Server changes", "handle-HfWaitressChanges", String(error.message));
             reject(error);  // Reject the promise if there's an error
         })
         .finally(() => {
@@ -552,7 +552,7 @@ function handleSaveChanges() {
         ...getGoogleDriveConfig()
     };
 
-    let hfSavePromise;  // Declaring the variable that will hold the promise returned by handleHfWaitressChanges(). Defaulting will result in a race condition, so we'll need to handle the Promise chain manually.
+    let hfSavePromise;  // Declaring the variable that will hold the promise returned by handle-HfWaitressChanges(). Defaulting will result in a race condition, so we'll need to handle the Promise chain manually.
     let needsReload = false;
 
     if (config.local_llm_server === "hf-waitress") {
@@ -561,7 +561,7 @@ function handleSaveChanges() {
             const hf_config = {
                 ...getHfWaitressConfig()
             };
-            console.log("handleHfWaitressChanges hf_config: ", hf_config);
+            console.log("handle-HfWaitressChanges hf_config: ", hf_config);
             hfSavePromise = handleHfWaitressChanges(hf_config)  // Added to the promise chain only if the conditions are met!
                 .then(() => {
                     console.log("HF-Waitress server changes saved successfully.");
@@ -594,7 +594,7 @@ function handleSaveChanges() {
                     return needsReload;
                 })
                 .catch(error => {
-                    errorHandler("saving HF-Waitress settings", "handleSaveChanges()", String(error.message));  // Catching the error will resolve the Promise and allow the rest of the code to continue!
+                    errorHandler("saving HF-Waitress settings", "handle-SaveChanges()", String(error.message));  // Catching the error will resolve the Promise and allow the rest of the code to continue!
                     return false; // hfSavePromise is assigned to the entire promise chain including this catch, so we need only return here to resolve the Promise. False indicates that a restart is not required.
                 });
         } else {
@@ -607,7 +607,7 @@ function handleSaveChanges() {
     }
     
     console.log("Saving LARS config: ", config);
-    Promise.all([hfSavePromise, saveConfigToServer(config)])    // This promise will always resolve, as hfSavePromise is manually set to resolve to false when necessary, so we're not blocking the saveConfigToServer() promise. Promise.all() is used to handle both promises in parallel, waiting for both to resolve before proceeding.
+    Promise.all([hfSavePromise, saveConfigToServer(config)])    // This promise will always resolve, as hfSavePromise is manually set to resolve to false when necessary, so we're not blocking the save-ConfigToServer() promise. Promise.all() is used to handle both promises in parallel, waiting for both to resolve before proceeding.
         .then(([hfNeedsReload, configNeedsReload]) => {
             console.log("LARS config saved successfully.");
             if (hfNeedsReload || configNeedsReload) {
@@ -616,7 +616,7 @@ function handleSaveChanges() {
             }
         })
         .catch(error => {
-            errorHandler("saving LARS settings", "handleSaveChanges()", String(error.message));
+            errorHandler("saving LARS settings", "handle-SaveChanges()", String(error.message));
         });
 }
 
