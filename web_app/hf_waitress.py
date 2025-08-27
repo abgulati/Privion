@@ -62,7 +62,7 @@ CORS(app)
 
 
 @app.route('/serve_generated_image/<path:filename>')
-def serve_generated_image(filename):
+def serve_generated_image(filename:str):
     print(f"\n\nserving generated image: {filename}\n\n")
     generated_images_folder = "generated_images"
     try:
@@ -73,7 +73,7 @@ def serve_generated_image(filename):
     return send_from_directory(generated_images_folder, filename)
 
 @app.route('/serve_uploaded_file/<path:filename>')
-def serve_uploaded_file(filename):
+def serve_uploaded_file(filename:str):
     print(f"\n\nserving uploaded file: {filename}\n\n")
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
@@ -114,8 +114,7 @@ try:
     LOGGER.setLevel(logging.ERROR)
 
     # 2 - Create a RotatingFileHandler
-    # maxBytes: max file size of log file after which a new file is created; set to 1024 * 1024 * 5 for 5MB: 1024x1024 is 1MB, then a multiplyer for the number of MB
-    # backupCount: number of backup files to keep specifying how many old log files to keep
+    # maxBytes: 1024 * 1024 * 5 Bytes = 5MB max file size per log, 2 backups = 3 files total
     handler = RotatingFileHandler('hf_server_log.log', maxBytes=1024*1024*5, backupCount=2)
     handler.setLevel(logging.ERROR)
 
@@ -123,14 +122,13 @@ try:
     formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
     handler.setFormatter(formatter)
 
-    # 4 - Add the handler to the logger
+    # 4 - Add the handler to the logger for final LOGGER - Usage: LOGGER.error(f"This is an error message with error {e}")
     LOGGER.addHandler(handler)
-    # Logger ready! Usage: logger.error(f"This is an error message with error {e}")
 except Exception as e:
     print(f"\n\nCould not establish logger, encountered error: {e}")
 
 
-def central_error_logging(message, exception=None):
+def central_error_logging(message:str, exception:Exception=None):
     with error_logging_semaphore:
         error_message = f"\n\n{message} {str(exception) if exception else '; No exception info.'}\n\n"
         
@@ -153,17 +151,17 @@ def central_error_logging(message, exception=None):
     return error_message
 
 
-def handle_api_error(message, exception=None):
+def handle_api_error(message:str, exception:Exception=None):
     error_message = central_error_logging(message, exception)
     return jsonify(success=False, error=error_message), 500 #internal server error
 
 
-def handle_local_error(message, exception=None):
+def handle_local_error(message:str, exception:Exception=None):
     _ = central_error_logging(message, exception)
     raise Exception(exception)
 
 
-def handle_error_no_return(message, exception=None):
+def handle_error_no_return(message:str, exception:Exception=None):
     _ = central_error_logging(message, exception)
 
 
@@ -173,7 +171,7 @@ def set_load_safe_defaults():
     except Exception as e:
         handle_error_no_return("Could not set load_safe_defaults to true in hf_config.json, encountered error: ", e)
 
-def handle_model_loading_error(message, exception=None, target="local"):
+def handle_model_loading_error(message:str, exception:Exception=None, target:str="local"):
     
     try:
         set_load_safe_defaults()
@@ -192,16 +190,32 @@ def handle_model_loading_error(message, exception=None, target="local"):
 ############################------------configuration manager-------------###############################
 
 if not os.path.exists('hf_config.json'):
+    '''
+    Initializes an empty JSON configuration file named 'hf_config.json' if it doesn't exist.
+    '''
     with config_writer_semaphore:
         try:
             with open('hf_config.json', 'w') as file:
                 json.dump({}, file)
         except Exception as e:
-            handle_error_no_return("Could not init config.json. Multiple app restarts may be required to get the app to init correctly. Printing error and proceeding: ", e)
+            handle_error_no_return("Could not init hf_config.json, encountered error: ", e)
 
 
-# Method to write to hf_config.json | input- dict of key:values to be written to hf_config.json
-def write_config(config_updates, filename='hf_config.json'):
+def write_config(config_updates:dict, filename:str='hf_config.json') -> dict:
+    '''
+    Method to write app configuration to hf_config.json.\n
+    Acquires a semaphore to prevent concurrent writes to the file.
+    
+    Args:
+        - config_updates: dict of key:values to be written to docling_parser_config.json
+        - filename: name of the file to write to, defaults to 'docling_parser_config.json'
+
+    Returns:
+        - Confirmation of success: {success: True}
+
+    Raises:
+        - Exception: If the file cannot be written to
+    '''
 
     with config_writer_semaphore:
 
@@ -282,8 +296,22 @@ def write_config(config_updates, filename='hf_config.json'):
         return {'success': True, 'restart_required':restart_required, 'hard_reboot_required':hard_reboot_required}
             
 
-# Method to read from hf_config.json | input- list of keys to be read from hf_config.json; output- dict of key:value pairs; MANAGE DEFAULTS HERE!
-def read_config(keys, default_value=None, filename='hf_config.json'):
+def read_config(keys:list, default_value=None, filename='hf_config.json') -> dict:
+    '''
+    Method to read app configuration from hf_config.json. Central method to configure safe application defaults.
+    Acquires a semaphore to prevent concurrent reads to the file.
+    
+    Args:
+        - keys: list of keys to read from hf_config.json
+        - default_value: default value to return if a key is not found in hf_config.json, defaults to None
+        - filename: name of the file to read from, defaults to 'hf_config.json'
+
+    Returns:
+        - dict of key:values read from hf_config.json
+
+    Raises:
+        - KeyError: If a key is not found in hf_config.json and no default value has been defined
+    '''
 
     with reader_semaphore:
     
@@ -651,34 +679,18 @@ except Exception as e:
 
 try:
     read_return = read_config(['upload_folder', 'generated_images_folder', 'transformer_models_folder', 'knowledge_graph_cache_dir'])
-    upload_folder = read_return['upload_folder']
-    generated_images_folder = read_return['generated_images_folder']
-    transformer_models_folder = read_return['transformer_models_folder']
-    knowledge_graph_cache_dir = read_return['knowledge_graph_cache_dir']
 except Exception as e:
     handle_local_error("Could not read paths for app directories (upload_folder, generated_images_folder) from config.json on boot, encountered error: ", e)
 
 try:
-    os.makedirs(upload_folder, exist_ok=True)
+    os.makedirs(read_return['upload_folder'], exist_ok=True)
+    os.makedirs(read_return['generated_images_folder'], exist_ok=True)
+    os.makedirs(read_return['transformer_models_folder'], exist_ok=True)
+    os.makedirs(read_return['knowledge_graph_cache_dir'], exist_ok=True)
 except Exception as e:
-    handle_local_error("Failed to create Uploaded Files Directory (upload_folder), encountered error: ", e)
+    handle_local_error("Failed to create app directories, encountered error: ", e)
 
-try:
-    os.makedirs(generated_images_folder, exist_ok=True)
-except Exception as e:
-    handle_local_error("Failed to create Generated Images Directory (generated_images_folder), encountered error: ", e)
-
-try:
-    os.makedirs(transformer_models_folder, exist_ok=True)
-except Exception as e:
-    handle_local_error("Failed to create Transformer Models Directory (transformer_models_folder), encountered error: ", e)
-
-try:
-    os.makedirs(knowledge_graph_cache_dir, exist_ok=True)
-except Exception as e:
-    handle_local_error("Failed to create Knowledge Graph Cache Directory (knowledge_graph_cache_dir), encountered error: ", e)
-
-app.config['UPLOAD_FOLDER'] = upload_folder
+app.config['UPLOAD_FOLDER'] = read_return['upload_folder']
 
 ############################----------------------------------------------###############################
 
@@ -1071,122 +1083,96 @@ def parse_arguments():
         For flags such as 'exl2', 'exl2_no_flash_attn', etc. we are not read_return-ing the values, as we do not wish to remember the previous settings for these flags and instead require the
         user to explicitly set them at launch, defaulting to False/None in parser otherwise.
         '''
-        read_return = read_config([
-            'access_gated',
-            'access_token',
-            'model_id',
-            'exl2',
-            'exl2_bpw',
-            'exl2_cache_type',
-            'exl2_max_seq_len',
-            'exl2_force_regenerate_measurement',
-            'exl2_no_flash_attn',
-            'gguf',
-            'awq',
-            'flux_diffusers',
-            'flux_low_vram_optimizations',
-            'load_quantized_flux',
-            'vision',
-            'gguf_model_id',
-            'gguf_filename',
-            'quantize',
-            'quant_level',
-            'hqq_group_size',
-            'push_to_hub',
-            'torch_device_map',
-            'torch_dtype',
-            'trust_remote_code',
-            'use_flash_attention_2',
-            'pipeline_task',
-            'max_new_tokens',
-            'return_full_text',
-            'temperature',
-            'do_sample',
-            'top_k',
-            'top_p',
-            'min_p',
-            'n_keep',
-            'port',
-            'host',
-            'load_safe_defaults'
-        ])
-        access_gated = str(read_return['access_gated']).lower() == 'true'
-        access_token = str(read_return['access_token'])
-        model_id = str(read_return['model_id'])
-        exl2_bpw = float(read_return['exl2_bpw'])
-        exl2_cache_type = str(read_return['exl2_cache_type'])
-        exl2_max_seq_len = int(read_return['exl2_max_seq_len'])
-        exl2_force_regenerate_measurement = str(read_return['exl2_force_regenerate_measurement']).lower() == 'true'
-        flux_low_vram_optimizations = str(read_return['flux_low_vram_optimizations']).lower() == 'true'
-        load_quantized_flux = str(read_return['load_quantized_flux']).lower() == 'true'
-        quantize = str(read_return['quantize'])
-        quant_level = str(read_return['quant_level'])
-        hqq_group_size = int(read_return['hqq_group_size'])
-        push_to_hub = str(read_return['push_to_hub']).lower() == 'true'
-        torch_device_map = str(read_return['torch_device_map'])
-        torch_dtype = str(read_return['torch_dtype'])
-        trust_remote_code = str(read_return['trust_remote_code']).lower() == 'true'
-        pipeline_task = str(read_return['pipeline_task'])
-        max_new_tokens = int(read_return['max_new_tokens'])
-        return_full_text = str(read_return['return_full_text']).lower() == 'true'
-        temperature = float(read_return['temperature'])
-        do_sample = str(read_return['do_sample']).lower() == 'true'
-        top_k = int(read_return['top_k'])
-        top_p = float(read_return['top_p'])
-        min_p = float(read_return['min_p'])
-        n_keep = int(read_return['n_keep'])
-        port = int(read_return['port'])
-        host = str(read_return['host'])
-        load_safe_defaults = str(read_return['load_safe_defaults']).lower() == 'true'
+        read_return = read_config(
+            [
+                'access_gated',
+                'access_token',
+                'model_id',
+                'exl2',
+                'exl2_bpw',
+                'exl2_cache_type',
+                'exl2_max_seq_len',
+                'exl2_force_regenerate_measurement',
+                'exl2_no_flash_attn',
+                'gguf',
+                'awq',
+                'flux_diffusers',
+                'flux_low_vram_optimizations',
+                'load_quantized_flux',
+                'vision',
+                'gguf_model_id',
+                'gguf_filename',
+                'quantize',
+                'quant_level',
+                'hqq_group_size',
+                'push_to_hub',
+                'torch_device_map',
+                'torch_dtype',
+                'trust_remote_code',
+                'use_flash_attention_2',
+                'pipeline_task',
+                'max_new_tokens',
+                'return_full_text',
+                'temperature',
+                'do_sample',
+                'top_k',
+                'top_p',
+                'min_p',
+                'n_keep',
+                'port',
+                'host',
+                'load_safe_defaults'
+            ]
+        )
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to parse_arguments(), encountered error: ", e)
 
     if parser:
 
         parser.add_argument("--reset_to_defaults", action="store_true", default=False, help="Use default settings")
-        parser.add_argument("--access_gated", action="store_true", default=access_gated, help="Specify True if you will be accessing gated models you've been approved to access")
-        parser.add_argument("--access_token", type=str, default=access_token, help="Access Token obtained from HF-Settings -> Access Tokens")
-        parser.add_argument("--model_id", type=str, default=model_id, help="model_id for for LLM in HF-Transformers format obtained from the model card. Remembers previously set value and falls-back to Phi3-mini-4k-instruct as the default.")
+        parser.add_argument("--access_gated", action="store_true", default=read_return['access_gated'], help="Specify True if you will be accessing gated models you've been approved to access")
+        parser.add_argument("--access_token", type=str, default=read_return['access_token'], help="Access Token obtained from HF-Settings -> Access Tokens")
+        parser.add_argument("--model_id", type=str, default=read_return['model_id'], help="model_id for for LLM in HF-Transformers format obtained from the model card. Remembers previously set value. Default: Phi3-mini-4k-instruct")
         parser.add_argument("--gguf", action="store_true", default=False, help="Add this flag if you'll be loading a GGUF LLM. Defaults to False.")
         parser.add_argument("--awq", action="store_true", default=False, help="Add this flag when loading AWQ-quantized models directly off the HF-Hub.")
         parser.add_argument("--flux_diffusers", action="store_true", default=False, help="Add this flag when loading FLUX-diffusers models directly off the HF-Hub.")
-        parser.add_argument("--flux_low_vram_optimizations", action="store_true", default=flux_low_vram_optimizations, help="Save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power")
-        parser.add_argument("--load_quantized_flux", action="store_true", default=load_quantized_flux, help="Add this flag when loading quantized FLUX models directly off the HF-Hub.")
+        parser.add_argument("--flux_low_vram_optimizations", action="store_true", default=read_return['flux_low_vram_optimizations'], help="Save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power")
+        parser.add_argument("--load_quantized_flux", action="store_true", default=read_return['load_quantized_flux'], help="Add this flag when loading quantized FLUX models directly off the HF-Hub.")
         parser.add_argument("--vision", action="store_true", default=False, help="Add this flag when loading vision models directly off the HF-Hub.")
         parser.add_argument("--gguf_model_id", type=str, default=None, help="GGUF model_id of the target repo. Defaults to None")
         parser.add_argument("--gguf_filename", type=str, default=None, help="GGUF filename from the target repo. Defaults to None")
-        parser.add_argument("--quantize", type=str, default=quantize, help="Quantization method to be utilized. Simply type 'n' to not use quantization. Remembers previously set value and falls-back to bitsandbytes as the default.")
-        parser.add_argument("--quant_level", type=str, default=quant_level, help="Specify quantization level. Valid values -  BitsAndBytes: int8 & int4; Quanto: int8, int4 and int2; HQQ: int8, int4, int3, int2, int1. Remembers previously set value and falls-back to int8 as the default.")
-        parser.add_argument("--hqq_group_size", type=int, default=hqq_group_size, help="Specify group_size for HQQ quantization. No restrictions as long as weight.numel() is divisible by the group_size. Remembers previously set value and falls-back to 64 as a default.")
-        parser.add_argument("--push_to_hub", action="store_true", default=push_to_hub, help="Push quantized LLM to your HF-hub. Remembers previously set value and falls-back to False as the default.")
-        parser.add_argument("--torch_device_map", type=str, default=torch_device_map, help="Specify inference device, example: cuda. Remembers previously set value and falls-back to auto as the default.")
-        parser.add_argument("--torch_dtype", type=str, default=torch_dtype, help="Specify model tensor type, example: bfloat16. Remembers previously set value and falls-back to auto as the default.")
-        parser.add_argument("--trust_remote_code", action="store_true", default=trust_remote_code, help="Allows the model to execute custom code that's part of the model's HF-repository. Remembers previously set value and falls-back to False by default as a security measure to prevent potentially malicious code from running automatically.")
+        parser.add_argument("--quantize", type=str, default=read_return['quantize'], help="Quantization method to be utilized. Simply type 'n' to not use quantization. Remembers previously set value. Default: bitsandbytes")
+        parser.add_argument("--quant_level", type=str, default=read_return['quant_level'], help="Specify quantization level. Valid values -  BitsAndBytes: int8 & int4; Quanto: int8, int4 and int2; HQQ: int8, int4, int3, int2, int1. Remembers previously set value. Default: int8")
+        parser.add_argument("--hqq_group_size", type=int, default=read_return['hqq_group_size'], help="Specify group_size for HQQ quantization. No restrictions as long as weight.numel() is divisible by the group_size. Remembers previously set value. Default: 64")
+        parser.add_argument("--push_to_hub", action="store_true", default=read_return['push_to_hub'], help="Push quantized LLM to your HF-hub. Remembers previously set value. Default: False")
+        parser.add_argument("--torch_device_map", type=str, default=read_return['torch_device_map'], help="Specify inference device, example: cuda. Remembers previously set value. Default: auto")
+        parser.add_argument("--torch_dtype", type=str, default=read_return['torch_dtype'], help="Specify model tensor type, example: bfloat16. Remembers previously set value. Default: auto")
+        parser.add_argument("--trust_remote_code", action="store_true", default=read_return['trust_remote_code'], help="Allows the model to execute custom code that's part of the model's HF-repository. Remembers previously set value. Default: False")
         parser.add_argument("--use_flash_attention_2", action="store_true", default=False, help="Set to True to attempt using Flash Attention 2. Defaults to False. Failed attempt to use FA2 will proceed to load the model without FA2.")
-        parser.add_argument("--pipeline_task", type=str, default=pipeline_task, help="Defaults to text-generation. For more details, open a Python shell, `import transformers`, and Run `help(transfomers.pipeline)`.")
-        parser.add_argument("--max_new_tokens", type=int, default=max_new_tokens, help="Set a hard limit on the maximum number of tokens an LLM can generate when responding. Remembers previously set value and falls-back to 500 as a default.")
-        parser.add_argument("--return_full_text", action="store_true", default=return_full_text, help="When set to True, the LLM response contains the entire messages list with the latest response appended at the end.")
-        parser.add_argument("--temperature", type=float, default=temperature, help="Set LLM temperature on a scale of 0.0 to 2.0. Remembers previously set value and falls-back to 0.1 as a default.")
-        parser.add_argument("--do_sample", action="store_true", default=do_sample, help="Perform sampling when selecting response tokens. Remembers previously set value and falls-back to True as a default. Must be set to True when temperature is above 0.0. For greedy decoding, leave this as False and set temp to 0.0")
-        parser.add_argument("--top_k", type=int, default=top_k, help="Limit the next token selection to the K most probable tokens. Remembers previously set value and falls-back to 40 as a default.")
-        parser.add_argument("--top_p", type=float, default=top_p, help="Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P. Remembers previously set value and falls-back to 0.95 as a default.")
-        parser.add_argument("--min_p", type=float, default=min_p, help="The minimum probability for a token to be considered, relative to the probability of the most likely token. Remembers previously set value and falls-back to 0.05 as a default.")
-        parser.add_argument("--n_keep", type=int, default=n_keep, help="Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded. Remembers previously set value and falls-back to 0 as a default, meaning no tokens are kept. Use -1 to retain all tokens from the prompt.")
-        parser.add_argument("--port", type=int, default=port, help="Specify the port to be used by the server. Remembers previously set value and falls-back to 9069 as a default.")
-        parser.add_argument("--host", type=str, default=host, help="Specify the host to be used by the server. Remembers previously set value and falls-back to 0.0.0.0 as a default.")
+        parser.add_argument("--pipeline_task", type=str, default=read_return['pipeline_task'], help="Defaults to text-generation. For more details, open a Python shell, `import transformers`, and Run `help(transfomers.pipeline)`.")
+        parser.add_argument("--max_new_tokens", type=int, default=read_return['max_new_tokens'], help="Set a hard limit on the maximum number of tokens an LLM can generate when responding. Remembers previously set value. Default: 500")
+        parser.add_argument("--return_full_text", action="store_true", default=read_return['return_full_text'], help="When set to True, the LLM response contains the entire messages list with the latest response appended at the end.")
+        parser.add_argument("--temperature", type=float, default=read_return['temperature'], help="Set LLM temperature on a scale of 0.0 to 2.0. Remembers previously set value. Default: 0.1")
+        parser.add_argument("--do_sample", action="store_true", default=read_return['do_sample'], help="Perform sampling when selecting response tokens. Remembers previously set value. Default: True. Must be set to True when temperature is above 0.0. For greedy decoding, leave this as False and set temp to 0.0")
+        parser.add_argument("--top_k", type=int, default=read_return['top_k'], help="Limit the next token selection to the K most probable tokens. Remembers previously set value. Default: 40")
+        parser.add_argument("--top_p", type=float, default=read_return['top_p'], help="Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P. Remembers previously set value. Default: 0.95")
+        parser.add_argument("--min_p", type=float, default=read_return['min_p'], help="The minimum probability for a token to be considered, relative to the probability of the most likely token. Remembers previously set value. Default: 0.05")
+        parser.add_argument("--n_keep", type=int, default=read_return['n_keep'], help="Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded. Remembers previously set value. Default: 0. Use -1 to retain all tokens from the prompt.")
+        parser.add_argument("--port", type=int, default=read_return['port'], help="Specify the port to be used by the server. Remembers previously set value. Default: 9069")
+        parser.add_argument("--host", type=str, default=read_return['host'], help="Specify the host to be used by the server. Remembers previously set value. Default: 0.0.0.0")
 
         # ExLlamaV2:
         parser.add_argument("--exl2", action="store_true", default=False, help="Add this flag when loading models via ExLlamaV2. Defaults to False.")
-        parser.add_argument("--exl2_bpw", type=float, default=exl2_bpw, help="Specify the bpw to be used when quantizing ExLlamaV2 models. Remembers previously set value and falls-back to 3.0 as the default.")
-        parser.add_argument("--exl2_force_regenerate_measurement", action="store_true", default=exl2_force_regenerate_measurement, help="Add this flag required to re-generate the measurement file for ExLlamaV2 models. Defaults to False.")
-        parser.add_argument("--exl2_cache_type", type=str, default=exl2_cache_type, help="Specify the cache type to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to full ExLlamaV2Cache as the default.")
-        parser.add_argument("--exl2_max_seq_len", type=int, default=exl2_max_seq_len, help="Specify the max sequence length (context size) to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to 2048 as the default.")
+        parser.add_argument("--exl2_bpw", type=float, default=read_return['exl2_bpw'], help="Specify the bpw to be used when quantizing ExLlamaV2 models. Remembers previously set value and falls-back to 3.0 as the default.")
+        parser.add_argument("--exl2_force_regenerate_measurement", action="store_true", default=read_return['exl2_force_regenerate_measurement'], help="Add this flag required to re-generate the measurement file for ExLlamaV2 models. Defaults to False.")
+        parser.add_argument("--exl2_cache_type", type=str, default=read_return['exl2_cache_type'], help="Specify the cache type to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to full ExLlamaV2Cache as the default.")
+        parser.add_argument("--exl2_max_seq_len", type=int, default=read_return['exl2_max_seq_len'], help="Specify the max sequence length (context size) to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to 2048 as the default.")
         parser.add_argument("--exl2_no_flash_attn", action="store_true", default=False, help="Use this flag to disable Flash Attention 2 for ExLlamaV2 models. Defaults to False.")
         
         args = parser.parse_args()
         print(f"\n\nparser.parse_args():\n\n{args}\n\n")
 
-        if args.reset_to_defaults or load_safe_defaults:
+        if args.reset_to_defaults or read_return['load_safe_defaults']:
             print("\n\nLoading Server with Safe Defaults\n\n")
             try:
                 # Empty hf_config.json
@@ -1195,7 +1181,7 @@ def parse_arguments():
                     json.dump({}, file, indent=4)
                 config_writer_semaphore.release()
                 
-                # Set defaults
+                # Set defaults by triggering read on an empty file
                 read_config([
                     'access_gated',
                     'access_token',
