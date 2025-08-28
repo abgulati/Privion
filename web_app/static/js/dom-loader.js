@@ -1674,13 +1674,13 @@ function startLLMServer() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            if (data.other_server_running) {
+            if (data.hf_waitress_server_running && data.llama_cpp_server_running) {
                 alert("Warning: Both HF-Waitress and llama.cpp servers appear to be running. Consider manually shutting one down to conserve memory!")
             }
             setServerStatusIndicator("Online");
             const llm_model = data.llm_model;
             setLlmModel(llm_model);
-            // return loadVectorDB(llm_model);
+            if (data.reboot_failed) { alert("The LLM server is online but the updated settings were not applied. Check application and browser logs for more details."); }
             return initChatHistoryDB(llm_model);
         } else {
             setServerStatusIndicator("Error");
@@ -1689,7 +1689,7 @@ function startLLMServer() {
     })
     .catch(error => {
         setServerStatusIndicator("Offline");
-        errorHandler("loading the LLM", "/local_llm_server_starter", String(error.message))
+        errorHandler("loading the LLM", "/local-llm_server_starter", String(error.message))
     })
 }
 
