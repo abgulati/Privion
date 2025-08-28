@@ -345,16 +345,15 @@ function handleSetupResponse(data) {
 
 
 async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer) {
-    const url = "http://localhost:8080/completion";
-    const requestData = {
-        prompt: formattedPrompt,
-        stream: true,
-        temperature: parseFloat(document.getElementById('tempSlider').value),
-        top_k: parseInt(document.getElementById('topkSlider').value),
-        top_p: parseFloat(document.getElementById('toppSlider').value),
-        min_p: parseFloat(document.getElementById('minpSlider').value),
-        n_keep: parseInt(document.getElementById('nkeepSlider').value)
-    };
+    const url = "http://localhost:8080/v1/chat/completions";
+
+    const requestData = JSON.parse(formattedPrompt);
+    requestData.stream = true;
+    requestData.temperature = parseFloat(document.getElementById('tempSlider').value);
+    requestData.top_k = parseInt(document.getElementById('topkSlider').value);
+    requestData.top_p = parseFloat(document.getElementById('toppSlider').value);
+    requestData.min_p = parseFloat(document.getElementById('minpSlider').value);
+    requestData.n_keep = parseInt(document.getElementById('nkeepSlider').value);
 
     try {
 
@@ -370,6 +369,8 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
         let totalContent = '';  //String to accumulate content
         let receivedComplete = false;
         let loaderHidden = false;
+        let reasoningContentStream = false;
+        let reasoningContentFirstToken = true;
 
         // Function to process each text chunk
         async function processChunk() {
@@ -395,13 +396,30 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
                         
                         const jsonStr = message.slice(6);   // remove 6 chars to get rid of the 'data: ' prefix!
                         try {
-                            const dataObj = JSON.parse(jsonStr);
-                            const streamedText = dataObj.content || "";
-                            appendStreamChunkAndRender(responseContentID, streamedText);
-                            handleAutoScroll(chatContainer);
-
-                            if (dataObj.stop) {
+                            if (jsonStr == '[DONE]') {
                                 receivedComplete = true;
+                            } else {
+                                const dataObj = JSON.parse(jsonStr);
+                                let streamedText = "";
+                                if (dataObj.choices[0].delta.reasoning_content) {
+                                    if (reasoningContentFirstToken) {
+                                        reasoningContentStream = true;
+                                        streamedText = '<think>' + dataObj.choices[0].delta.reasoning_content;
+                                        reasoningContentFirstToken = false;
+                                    } else {
+                                        streamedText = dataObj.choices[0].delta.reasoning_content;
+                                    }
+                                } else {
+                                    if (reasoningContentStream) {
+                                        streamedText = '</think>' + dataObj.choices[0].delta.content || "";
+                                        reasoningContentStream = false;
+                                    } else {
+                                        streamedText = dataObj.choices[0].delta.content || "";
+                                    }
+                                }
+                                appendStreamChunkAndRender(responseContentID, streamedText);
+                                totalContent += streamedText;
+                                handleAutoScroll(chatContainer);
                             }
                         } catch (error) {
                             console.error('Error parsing JSON: ', error);
@@ -726,17 +744,29 @@ function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapper
         streamState.set(stream_session_id, { buffer: state, scheduled: false });
         finalizeStreamRender(responseContentID);
     }
-    
-    document.getElementById(responseContentID).innerHTML += `
-    <br>
-    <div class="star-rating" data-rated="False" data-rating-chat-id=${current_chat_id} data-rating-sequence-id=${latest_sequence_id}>
-        <i class="far fa-star" data-rate="1"></i>
-        <i class="far fa-star" data-rate="2"></i>
-        <i class="far fa-star" data-rate="3"></i>
-        <i class="far fa-star" data-rate="4"></i>
-        <i class="far fa-star" data-rate="5"></i>
-    </div>
-    `
+
+    // Using array and join to avoid newline characters \n's appearing in the HTML output as breakline tags
+    const llm_star_rating_html_parts = [
+        '<br>',
+        `<div class="star-rating" data-rated="False" data-rating-chat-id=${current_chat_id} data-rating-sequence-id=${latest_sequence_id}>`,
+        '<i class="far fa-star" data-rate="1"></i>',
+        '<i class="far fa-star" data-rate="2"></i>',
+        '<i class="far fa-star" data-rate="3"></i>',
+        '<i class="far fa-star" data-rate="4"></i>',
+        '<i class="far fa-star" data-rate="5"></i>',
+        '</div>',
+        '</div>',
+        '</div>'
+    ];
+
+    // Join the array elements into a single string
+    const llm_star_rating_full_div = llm_star_rating_html_parts.join('');
+
+    document.getElementById(responseContentID).innerHTML += llm_star_rating_full_div;
+    // const final_state = document.getElementById(responseContentID).innerHTML;
+    // streamState.set(stream_session_id, { buffer: final_state, scheduled: false });
+    // finalizeStreamRender(responseContentID);
+
     if (do_rag && data.pdf_frame != "" && data.pdf_frame != null) {
         document.getElementById(masterWrapperID).innerHTML += data.pdf_frame;
         // Open the first tab by default
