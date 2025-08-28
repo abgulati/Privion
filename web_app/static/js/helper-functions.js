@@ -195,6 +195,11 @@ function resetResponseAndViewerContainerWithStreamSessionId(streamSessionId) {
                 <div class="llm-response" id="ResponseContent${streamSessionId}"></div>
             </div>
         `;
+
+        // Reset Markdown Rendering Pipeline's buffer otherwise the regenerated response will be appended to the previous response!
+        const state = ``;
+        streamState.set(streamSessionId, { buffer: state, scheduled: false });
+        finalizeStreamRender(`ResponseContent${streamSessionId}`);
     }
     document.getElementById(`ResponseWrapper${streamSessionId}`).style.display  = 'block';
     scrollChatAreaToBottom();
