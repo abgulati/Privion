@@ -90,15 +90,68 @@ function appendStreamChunkAndRender(responseContentID, chunk) {
     state.buffer += (chunk || '');
     streamState.set(sessionId, state);
 
+    /*
+    Race-avoidance: re-read the latest state from streamState inside the timeout
+    to prevent a stale render. A stale render can occur if finalizeStreamRender
+    or any post-stream UI update (e.g., appending star-rating) updates the buffer
+    after this timeout was queued., i.e., while the scheduled renderer is still pending!
+
+    Eg: The above is most likely to occur when a response stream from the LLM has just concluded, and so the scheduled renderer is still running,
+    but the handle-FetchedReferences method tries to append the star-rating element to the response content element and proceeds to call finalize-StreamRender()
+    In this case, while the state obj will be updated, as will the innerHTML of the response content element, the scheduled renderer will still render the stale buffer!
+
+    Contract:
+    - Never replace the state object in the Map; mutate its fields (buffer, scheduled).
+    - scheduled === true ⇒ exactly one pending timer. As in: while the flag is true, there is already one setTimeout queued; don’t queue another.
+
+    Throttle: 80ms (~12fps). Consider requestAnimationFrame if you want frame-sync.
+    */
+
     if (!state.scheduled) {
-        state.scheduled = true;
+        state.scheduled = true; // schedule only a single render timer per session.
+        const sid = sessionId;
         setTimeout(() => {
-        const el = document.getElementById(responseContentID);
-        if (el) renderMarkdownInto(el, state.buffer);
-        state.scheduled = false;
-        handleAutoScroll(document.getElementById('chat-area'));
+            const cur = streamState.get(sid);   // ensure we always render the newest buffer...
+            const el = document.getElementById(responseContentID);
+            if (cur && el) renderMarkdownInto(el, cur.buffer);
+            if (cur) cur.scheduled = false; // ... and then flip scheduled on the same, current state obj "to maintain the one-timer invariant": at any moment, there is at most one pending render timer per session.
+            handleAutoScroll(document.getElementById('chat-area'));
         }, 80); // ~12 FPS; tune as needed
     }
+
+    /*
+    ### Renderer explanation
+    - `scheduled` is a per-session flag that prevents spawning multiple timers at once.
+    - It's a coalescing/throttling flag that ensures only one pending timer per session; this prevents overlapping renders and stale overwrites.
+    - “scheduled === true ⇒ exactly one pending timer” means: while the flag is true, there is already one setTimeout queued; don’t queue another.
+    - “one-timer invariant” is the rule we keep: at any moment, there is at most one pending render timer per session.
+
+    ### How it works (step-by-step)
+    1) A chunk arrives:
+    - We append it to `state.buffer`.
+    - If `state.scheduled` is false, we set it to true and queue a single `setTimeout(..., 80)`.
+
+    2) More chunks arrive before the timeout fires:
+    - We just keep appending to `state.buffer`.
+    - We do not queue more timers because `state.scheduled` is true.
+
+    3) The timer fires:
+    - It re-reads the current state from the Map, renders the latest `buffer`, then sets `state.scheduled = false`.
+
+    4) Next chunk after that:
+    - Sees `scheduled` is false, so it queues the next single timer, and the cycle repeats.
+
+    Effect: many fast chunks are “coalesced” into at most one render per 80ms. This avoids:
+    - Excessive renders and jank.
+    - Out-of-order/stale renders from multiple overlapping timers.
+
+    If we didn’t have `scheduled`:
+    - Every chunk would start its own timer.
+    - Timers could fire in a tight cluster, re-rendering multiple times with intermediate buffers, and potentially clobbering UI.
+
+    Invariants in one sentence:
+    - Exactly one render timer pending per session at a time; when it fires, it clears the flag so the next burst can schedule the next single render.
+    */
 }
 
 function finalizeStreamRender(responseContentID) {
@@ -705,7 +758,7 @@ async function fetchEventStream(serverType, formattedPrompt, responseContentID, 
 }
 
 
-function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, stream_session_id, user_message_html_unique_id, regeneration_request) {
+function handleFetchedReferences(do_rag, data, responseContentID, masterWrapperID, stream_session_id, user_message_html_unique_id, regeneration_request) {
     const latest_sequence_id = getSequenceId();
     const current_chat_id = data.chat_id;
 
@@ -738,42 +791,46 @@ function handleFetchedReferencess(do_rag, data, responseContentID, masterWrapper
         }
     }
 
-    if (do_rag && data.response != "" && data.response != null) {
-        document.getElementById(responseContentID).innerHTML = `${data.response}`;
-        const state = `${data.response}`;
-        streamState.set(stream_session_id, { buffer: state, scheduled: false });
-        finalizeStreamRender(responseContentID);
-    }
-
-    // Using array and join to avoid newline characters \n's appearing in the HTML output as breakline tags
     const llm_star_rating_html_parts = [
         '<br>',
-        `<div class="star-rating" data-rated="False" data-rating-chat-id=${current_chat_id} data-rating-sequence-id=${latest_sequence_id}>`,
+        `<div class="star-rating" data-rated="False" data-rating-chat-id="${current_chat_id}" data-rating-sequence-id="${latest_sequence_id}">`,
         '<i class="far fa-star" data-rate="1"></i>',
         '<i class="far fa-star" data-rate="2"></i>',
         '<i class="far fa-star" data-rate="3"></i>',
         '<i class="far fa-star" data-rate="4"></i>',
         '<i class="far fa-star" data-rate="5"></i>',
-        '</div>',
-        '</div>',
         '</div>'
-    ];
+    ];  // Using array and join to avoid newline characters \n's appearing in the HTML output as breakline tags
+    const llm_star_rating_full_div = llm_star_rating_html_parts.join('');   // Join the array elements into a single string
 
-    // Join the array elements into a single string
-    const llm_star_rating_full_div = llm_star_rating_html_parts.join('');
-
-    document.getElementById(responseContentID).innerHTML += llm_star_rating_full_div;
-    // const final_state = document.getElementById(responseContentID).innerHTML;
-    // streamState.set(stream_session_id, { buffer: final_state, scheduled: false });
-    // finalizeStreamRender(responseContentID);
+    const el = document.getElementById(responseContentID);
+    const finalResponse = (data?.response && data.response.length > 0) ? data.response : el.innerHTML;
+    /* Notes:
+        - data.get(...) won't work on JSON objects, and Map.get won't take a default, thus the above
+        - data?.response elegantly handles both “data might not exist” and “response might not exist,” yielding undefined instead of throwing.
+        - `?.` is called the "optional chaining operator" and is used to safely access properties of an object that might not exist.
+        - We could have also used "nullish coalescing operator" `??` E.g. `data?.response ?? el.innerHTML`
+        - `??` falls back to the right-hand side if the left-hand side is null or undefined, but not if it's false, 0, or an empty string
+    */
+    
+    // Never replace the state object, mutate it in place to prevent race conditions with any already-scheduled renders - just ensure...
+    let stateObj = streamState.get(stream_session_id);   // ...the scheduled renderer in append-StreamChunkAndRender() reads the latest state from the map!
+    if (!stateObj) {
+        stateObj = { buffer: '', scheduled: false };
+        streamState.set(stream_session_id, stateObj);
+    }
+    stateObj.buffer = '';
+    document.getElementById(responseContentID).innerHTML = `${finalResponse}${llm_star_rating_full_div}`;
+    stateObj.buffer = `${finalResponse}${llm_star_rating_full_div}`;
+    stateObj.scheduled = false;
+    finalizeStreamRender(responseContentID);
 
     if (do_rag && data.pdf_frame != "" && data.pdf_frame != null) {
         document.getElementById(masterWrapperID).innerHTML += data.pdf_frame;
-        // Open the first tab by default
         var defaultTabs = document.getElementsByClassName("defaultTabs");
         for (let i = 0; i < defaultTabs.length; i++) {
             if (defaultTabs[i].getAttribute('stream-session-id') === stream_session_id) {
-                defaultTabs[i].click();
+                defaultTabs[i].click(); // Open the first tab by default
             }
         }
     }
@@ -798,7 +855,7 @@ async function getReferences(do_rag, params, responseContentID, masterWrapperID,
             throw new Error(`Internal Server Error: Check server-log and server command-line for more details. Error: ${data.error}`);
         }
 
-        handleFetchedReferencess(do_rag, data, responseContentID, masterWrapperID, params.stream_session_id, user_message_html_unique_id, params.regeneration_request);
+        handleFetchedReferences(do_rag, data, responseContentID, masterWrapperID, params.stream_session_id, user_message_html_unique_id, params.regeneration_request);
     } catch (error) {
         errorHandler("fetching relevant reference material", "get-References()", String(error));
     }
