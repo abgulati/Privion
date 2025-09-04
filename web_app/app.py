@@ -18,7 +18,7 @@ from googleapiclient.http import MediaIoBaseDownload
 from falkordb import FalkorDB
 import chromadb
 
-from pdf2image import convert_from_path
+from pdf2image import convert_from_path # accepts `pdf_path` param as either a String or PurePath. Can directly pass pathlib.Path as it's a subclass of PurePath!
 
 from urllib.parse import urlparse, parse_qs
 from urlextract import URLExtract
@@ -31,8 +31,8 @@ import argparse
 import datetime
 import requests
 import logging
+import pathlib
 import sqlite3
-import signal
 import PyPDF2
 import shutil   # Shell Utilities is part of Python's standard library and is used for file operations
 import queue
@@ -54,7 +54,7 @@ from whoosh import scoring
 
 from waitress import serve
 
-import fitz # PyMuPDF
+import fitz # PyMuPDF - fitz.open(filename) accepts a string or pathlib.Path
 
 try:
     # Standard Pipeline
@@ -96,6 +96,15 @@ try:
 except ImportError:
     print("WARNING: utils.py is not present. Skipping import.")
 
+def flash_attention_is_installed() -> bool:
+    try:
+        import flash_attn
+        print(f"Flash Attention is installed: {flash_attn.__version__}")
+        return True
+    except ImportError:
+        print("Flash Attention is not installed.")
+        return False
+
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Allow insecure traffic - Needed to bypass HTTPS requirement for Google Drive OAuth. FOR DEV USE ONLY! SWITCH TO SELF-SIGNED CERTIFICATES & HTTPS FOR PRODUCTION!
 
 app = Flask(__name__)
@@ -128,12 +137,10 @@ def pdf_viewer(filename):
 
 
 #########################------------------GLOBALS!----------------------###############################
-LLAMA_CPP_PROCESS = None
-LLM = None
-LOADED_UP = False
-LLM_LOADED_UP = False
-LLM_CHANGE_RELOAD_TRIGGER_SET = False
-DOCLING_CONVERTER = None
+LLAMA_CPP_PROCESS = None   #  used in llama-cpp_server_starter and hf-waitress_server_starter, primary purpose is to manage the termination of the llama.cpp server process
+LLM_CHANGE_RELOAD_TRIGGER_SET = False   # set in config.json and used in llama-cpp_server_starter
+
+DOCLING_CONVERTER = None    # used in docling-ocr_page and bulk-text_extract_from_staging_area
 
 # Dict for user queries:  queries[session_id] = user_input
 QUERIES = {}
@@ -156,8 +163,7 @@ try:
     LOGGER.setLevel(logging.ERROR)
 
     # 2 - Create a RotatingFileHandler
-    # maxBytes: max file size of log file after which a new file is created; set to 1024 * 1024 * 5 for 5MB: 1024x1024 is 1MB, then a multiplyer for the number of MB
-    # backupCount: number of backup files to keep specifying how many old log files to keep
+    # maxBytes: 1024 * 1024 * 5 Bytes = 5MB max file size per log, 2 backups = 3 files total
     handler = RotatingFileHandler('lars_server_log.log', maxBytes=1024*1024*5, backupCount=2)
     handler.setLevel(logging.ERROR)
 
@@ -165,14 +171,13 @@ try:
     formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
     handler.setFormatter(formatter)
 
-    # 4 - Add the handler to the logger
+    # 4 - Add the handler to the logger for final LOGGER - Usage: LOGGER.error(f"This is an error message with error {e}")
     LOGGER.addHandler(handler)
-    # Logger ready! Usage: logger.error(f"This is an error message with error {e}")
 except Exception as e:
     print(f"\n\nCould not establish logger, encountered error: {e}")
 
 
-def central_error_logging(message, exception=None):
+def central_error_logging(message:str, exception:Exception=None):
     error_message = f"{message} {str(exception) if exception else '; No exception info.'}".strip()
     #traceback_details = traceback.format_exc()
     #full_message = f"\n\n{error_message}\n\nTraceback: {traceback_details}\n\n"
@@ -186,26 +191,29 @@ def central_error_logging(message, exception=None):
     return error_message
 
 
-def handle_api_error(message, exception=None):
+def handle_api_error(message:str, exception:Exception=None):
     error_message = central_error_logging(message, exception)
     return jsonify(success=False, error=error_message), 500 #internal server error
 
 
-def handle_local_error(message, exception=None):
+def handle_local_error(message:str, exception:Exception=None):
     _ = central_error_logging(message, exception)
     raise Exception(exception)
 
 
-def handle_error_no_return(message, exception=None):
+def handle_error_no_return(message:str, exception:Exception=None):
     _ = central_error_logging(message, exception)
 
-#########################-------------------------------------###############################
+############################----------------------------------------------###############################
 
 
 
 ############################------------configuration manager-------------###############################
 
 if not os.path.exists('config.json'):
+    '''
+    Initializes an empty JSON configuration file named 'config.json' if it doesn't exist.
+    '''
     try:
         with open('config.json', 'w') as file:
             json.dump({}, file)
@@ -213,11 +221,22 @@ if not os.path.exists('config.json'):
         handle_error_no_return("Could not init config.json. Multiple app restarts may be required to get the app to init correctly. Printing error and proceeding: ", e)
 
 
+def write_config(config_updates:dict, filename:str='config.json') -> dict:
+    '''
+    Method to write app configuration to config.json.\n
+    
+    Args:
+        - config_updates: dict of key:values to be written to config.json
+        - filename: name of the file to write to, defaults to 'config.json'
 
-# Method to write to config.json | input- dict of key:values to be written to config.json
-def write_config(config_updates, filename='config.json'):
+    Returns:
+        - Confirmation of success: {success: True}
 
-    # Open config file to read-in all current params:
+    Raises:
+        - Exception: If the file cannot be written to
+    '''
+
+    # First, open existing config file (if present) to read-in current settings, fallback to an empty dict if file does not exist:
     try:
         with open(filename, 'r') as file:
             config = json.load(file)
@@ -226,30 +245,29 @@ def write_config(config_updates, filename='config.json'):
         handle_error_no_return("Could not read config.json when attempting to write, encountered error: ", e)
         
     restart_required = False
-    if LLM_LOADED_UP:
-        llm_trigger_keys_for_app_restart = [
-            'use_local_llm',
-            'local_llm_server',
-            'use_azure_open_ai',
-            'use_gpu',
-            'model_choice',
-            'local_llm_chat_template_format',
-            'local_llm_context_length',
-            'local_llm_max_new_tokens',
-            'local_llm_gpu_layers',
-            'base_template',
-            'skip_system_prompt',
-            'hf_waitress_serving_url',
-            'hf_waitress_access_url',
-            'hf_waitress_server_port'
-        ]
-                
-        for key in llm_trigger_keys_for_app_restart:
-            if key in config_updates and config_updates[key] != config.get(key):
-                global LLM_CHANGE_RELOAD_TRIGGER_SET
-                LLM_CHANGE_RELOAD_TRIGGER_SET = True
-                restart_required = True
-                break
+    llm_trigger_keys_for_app_restart = [
+        'use_local_llm',
+        'local_llm_server',
+        'use_azure_open_ai',
+        'use_gpu',
+        'model_choice',
+        'local_llm_chat_template_format',
+        'local_llm_context_length',
+        'local_llm_max_new_tokens',
+        'local_llm_gpu_layers',
+        'base_template',
+        'skip_system_prompt',
+        'hf_waitress_serving_url',
+        'hf_waitress_access_url',
+        'hf_waitress_server_port'
+    ]
+            
+    for key in llm_trigger_keys_for_app_restart:
+        if key in config_updates and config_updates[key] != config.get(key):
+            global LLM_CHANGE_RELOAD_TRIGGER_SET
+            LLM_CHANGE_RELOAD_TRIGGER_SET = True
+            restart_required = True
+            break
 
     config.update(config_updates)
 
@@ -263,20 +281,33 @@ def write_config(config_updates, filename='config.json'):
     return {'success': True, 'restart_required':restart_required}
 
 
-def safe_write_config(config_updates):
+def safe_write_config(config_updates:dict, filename:str='config.json') -> dict:
     '''
     Wrapper for write-config() that handles errors silently.
     Directly invoke write-config() instead of this method anytime a write-specific error must be raised!
     '''
     try:
-        return write_config(config_updates)
+        return write_config(config_updates, filename)
     except Exception as e:
         handle_error_no_return("Could not write to config.json, encountered error: ", e)
         return {'success': False, 'restart_required': False}
 
 
-# Method to read from config.json | input- list of keys to be read from config.json; output- dict of key:value pairs; MANAGE DEFAULTS HERE!
-def read_config(keys, default_value=None, filename='config.json'):
+def read_config(keys:list, default_value=None, filename='config.json') -> dict:
+    '''
+    Method to read app configuration from config.json. Central method to configure safe application defaults.
+    
+    Args:
+        - keys: list of keys to read from config.json
+        - default_value: default value to return if a key is not found in config.json, defaults to None
+        - filename: name of the file to read from, defaults to 'config.json'
+
+    Returns:
+        - dict of key:values read from config.json
+
+    Raises:
+        - KeyError: If a key is not found in config.json and no default value has been defined
+    '''
     
     # Open config file to read-in all current params:
     try:
@@ -315,6 +346,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'graph_extraction_model_directory_name': 'graph-extraction-model-server',
                 'graph_summary_generator_directory_name': 'graph-summary-generator-server',
                 'local_llm_server':'hf-waitress',
+                'exclusive_server_mode':False,  # If True, only one main LLM server instance will be allowed to run at a time. For example, when launching llama.cpp, HF-Waitress will be shut down.
                 'model_choice':'Meta-Llama-3-8B-Instruct.f16.gguf',
                 'vision_llm_local_url':"http://localhost:9069/completions",
                 'kosmos_local_url':"http://localhost:25000",
@@ -361,7 +393,7 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'azure_openai_api_version':'2023-05-15',
                 'azure_openai_max_tokens':4096,
                 'azure_openai_temperature':0.7,
-                'force_extract_previously_extracted_text':False,
+                'force_re_extract':False,
                 'llm_filter_citations':True,
                 'local_llm_model_type':'llama',
                 'local_llm_chat_template_format':'llama3',
@@ -373,8 +405,10 @@ def read_config(keys, default_value=None, filename='config.json'):
                 'local_llm_top_p':0.95,
                 'local_llm_min_p':0.05,
                 'local_llm_n_keep':0,
-                'server_timeout_seconds':10,
-                'server_retry_attempts':3,
+                'llama_cpp_server_timeout_seconds':3,
+                'llama_cpp_server_retry_attempts':200,
+                'hf_waitress_server_timeout_seconds':3,
+                'hf_waitress_server_retry_attempts':200,
                 'whoosh_search_weighting':'BM25F',
                 'fetch_top_k_results_from_whoosh':50,
                 'fetch_top_k_results_from_vectordb':50,
@@ -575,7 +609,7 @@ def read_config(keys, default_value=None, filename='config.json'):
     return return_dict
 
 
-def read_hf_config(keys, default_value=None, filename='hf_config.json'):
+def read_hf_config(keys:list, default_value=None, filename='hf_config.json') -> dict:
     
     # Open hf_config file to read-in all current params:
     try:
@@ -702,65 +736,29 @@ except Exception as e:
     handle_local_error("Failed to create Base App Directory, encountered error: ", e)
         
 try:
-    read_return = read_config([
-        'model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 
+    read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 
         'docs_to_knowledge_graph_dir', 'upload_staging_folder', 'graph_db_data_directory'])
-    model_dir = read_return['model_dir']
-    highlighted_docs = read_return['highlighted_docs']
-    upload_folder = read_return['upload_folder']
-    ocr_pdfs = read_return['ocr_pdfs']
-    pdfs_to_txts = read_return['pdfs_to_txts']
-    docs_to_knowledge_graph_dir = read_return['docs_to_knowledge_graph_dir']
-    upload_staging_folder = read_return['upload_staging_folder']
-    graph_db_data_directory = read_return['graph_db_data_directory']
 except Exception as e:
     handle_local_error("Could not read paths for app directories (model_dir, highlighted_docs, upload_folder, etc.) from config.json on boot, encountered error: ", e)
 
 try:
-    os.makedirs(model_dir, exist_ok=True)
+    os.makedirs(read_return['model_dir'], exist_ok=True)
+    os.makedirs(read_return['highlighted_docs'], exist_ok=True)
+    os.makedirs(read_return['upload_folder'], exist_ok=True)
+    os.makedirs(read_return['ocr_pdfs'], exist_ok=True)
+    os.makedirs(read_return['pdfs_to_txts'], exist_ok=True)
+    os.makedirs(read_return['docs_to_knowledge_graph_dir'], exist_ok=True)
+    os.makedirs(read_return['upload_staging_folder'], exist_ok=True)
+    os.makedirs(read_return['graph_db_data_directory'], exist_ok=True)
 except Exception as e:
-    handle_local_error("Failed to create Model Directory (model_dir), encountered error: ", e)
+    handle_local_error("Failed to create app directories, encountered error: ", e)
 
-try:
-    os.makedirs(highlighted_docs, exist_ok=True)
-except Exception as e:
-    handle_local_error("Failed to create Highlighted Docs Directory (highlighted_docs), encountered error: ", e)
+app.config['UPLOAD_FOLDER'] = read_return['upload_folder']
+app.config['DOWNLOAD_FOLDER'] = read_return['highlighted_docs']
+app.config['UPLOAD_STAGING_FOLDER'] = read_return['upload_staging_folder']
 
-try:
-    os.makedirs(upload_folder, exist_ok=True)
-except Exception as e:
-    handle_local_error("Failed to create Uploaded Docs Directory (upload_folder), encountered error: ", e)
-    
-try:
-    os.makedirs(ocr_pdfs, exist_ok=True)
-except Exception as e:
-    handle_local_error("Failed to create OCR'ed Docs Directory (ocr_pdfs), encountered error: ", e)
 
-try:
-    os.makedirs(pdfs_to_txts, exist_ok=True)
-except Exception as e:
-    handle_local_error("Failed to create txt-docs Directory (pdfs_to_txts), encountered error: ", e)
-
-try:
-    os.makedirs(docs_to_knowledge_graph_dir, exist_ok=True)
-except Exception as e:
-    handle_local_error("Failed to create docs_to_knowledge_graph_dir, encountered error: ", e)
-
-try:
-    os.makedirs(upload_staging_folder, exist_ok=True)
-except Exception as e:
-    handle_local_error("Failed to create upload_staging_folder, encountered error: ", e)
-
-try:
-    os.makedirs(graph_db_data_directory, exist_ok=True)
-except Exception as e:
-    handle_local_error("Failed to create graph_db_data_directory, encountered error: ", e)
-
-app.config['UPLOAD_FOLDER'] = upload_folder
-app.config['DOWNLOAD_FOLDER'] = highlighted_docs
-app.config['UPLOAD_STAGING_FOLDER'] = upload_staging_folder
-
-def clean_text_string(text_to_be_cleaned):
+def clean_text_string(text_to_be_cleaned:str) -> str:
     
     # Clean text
     # text_to_be_cleaned = text_to_be_cleaned.replace("►", "").replace("■", "").replace("▼", "")
@@ -782,8 +780,20 @@ def clean_text_string(text_to_be_cleaned):
 
 ############################------------File & Folder Management-------------###############################
 
-def load_json_file(file_path):
-    if os.path.exists(file_path):
+def load_json_file(file_path:pathlib.Path) -> dict:
+    '''
+    Load a JSON file into a dictionary
+
+    Args:
+        - file_path: pathlib.Path object of the file path
+
+    Returns:
+        - dict: The dictionary loaded from the JSON file
+
+    Raises:
+        - Exception: If the JSON file cannot be loaded
+    '''
+    if file_path.exists():
         try:
             with open(file_path, 'r') as file:
                 return json.load(file)
@@ -793,14 +803,22 @@ def load_json_file(file_path):
         return None   # NOTE: isinstance({}, dict) will return True so better to return None!
 
 
-def update_and_save_json_file(data: dict, file_path: str) -> bool:
+def update_and_save_json_file(data: dict, file_path: pathlib.Path) -> bool:
     '''
     - Updates a JSON file with the given data.
+
+    Args:
+        - data: dict of the data to be updated and saved
+        - file_path: pathlib.Path object of the file path
+
     - Returns:
         - bool: True if the file was updated and saved successfully, False otherwise.
+
+    Raises:
+        - Exception: If the JSON file cannot be updated and saved
     '''
     current_cache = {}
-    if os.path.exists(file_path):
+    if file_path.exists():
         try:
             with open(file_path, 'r') as file:
                 current_cache = json.load(file)
@@ -817,7 +835,21 @@ def update_and_save_json_file(data: dict, file_path: str) -> bool:
     return True
 
 
-def overwrite_json_file(data, file_path):
+def overwrite_json_file(data: dict, file_path: pathlib.Path) -> bool:
+    '''
+    Overwrite a JSON file with the given data.
+
+    Args:
+        - data: dict of the data to be overwritten
+        - file_path: pathlib.Path object of the file path
+
+    Returns:
+        - bool: True if the file was overwritten successfully, False otherwise
+
+    Raises:
+        - Exception: If the JSON file cannot be overwritten
+    '''
+
     try:
         with open(file_path, 'w') as file:
             json.dump(data, file, indent=4)
@@ -827,32 +859,57 @@ def overwrite_json_file(data, file_path):
     return True
 
 
-def remove_file_from_filepath(filepath):
+def remove_file_from_filepath(filepath: pathlib.Path):
     print(f"\n\nRemoving file from filepath: {filepath}\n\n")
     try:
-        os.remove(filepath)
+        os.remove(str(filepath))
         print(f"Successfully deleted file: {filepath}")
     except Exception as e:
         handle_local_error(f"Could not remove file from filepath: {filepath}, encountered error: ", e)
 
 
-def safe_remove_file_from_filepath(filepath):
+def safe_remove_file_from_filepath(filepath: pathlib.Path):
     try:
         remove_file_from_filepath(filepath)
     except Exception as e:
         handle_error_no_return(f"Could not remove file from filepath: {filepath}, encountered error: ", e)
 
 
-def remove_folder_from_filepath(folderpath):
+def remove_folder_from_filepath(folderpath:pathlib.Path):
+    '''
+    Remove a folder from a filepath.
+
+    Args:
+        - folderpath: pathlib.Path object of the folder path
+    
+
+    Returns:
+        - bool: True if the folder was removed successfully, False otherwise
+
+    Raises:
+        - Exception: If the folder cannot be removed
+    '''
     print(f"\n\nRemoving folder from filepath: {folderpath}\n\n")
     try:
-        shutil.rmtree(folderpath)
+        shutil.rmtree(str(folderpath))
         print(f"Successfully deleted folder: {folderpath}")
     except Exception as e:
         handle_local_error(f"Could not remove folder from filepath: {folderpath}, encountered error: ", e)
     
 
-def safe_remove_folder_from_filepath(folderpath):
+def safe_remove_folder_from_filepath(folderpath:pathlib.Path):
+    '''
+    Wrapper method to remove a folder from a filepath safely.
+
+    Args:
+        - folderpath: pathlib.Path object of the folder path
+
+    Returns:
+        - bool: True if the folder was removed successfully, False otherwise
+
+    Raises:
+        - Exception: If the folder cannot be removed
+    '''
     try:
         remove_folder_from_filepath(folderpath)
     except PermissionError:
@@ -866,44 +923,56 @@ def safe_remove_folder_from_filepath(folderpath):
 
 ############################----------------------------------------------###############################
 
-def get_path_to_knowledge_domain():
+def get_path_to_knowledge_domain() -> pathlib.Path:
+    '''
+    Get the path to the knowledge domain.
+
+    Returns:
+        - pathlib.Path: The path to the knowledge domain
+    '''
     print("Getting path to knowledge domain")
     try:
         read_return = read_config(['selected_knowledge_domain', 'knowledge_domain_base_directory'])
-        selected_knowledge_domain = read_return['selected_knowledge_domain']
-        knowledge_domain_base_directory = read_return['knowledge_domain_base_directory']
     except Exception as e:
-        handle_local_error("Missing values in config.json, could not get_path_to_knowledge_domain. Error: ", e)
+        handle_local_error("Missing values in config.json, could not get path to knowledge domain. Error: ", e)
 
     try:
-        path_to_knowledge_domain = os.path.join(knowledge_domain_base_directory, selected_knowledge_domain)
-        if not os.path.exists(path_to_knowledge_domain):
-            os.makedirs(path_to_knowledge_domain, exist_ok=True)
+        path_to_knowledge_domain = pathlib.Path(rf"{str(read_return['knowledge_domain_base_directory'])}").resolve() / str(read_return['selected_knowledge_domain'])
+
+        if not path_to_knowledge_domain.exists():
+            path_to_knowledge_domain.mkdir(parents=True, exist_ok=True)
             print(f"\n\nCreated knowledge domain directory: {path_to_knowledge_domain}\n\n")
+        
         return path_to_knowledge_domain
     except Exception as e:
         handle_local_error("Could not create knowledge domain folder, encountered error: ", e)
 
 
-def determine_whoosh_index_folder():
+def determine_whoosh_index_folder() -> pathlib.Path:
+    '''
+    Determine the path to the Whoosh Index folder.
+
+    Returns:
+        - pathlib.Path: The path to the Whoosh Index folder
+    '''
     print("Determining Whoosh Index Folder")
 
     path_to_knowledge_domain = get_path_to_knowledge_domain()
 
     try:
-        selected_embedding_model = read_config(['selected_embedding_model'])['selected_embedding_model']
+        selected_embedding_model = str(read_config(['selected_embedding_model'])['selected_embedding_model'])
     except Exception as e:
         handle_local_error("Could not determine selected embedding model, encountered error: ", e)
 
     try:
-        whoosh_index_folder = os.path.join(path_to_knowledge_domain, "vector_db_and_whoosh_index", selected_embedding_model, "whoosh_index")
+        whoosh_index_folder = path_to_knowledge_domain / "vector_db_and_whoosh_index" / selected_embedding_model / "whoosh_index"
     except Exception as e:
         handle_local_error("Could not determine whoosh index folder, encountered error: ", e)
 
     return whoosh_index_folder
 
 
-def create_whoosh_index_in_folder(whoosh_index_folder):
+def create_whoosh_index_in_folder(whoosh_index_folder:pathlib.Path):
 
     print(f"Creating Whoosh Index in folder: {whoosh_index_folder}")
     
@@ -917,37 +986,37 @@ def create_whoosh_index_in_folder(whoosh_index_folder):
 
     # Create a directory for persistent storage of the index to disk
     try:
-        os.makedirs(whoosh_index_folder, exist_ok=True)
+        whoosh_index_folder.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         handle_local_error("Failed to create directory for the Whoosh Index, encountered error: ", e)
     # Create the index based on the schema definted above
     try:
-        ix = create_in(whoosh_index_folder, schema)
+        ix = create_in(str(whoosh_index_folder), schema)
     except Exception as e:
         handle_local_error("Failed to create Whoosh Index, encountered error: ", e)
 
     return ix
 
 
-def get_whoosh_index_object_for_folder(whoosh_index_folder):
+def get_whoosh_index_object_for_folder(whoosh_index_folder:pathlib.Path):
 
     print(f"Getting Whoosh Index Object for folder: {whoosh_index_folder}")
 
-    if not os.path.exists(whoosh_index_folder):
+    if not whoosh_index_folder.exists():
         try:
             ix = create_whoosh_index_in_folder(whoosh_index_folder)
         except Exception as e:
             handle_local_error("Failed to create Whoosh Index, encountered error: ", e)
     else:
         try:
-            ix = open_dir(whoosh_index_folder)
+            ix = open_dir(str(whoosh_index_folder))
         except Exception as e:
             handle_local_error("Failed to open Whoosh Index, encountered error: ", e)
 
     return ix
 
 
-def whoosh_indexer(new_chunks):
+def whoosh_indexer(new_chunks:list[dict]):
 
     print("\n\nWhoosh Indexing Chunks\n\n")
     
@@ -989,7 +1058,7 @@ def search_whoosh_index(query):
         whoosh_search_weighting = read_return['whoosh_search_weighting']
         min_lexical_similarity_threshold = float(read_return['min_lexical_similarity_threshold'])  # Like semantic search with ChromaDB, higher scores indicate better matches but the range with Whoosh is different!
     except Exception as e:
-        handle_local_error("Missing whoosh_index_folder in config.json for method search_whoosh_index. Error: ", e)
+        handle_local_error("Missing whoosh config in config.json for method search_whoosh_index. Error: ", e)
 
     try:
         whoosh_index_folder = determine_whoosh_index_folder()
@@ -1057,30 +1126,36 @@ def search_whoosh_index(query):
         return []
 
 
-def PDFtoAzureDocAiTXT(input_filepath):
+def PDFtoAzureDocAiTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
+    '''
+    OCR PDFs using Azure Document Intelligence OCR by iterating through each page, converting to a binary stream and then invoking `begin_analyze_document()`
 
-    print("\n\nProcessing Document - PDF to Azure DocAI TXT\n\n")
+    Args:
+        - input_pdf_filepath: pathlib.Path object of the PDF file to be OCR'ed
+
+    Returns:
+        - pathlib.Path object of the output text file
+    
+    Raises:
+        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+    '''
     
     try:
-        read_return = read_config(['azure_doc_ai_endpoint', 'azure_doc_ai_subscription_key', 'ocr_pdfs', 'force_extract_previously_extracted_text'])
-        azure_doc_ai_endpoint = read_return['azure_doc_ai_endpoint']
-        azure_doc_ai_subscription_key = read_return['azure_doc_ai_subscription_key']
-        ocr_pdfs = read_return['ocr_pdfs']
-        force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
+        read_return = read_config(['azure_doc_ai_endpoint', 'azure_doc_ai_subscription_key', 'ocr_pdfs', 'force_re_extract'])
     except Exception as e:
         handle_local_error("Missing Azure OCR Endpoint URL & Subscription Key for Azure Document Intelligence OCR, please provide required API config. Error: ", e)
 
     try:
-        source_filename = os.path.basename(input_filepath)
+        source_filename = input_pdf_filepath.name
+        print(f"\n\nApplying Azure DocAI OCR to PDF file: {source_filename}\n\n")
+
+        output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
+        output_text_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
     except Exception as e:
         handle_local_error("Could not extract filename, encountered error: ", e)
 
-    # Set output path
-    output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
-    output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
-
-    if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
-        if os.path.getsize(output_text_file_path) > 0:
+    if output_text_file_path.exists() and not read_return['force_re_extract']:
+        if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
             print("Azure-OCR'ed doc already exists and is not empty! Returning existing file.")
             return output_text_file_path
         else:
@@ -1093,12 +1168,12 @@ def PDFtoAzureDocAiTXT(input_filepath):
         handle_local_error("Could not initialize/access output text file, encountered error: ", e)
 
     try:
-        docai_client = DocumentAnalysisClient(azure_doc_ai_endpoint, AzureKeyCredential(azure_doc_ai_subscription_key))
+        docai_client = DocumentAnalysisClient(read_return['azure_doc_ai_endpoint'], AzureKeyCredential(read_return['azure_doc_ai_subscription_key']))
     except Exception as e:
         handle_local_error("Could not create ComputerVisionClient for Azure DocAI, encountered error: ", e)
 
     try:
-        with open(input_filepath, "rb") as pdf_file:
+        with open(input_pdf_filepath, "rb") as pdf_file:
             # 1 - Get page count:
             try:
                 pypdf_reader = PyPDF2.PdfReader(pdf_file)
@@ -1170,35 +1245,39 @@ def PDFtoAzureDocAiTXT(input_filepath):
 
     # Close all files
     output_text_file.close()
-
+    print(f"\n\nCompleted Azure-DocAI OCR for PDF file: {input_pdf_filepath}\n\n")
     return output_text_file_path
 
 
-def PDFtoAzureOCRTXT(input_filepath):
-    
-    print("\n\nProcessing Document - PDF to Azure OCR TXT\n\n")
-    
+def PDFtoAzureOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
+    '''
+    OCR PDFs using Azure Computer Vision OCR by iterating through each page, converting to a binary stream and then invoking `recognize_printed_text_in_stream()`
+
+    Args:
+        - input_pdf_filepath: pathlib.Path object of the PDF file to be OCR'ed
+
+    Returns:
+        - pathlib.Path object of the output text file
+
+    Raises:
+        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+    '''
     try:
-        read_return = read_config(['azure_ocr_endpoint', 'azure_ocr_subscription_key', 'ocr_pdfs', 'azure_cv_free_tier', 'force_extract_previously_extracted_text'])
-        azure_ocr_endpoint = read_return['azure_ocr_endpoint']
-        azure_ocr_subscription_key = read_return['azure_ocr_subscription_key']
-        ocr_pdfs = read_return['ocr_pdfs']
-        azure_cv_free_tier = read_return['azure_cv_free_tier']
-        force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
+        read_return = read_config(['azure_ocr_endpoint', 'azure_ocr_subscription_key', 'ocr_pdfs', 'azure_cv_free_tier', 'force_re_extract'])
     except Exception as e:
         handle_local_error("Missing Azure OCR Endpoint URL & Subscription Key for Azure OCR, please provide required API config. Error: ", e)
 
     try:
-        source_filename = os.path.basename(input_filepath)
+        source_filename = input_pdf_filepath.name
+        print(f"\n\nApplying Azure OCR to PDF file: {source_filename}\n\n")
+
+        output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
+        output_text_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
     except Exception as e:
         handle_local_error("Could not extract filename, encountered error: ", e)
 
-    # Set output path
-    output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
-    output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
-
-    if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
-        if os.path.getsize(output_text_file_path) > 0:
+    if output_text_file_path.exists() and not read_return['force_re_extract']:
+        if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
             print("OCR'ed doc already exists and is not empty! Returning existing file.")
             return output_text_file_path
         else:
@@ -1207,7 +1286,7 @@ def PDFtoAzureOCRTXT(input_filepath):
     # Convert PDF to  a list of images
     try:
         print("\n\nConverting PDF to a list of Images\n\n")
-        pages = convert_from_path(input_filepath, 300) # The convert_from_path() function from pdf2image lib intertnally uses Poppler to convert PDF pages to images, and then creates PIP Image objects from them. 300dpi - good balance between quality and performance
+        pages = convert_from_path(input_pdf_filepath, 300) # The convert-from_path() function from pdf2image lib intertnally uses Poppler to convert PDF pages to images, and then creates PIP Image objects from them. 300dpi - good balance between quality and performance
     except Exception as e:
         handle_local_error("Could not image PDF file, encountered error: ", e)
 
@@ -1218,7 +1297,7 @@ def PDFtoAzureOCRTXT(input_filepath):
         handle_local_error("Could not initialize/access output text file, encountered error: ", e)
 
     try:
-        computervision_client = ComputerVisionClient(azure_ocr_endpoint, CognitiveServicesCredentials(azure_ocr_subscription_key))
+        computervision_client = ComputerVisionClient(read_return['azure_ocr_endpoint'], CognitiveServicesCredentials(read_return['azure_ocr_subscription_key']))
     except Exception as e:
         handle_local_error("Could not create ComputerVisionClient for Azure OCR, encountered error: ", e)
     
@@ -1239,7 +1318,7 @@ def PDFtoAzureOCRTXT(input_filepath):
 
         # Send to Azure OCR
         try:
-            if azure_cv_free_tier:
+            if read_return['azure_cv_free_tier']:
                 if calls_made < 20:
                     print(f"Submitting page {page_number} to AzureComputerVision for OCR")
                     result = computervision_client.recognize_printed_text_in_stream(image=img_stream)
@@ -1293,15 +1372,13 @@ def PDFtoAzureOCRTXT(input_filepath):
 
     # Close all files
     output_text_file.close()
-
+    print(f"\n\nCompleted Azure-ComputerVision OCR for PDF file: {input_pdf_filepath}\n\n")
     return output_text_file_path
 
 
-def get_vision_llm_request_params():
+def get_vision_llm_request_params() -> tuple[str, dict, dict]:
     try:
         read_return = read_config(['vision_llm_local_url', 'vision_ocr_prompt'])
-        vision_llm_local_url = read_return['vision_llm_local_url']
-        vision_ocr_prompt = read_return['vision_ocr_prompt']
     except Exception as e:
         handle_local_error("Missing Vision LLM URL or Vision OCR Prompt for get_vision_llm_request_params, please provide required API config. Error: ", e)
 
@@ -1311,7 +1388,7 @@ def get_vision_llm_request_params():
                 "role": "user", 
                 "content": [
                     {"type": "image"},
-                    {"type": "text", "text": vision_ocr_prompt}
+                    {"type": "text", "text": read_return['vision_ocr_prompt']}
                 ]
             }
         ])
@@ -1322,12 +1399,22 @@ def get_vision_llm_request_params():
         'X-Max-New-Tokens': '5000'
     }
 
-    return vision_llm_local_url, vision_request_payload, headers
+    return read_return['vision_llm_local_url'], vision_request_payload, headers
 
 
-def PDFtoVisionLLMOCRTXT(input_filepath):
-    
-    print("\n\nProcessing Document - PDF to Vision LLM OCR TXT\n\n")
+def PDFtoVisionLLMOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
+    '''
+    OCR PDFs using Vision LLM by iterating through each page, converting to a binary stream and then invoking the Vision LLM
+
+    Args:
+        - input_filepath: pathlib.Path object of the PDF file to be OCR'ed
+
+    Returns:
+        - pathlib.Path object of the output text file
+
+    Raises:
+        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+    '''
 
     try:
         print("\n\nChecking if HF-Waitress Server is Online\n\n")
@@ -1340,23 +1427,21 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
         handle_error_no_return("Could not check if HF-Waitress Server is Online, presuming online and proceeding. Encountered error: ", e)
 
     try:
-        read_return = read_config(['ocr_pdfs', 'force_extract_previously_extracted_text'])
-        ocr_pdfs = read_return['ocr_pdfs']
-        force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
+        read_return = read_config(['ocr_pdfs', 'force_re_extract'])
     except Exception as e:
         handle_local_error("Missing OCR PDFs directory for Vision LLM-based OCR, please provide required API config. Error: ", e)
 
     try:
-        source_filename = os.path.basename(input_filepath)
+        source_filename = input_pdf_filepath.name
+        print(f"\n\nApplying Vision LLM OCR to PDF file: {source_filename}\n\n")
+
+        output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
+        output_text_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
     except Exception as e:
         handle_local_error("Could not extract filename, encountered error: ", e)
 
-    # Set output path
-    output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
-    output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
-
-    if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
-        if os.path.getsize(output_text_file_path) > 0:
+    if output_text_file_path.exists() and not read_return['force_re_extract']:
+        if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
             print("Vision LLM OCR'ed doc already exists and is not empty! Returning existing file.")
             return output_text_file_path
         else:
@@ -1366,7 +1451,7 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
     pil_image_object_list = []
     try:
         print("\n\nConverting PDF to a list of Images\n\n")
-        pil_image_object_list = convert_from_path(input_filepath, 300) # The convert_from_path() function from pdf2image lib intertnally uses Poppler to convert PDF pages to images, and then creates PIP Image objects from them. 300dpi - good balance between quality and performance
+        pil_image_object_list = convert_from_path(input_pdf_filepath, 300) # The convert-from_path() function from pdf2image lib intertnally uses Poppler to convert PDF pages to images, and then creates PIL Image objects from them. 300dpi - good balance between quality and performance
     except Exception as e:
         handle_local_error("Could not image PDF file, encountered error: ", e)
 
@@ -1427,11 +1512,11 @@ def PDFtoVisionLLMOCRTXT(input_filepath):
     
      # Close all files
     output_text_file.close()
-
+    print(f"\n\nCompleted Local Vision-LLM OCR for PDF file: {input_pdf_filepath}\n\n")
     return output_text_file_path
 
 
-def get_container_id_by_container_name(container_name):
+def get_container_id_by_container_name(container_name:str) -> str:
     print(f"\nChecking if container {container_name} is running...\n")
     try:
         result = subprocess.run(
@@ -1445,7 +1530,7 @@ def get_container_id_by_container_name(container_name):
         handle_local_error(f"Could not check if {container_name} Docker container is running, encountered error: ", e)
     
 
-def check_if_container_is_running(container_name):
+def check_if_container_is_running(container_name:str) -> bool:
     try:
         container_id = get_container_id_by_container_name(container_name)
         return container_id is not None and container_id != ""
@@ -1454,7 +1539,7 @@ def check_if_container_is_running(container_name):
         return False
 
 
-def start_kosmos_container():
+def start_kosmos_container() -> bool:
     try:
         read_return = read_config(['kosmos_container_name', 'minimum_free_vram_for_kosmos_ocr'])
         kosmos_container_name = read_return['kosmos_container_name']
@@ -1506,7 +1591,7 @@ def start_kosmos_container():
     return True
 
 
-def get_kosmos_request_params():
+def get_kosmos_request_params() -> tuple[str, dict, dict]:
     try:
         read_return = read_config(['kosmos_local_url', 'kosmos_task', 'kosmos_threshold', 'kosmos_offload_vram'])
         kosmos_local_url = read_return['kosmos_local_url'] + '/infer_file_stream'
@@ -1527,7 +1612,7 @@ def get_kosmos_request_params():
     return kosmos_local_url, payload, headers
 
 
-def kosmos_ocr_page(page_as_pil_image_object, retry_count=0):
+def kosmos_ocr_page(page_as_pil_image_object, retry_count:int=0) -> str:
     print(f"\n\nProcessing Page - Kosmos OCR\n\n")
     try:
         kosmos_local_url, payload, headers = get_kosmos_request_params()
@@ -1597,27 +1682,35 @@ def kosmos_ocr_page(page_as_pil_image_object, retry_count=0):
             img_stream.close()  # io.BytesIO objects are in-memory streams, and while the GC will eventually close them, it's best to do it explicitly here.
 
 
-def PDFtoKosmosOCRTXT(input_pdf_filepath):
-    print("\n\nProcessing Document - PDF to Kosmos OCR TXT\n\n")
+def PDFtoKosmosOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
+    '''
+    OCR PDFs using Kosmos by iterating through each page, converting to a binary stream and then invoking `infer_file_stream()`
 
+    Args:
+        - input_pdf_filepath: pathlib.Path object of the PDF file to be OCR'ed
+
+    Returns:
+        - pathlib.Path object of the output text file
+
+    Raises:
+        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+    '''
     try:
-        read_return = read_config(['ocr_pdfs', 'force_extract_previously_extracted_text'])
-        ocr_pdfs = read_return['ocr_pdfs']
-        force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
+        read_return = read_config(['ocr_pdfs', 'force_re_extract'])
     except Exception as e:
         handle_local_error("Missing OCR PDFs directory for Kosmos OCR, please provide required API config. Error: ", e)
 
     try:
-        source_filename = os.path.basename(input_pdf_filepath)
+        source_filename = input_pdf_filepath.name
+        print(f"\n\nApplying Kosmos OCR to PDF file: {source_filename}\n\n")
+
+        output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
+        output_text_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
     except Exception as e:
         handle_local_error("Could not extract filename, encountered error: ", e)
 
-    # Set output path
-    output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
-    output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name)
-
-    if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
-        if os.path.getsize(output_text_file_path) > 0:
+    if output_text_file_path.exists() and not read_return['force_re_extract']:
+        if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
             print("Kosmos OCR'ed doc already exists and is not empty! Returning existing file.")
             return output_text_file_path
         else:
@@ -1627,7 +1720,8 @@ def PDFtoKosmosOCRTXT(input_pdf_filepath):
     pil_image_object_list = []
     try:
         print("\n\nConverting PDF to a list of Images\n\n")
-        pil_image_object_list = convert_from_path(input_pdf_filepath, 300) # The convert_from_path() function from pdf2image lib intertnally uses Poppler to convert PDF pages to images, and then creates PIP Image objects from them. 300dpi - good balance between quality and performance
+        pil_image_object_list = convert_from_path(input_pdf_filepath, 300) # The convert-from_path() function from pdf2image lib intertnally uses Poppler to convert PDF pages to images, and then creates PIP Image objects from them. 300dpi - good balance between quality and performance
+        pdf_document_length = len(pil_image_object_list)
     except Exception as e:
         handle_local_error("Could not image PDF file, encountered error: ", e)
     
@@ -1638,10 +1732,9 @@ def PDFtoKosmosOCRTXT(input_pdf_filepath):
         handle_local_error("Could not initialize/access output text file, encountered error: ", e)
 
     # Initialize page number
-    page_number = 0
-    for count, image in enumerate(pil_image_object_list, start=1):
+    for page_number, image in enumerate(pil_image_object_list, start=1):
         try:
-            page_number = count
+            print(f"\nProcessing Page: {page_number} of {pdf_document_length} from file: {source_filename}\n")
             full_parsed_text = kosmos_ocr_page(image)
             output_text_file.write(f"[PAGE:{page_number}]\n{full_parsed_text}\n")
         except Exception as e:
@@ -1650,10 +1743,11 @@ def PDFtoKosmosOCRTXT(input_pdf_filepath):
     
     # Close & return
     output_text_file.close()
+    print(f"\n\nCompleted Kosmos OCR for PDF file: {input_pdf_filepath}\n\n")
     return output_text_file_path
 
 
-def get_docling_ocr_model(model_name_string):
+def get_docling_ocr_model(model_name_string:str):
     try:
         if model_name_string == 'easyocr':
             return EasyOcrOptions()
@@ -1674,7 +1768,7 @@ def get_docling_ocr_model(model_name_string):
         handle_local_error("Could not get Docling OCR model, encountered error: ", e)
         
 
-def get_docling_vlm_model(model_name_string):
+def get_docling_vlm_model(model_name_string:str):
     try:
         if model_name_string == 'smoldocling_mlx':
             return vlm_model_specs.SMOLDOCLING_MLX
@@ -1710,7 +1804,7 @@ def get_docling_vlm_model(model_name_string):
         handle_local_error("Could not get Docling VLM model, encountered error: ", e)
 
 
-def get_docling_config():
+def get_docling_config() -> dict:
     try:
         return read_config(
             [
@@ -1734,23 +1828,22 @@ def get_docling_config():
         handle_local_error("Could not read Docling config, encountered error: ", e)
 
 
-def get_docling_converter(docling_config):
+def get_docling_converter(docling_config:dict):
     try:
 
         if docling_config['docling_pipeline'] == 'vlm':
             
             # a. Set VLM Pipeline Options
-            global VLM_PIPELINE_OPTIONS
-            VLM_PIPELINE_OPTIONS = None
-            VLM_PIPELINE_OPTIONS = VlmPipelineOptions()
-            VLM_PIPELINE_OPTIONS.vlm_options = get_docling_vlm_model(docling_config['docling_vlm_model'])
+            vlm_pipeline_options = None
+            vlm_pipeline_options = VlmPipelineOptions()
+            vlm_pipeline_options.vlm_options = get_docling_vlm_model(docling_config['docling_vlm_model'])
 
             # b. VLM Converter
             vlm_converter = DocumentConverter(
                 format_options={
                     InputFormat.PDF: PdfFormatOption(
                         pipeline_cls=VlmPipeline,
-                        pipeline_options=VLM_PIPELINE_OPTIONS,
+                        pipeline_options=vlm_pipeline_options,
                     ),
                 }
             )
@@ -1759,18 +1852,17 @@ def get_docling_converter(docling_config):
 
         # Standard Pipeline
         # a. Set PDF Pipeline Options
-        global PDF_PIPELINE_OPTIONS
-        PDF_PIPELINE_OPTIONS = None
-        PDF_PIPELINE_OPTIONS = PdfPipelineOptions()
-        PDF_PIPELINE_OPTIONS.do_ocr = str(docling_config['docling_do_ocr']).lower() == 'true'
-        PDF_PIPELINE_OPTIONS.do_code_enrichment = str(docling_config['docling_do_code_enrichment']).lower() == 'true'
-        PDF_PIPELINE_OPTIONS.do_formula_enrichment = str(docling_config['docling_do_formula_enrichment']).lower() == 'true'
-        PDF_PIPELINE_OPTIONS.do_table_structure = str(docling_config['docling_do_table_structure']).lower() == 'true'
-        PDF_PIPELINE_OPTIONS.do_picture_classification = str(docling_config['docling_do_picture_classification']).lower() == 'true'
-        PDF_PIPELINE_OPTIONS.do_picture_description = str(docling_config['docling_do_picture_description']).lower() == 'true'
-        PDF_PIPELINE_OPTIONS.table_structure_options.mode = TableFormerMode.ACCURATE if str(docling_config['docling_table_structure_mode']) == 'accurate' else TableFormerMode.FAST
-        PDF_PIPELINE_OPTIONS.table_structure_options.do_cell_matching = str(docling_config['docling_do_cell_matching']).lower() == 'true'
-        PDF_PIPELINE_OPTIONS.accelerator_options = AcceleratorOptions(
+        pdf_pipeline_options = None
+        pdf_pipeline_options = PdfPipelineOptions()
+        pdf_pipeline_options.do_ocr = str(docling_config['docling_do_ocr']).lower() == 'true'
+        pdf_pipeline_options.do_code_enrichment = str(docling_config['docling_do_code_enrichment']).lower() == 'true'
+        pdf_pipeline_options.do_formula_enrichment = str(docling_config['docling_do_formula_enrichment']).lower() == 'true'
+        pdf_pipeline_options.do_table_structure = str(docling_config['docling_do_table_structure']).lower() == 'true'
+        pdf_pipeline_options.do_picture_classification = str(docling_config['docling_do_picture_classification']).lower() == 'true'
+        pdf_pipeline_options.do_picture_description = str(docling_config['docling_do_picture_description']).lower() == 'true'
+        pdf_pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE if str(docling_config['docling_table_structure_mode']) == 'accurate' else TableFormerMode.FAST
+        pdf_pipeline_options.table_structure_options.do_cell_matching = str(docling_config['docling_do_cell_matching']).lower() == 'true'
+        pdf_pipeline_options.accelerator_options = AcceleratorOptions(
             num_threads = int(docling_config['docling_num_threads']),
             device = AcceleratorDevice.AUTO,
             # cuda_use_flash_attention_2 = str(docling_config['docling_cuda_use_flash_attention_2']).lower() == 'true'
@@ -1779,13 +1871,13 @@ def get_docling_converter(docling_config):
         # b. Set OCR Options
         ocr_options = get_docling_ocr_model(str(docling_config['docling_ocr_model']))
         ocr_options.force_full_page_ocr = str(docling_config['docling_force_full_page_ocr']).lower() == 'true'
-        PDF_PIPELINE_OPTIONS.ocr_options = ocr_options
+        pdf_pipeline_options.ocr_options = ocr_options
 
         # c. Initialize converter and process
         converter = DocumentConverter(
             format_options={
                 InputFormat.PDF: PdfFormatOption(
-                    pipeline_options=PDF_PIPELINE_OPTIONS,
+                    pipeline_options=pdf_pipeline_options,
                 )
             }
         )
@@ -1796,7 +1888,7 @@ def get_docling_converter(docling_config):
         handle_local_error("Could not get Docling converter, encountered error: ", e)
 
 
-def docling_ocr_page(page_as_pdf_bytes, page_number, retry_count=0):
+def docling_ocr_page(page_as_pdf_bytes:bytes, page_number:int, retry_count:int=0) -> str:
     '''
     OCR a single page using Docling
     '''
@@ -1822,31 +1914,35 @@ def docling_ocr_page(page_as_pdf_bytes, page_number, retry_count=0):
             handle_local_error("Failed to receive a proper response from the Docling OCR service even after 3 retries, stopping execution. Encountered error: ", e)
 
 
-def PDFtoDoclingOCRTXT(input_pdf_filepath):
+def PDFtoDoclingOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
     '''
     OCR PDFs using Docling by iterating through each page, converting to a binary stream and then invoking `dolcing_ocr_page()`
+
+    Args:
+        - input_pdf_filepath: pathlib.Path object of the PDF file to be OCR'ed
+
+    Returns:
+        - pathlib.Path object of the output text file
+
+    Raises:
+        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
     '''
-
-    print("\n\nProcessing Document - PDF to Docling OCR TXT\n\n")
-
     try:
-        read_return = read_config(['force_extract_previously_extracted_text', 'ocr_pdfs'])
-        ocr_pdfs = read_return['ocr_pdfs']
-        force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
+        read_return = read_config(['force_re_extract', 'ocr_pdfs'])
     except Exception as e:
         handle_local_error("Could not read required values from config.json when attempting to convert PDF to TXT, encountered error: ", e)
     
     try:
-        source_filename = os.path.basename(input_pdf_filepath)
+        source_filename = input_pdf_filepath.name
+        print(f"\n\nApplying Docling OCR to PDF file: {source_filename}\n\n")
+
+        output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
+        output_text_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
     except Exception as e:
         handle_local_error("Could not extract filename, encountered error: ", e)
 
-    # Set output path
-    output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
-    output_text_file_path = os.path.join(ocr_pdfs, output_text_file_name).replace("\\","/")
-
-    if os.path.exists(output_text_file_path) and not force_extract_previously_extracted_text:
-        if os.path.getsize(output_text_file_path) > 0:
+    if output_text_file_path.exists() and not read_return['force_re_extract']:
+        if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
             print("Vision LLM OCR'ed doc already exists and is not empty! Returning existing file.")
             return output_text_file_path
         else:
@@ -1890,17 +1986,30 @@ def PDFtoDoclingOCRTXT(input_pdf_filepath):
     
     # Close & return
     output_text_file.close()
+    print(f"\n\nCompleted Docling OCR for PDF file: {input_pdf_filepath}\n\n")
     return output_text_file_path
 
 
-def UseBackupOcrOnPage(input_pdf_filepath, current_page_num):
+def UseBackupOcrOnPage(input_pdf_filepath:pathlib.Path, current_page_num:int) -> str:
+    '''
+    OCR a single page using the backup OCR service
+    
+    Args:
+        - input_pdf_filepath: pathlib.Path object of the PDF file to be OCR'ed
+        - current_page_num: int of the page number to be OCR'ed
+
+    Returns:
+        - str of the OCR'ed text
+    
+    Raises:
+        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+    '''
     try:
         read_return = read_config(['backup_ocr_service_choice'])
-        backup_ocr_service_choice = read_return['backup_ocr_service_choice']
     except Exception as e:
         handle_local_error("Could not read required values from config.json when attempting to use backup OCR on page, encountered error: ", e)
     
-    if backup_ocr_service_choice == 'Kosmos':
+    if read_return['backup_ocr_service_choice'] == 'Kosmos':
         try:
             current_page_as_pil_image_object = convert_from_path(
                 input_pdf_filepath,
@@ -1918,7 +2027,7 @@ def UseBackupOcrOnPage(input_pdf_filepath, current_page_num):
         except Exception as e:
             handle_local_error("Could not OCR page with Kosmos, skipping. Encountered error: ", e)
         
-    elif backup_ocr_service_choice == 'Docling':
+    elif read_return['backup_ocr_service_choice'] == 'Docling':
         try:
             pdf_document = fitz.open(input_pdf_filepath)
             # Extract single page as a new PDF
@@ -1936,36 +2045,41 @@ def UseBackupOcrOnPage(input_pdf_filepath, current_page_num):
             handle_local_error("Could not OCR page with Docling, skipping. Encountered error: ", e)
 
     else:
-        handle_local_error("Invalid backup OCR service choice, skipping. Encountered error: ", backup_ocr_service_choice)
+        handle_local_error("Invalid backup OCR service choice, skipping. Encountered error: ", read_return['backup_ocr_service_choice'])
     
 
-def PDFtoTXT(input_pdf_filepath):
+def PDFtoTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
+    '''
+    OCR PDFs using PyPDF2 by iterating through each page, converting to a binary stream and then invoking `Use-BackupOcrOnPage()`
 
-    print("\n\nProcessing Document - PDF to TXT\n\n")
+    Args:
+        - input_pdf_filepath: pathlib.Path object of the PDF file to be OCR'ed
 
+    Returns:
+        - pathlib.Path object of the output text file
+
+    Raises:
+        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+    '''
     try:
-        read_return = read_config(['pdfs_to_txts', 'force_extract_previously_extracted_text', 'ocr_pdfs', 'min_char_threshold_for_backup_ocr'])
-        pdfs_to_txts = read_return['pdfs_to_txts']
-        ocr_pdfs = read_return['ocr_pdfs']
-        force_extract_previously_extracted_text = str(read_return['force_extract_previously_extracted_text']).lower() == 'true'
-        min_char_threshold_for_backup_ocr = int(read_return['min_char_threshold_for_backup_ocr'])
+        read_return = read_config(['pdfs_to_txts', 'force_re_extract', 'ocr_pdfs', 'min_char_threshold_for_backup_ocr'])
     except Exception as e:
         handle_local_error("Could not read required values from config.json when attempting to convert PDF to TXT, encountered error: ", e)
 
     try:
-        source_filename = os.path.basename(input_pdf_filepath)
+        source_filename = input_pdf_filepath.name
+        print(f"\n\nApplying PyPDF2 OCR to PDF file: {source_filename}\n\n")
 
-        # Set output path
-        output_text_file_name = source_filename.replace(".pdf",".txt")   # Using this instead of os.path.splitext() in case filename contains a period
-        output_text_file_path = os.path.join(pdfs_to_txts, output_text_file_name)
-        ocr_pdf_file_path = os.path.join(ocr_pdfs, output_text_file_name)
+        output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
+        output_text_file_path = pathlib.Path(rf"{read_return['pdfs_to_txts']}").resolve() / output_text_file_name   # normalize and append filename
+        ocr_pdf_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
 
-        if not force_extract_previously_extracted_text:
-            if os.path.exists(output_text_file_path) and os.path.getsize(output_text_file_path) > 0:
+        if not read_return['force_re_extract']:
+            if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
                 print("PyPDF2-extracted .txt already exists and is not empty! Returning existing file.")
                 return output_text_file_path
-            elif os.path.exists(ocr_pdf_file_path) and os.path.getsize(ocr_pdf_file_path) > 0:
-                print("Kosmos OCR'ed .txt already exists and is not empty! Returning existing file.")
+            elif ocr_pdf_file_path.is_file() and ocr_pdf_file_path.stat().st_size > 0:
+                print("OCR'ed .txt already exists and is not empty! Returning existing file.")
                 return ocr_pdf_file_path
             else:
                 print("PyPDF2-extracted .txt already exists but is empty! Overwriting with new .txt file.")
@@ -1974,7 +2088,7 @@ def PDFtoTXT(input_pdf_filepath):
         handle_local_error("Could not complete necessary file system operations when attempting to convert PDF to TXT, encountered error: ", e)
     
     try:
-        with open(input_pdf_filepath, 'rb') as pdf_file_obj:
+        with open(input_pdf_filepath, 'rb') as pdf_file_obj:    # Open PDF file as binary stream. The `with open()` block will automatically close the file after the block is executed.
             pdf_reader = PyPDF2.PdfReader(pdf_file_obj)
             num_pages = len(pdf_reader.pages)
 
@@ -1982,12 +2096,12 @@ def PDFtoTXT(input_pdf_filepath):
 
                 # Loop through all the pages and extract text
                 for page_num in range(num_pages):
-                    print(f"Processing page {page_num+1} of {num_pages}")
                     current_page_num = int(page_num) + 1
+                    print(f"\nProcessing page {current_page_num} of {num_pages} from file: {source_filename}\n")
+
                     use_backup_ocr = False
                     pypdf2_text = ""
                     ocr_text = ""
-                    
                     try:
                         page = pdf_reader.pages[page_num]
                         pypdf2_text = page.extract_text()
@@ -1996,7 +2110,7 @@ def PDFtoTXT(input_pdf_filepath):
                         use_backup_ocr = True
                         pypdf2_text = ""
 
-                    if use_backup_ocr or pypdf2_text is None or len(pypdf2_text) < min_char_threshold_for_backup_ocr:
+                    if use_backup_ocr or pypdf2_text is None or len(pypdf2_text) < read_return['min_char_threshold_for_backup_ocr']:
                         print(f"OCR Necessary - Attempting to OCR page {current_page_num} of {num_pages} using backup OCR method.")
                         try:
                             ocr_text = UseBackupOcrOnPage(input_pdf_filepath, current_page_num)
@@ -2014,6 +2128,7 @@ def PDFtoTXT(input_pdf_filepath):
     except Exception as e:
         handle_local_error("Could not process PDF file, encountered error: ", e)
 
+    print(f"\n\nCompleted default-extraction for PDF file: {input_pdf_filepath}\n\n")
     return output_text_file_path
 
 
@@ -2072,7 +2187,7 @@ def init_and_connect_to_docs_loaded_db() -> tuple[sqlite3.Connection, sqlite3.Cu
     return conn, cursor
 
 
-def is_doc_already_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
+def is_doc_already_loaded_to_db(document_name:str, embedding_model:str, chunk_size:int, chunk_overlap:int, knowledge_domain:str) -> bool:
     print(f"Checking if {document_name} already exists in the appropriate records DB")
 
     try:
@@ -2104,7 +2219,7 @@ def is_doc_already_loaded_to_db(document_name, embedding_model, chunk_size, chun
         return False
 
 
-def record_doc_loaded_to_db(document_name, chunk_size, chunk_overlap):
+def record_doc_loaded_to_db(document_name:str, chunk_size:int, chunk_overlap:int) -> bool:
 
     print("\n\nRecording document loading to records DB\n\n")
 
@@ -2144,7 +2259,7 @@ def split_embeddings_list(all_splits, max_emmbeddings_list_size):
         Also, issues may arise if attmepting to enumerate() as there's an implicit split_docs[i] indexing, especially if anywhere in the loop you then try a len() on the yielded object!
         This is because you would be using the generator multiple times (once for length, then again for iteration): Generators are "single-use" iterators - once you iterate through them, 
         they're exhausted and can't be used again without recreating them. Plus, they don't support random access or length checking because they generate values on-the-fly!
-        Hence this method is not used by core_embedder(), but the code retained here for future reference and debugging/documentation purposes!
+        Hence this method is not used by core-embedder(), but the code retained here for future reference and debugging/documentation purposes!
         '''
 
 
@@ -2158,7 +2273,21 @@ class Document:
         return f"Document(page_content='{self.page_content}', metadata={self.metadata})"
 
 # Consider turning this into a generator function in the future for efficiency when dealing with large files!
-def chunk_docs_with_page_numbers(input_file, chunk_size=250):
+def chunk_docs_with_page_numbers(input_filepath:pathlib.Path, chunk_size:int=250) -> list[dict]:
+    '''
+    Chunk the document into smaller chunks, and then store the chunks in the Documents list
+
+    Args:
+        - input_file: pathlib.Path object of the input file
+        - chunk_size: int of the chunk size
+
+    Returns:
+        - list[dict]: The list of document chunks
+
+    Raises:
+        - Exception: If the document cannot be chunked
+    '''
+
     print("\nGenerating Document Chunks\n")
     documents = []
     current_chunk = ""
@@ -2167,12 +2296,12 @@ def chunk_docs_with_page_numbers(input_file, chunk_size=250):
     def add_chunk(chunk, page):
         if chunk.strip():   #if chunk is not empty!
             #print(f"\n\nAdding chunk from page {page}: {chunk.strip()}\n\n")
-            input_file_name = os.path.basename(input_file)
+            input_file_name = input_filepath.name
             source_link = f"http://llm-citations-database.net/source?doc_name={input_file_name}&page_number={page}"
             documents.append({
                 'content': chunk.strip(),
                 'source_link': source_link,
-                'source': input_file,
+                'source': str(input_filepath),
                 'page_number': page
             })
     
@@ -2193,7 +2322,7 @@ def chunk_docs_with_page_numbers(input_file, chunk_size=250):
         return current_chunk_for_eval
     
     try:
-        with open(input_file, 'r', encoding='utf-8') as file:
+        with open(input_filepath, 'r', encoding='utf-8') as file:
             for line in file:
                 if line.startswith('[PAGE:'):   # Our text-extraction method adds '[PAGE:' to the beginning of each page, and these are on a separate line, so this line will only contain the added page number. Example: [PAGE:1]
                     new_page = int(line.strip()[6:-1])  #strip() removes leading and trailing whitespace, [6:-1] removes the [PAGE: and ]
@@ -2218,11 +2347,25 @@ def chunk_docs_with_page_numbers(input_file, chunk_size=250):
     return documents
 
 
-def create_vector_db_directory(path_to_knowledge_domain, embedding_function):
+def create_vector_db_directory(path_to_knowledge_domain:pathlib.Path, embedding_function:str) -> pathlib.Path:
+    '''
+    Create the vector_db directory.
+
+    Args:
+        - path_to_knowledge_domain: pathlib.Path of the path to the knowledge domain
+        - embedding_function: str of the embedding function
+
+    Returns:
+        - pathlib.Path: The path to the vector_db directory
+
+    Raises:
+        - Exception: If the vector_db directory cannot be created
+    '''
+
     try:
-        vector_db_path = os.path.join(path_to_knowledge_domain, "vector_db_and_whoosh_index", embedding_function)
-        if not os.path.exists(vector_db_path):
-            os.makedirs(vector_db_path, exist_ok=True)
+        vector_db_path = path_to_knowledge_domain / "vector_db_and_whoosh_index" / embedding_function
+        if not vector_db_path.exists():
+            vector_db_path.mkdir(parents=True, exist_ok=True)
             print(f"\n\nCreated vector_db directory: {vector_db_path}\n\n")
         else:
             print(f"\n\nVector_db directory already exists, returning path: {vector_db_path}\n\n")
@@ -2231,7 +2374,22 @@ def create_vector_db_directory(path_to_knowledge_domain, embedding_function):
         handle_local_error("Could not create vector_db directory, encountered error: ", e)
 
 
-def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
+def core_embedder(chunks:list[dict], selected_embedding_model:str, path_to_knowledge_domain:pathlib.Path) -> bool:
+    '''
+    Embed the chunks and store them in the VectorDB.
+
+    Args:
+        - chunks: list[dict] of the chunks
+        - selected_embedding_model: str of the selected embedding model
+        - path_to_knowledge_domain: pathlib.Path of the path to the knowledge domain
+
+    Returns:
+        - bool: True if the chunks were embedded and stored in the VectorDB, False otherwise
+
+    Raises:
+        - Exception: If the chunks cannot be embedded or stored in the VectorDB
+    '''
+
     # Convert Chunks to Document objects:
     try:    # To generate a list of Document objects, each containing a 'page_content' string, and a 'metadata' dictionary with 'source_link', 'page_number', and 'source' keys
         numbered_splits = [Document(page_content=chunk['content'], metadata={'source_link':chunk['source_link'], 'page_number': chunk['page_number'], 'source': chunk['source']}) for chunk in chunks]
@@ -2268,7 +2426,7 @@ def core_embedder(chunks, selected_embedding_model, path_to_knowledge_domain):
     print("Storing to VectorDB: ChromaDB")
     try:
         # Initialize Chroma Client and collection
-        chroma_client = chromadb.PersistentClient(path=vector_db_path, settings=chromadb.Settings(allow_reset=True))
+        chroma_client = chromadb.PersistentClient(path=str(vector_db_path), settings=chromadb.Settings(allow_reset=True))
         collection = chroma_client.get_or_create_collection(name="knowledge_domain", metadata={"hnsw:space": "cosine"}) # By default, ChromaDB returns the L2 distance (lower is better), but we want cosine distance (higher is better)
 
         batch_size = 5000
@@ -2367,7 +2525,23 @@ def hf_waitress_non_streaming_request_response_handler(endpoint_url, headers, pa
         handle_local_error("Failed /completions request to extract entities and relationships from chunk, encountered error: ", e)
 
 
-def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payload, cache_filepath: str = None):
+def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payload, cache_filepath: pathlib.Path = None) -> dict:
+    '''
+    Handle the response from the exl2-grapher API
+
+    Args:
+        - endpoint_url: str of the endpoint URL
+        - headers: dict of the headers
+        - payload: str of the payload
+        - cache_filepath: pathlib.Path object of the cache filepath
+
+    Returns:
+        - dict: The full response from the exl2-grapher API
+
+    Raises:
+        - Exception: If the response cannot be handled
+    '''
+
     print(f"\nHF-Waitress Bulk-Stream Request Response Handler Invoked\n")
     try:
         response = requests.post(endpoint_url, headers=headers, data=payload, stream=True)
@@ -2441,7 +2615,7 @@ def graphing_request_response_handler(grapher_url, headers, payload):
         handle_local_error("Failed /completions request to extract entities and relationships from chunk, encountered error: ", e)
 
 
-def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mode: bool = False, cache_filepath: str = None) -> dict:
+def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mode: bool = False, cache_filepath: pathlib.Path = None) -> dict:
     '''
     Appends the `entities_and_relationships` key to each chunk_entities dict, returning the following structure:
 
@@ -2623,7 +2797,7 @@ def bring_graph_summarizer_model_online():  # Launch HF-Waitress instance with g
             'graph_models_base_directory_name', 'graph_summary_generator_directory_name',
             'minimum_free_vram_for_graph_summarizer_model', 'graph_model_access_url', 'graph_model_server_port'
         ])
-        hf_waitress_graph_summarizer_server_path = os.path.normpath(os.path.join(os.getcwd(), config_data['graph_models_base_directory_name'], config_data['graph_summary_generator_directory_name']))    # normpath() is used to "normalize" i.e. convert to a path that is appropriate for the current OS
+        hf_waitress_graph_summarizer_server_path = pathlib.Path.cwd() / str(config_data['graph_models_base_directory_name']) / str(config_data['graph_summary_generator_directory_name'])
         print(f"\nLaunching HF-Waitress instance with graph summarizer model at path: {hf_waitress_graph_summarizer_server_path}\n")
     except Exception as e:
         handle_local_error("Could not read graph model config, encountered error: ", e)
@@ -2682,7 +2856,20 @@ def bring_graph_summarizer_model_online():  # Launch HF-Waitress instance with g
     return False
 
 
-def summary_generator_for_graph_db(chunk_entities=None, cache_filepath: str = None):
+def summary_generator_for_graph_db(chunk_entities=None, cache_filepath: pathlib.Path = None) -> dict:
+    '''
+    Generate summaries for the graph DB.
+
+    Args:
+        - chunk_entities: dict of the chunk entities
+        - cache_filepath: pathlib.Path object of the cache filepath
+
+    Returns:
+        - dict: The full response from the exl2-grapher API
+
+    Raises:
+        - Exception: If the summaries cannot be generated
+    '''
     print("\nGenerating summaries...\n")
 
     if chunk_entities is None:
@@ -2887,7 +3074,7 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
             handle_error_no_return(f"Could NOT create relationship from data: {relationship} in {selected_knowledge_domain} graph DB, skipping. Encountered error: ", e)
 
 
-def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB, skip_summary_generation: bool = False, summaries_filepath: str = None):
+def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB, skip_summary_generation: bool = False, summaries_filepath: pathlib.Path = None):
     '''
     Receives a complete chunk_entities dict:
 
@@ -3011,7 +3198,7 @@ def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with k
             'graph_extraction_model_directory_name', 'graph_summary_generator_directory_name',
             'minimum_free_vram_for_graph_extraction_model', 'graph_summarizer_access_url', 'graph_summarizer_server_port'
         ])
-        hf_waitress_kb_generator_server_path = os.path.normpath(os.path.join(os.getcwd(), config_data['graph_models_base_directory_name'], config_data['graph_extraction_model_directory_name']))    # normpath() is used to "normalize" i.e. convert to a path that is appropriate for the current OS
+        hf_waitress_kb_generator_server_path = pathlib.Path.cwd() / str(config_data['graph_models_base_directory_name']) / str(config_data['graph_extraction_model_directory_name'])
         print(f"\nLaunching HF-Waitress instance with kb-generator model at path: {hf_waitress_kb_generator_server_path}\n")
     except Exception as e:
         handle_local_error("Could not read graph model config, encountered error: ", e)
@@ -3131,8 +3318,7 @@ def assemble_chunks_for_graph_db(chunks):
         for count, chunk in enumerate(chunks):
 
             try:
-                chunk_source_filepath = chunk['source']
-                source_filename = os.path.basename(chunk_source_filepath)
+                source_filename = pathlib.Path(rf"{str(chunk['source'])}").resolve().name
 
                 try:    # page numbers while useful are non-essential which is why I'm wrapping in a dedicated try-except block that does not raise an error!
                     page_number_list.append(int(chunk['page_number']))
@@ -3179,7 +3365,24 @@ def assemble_chunks_for_graph_db(chunks):
     return chunk_entities
 
 
-def determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_filepath):
+def determine_graph_cache_reuse(entities_and_relationships_filepath:pathlib.Path, summaries_filepath:pathlib.Path) -> tuple[bool, bool, dict]:
+    '''
+    Determine if the graph cache should be reused, and if so, load the complete chunk entities from the cache.
+
+    Args:
+        - entities_and_relationships_filepath: pathlib.Path object of the entities and relationships cache filepath
+        - summaries_filepath: pathlib.Path object of the summaries cache filepath
+    
+    Returns:
+        - tuple[bool, bool, dict]: A tuple containing:
+            - bool: True if the graph cache should be reused, False otherwise
+            - bool: True if the summary generation should be skipped, False otherwise
+            - dict: The complete chunk entities if the graph cache should be reused, None otherwise
+
+    Raises:
+        - Exception: If the graph cache config cannot be determined
+    '''
+
     try:
         read_return = read_config(['reuse_graph_extraction_cache_without_validation', 'reuse_graph_summary_cache_without_validation', 'skip_summary_generation'])
         reuse_graph_extraction_cache_without_validation = str(read_return['reuse_graph_extraction_cache_without_validation']).lower() == 'true'
@@ -3191,7 +3394,7 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_f
     except Exception as e:
         handle_local_error("Could not determine graph cache config, encountered error: ", e)
     
-    if reuse_graph_extraction_cache_without_validation and os.path.exists(entities_and_relationships_filepath):
+    if reuse_graph_extraction_cache_without_validation and entities_and_relationships_filepath.exists():
         try:
             candidate = load_json_file(entities_and_relationships_filepath)
             if isinstance(candidate, dict) and candidate != {}: # TODO: validation of the JSON file format
@@ -3205,7 +3408,7 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_f
             loaded_entities_and_relationships = False
             handle_error_no_return("Could not load previously extracted graph entities and relationships, encountered error: ", e)
     
-    if reuse_graph_summary_cache_without_validation and os.path.exists(summaries_filepath):
+    if reuse_graph_summary_cache_without_validation and summaries_filepath.exists():
         try:
             candidate = load_json_file(summaries_filepath)
             if isinstance(candidate, dict) and candidate != {}: # TODO: validation of the JSON file format
@@ -3226,16 +3429,15 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_f
     return reuse_previous_extract, skip_summary_generation, complete_chunk_entities
 
 
-def get_graph_cache_filepaths(input_file, docs_to_knowledge_graph_dir):
+def get_graph_cache_filepaths(input_filepath:pathlib.Path, docs_to_knowledge_graph_dir:pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     try:
-        input_filename = os.path.basename(input_file)
-        input_filename_no_ext = str(os.path.splitext(input_filename)[0]) # os.path.splitext() returns a tuple containing the path's name and extension separately
+        input_filename_no_ext = str(input_filepath.stem)
         
         entities_and_relationships_filename = input_filename_no_ext + '_entities_and_relationships.json'
-        entities_and_relationships_filepath = os.path.join(docs_to_knowledge_graph_dir, entities_and_relationships_filename)
-
+        entities_and_relationships_filepath = docs_to_knowledge_graph_dir / entities_and_relationships_filename
+        
         summaries_filename = input_filename_no_ext + '_summaries.json'
-        summaries_filepath = os.path.join(docs_to_knowledge_graph_dir, summaries_filename)
+        summaries_filepath = docs_to_knowledge_graph_dir / summaries_filename
 
         return entities_and_relationships_filepath, summaries_filepath
     
@@ -3246,16 +3448,12 @@ def get_graph_cache_filepaths(input_file, docs_to_knowledge_graph_dir):
 def read_graph_generator_config():
     try:
         read_return = read_config(['docs_to_knowledge_graph_dir', 'selected_knowledge_domain', 'apply_clustering_to_graph_db_on_doc_load'])
-        docs_to_knowledge_graph_dir = read_return['docs_to_knowledge_graph_dir']
-        selected_knowledge_domain = read_return['selected_knowledge_domain']
-        apply_clustering_to_graph_db_on_doc_load = str(read_return['apply_clustering_to_graph_db_on_doc_load']).lower() == 'true'
+        return read_return['docs_to_knowledge_graph_dir'], read_return['selected_knowledge_domain'], str(read_return['apply_clustering_to_graph_db_on_doc_load']).lower() == 'true'
     except Exception as e:
-        handle_error_no_return("Could not read graph generator config, encountered error: ", e)
-    
-    return docs_to_knowledge_graph_dir, selected_knowledge_domain, apply_clustering_to_graph_db_on_doc_load
+        handle_local_error("Could not read graph generator config, encountered error: ", e)
 
 
-def graph_generator(chunks, input_file):
+def graph_generator(chunks:list[dict], input_filepath:pathlib.Path) -> bool:
     '''
     Assembles document chunks (via assemble_chunks_for_graph_db()) into a dictionary of entities for storage to the GraphDB:
 
@@ -3290,7 +3488,7 @@ def graph_generator(chunks, input_file):
         handle_local_error("Could not read graph generator config, encountered error: ", e)
 
     try:
-        entities_and_relationships_filepath, summaries_filepath = get_graph_cache_filepaths(input_file, docs_to_knowledge_graph_dir)
+        entities_and_relationships_filepath, summaries_filepath = get_graph_cache_filepaths(input_filepath, pathlib.Path(rf"{docs_to_knowledge_graph_dir}").resolve())
     except Exception as e:
         handle_local_error("Could not set graph generator file names and paths, encountered error: ", e)
 
@@ -3336,25 +3534,32 @@ def graph_generator(chunks, input_file):
     return True
 
 
-def read_embeddings_config() -> tuple[str, str]:
+def read_embeddings_config() -> tuple[str, pathlib.Path, int, int, bool, bool]:
     print("\n\nReading embeddings config\n\n")
     try:
         read_return = read_config(['selected_embedding_model', 'chunk_size', 'chunk_overlap', 'upload_doc_to_graph_db', 'perform_only_graph_rag'])
-        selected_embedding_model = read_return['selected_embedding_model']
-        chunk_sz = read_return['chunk_size']
-        chunk_olp = read_return['chunk_overlap']
-        upload_doc_to_graph_db = str(read_return['upload_doc_to_graph_db']).lower() == 'true'
-        perform_only_graph_rag = str(read_return['perform_only_graph_rag']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Missing values in config.json, could not read_embeddings_config. Error: ", e)
+        handle_local_error("Missing values in config.json, could not read embeddings config. Error: ", e)
 
     path_to_knowledge_domain = get_path_to_knowledge_domain()
-
-    return selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp, upload_doc_to_graph_db, perform_only_graph_rag
+    return read_return['selected_embedding_model'], path_to_knowledge_domain, int(read_return['chunk_size']), int(read_return['chunk_overlap']), str(read_return['upload_doc_to_graph_db']).lower() == 'true', str(read_return['perform_only_graph_rag']).lower() == 'true'
 
 
 # Document vectorization and chunking
-def whoosh_embed_and_graph_doc_chunks(input_file):
+def whoosh_embed_and_graph_doc_chunks(input_filepath:pathlib.Path) -> tuple[int, int]:
+    '''
+    Vectorize and chunk the document, and then store the chunks in the VectorDB and GraphDB
+
+    Args:
+        - input_file: pathlib.Path object of the input file
+
+    Returns:
+        - tuple[int, int]: The chunk size and chunk overlap
+
+    Raises:
+        - Exception: If the document cannot be vectorized and chunked
+    '''
+
     print("\n\nCore Document Vectorization and Chunking Function Invoked\n\n")
 
     # Read Embeddings Config
@@ -3366,7 +3571,7 @@ def whoosh_embed_and_graph_doc_chunks(input_file):
     # Chunk Source Data
     print("Chunking Doc")
     try:
-        chunks = chunk_docs_with_page_numbers(input_file, chunk_sz) # Generates a list of dictionaries, each containing 'content', 'source', and 'page_number' as keys
+        chunks = chunk_docs_with_page_numbers(input_filepath, chunk_sz) # Generates a list of dictionaries, each containing 'content', 'source', and 'page_number' as keys
         if len(chunks) > 0:
             if not perform_only_graph_rag:
                 
@@ -3385,7 +3590,7 @@ def whoosh_embed_and_graph_doc_chunks(input_file):
             
             if upload_doc_to_graph_db:
                 try:
-                    graph_generator(chunks, input_file)
+                    graph_generator(chunks, input_filepath)
                 except Exception as e:
                     handle_error_no_return("Could not graph chunks, skipping. Encountered error: ", e)
             print("Document added to knowledge domain.")
@@ -3561,13 +3766,13 @@ def upload_new_llm():
     filename = secure_filename(input_file.filename)
 
     try:
-        filepath = os.path.join(model_dir, filename)
+        filepath = pathlib.Path(rf"{str(model_dir)}").resolve() / str(filename)
 
         print("Loading new LLM - filename: ", filename)
         print("Loading new LLM - filepath: ", filepath)
 
         # Save the uploaded file to the specified path
-        input_file.save(filepath)
+        input_file.save(str(filepath))
     except Exception as e:
         return handle_api_error("Failed to save LLM to model_dir, encountered error: ", e)
 
@@ -3961,7 +4166,7 @@ def stage_gdrive_file(filename_with_extension, file_content, mime_type, lars_use
         handle_error_no_return(f"Could not check if GDrive file '{filename_with_extension}' is already staged, proceeding afresh. Encountered error: ", e)
 
     # New file, proceed with fresh upload
-    try:    # convert file_content to FileStorage object and pass to save_file_to_staging_dir
+    try:    # convert file_content to FileStorage object and pass to save-file_to_staging_dir
         file_to_stage = FileStorage(
             stream=io.BytesIO(file_content),
             filename=filename_with_extension,
@@ -3978,7 +4183,7 @@ def stage_gdrive_file(filename_with_extension, file_content, mime_type, lars_use
     try:
         staging_info_record['document_name_and_extension'] = staged_filename # secure_filename version of original filename
         staging_info_record['staged_datetime'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        staging_info_record['staged_filepath'] = staged_filepath
+        staging_info_record['staged_filepath'] = str(staged_filepath)
         staging_info_record['txt_filepath'] = ''
         staging_info_record['status'] = 'Staged - File Saved to Staging Area'
         insert_into_staging_db(staging_info_record, skip_check=True)  # `file_already_staged` check has already been performed, so this will insert directly into the DB barring some error.
@@ -4013,7 +4218,8 @@ def download_gdrive_file(service, file_id, filename, mime_type, lars_user_id):
                 print(f"Downloading google-apps file with mimeType {file_mime_category}")
                 gdrive_request = service.files().export_media(fileId=file_id, mimeType=export_mime_type)
                 
-                base_filename, _ = os.path.splitext(filename) # Remove existing extension if any
+                #base_filename, _ = os.path.splitext(filename) # Remove existing extension if any
+                base_filename = pathlib.Path(rf"{str(filename)}").resolve().stem
                 filename_with_extension = base_filename + file_extension
             
             else:
@@ -4138,7 +4344,19 @@ def gdrive_file_transfer_to_staging():
         return handle_api_error(f"Server-side error - could not download file: '{original_filename}' from Google Drive: ", e)
 
 
-def get_text_extract_from_pdf(pdf_filepath):
+def get_text_extract_from_pdf(pdf_filepath:pathlib.Path) -> pathlib.Path:
+    '''
+    Determine which OCR service to use and extract text from the PDF document
+
+    Args:
+        - pdf_filepath: pathlib.Path object of the PDF file to be OCR'ed
+
+    Returns:
+        - pathlib.Path object of the output text file
+
+    Raises:
+        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+    '''
     print("\nGetting text extract from PDF\n")
 
     try:
@@ -4146,7 +4364,7 @@ def get_text_extract_from_pdf(pdf_filepath):
         force_ocr = read_return.get('force_ocr', False)
         ocr_service_choice = read_return.get('ocr_service_choice', None)
     except Exception as e:
-        handle_local_error("Could not determine force_ocr in config.json. Disabling OCR and proceeding. Error: ", e)
+        handle_local_error("Could not determine ocr configuration from config.json. Disabling OCR and proceeding. Error: ", e)
     
     if force_ocr:
         try:
@@ -4177,47 +4395,87 @@ def get_text_extract_from_pdf(pdf_filepath):
     return txt_filepath
 
 
-def convert_to_pdf_with_unoconv(input_file_path, output_file_path):
-    print("\n\nConverting non-PDF document to PDF format\n\n")
+def convert_to_pdf_with_unoconv(input_file_path: pathlib.Path, output_file_path: pathlib.Path):
+    '''
+    Convert a non-PDF document to a PDF file using unoconv
+
+    Args:
+        - input_file_path: pathlib.Path object of the input file to be converted
+        - output_file_path: pathlib.Path object of the output file to be created
+    '''
+    print(f"\n\nConverting non-PDF document to PDF format. Input file: {input_file_path}. Output file: {output_file_path}\n\n")
     if platform.system() == 'Windows':
         subprocess.run(['python', 'unoconv.py', '-f', 'pdf', '-o', output_file_path, input_file_path], check=True)
     else:
         subprocess.run(['unoconv', '-f', 'pdf', '-o', output_file_path, input_file_path], check=True)
 
 
-def convert_non_pdf_to_pdf_with_unoconv(filename, filepath):
+def prep_and_execute_unoconv_conversion(input_filepath: pathlib.Path, target_dir_path: pathlib.Path) -> pathlib.Path:
+    '''
+    Prepare and execute the unoconv conversion of a non-PDF document to a PDF file
+
+    Args:
+        - input_filepath: pathlib.Path object of the input file to be converted
+        - target_dir_path: pathlib.Path object of the directory to save the converted file
+
+    Returns:
+        - pathlib.Path object of the output file
+
+    Raises:
+        - Exception: If the input file cannot be converted, the output file cannot be created, or the conversion fails
+    '''
     print("Converting to PDF file")
 
     try:
-        conv_filename = os.path.splitext(filename)[0] + '.pdf'
-        conv_filepath = os.path.join(app.config['UPLOAD_FOLDER'], conv_filename)
-
-        convert_to_pdf_with_unoconv(filepath, conv_filepath)
-
-        return conv_filename, conv_filepath
+        conv_filename = input_filepath.with_suffix(".pdf").name
+        output_filepath = target_dir_path / conv_filename
+        convert_to_pdf_with_unoconv(input_filepath, output_filepath)
+        return output_filepath
     except subprocess.CalledProcessError as e:
-        return handle_api_error("Could not convert file to PDF, encountered error: ", e)
+        handle_local_error("Could not convert file to PDF, encountered error: ", e)
     except Exception as e:
-        return handle_api_error("Unexpected error when converting file to PDF, encountered error: ", e)
+        handle_local_error("Unexpected error when converting file to PDF, encountered error: ", e)
 
 
-def check_if_converted_file_exists(filepath):
+def check_if_converted_file_exists(pdf_filename: str) -> tuple[bool, pathlib.Path]:
+    '''
+    Invoked for non-PDF files to check if a converted file already exists
+
+    Args:
+        - pdf_filename: pathlib.Path object of the PDF file to be checked
+
+    Returns:
+        - tuple[bool, pathlib.Path]: True if the converted file exists, False otherwise, and the path to the converted file
+
+    Raises:
+        - Exception: If the converted file cannot be found, the output file cannot be created, or the conversion fails
+    '''
     try:
-        source_filename = os.path.basename(filepath)
-        pdf_filename = os.path.splitext(source_filename)[0] + ".pdf"   # os.path.splitext() returns a tuple containing the path's name and extension separately
-        pdf_filepath = os.path.join(app.config['UPLOAD_FOLDER'], pdf_filename)
-        return os.path.exists(pdf_filepath), pdf_filepath
+        pdf_filepath = pathlib.Path(rf"{app.config['UPLOAD_FOLDER']}").resolve() / pdf_filename
+        return pdf_filepath.exists(), pdf_filepath
     except Exception as e:
         handle_error_no_return("Could not determine if converted file already exists, proceeding to convert file regardless. Encountered error: ", e)
         return False, None
 
 
-def get_pdf_filepath_for_upload(filename, filepath):
+def get_pdf_filepath_for_upload(filepath: pathlib.Path) -> pathlib.Path:
+    '''
+    Determine which PDF filepath to use for upload - either from staging or converted directories
+
+    Args:
+        - filepath: pathlib.Path object of the file to be uploaded
+
+    Returns:
+        - pathlib.Path object of the PDF filepath to be uploaded
+
+    Raises:
+        - Exception: If the PDF filepath cannot be determined, the conversion fails, or the file cannot be uploaded
+    '''
     try:
-        if not filename.lower().endswith('.pdf'):
-            converted_file_exists, converted_pdf_file_path = check_if_converted_file_exists(filepath)
+        if not filepath.suffix.lower() == '.pdf':
+            converted_file_exists, converted_pdf_file_path = check_if_converted_file_exists(filepath.with_suffix(".pdf").name)
             if not converted_file_exists:
-                _, pdf_filepath = convert_non_pdf_to_pdf_with_unoconv(filename, filepath)
+                pdf_filepath = prep_and_execute_unoconv_conversion(filepath, converted_pdf_file_path.parent)
             else:
                 pdf_filepath = converted_pdf_file_path
             return pdf_filepath
@@ -4227,9 +4485,22 @@ def get_pdf_filepath_for_upload(filename, filepath):
         handle_local_error("Could not get PDF filepath for upload, encountered error: ", e)
 
 
-def upload_to_rag_and_records_databases(original_filename, txt_filepath):
+def upload_to_rag_and_records_databases(original_filename:str, txt_filepath:pathlib.Path) -> bool:
+    '''
+    Upload the document to the RAG and Records databases
+
+    Args:
+        - original_filename: str of the original filename
+        - txt_filepath: pathlib.Path object of the text filepath
+
+    Returns:
+        - bool: True if the document was uploaded to the RAG and Records databases, False otherwise
+
+    Raises:
+        - Exception: If the document cannot be uploaded to the RAG and Records databases
+    '''
     try:
-        if os.path.getsize(txt_filepath) > 0:
+        if txt_filepath.is_file() and txt_filepath.stat().st_size > 0:
             chunk_size, chunk_overlap = whoosh_embed_and_graph_doc_chunks(txt_filepath)
         else:
             print("Extracted document is empty! Skipping upload to RAG databases.")
@@ -4237,7 +4508,7 @@ def upload_to_rag_and_records_databases(original_filename, txt_filepath):
         handle_local_error("Failed to embed & index document: ", e)
 
     try:
-        if os.path.getsize(txt_filepath) > 0:
+        if txt_filepath.is_file() and txt_filepath.stat().st_size > 0:
             record_doc_loaded_to_db(original_filename, chunk_size, chunk_overlap)
         else:
             print("Extracted document is empty! Not saving to Records DB.")
@@ -4432,7 +4703,7 @@ def check_if_file_already_staged(file_transfer_info: dict):
             try:    # validate file transfer data
                 validate_file_transfer_info(staged_file_info) # exception will be raised if invalid
                 print(f"\n\nStaged file info validated successfully!\n\n")
-                if os.path.exists(os.path.join(app.config['UPLOAD_STAGING_FOLDER'], staged_file_info['document_name_and_extension'])):  # `document_name_and_extension` key will exist because it passed validation
+                if (pathlib.Path(rf"{app.config['UPLOAD_STAGING_FOLDER']}").resolve() / staged_file_info['document_name_and_extension']).exists():
                     print(f"\n\nStaged file info is valid and file exists in staging area!\n\n")
                     staged_file_info.pop('id', None)    # 'id' primary key is for internal DB use only
                     return staged_file_info
@@ -4559,8 +4830,9 @@ def perform_post_bulk_upload_cleanup(data_queue: queue.Queue = None):
 
     # 2. Ensure chat-LLM server is online
     try:
-        read_return = read_config(['local_llm_server'])
+        read_return = read_config(['local_llm_server', 'exclusive_server_mode'])
         server_to_start = read_return['local_llm_server']
+        exclusive_server_mode = str(read_return['exclusive_server_mode']).lower() == 'true'
         if data_queue is not None: data_queue.put(f"Checking if {server_to_start} chat-LLM server is online... | waiting")
     except Exception as e:
         handle_error_no_return("Server-side error, could not read local_llm_server from config.json, encountered error: ", e)
@@ -4579,7 +4851,7 @@ def perform_post_bulk_upload_cleanup(data_queue: queue.Queue = None):
                 else:
                     handle_error_no_return(f"\nCould not shut down graph model at URL {graph_model_base_url}, proceeding regardless...\n")
 
-                server_starter_response = hf_waitress_server_starter()
+                server_starter_response = hf_waitress_server_starter(exclusive_server_mode = exclusive_server_mode)
                 if server_starter_response is not None and server_starter_response.get('success'):
                     print("\nSuccessfully started HF-Waitress Chat server\n")
                     if data_queue is not None: data_queue.put(f"Successfully started HF-Waitress Chat server | success")
@@ -4594,7 +4866,7 @@ def perform_post_bulk_upload_cleanup(data_queue: queue.Queue = None):
                 return True
         
         elif server_to_start == 'llama-cpp':
-            server_starter_response = llama_cpp_server_starter()
+            server_starter_response = llama_cpp_server_starter(exclusive_server_mode)
             if server_starter_response is not None and server_starter_response.get('success'):
                 print("\nSuccessfully started llama-cpp Chat server\n")
                 if data_queue is not None: data_queue.put(f"Successfully started llama-cpp Chat server | success")
@@ -4624,7 +4896,7 @@ def bulk_upload_files_to_rag_and_records_databases(docs_to_upload: list[dict], d
                 handle_error_no_return(f"Could not update the `status` key in the staging DB. Encountered error: ", e)
 
             try:
-                upload_to_rag_and_records_databases(doc['document_name_and_extension'], doc['txt_filepath'])
+                upload_to_rag_and_records_databases(doc['document_name_and_extension'], pathlib.Path(rf"{doc['txt_filepath']}").resolve())
                 if data_queue is not None: data_queue.put(f"Successfully Uploaded Document: {doc.get('document_name_and_extension', 'Unknown document name')} | success")
                 safe_delete_entry_from_staging_db(doc)
             except Exception as e:
@@ -4637,13 +4909,13 @@ def bulk_upload_files_to_rag_and_records_databases(docs_to_upload: list[dict], d
     return True
 
 
-def move_file_to_upload_dir(staged_filename: str, staged_filepath: str):
+def move_file_to_upload_dir(staged_filename: str, staged_filepath: pathlib.Path) -> pathlib.Path:
     
     try:    # copy from staging to upload folder
-        final_filepath = os.path.join(app.config['UPLOAD_FOLDER'], staged_filename)   # staged_filename is the clean, secure_filename version of the original filename
-        shutil.copy2(staged_filepath, final_filepath)   # copy2 preserves more metadata than copy()
+        final_filepath = pathlib.Path(rf"{app.config['UPLOAD_FOLDER']}").resolve() / staged_filename
+        shutil.copy2(str(staged_filepath), str(final_filepath))   # copy2 preserves more metadata than copy()
         safe_remove_file_from_filepath(staged_filepath)
-        return staged_filename, final_filepath
+        return final_filepath   # access filename using final_filepath.name
     except FileNotFoundError as f:
         handle_local_error(f"File not found: {staged_filepath}", f)
     except Exception as e:
@@ -4691,7 +4963,7 @@ def bulk_text_extract_from_staging_area(staged_docs_to_upload: list[dict], data_
             },...
         ]
     
-    And iterates through the list, adding documents to LARS
+    And iterates through the list, adding documents to LARS/Privion
     '''
     print("\nBulk uploading documents from staging area\n")
 
@@ -4702,7 +4974,7 @@ def bulk_text_extract_from_staging_area(staged_docs_to_upload: list[dict], data_
         for count, doc in enumerate(staged_docs_to_upload):
             if data_queue is not None: data_queue.put(f"Performing Step 1 of 2 for document: {doc.get('document_name_and_extension', 'Unknown document name')} - Data Extraction. Progress: {count + 1} of {len(staged_docs_to_upload)}... | waiting")
             try:    # Move to upload dir
-                filename, filepath = move_file_to_upload_dir(doc['document_name_and_extension'], doc['staged_filepath']) # will also delete from staging dir
+                filepath = move_file_to_upload_dir(doc['document_name_and_extension'], pathlib.Path(rf"{doc['staged_filepath']}").resolve()) # will also delete from staging dir
             except Exception as e:
                 if data_queue is not None: data_queue.put(f"Error processing file - Could not move file to upload directory | failure")
                 handle_error_no_return(f"Could not move file to upload directory. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
@@ -4716,7 +4988,7 @@ def bulk_text_extract_from_staging_area(staged_docs_to_upload: list[dict], data_
                 handle_error_no_return(f"Could not update the `status` key in the staging DB. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
             
             try:    # Get PDF filepath for upload
-                pdf_filepath = get_pdf_filepath_for_upload(filename, filepath)
+                pdf_filepath = get_pdf_filepath_for_upload(filepath)
             except Exception as e:
                 if data_queue is not None: data_queue.put(f"Error processing file - Could not get filepath for upload | failure")
                 handle_error_no_return(f"Could not get PDF filepath for upload. WARNING: {doc.get('document_name_and_extension', 'Unknown document name')} will not be uploaded to RAG & Records databases. Encountered error: ", e)
@@ -4731,7 +5003,7 @@ def bulk_text_extract_from_staging_area(staged_docs_to_upload: list[dict], data_
                 continue
 
             try:
-                doc['txt_filepath'] = txt_filepath
+                doc['txt_filepath'] = str(txt_filepath)
                 doc['status'] = 'Text Extraction Completed - Path to TXT File Saved'
                 insert_into_staging_db(doc) # update the `txt_filepath` key in the staging DB
             except Exception as e:
@@ -4746,8 +5018,8 @@ def bulk_text_extract_from_staging_area(staged_docs_to_upload: list[dict], data_
             handle_error_no_return("Could not enable Kosmos VRAM offloading after bulk upload completes, skipping. Encountered error: ", e)
 
     finally:    # Cleanup
-        global DOCLING_CONVERTER, VLM_PIPELINE_OPTIONS, PDF_PIPELINE_OPTIONS
-        DOCLING_CONVERTER, VLM_PIPELINE_OPTIONS, PDF_PIPELINE_OPTIONS = None, None, None
+        global DOCLING_CONVERTER
+        DOCLING_CONVERTER = None
 
     return True
 
@@ -4756,6 +5028,7 @@ def bulk_text_extract_from_staging_area(staged_docs_to_upload: list[dict], data_
 def bulk_upload_files():
     '''
     Step Two of the bulk upload process!
+    For Step One, see below for file-transfer_to_staging()
 
     Will receive a JSON list of dictionaries, each entry comprising a complete set of information on a file to be uploaded:
         user_id: str
@@ -4827,12 +5100,12 @@ def bulk_upload_files():
     return Response(bulk_process_files(), content_type='text/event-stream')
 
 
-def save_file_to_staging_dir(input_file):   # input_file is a Request.files object
+def save_file_to_staging_dir(input_file) -> tuple[str, pathlib.Path]:   # input_file is a Request.files object
     try:
         filename = secure_filename(input_file.filename)
         filename = filename.replace("PDF", "pdf") if "PDF" in filename else filename
-        filepath = os.path.join(app.config['UPLOAD_STAGING_FOLDER'], filename)
-        input_file.save(filepath)
+        filepath = pathlib.Path(rf"{app.config['UPLOAD_STAGING_FOLDER']}").resolve() / filename
+        input_file.save(str(filepath))   # save() is a method of the Request.files object, and it expects a string filepath, not a pathlib.Path object
         print(f"\nSaved file {filename} to {filepath} successfully.\n")
         return filename, filepath
     except Exception as e:
@@ -4860,7 +5133,7 @@ def file_transfer_to_staging():
         text_extraction_method: str
         upload_initiated_datetime: str
     
-    And the file to uploaded as a Request.files object.
+    And the file itself as a Request.files object.
 
     Will save the file to the staging area, and add the following keys to the `file_transfer_info` dictionary and return it:
         staged_datetime: str
@@ -4868,7 +5141,7 @@ def file_transfer_to_staging():
         txt_filepath: str   # will be left blank for now and updated after text extraction by the bulk_text_extract method
         status: str
 
-    Additionally, the `document_name_and_extension` key will be updated to the secure_filename version of the original filename.
+    Additionally, the `document_name_and_extension` key will be updated to the secure-filename version of the original filename.
 
     So this method receives a single dict, the front-end JS is responsible for collecting them into a list for step two.
     '''
@@ -4904,9 +5177,9 @@ def file_transfer_to_staging():
         return handle_api_error("Server-side error, could not save file to staging area, encountered error: ", e)
 
     try:
-        file_transfer_info['document_name_and_extension'] = staged_filename # secure_filename version of original filename
+        file_transfer_info['document_name_and_extension'] = staged_filename # secure-filename version of original filename
         file_transfer_info['staged_datetime'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        file_transfer_info['staged_filepath'] = staged_filepath
+        file_transfer_info['staged_filepath'] = str(staged_filepath)
         file_transfer_info['txt_filepath'] = ''
         file_transfer_info['status'] = 'Staged - File Saved to Staging Area'
         insert_into_staging_db(file_transfer_info, skip_check=True)  # `file_already_staged` check has already been performed, so this will insert directly into the DB barring some error.
@@ -4991,8 +5264,8 @@ def cancel_upload_for_staged_files(user_id: str):
         result = cursor.fetchall()
         if result:
             for file in result:
-                safe_remove_file_from_filepath(file['staged_filepath'])
-                safe_remove_file_from_filepath(file['txt_filepath'])
+                safe_remove_file_from_filepath(pathlib.Path(rf"{file['staged_filepath']}").resolve())
+                safe_remove_file_from_filepath(pathlib.Path(rf"{file['txt_filepath']}").resolve())
     except Exception as e:
         handle_local_error("Could not check for pending uploads, encountered error: ", e)
     
@@ -5099,100 +5372,176 @@ def get_url_for_server(server_to_check):
             handle_error_no_return("Could not read hf_waitress_access_url and hf_waitress_server_port from config.json, using default localhost:9069 instead. Encountered error: ", e)
             return 'http://localhost:9069'
     else:
-        return handle_api_error("Invalid server_to_check in method get_url_for_server, encountered error: ", e)
+        return handle_local_error("Invalid server choice, encountered error: ", e)
 
 
-@app.route('/llama_cpp_server_starter')
-def llama_cpp_server_starter():
-    print("\n\nStarting llama.cpp Server\n\n")
+def check_status_and_shutdown_llm_server(server_to_shutdown: str):
+    print(f"\n\nShutdown Requested: Checking Status & Shutting Down Server: {server_to_shutdown} ...\n\n")
+    
+    try:
+        target_server_url = get_url_for_server(server_to_shutdown)  # will throw error if invalid server choice
+    except Exception as e:
+        err_msg = f"Could not check if the server is running, encountered error: "
+        handle_error_no_return(err_msg, e)
+        return {'success': False, 'message': f"{err_msg} {e}"}
+    
+    try:
+        if server_to_shutdown == 'hf-waitress':
+            result = utils.shutdown_waitress_server(target_server_url)
+        elif server_to_shutdown == 'llama-cpp':
+            result = utils.shutdown_local_llm_server_process(LLAMA_CPP_PROCESS)
+        else:
+            raise Exception(f"\nInvalid server choice: {server_to_shutdown}\n")
+        
+        if result['success']:
+            return result
+        else:
+            raise Exception(result['message'])
+    
+    except Exception as e:
+        err_msg = f"Could not terminate running server at URL {target_server_url}. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator for help. Provide the following technical details: "
+        handle_error_no_return(err_msg, e)
+        return {'success': False, 'message': f"{err_msg} {e}"}
 
-    global LLM_CHANGE_RELOAD_TRIGGER_SET
-    global LLAMA_CPP_PROCESS
-    global LLM_LOADED_UP
 
-    other_server_running = False
+@app.route('/shutdown_local_llm_server', methods=['POST'])
+def shutdown_local_llm_server():
+    '''
+    API interface to check-status_and_shutdown_llm_server, leaving that method free to be invoked directly in other methods here.
+    '''
+    try:
+        server_to_shutdown = request.form['server_to_shutdown']
+    except Exception as e:
+        return handle_api_error("Server-side error, could not read server_to_shutdown from the POST request, encountered error: ", e)
+
+    try:
+        return jsonify(check_status_and_shutdown_llm_server(server_to_shutdown))
+    except Exception as e:
+        return handle_api_error("Server-side error, could not shutdown local LLM server, encountered error: ", e)
+
+
+def run_prechecks_for_llama_cpp_server_starter(exclusive_server_mode: bool):
+    '''
+    This method checks if:
+        - The llama.cpp server is already running, and if so, checks if a restart is required (reload trigger set) due to setting changes.
+            - If set, the running server process is terminated and a new instance can be launched.
+            - If not, the server starter method may simply return.
+        
+    Furthermore, it can be made to check if other LLM servers (eg: HF-Waitress) are running, and shut them down if so, if the related input arg is set to True.
+
+    Args:
+        exclusive_server_mode (bool): Whether to check if other LLM servers (eg: HF-Waitress) are running and shut them down if so.
+
+    Returns:
+        - dict: A dictionary containing the following keys:
+            - 'success': True if the prechecks were successful, False otherwise.
+            - 'llm_model': The model choice, or 'undefined' if not set.
+            - 'hf_waitress_server_running': True if the HF-Waitress server is running, False otherwise.
+            - 'llama_cpp_server_running': True if the llama.cpp server is running, False otherwise.
+            - 'skip_fresh_start': True if the prechecks determined that the llama.cpp server should not be launched, False otherwise.
+            - 'reboot_failed': True if the hard-reboot failed, False otherwise.
+    '''
+
+    global LLAMA_CPP_PROCESS, LLM_CHANGE_RELOAD_TRIGGER_SET
+    hf_waitress_server_running, llama_cpp_server_running = False, False
     hf_waitress_base_url = get_url_for_server('hf-waitress')
     llama_cpp_base_url = get_url_for_server('llama-cpp')
 
-    # Before attempting to start the llama.cpp server, check if HF-Waitress is running and if so, shut it down:
     try:
-        if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
-            print("\n\nThe HF-Waitress server is running. Attempting to shut it down before starting the llama.cpp server.\n\n")
-            try:
-                if utils.shutdown_waitress_server(hf_waitress_base_url)['success']:
-                    print(f"\nSuccessfully shut down HF-Waitress server at URL {hf_waitress_base_url}\n")
-                else:
-                    raise Exception(f"\nCould not shut down HF-Waitress server at URL {hf_waitress_base_url}, proceeding regardless...\n")
-                LLM_LOADED_UP = False
-            except Exception as e:
-                LLM_LOADED_UP = True    # We know the HF-Waitress server is running, which means `hf_waitress.py` is available, so we set LLM_LOADED_UP to True
-                other_server_running = True # Set to True as we've determined the other server is running and we failed to terminate it
-                handle_error_no_return("Could not terminate running HF-Waitress process before launching llama.cpp. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator to whitelist your IP. Additional technical details follow: ", e)
+        model_choice = read_config(['model_choice'])['model_choice']
     except Exception as e:
-        handle_error_no_return("Warning: Could not check if HF-Waitress server is running. Proceeding to launch llama.cpp server. Encountered error: ", e)   
+        handle_error_no_return("Missing model_choice in config.json in method llama-cpp-server-starter. Printing error and proceeding with model_choice: 'undefined' ", e)
+        model_choice = 'undefined'
 
-    is_llama_cpp_running = False
+    if exclusive_server_mode:
+        waitress_shutdown_result = utils.shutdown_waitress_server(hf_waitress_base_url)
+        if waitress_shutdown_result['success']:
+            print(f"\nSuccessfully shut down HF-Waitress server at URL {hf_waitress_base_url}\n")
+            hf_waitress_server_running = False
+        else:
+            hf_waitress_server_running = True # Set to True as we've determined the other server is running and we failed to terminate it
+            err_msg = "Could not terminate running HF-Waitress process before launching llama.cpp, proceeding regardless. Your IP may not be whitelisted for this action, contact the administrator for help."
+            handle_error_no_return(f"{err_msg} Provide the following technical details: ", waitress_shutdown_result['message'])
+    # else:
+    #     try:    # to set an accurate value for the boolean regardless of exclusive_server_mode
+    #         hf_waitress_server_running = utils.is_local_server_online(hf_waitress_base_url)['server_available']
+    #     except Exception as e:
+    #         handle_error_no_return("Warning: Could not check if HF-Waitress server is running. Proceeding to launch llama.cpp server. Encountered error: ", e)
+
     try:
-        is_llama_cpp_running = utils.is_local_server_online(llama_cpp_base_url)['server_available']
+        llama_cpp_server_running = utils.is_local_server_online(llama_cpp_base_url)['server_available']
     except Exception as e:
         handle_error_no_return("Warning: Could not check if llama.cpp server is running. Proceeding to launch llama.cpp server. Encountered error: ", e)
 
-    model_choice = 'undefined'
-    try:
-        read_return = read_config(['model_choice'])
-        model_choice = read_return['model_choice']
-    except Exception as e:
-        handle_error_no_return("Missing model_choice in config.json in method llama-cpp-server-starter. Printing error and proceeding with model_choice: 'undefined' ", e)
+    if llama_cpp_server_running and LLAMA_CPP_PROCESS is not None:
 
-    if is_llama_cpp_running and not LLM_CHANGE_RELOAD_TRIGGER_SET:
-        LLM_LOADED_UP = True
-        print(f'\n\nThe llama.cpp server is already loaded and the reload trigger is not set. Simply returning with model choice: {model_choice}\n\n')
-        return {'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running}
+        if LLM_CHANGE_RELOAD_TRIGGER_SET:
+            
+            print("\n\nllama.cpp server online, but reload requested. Attempting to terminate and restart...\n\n")
+            try:
+                if utils.shutdown_local_llm_server_process(LLAMA_CPP_PROCESS)['success']:
+                    print(f"\nSuccessfully shut down llama.cpp server at URL {llama_cpp_base_url}\n")
+                    LLAMA_CPP_PROCESS = None
+                    LLM_CHANGE_RELOAD_TRIGGER_SET = False
+                    return {'success': True, 'llm_model': model_choice, 'hf_waitress_server_running': hf_waitress_server_running, 'llama_cpp_server_running': False, 'skip_fresh_start': False, 'reboot_failed': False}
+                else:
+                    raise Exception(f"\nFailed to shutdown llama.cpp server at URL {llama_cpp_base_url}\n")
+            except Exception as e:
+                LLM_CHANGE_RELOAD_TRIGGER_SET = False
+                handle_error_no_return("Failed to terminate running llama.cpp process, server was likely launched by a previous session. To change, shutdown the previously launched server manually and reload this page. Technical error-details follow: ", e)
+                return {'success': True, 'llm_model': model_choice, 'hf_waitress_server_running': hf_waitress_server_running, 'llama_cpp_server_running': True, 'skip_fresh_start': True, 'reboot_failed': True}    # success True as the server is online thus the starter has technically succeeded
+
+        else:
+            print(f'\n\nThe llama.cpp server is already loaded and the reload trigger is not set. Presently selected model: {model_choice}. Returning...\n\n')
+            return {'success': True, 'llm_model': model_choice, 'hf_waitress_server_running': hf_waitress_server_running, 'llama_cpp_server_running': True, 'skip_fresh_start': True, 'reboot_failed': False}
+        
+    elif llama_cpp_server_running and LLAMA_CPP_PROCESS is None:
+        print(f'\n\nThe llama.cpp server is running but Privion does not have control over it, as it was launched by another process/session. Presently selected model: {model_choice}. Returning...\n\n')
+        LLM_CHANGE_RELOAD_TRIGGER_SET = False   # LLM-CHANGE_RELOAD_TRIGGER_SET does not matter in this case, as we cannot restart the server anyways!
+        return {'success': True, 'llm_model': model_choice, 'hf_waitress_server_running': hf_waitress_server_running, 'llama_cpp_server_running': True, 'skip_fresh_start': True, 'reboot_failed': False}
     
-    elif is_llama_cpp_running and LLM_CHANGE_RELOAD_TRIGGER_SET:
-        print("\n\nllama.cpp server online and LLM_CHANGE_RELOAD_TRIGGER_SET is set. Attempting to terminate and reload from config.json\n\n")
-        try:
-            utils.terminate_local_llm_server_process(LLAMA_CPP_PROCESS)
-            LLAMA_CPP_PROCESS = None
-            LLM_CHANGE_RELOAD_TRIGGER_SET = False
-        except Exception as e:
-            LLM_LOADED_UP = True  # We know the llama.cpp server is running but there was an error terminating it, so we set LLM_LOADED_UP to True while leaving LLM_CHANGE_RELOAD_TRIGGER_SET to True as we know the server needs to be re-loaded.
-            handle_error_no_return("Failed to terminate running llama.cpp process, server was likely launched by a previous session. Returning with the currently loaded LLM. To change, shutdown the previously launched server manually and reload this page. Technical error-details follow: ", e)
-            return {'success': True, 'llm_model': 'undefined', 'other_server_running': other_server_running}   # We still return success:True as we've at least determined llama.cpp is running and loaded with a model, even if we cannot reload it.
-                 
-    elif LLM_CHANGE_RELOAD_TRIGGER_SET: # llama.cpp is not running, set flags to false and new settings will be loaded on next llama.cpp launch
-        print("\n\nResetting the LLM_CHANGE_RELOAD_TRIGGER_SET flag and attemping to launch the server with the currently selected LLM.\n\n")
-        LLM_CHANGE_RELOAD_TRIGGER_SET = False
-        LLM_LOADED_UP = False
+    else:
+        print(f'\n\nThe llama.cpp server is not running. Proceeding to launch llama.cpp server.\n\n')
+        return {'success': True, 'llm_model': model_choice, 'hf_waitress_server_running': hf_waitress_server_running, 'llama_cpp_server_running': False, 'skip_fresh_start': False, 'reboot_failed': False}
 
+
+def llama_cpp_server_starter(exclusive_server_mode: bool):
+    print("\n\nStarting llama.cpp Server\n\n")
+
+    global LLM_CHANGE_RELOAD_TRIGGER_SET, LLAMA_CPP_PROCESS
 
     try:
-        read_return = read_config(['model_dir', 'model_choice', 'local_llm_context_length', 'local_llm_max_new_tokens', 'local_llm_gpu_layers', 'server_timeout_seconds', 'server_retry_attempts', 'use_gpu'])
-        model_dir = read_return['model_dir']
-        model_choice = read_return['model_choice']
-        local_llm_context_length = read_return['local_llm_context_length']
-        local_llm_max_new_tokens = read_return['local_llm_max_new_tokens']
-        local_llm_gpu_layers = read_return['local_llm_gpu_layers']
-        server_timeout_seconds = read_return['server_timeout_seconds']
-        server_retry_attempts = read_return['server_retry_attempts']
-        use_gpu = read_return['use_gpu']
+        precheck_result = run_prechecks_for_llama_cpp_server_starter(exclusive_server_mode)
     except Exception as e:
-        return handle_api_error("Missing values in config.json when preparing to launch llama.cpp server, encountered error: ", e)
-
-
+        return handle_api_error("Could not run prechecks for llama.cpp server starter, encountered error: ", e)
+    
+    if precheck_result['skip_fresh_start']:
+        return precheck_result
+    
+    # Reset the flags to False as we're launching a new server:
+    LLM_CHANGE_RELOAD_TRIGGER_SET = False
+    
+    # Read the config values for the llama.cpp server:
     try:
-        cpp_model = os.path.join(model_dir, model_choice)
+        read_return = read_config(['model_dir', 'model_choice', 'local_llm_context_length', 'local_llm_max_new_tokens', 'local_llm_gpu_layers', 'llama_cpp_server_timeout_seconds', 'llama_cpp_server_retry_attempts', 'use_gpu'])
+        llama_cpp_base_url = get_url_for_server('llama-cpp')
+        # cpp_model = os.path.join(read_return['model_dir'], read_return['model_choice'])
+        cpp_model = str(pathlib.Path(rf"{read_return['model_dir']}").resolve() / read_return['model_choice'])
     except Exception as e:
-        return handle_api_error("Could not os.join path to model file to launch llama.cpp server, encountered error: ", e)
+        return handle_api_error("Error with core configuration in config.json for llama.cpp server starter method: ", e)
 
-    if not use_gpu:
-        local_llm_gpu_layers = 0
+    if not read_return['use_gpu']:
+        read_return['local_llm_gpu_layers'] = 0
 
     try:
-        cpp_app = ['llama-server', '-m', cpp_model, '-ngl', str(local_llm_gpu_layers), '-c', str(local_llm_context_length), '-n', str(local_llm_max_new_tokens), '--host', '0.0.0.0']
+        # cpp_app = ['llama-server', '-m', cpp_model, '--jinja', '-ngl', str(read_return['local_llm_gpu_layers']), '-c', str(read_return['local_llm_context_length']), '-n', str(read_return['local_llm_max_new_tokens']), '--host', '0.0.0.0']
+        cpp_app = f'llama-server -m {cpp_model} --jinja -ngl {read_return["local_llm_gpu_layers"]} -c {read_return["local_llm_context_length"]} -n {read_return["local_llm_max_new_tokens"]} --host 0.0.0.0'
+
+        if flash_attention_is_installed():
+            cpp_app += ' -fa'
 
         if platform.system() == 'Windows':
-            #LLAMA_CPP_PROCESS = subprocess.Popen(cpp_app, creationflags=subprocess.CREATE_NEW_CONSOLE)  # Windows only! Comment when containerizing or deploying to Linux/MacOS!
+            # LLAMA_CPP_PROCESS = subprocess.Popen(cpp_app, creationflags=subprocess.CREATE_NEW_CONSOLE)
             windows_command = f'start cmd /k "{cpp_app}"'  # /c - closes window after command finishes, /k - keeps window open (useful for debugging)
             LLAMA_CPP_PROCESS = subprocess.Popen(windows_command, shell=True)
         else:           
@@ -5203,21 +5552,16 @@ def llama_cpp_server_starter():
     except Exception as e:
         return handle_api_error("Could not launch llama.cpp process, encountered error: ", e)
 
-
-    timeout = server_timeout_seconds   
-    attempts = server_retry_attempts
-
     try:
-        for _ in range(attempts):
+        for _ in range(read_return['llama_cpp_server_retry_attempts']):
             if utils.is_local_server_online(llama_cpp_base_url)['server_available']:
                 print("\n\nllama.cpp server launched succesfully! Returning.\n\n")
-                LLM_LOADED_UP = True
-                return {'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running}
-            time.sleep(timeout)
+                return {'success': True, 'llm_model': read_return['model_choice'], 'hf_waitress_server_running': precheck_result['hf_waitress_server_running'], 'llama_cpp_server_running': True, 'skip_fresh_start': False, 'reboot_failed': False}
+            time.sleep(read_return['llama_cpp_server_timeout_seconds'])
     except Exception as e:
         handle_error_no_return("Could not check server status after launch attempt, printing error and retrying: ", e)
 
-    return handle_api_error("Failed to start llama.cpp local-server")
+    return {'success': False, 'llm_model': None, 'hf_waitress_server_running': precheck_result['hf_waitress_server_running'], 'llama_cpp_server_running': False, 'skip_fresh_start': False, 'reboot_failed': precheck_result['reboot_failed']}
 
 
 def get_hf_waitress_serving_host_and_port():
@@ -5229,90 +5573,115 @@ def get_hf_waitress_serving_host_and_port():
         return '0.0.0.0', 9069
 
 
-def hf_waitress_server_starter(hard_reboot_required = False):
-    print("\n\nStarting HF-Waitress Server\n\n")
+def run_prechecks_for_hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required: bool):
+    '''
+    This method checks if:
+        - The HF-Waitress server is already running, and if so, checks if a hard-reboot is required (hard_reboot_required set).
+            - If set, the running server process is terminated and a new instance can be launched.
+            - If not, the server starter method may simply return.
+        
+    Furthermore, it can be made to check if other LLM servers (eg: llama.cpp) are running, and shut them down if so, if the related input arg is set to True.
 
-    global LLM_CHANGE_RELOAD_TRIGGER_SET    # This is only set by LARS basis llama.cpp, so we simply handle it here!
-    global LLM_LOADED_UP
+    Args:
+        exclusive_server_mode (bool): Whether to check if other LLM servers (eg: llama.cpp) are running, and shut them down if so.
+        hard_reboot_required (bool): Whether to check if a hard-reboot is required - will be set and specified by HF-Waitress itself basis changes to Core Settings.
+
+    Returns:
+        - dict: A dictionary containing the following keys:
+            - 'success': True if the prechecks were successful, False otherwise.
+            - 'llm_model': The model choice, or 'undefined' if not set.
+            - 'hf_waitress_server_running': True if the HF-Waitress server is running, False otherwise.
+            - 'llama_cpp_server_running': True if the llama.cpp server is running, False otherwise.
+            - 'skip_fresh_start': True if the prechecks determined that the HF-Waitress server should not be launched, False otherwise.
+            - 'reboot_failed': True if the hard-reboot failed, False otherwise.
+    '''
+    
     global LLAMA_CPP_PROCESS
-
-    other_server_running = False
+    hf_waitress_server_running, llama_cpp_server_running = False, False
     hf_waitress_base_url = get_url_for_server('hf-waitress')
     llama_cpp_base_url = get_url_for_server('llama-cpp')
+    model_choice = read_hf_config(['model_id'])['model_id']
 
-    if hard_reboot_required:
-        print("\nHard-Reboot of HF-Waitress server requested.\n")
-        if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
-            print("\nHF-Waitress server is running, terminating it before hard-reboot.\n")
-            try:
-                if utils.shutdown_waitress_server(hf_waitress_base_url)['success']:
-                    print(f"\nSuccessfully shut down HF-Waitress server at URL {hf_waitress_base_url}\n")
-                else:
-                    raise Exception(f"\nCould not shut down HF-Waitress server at URL {hf_waitress_base_url}, proceeding regardless...\n")
-            except Exception as e:
-                other_server_running = True
-                handle_error_no_return("Could not terminate running HF-Waitress process before hard-reboot. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator to whitelist your IP. Additional technical details follow: ", e)
-            finally:
-                LLM_LOADED_UP = False
+    if exclusive_server_mode and LLAMA_CPP_PROCESS is not None:
+        llama_cpp_shutdown_result = utils.shutdown_local_llm_server_process(LLAMA_CPP_PROCESS)
+        if llama_cpp_shutdown_result['success']:
+            print(f"\nSuccessfully shut down llama.cpp server at URL {llama_cpp_base_url}\n")
+            llama_cpp_server_running = False
+            LLAMA_CPP_PROCESS = None
         else:
-            print("\nHF-Waitress server is not running, proceeding to hard-reboot.\n")
+            llama_cpp_server_running = True    # We know the llama.cpp server is running, which means `llama-server` is available, so we set LLM-LOADED_UP to True
+            err_msg = "Could not terminate running llama.cpp process before launching HF-Waitress, proceeding regardless. Your IP may not be whitelisted for this action, contact the administrator for help."
+            handle_error_no_return(f"{err_msg} Provide the following technical details: ", llama_cpp_shutdown_result['message'])
+    # else:
+    #     try:    # to set an accurate value for the boolean regardless of exclusive_server_mode - LLAMA-CPP_PROCESS might be None but server may be online from elsewhere
+    #         llama_cpp_server_running = utils.is_local_server_online(llama_cpp_base_url)['server_available']
+    #     except Exception as e:
+    #         handle_error_no_return("Warning: Could not check if llama.cpp server is running. Proceeding to launch HF-Waitress server. Encountered error: ", e)
 
-    # Before attempting to start the HF-Waitress server, check if llama.cpp is running and if so, shut it down:
-    try:
-        if LLAMA_CPP_PROCESS is not None and utils.is_local_server_online(llama_cpp_base_url)['server_available']:
-            print("\n\nThe llama.cpp server is running. Attempting to shut it down before starting the HF-Waitress server.\n\n")
-            try:
-                utils.terminate_local_llm_server_process(LLAMA_CPP_PROCESS)
-                LLAMA_CPP_PROCESS = None
-                LLM_LOADED_UP = False
+    if hard_reboot_required:    # will be set and specified by HF-Waitress itself
+        print("\nHard-Reboot of HF-Waitress server requested.\n")
+        try:
+            if utils.shutdown_waitress_server(hf_waitress_base_url)['success']:
+                print(f"\nSuccessfully shut down HF-Waitress server at URL {hf_waitress_base_url}, proceeding to restart...\n")
+                hf_waitress_server_running = False
+            else:
+                raise Exception(f"\nCould not shut down HF-Waitress server at URL {hf_waitress_base_url}...\n")
+        
+        except Exception as e:
+            hf_waitress_server_running = True
+            err_msg = f"Could not terminate running HF-Waitress process before hard-reboot. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator for help."
+            handle_error_no_return(f"{err_msg} Additional technical details follow: ", e)
+            
+            try:    # to set an accurate value for the boolean
+                llama_cpp_server_running = utils.is_local_server_online(llama_cpp_base_url)['server_available']
             except Exception as e:
-                LLM_LOADED_UP = True    # We know the llama.cpp server is running, which means `llama-server` is available, so we set LLM_LOADED_UP to True
-                other_server_running = True # Set to True as we've determined the other server is running and we failed to terminate it
-                handle_error_no_return("Warning: Failed to terminate running llama.cpp process before launching HF-Waitress. It was likely launched by a previous session or external process. Consider manually shutting down this server to conserve memory. Technical error-details follow: ", e)
-    except Exception as e:
-        handle_error_no_return("Could not check if llama.cpp server is running. Proceeding to launch HF-Waitress server. Encountered error: ", e)
+                handle_error_no_return("Warning: Could not check if llama.cpp server is running. Proceeding to launch HF-Waitress server. Encountered error: ", e)
+            
+            return {'success': True, 'llm_model': model_choice, 'hf_waitress_server_running': hf_waitress_server_running, 'llama_cpp_server_running': llama_cpp_server_running, 'skip_fresh_start': True, 'reboot_failed': True}    # success True as the server is online thus the starter has technically succeeded
+    else:
+        try:
+            hf_waitress_server_running = utils.is_local_server_online(hf_waitress_base_url)['server_available']
+        except Exception as e:
+            handle_error_no_return("Warning: Could not check if HF-Waitress server is running. Proceeding to launch HF-Waitress server. Encountered error: ", e)
 
-    model_choice = 'microsoft/Phi-3-mini-4k-instruct'   # match default in hf_waitress.py as this will only be used in the very first run, as the hf_config.json file is created in the first run!
+    return {'success': True, 'llm_model': model_choice, 'hf_waitress_server_running': hf_waitress_server_running, 'llama_cpp_server_running': llama_cpp_server_running, 'skip_fresh_start': hf_waitress_server_running, 'reboot_failed': False}     # skip fresh start if HF-Waitress server is already running
+
+
+def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required: bool = False):
+    print("\n\nStarting HF-Waitress Server\n\n")
+
     try:
-        hf_read_return = read_hf_config(['model_id', 'awq', 'use_flash_attention_2', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux', 'vision', 'exl2'])
-        model_choice = hf_read_return['model_id']
-        is_awq = str(hf_read_return['awq']).lower() == 'true'
-        use_flash_attention_2 = str(hf_read_return['use_flash_attention_2']).lower() == 'true'
-        flux_diffusers = str(hf_read_return['flux_diffusers']).lower() == 'true'
-        flux_low_vram_optimizations = str(hf_read_return['flux_low_vram_optimizations']).lower() == 'true'
-        load_quantized_flux = str(hf_read_return['load_quantized_flux']).lower() == 'true'
-        vision = str(hf_read_return['vision']).lower() == 'true'
-        exl2 = str(hf_read_return['exl2']).lower() == 'true'
+        precheck_result = run_prechecks_for_hf_waitress_server_starter(exclusive_server_mode, hard_reboot_required)
+    except Exception as e:
+        return handle_api_error("Could not run prechecks for HF-Waitress server starter, encountered error: ", e)
+    
+    if precheck_result['skip_fresh_start']:
+        return precheck_result
+
+    try:
+        hf_read_return = read_hf_config(['awq', 'use_flash_attention_2', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux', 'vision', 'exl2'])
+        lars_read_return = read_config(['hf_waitress_server_timeout_seconds', 'hf_waitress_server_retry_attempts'])
+        hf_waitress_base_url = get_url_for_server('hf-waitress')
     except Exception as e:
         return handle_api_error("Could not read hf_config.json, encountered error: ", e)
-
-    if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
-        print("\n\nHF-Waitress server already running. Resetting LLM_CHANGE_RELOAD_TRIGGER_SET and simply returning!\n\n")
-        LLM_LOADED_UP = True
-        LLM_CHANGE_RELOAD_TRIGGER_SET = False   # The only instance where we're in this method and LLM_CHANGE_RELOAD_TRIGGER_SET is set while the HF-Waitress server is running is when we're trying to switch back to it after running llama.cpp. So we simply reset the flag and return.
-        return {'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running}
-    elif LLM_CHANGE_RELOAD_TRIGGER_SET:  # Switching to HF-Waitress and it's offline, so we set LLM_CHANGE_RELOAD_TRIGGER_SET to False and proceed to launch the server.
-        print('\n\nProceeding to reload the LLM & resetting the LLM_CHANGE_RELOAD_TRIGGER_SET flag.\n\n')
-        LLM_CHANGE_RELOAD_TRIGGER_SET = False
-        LLM_LOADED_UP = False
     
     print("\n\nProceeding to launch HF-Waitress server\n\n")
     
     hf_waitress_host, hf_waitress_port = get_hf_waitress_serving_host_and_port()
     launch_args = f'--host={hf_waitress_host} --port={hf_waitress_port} '
-    if is_awq:
+    if hf_read_return['awq']:
         launch_args += '--awq '
-    if use_flash_attention_2:
+    if hf_read_return['use_flash_attention_2']:
         launch_args += '--use_flash_attention_2 '
-    if flux_diffusers:
+    if hf_read_return['flux_diffusers']:
         launch_args += '--flux_diffusers '
-    if flux_low_vram_optimizations:
+    if hf_read_return['flux_low_vram_optimizations']:
         launch_args += '--flux_low_vram_optimizations '
-    if load_quantized_flux:
+    if hf_read_return['load_quantized_flux']:
         launch_args += '--load_quantized_flux '
-    if vision:
+    if hf_read_return['vision']:
         launch_args += '--vision '
-    if exl2:
+    if hf_read_return['exl2']:
         launch_args += '--exl2 '
     launch_args = launch_args.strip()
     base_command = 'python' if platform.system() == 'Windows' else 'python3'
@@ -5326,10 +5695,9 @@ def hf_waitress_server_starter(hard_reboot_required = False):
         else:
             # Platform & container agnostic - On Linux/Unix, you need to explicitly provide the arguments as a list to avoid shell interpretation issues:
             command_list = [base_command]  # 'python3'
-            # Add script name
-            command_list.append('hf_waitress.py')
-            # Add any additional arguments
-            if launch_args.strip():  # Only add if there are actual arguments
+            command_list.append('hf_waitress.py')   # Add script name
+            
+            if launch_args.strip():  # Add any additional arguments - Only if there are actual arguments
                 command_list.extend(launch_args.split())
             
             with open('hf_waitress_output_log.txt', 'w') as f:
@@ -5338,20 +5706,16 @@ def hf_waitress_server_starter(hard_reboot_required = False):
     except Exception as e:
         return handle_api_error(f"Could not launch HF-Waitress process in directory: {os.getcwd()}, encountered error: ", e)
 
-    timeout = 3   # seconds
-    attempts = 200  # 200 * 3 = 600 seconds = 10 minutes
-
     try:
-        for _ in range(attempts):
+        for _ in range(lars_read_return['hf_waitress_server_retry_attempts']):
             if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
-                print("\n\nHF-Waitress server launched succesfully! Returning.\n\n")
-                LLM_LOADED_UP = True
-                return {'success': True, 'llm_model': model_choice, 'other_server_running': other_server_running}
-            time.sleep(timeout)
+                print("\n\nHF-Waitress server launched succesfully with model! Returning.\n\n")
+                return {'success': True, 'llm_model': read_hf_config(['model_id'])['model_id'], 'hf_waitress_server_running': True, 'llama_cpp_server_running': precheck_result['llama_cpp_server_running'], 'skip_fresh_start': False, 'reboot_failed': False}
+            time.sleep(lars_read_return['hf_waitress_server_timeout_seconds'])
     except Exception as e:
         handle_error_no_return("Could not check server status after launch attempt, printing error and retrying: ", e)
 
-    return handle_api_error("Failed to start HF-Waitress Server. It may be taking a while to download the model, try refreshing LARS in a few minutes.")
+    return {'success': False, 'llm_model': None, 'hf_waitress_server_running': False, 'llama_cpp_server_running': precheck_result['llama_cpp_server_running'], 'skip_fresh_start': False, 'reboot_failed': precheck_result['reboot_failed']}
 
 
 @app.route('/hf_waitress_server_starter_endpoint', methods=['POST'])
@@ -5365,7 +5729,8 @@ def hf_waitress_server_starter_endpoint():
         return handle_api_error("Could not read request, encountered error: ", e)
 
     try:
-        result = hf_waitress_server_starter(hard_reboot_required)
+        exclusive_server_mode = str(read_config(['exclusive_server_mode'])['exclusive_server_mode']).lower() == 'true'
+        result = hf_waitress_server_starter(exclusive_server_mode = exclusive_server_mode, hard_reboot_required = hard_reboot_required)
         return jsonify(result)
     except Exception as e:
         return handle_api_error("Could not start HF-Waitress server, encountered error: ", e)
@@ -5391,24 +5756,24 @@ def local_llm_server_starter():
     print("\n\nStarting Local LLM Server\n\n")
 
     try:
-        read_return = read_config(['local_llm_server'])
+        read_return = read_config(['local_llm_server', 'exclusive_server_mode'])
         server_to_start = read_return['local_llm_server']
+        exclusive_server_mode = str(read_return['exclusive_server_mode']).lower() == 'true'
     except Exception as e:
         return handle_api_error("Server-side error, could not read local_llm_server from config.json, encountered error: ", e)
 
     try:
         if server_to_start == 'hf-waitress':
-            result = hf_waitress_server_starter()
+            result = hf_waitress_server_starter(exclusive_server_mode = exclusive_server_mode)
             return jsonify(result)
         elif server_to_start == 'llama-cpp':
-            result = llama_cpp_server_starter()
+            result = llama_cpp_server_starter(exclusive_server_mode)
             return jsonify(result)
         else:
             return handle_api_error(f"Invalid local LLM server choice: {server_to_start}")
     except Exception as e:
         return handle_api_error("Server-side error, could not start local LLM server, encountered error: ", e)
 
-    # return jsonify({'success': True})
 
 
 @app.route('/set_prompt_template', methods=['POST'])
@@ -5469,17 +5834,17 @@ def fetch_file_list_for_vector_db():
     return jsonify({'success': True, 'file_row_list': file_row_list})
 
 
-def shell_delete_folder(folder_path, delete_vector_db = False):
-    print(f"Deleting folder / resetting vector_db at path: {folder_path}")
+def shell_delete_folder(target_path:pathlib.Path, delete_vector_db:bool = False) -> bool:
+    print(f"Deleting folder / resetting vector_db at path: {target_path}")
     try:
-        if os.path.exists(folder_path):
+        if target_path.exists():
 
             if delete_vector_db:
                 try:
-                    print(f"Attempting to close connection to VectorDB at path: {folder_path} before deleting it...")
-                    client = chromadb.PersistentClient(path=folder_path, settings=chromadb.Settings(allow_reset=True))
+                    print(f"Attempting to close connection to VectorDB at path: {target_path} before deleting it...")
+                    client = chromadb.PersistentClient(path=str(target_path), settings=chromadb.Settings(allow_reset=True))
                     client.reset()  # Specifically mentioned in the chromadb docs as the way to cleanup and remove vector_dbs
-                    print(f"Successfully reset vectorDB at path: {folder_path}")
+                    print(f"Successfully reset vectorDB at path: {target_path}")
                     return True
                 except Exception as e:
                     handle_error_no_return("Could not reset vector_db, encountered error: ", e)
@@ -5487,8 +5852,8 @@ def shell_delete_folder(folder_path, delete_vector_db = False):
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    shutil.rmtree(folder_path)
-                    print(f"Removed existing folder: {folder_path}")
+                    shutil.rmtree(str(target_path))
+                    print(f"Removed existing folder: {target_path}")
                     break
                 except PermissionError:
                     if attempt < max_retries - 1:
@@ -5498,12 +5863,13 @@ def shell_delete_folder(folder_path, delete_vector_db = False):
                         print(f"Failed to remove folder after {max_retries} attempts.")
                         break
         else:
-            print(f"No existing folder found at: {folder_path}")
+            print(f"No existing folder found at: {target_path}")
     except Exception as e:
-        return handle_api_error("Could not remove existing folder, encountered error: ", e)
+        handle_error_no_return("Could not remove existing folder, encountered error: ", e)
+        return False
 
 
-def clean_up_docs_loaded_db(selected_embedding_model_choice, knowledge_domain):
+def clean_up_docs_loaded_db(selected_embedding_model_choice:str, knowledge_domain:str) -> bool:
     print(f"Cleaning up docs_loaded_db for embedding model: {selected_embedding_model_choice} and knowledge domain: {knowledge_domain}")
     try:
         conn, cursor = init_and_connect_to_docs_loaded_db()
@@ -5519,7 +5885,7 @@ def clean_up_docs_loaded_db(selected_embedding_model_choice, knowledge_domain):
         cursor.close()
 
 
-def delete_knowledge_domain_graph(knowledge_domain):
+def delete_knowledge_domain_graph(knowledge_domain:str) -> bool:
     print(f"Deleting knowledge domain graph for: {knowledge_domain}")
 
     try:
@@ -5527,15 +5893,18 @@ def delete_knowledge_domain_graph(knowledge_domain):
             bring_graph_db_online()
             time.sleep(5)   # While the bring-graph-db-online() method waits for the container to start, loading the datasets takes a bit longer so we wait 5 seconds before proceeding.
     except Exception as e:
-        handle_local_error(f"Could not bring graph DB online, unable to delete knowledge graph for {knowledge_domain} domain. Encountered error: ", e)
+        handle_error_no_return(f"Could not bring graph DB online, unable to delete knowledge graph for {knowledge_domain} domain. Encountered error: ", e)
+        return False
     
     try:
         client = get_graph_db_client()
         graph = client.select_graph(knowledge_domain)
         graph.delete()  # client.delete_graph() is unsupported by FalkorDB. Delete individual nodes with Cypher: `MATCH (n) DETACH DELETE n`
         print(f"Successfully deleted graph for {knowledge_domain} domain in graph DB")
+        return True
     except Exception as e:
         handle_error_no_return(f"Could not delete graph for {knowledge_domain} domain in graph DB, encountered error: ", e)
+        return False
 
 
 @app.route('/reset_vector_db_on_disk', methods=['POST'])
@@ -5544,27 +5913,27 @@ def reset_vector_db_on_disk():
     print("Resetting selected VectorDB")
 
     try:
-        selected_embedding_model_choice = request.form['selected_embedding_model']
-        knowledge_domain = request.form['selected_knowledge_domain']
+        selected_embedding_model_choice = str(request.form['selected_embedding_model'])
+        knowledge_domain = str(request.form['selected_knowledge_domain'])
     except Exception as e:
         return handle_api_error("Server-side error, could not read selected_embedding_model or selected_knowledge_domain from the POST request in method reset_vector_db_on_disk, encountered error: ", e)
 
     try:
-        knowledge_domain_base_directory = read_config(['knowledge_domain_base_directory'])['knowledge_domain_base_directory']
+        knowledge_domain_base_directory = str(read_config(['knowledge_domain_base_directory'])['knowledge_domain_base_directory'])
     except Exception as e:
         handle_local_error("Missing values in config.json, could not determine knowledge_domain_base_directory. Error: ", e)
 
     try:
-        path_to_knowledge_domain = os.path.join(knowledge_domain_base_directory, knowledge_domain)
-        if not os.path.exists(path_to_knowledge_domain):
-            os.makedirs(path_to_knowledge_domain, exist_ok=True)
+        path_to_knowledge_domain = pathlib.Path(rf"{knowledge_domain_base_directory}").resolve() / knowledge_domain
+        if not path_to_knowledge_domain.exists():
+            path_to_knowledge_domain.mkdir(parents=True, exist_ok=True)
             print(f"\n\nCreated knowledge domain directory: {path_to_knowledge_domain}\n\n")
     except Exception as e:
         handle_api_error("Could not determine path to knowledge domain, encountered error: ", e)
 
     try:
-        vector_db_path = os.path.join(path_to_knowledge_domain, "vector_db_and_whoosh_index", selected_embedding_model_choice)
-        whoosh_index_path = os.path.join(path_to_knowledge_domain, "vector_db_and_whoosh_index", selected_embedding_model_choice, "whoosh_index")
+        vector_db_path = path_to_knowledge_domain / "vector_db_and_whoosh_index" / selected_embedding_model_choice
+        whoosh_index_path = path_to_knowledge_domain / "vector_db_and_whoosh_index" / selected_embedding_model_choice / "whoosh_index"
     except Exception as e:
         handle_api_error("Could not determine path to vector_db or whoosh_index, encountered error: ", e)
     
@@ -5745,7 +6114,7 @@ def generate_llm_response_html(llm_response: str, stream_session_id: str, user_r
         # Using string-join to avoid newline characters \n's appearing in the HTML output as breakline tags !:
         llm_rating_html_parts = [
             '<br>',
-            f'<div class="star-rating" data-rated={response_rated} data-rating-chat-id={chat_id} data-rating-sequence-id={sequence_id}>',
+            f'<div class="star-rating" data-rated="{response_rated}" data-rating-chat-id="{chat_id}" data-rating-sequence-id="{sequence_id}">',
             '<i class="far fa-star" data-rate="1"></i>',
             '<i class="far fa-star" data-rate="2"></i>',
             '<i class="far fa-star" data-rate="3"></i>',
@@ -6130,6 +6499,25 @@ def get_formatted_prompt_from_history_db(chat_id, sequence_id):
     return formatted_prompt
 
 
+def clean_think_tags_from_prompt(formatted_prompt:str) -> str:
+    """
+    Creates a new list of messages with <think></think> tags cleaned.
+    This is because llama.cpp's Jinja parser cannot handle those tags!
+    This function does not modify the original list.
+    """
+    cleaned_prompt = {"messages": []}
+    for message in formatted_prompt['messages']:
+        new_message = message.copy()    # Create a copy to avoid modifying the original
+        
+        if "</think>" in new_message['content']:
+            clean_content = new_message['content'].split("</think>", 1)[-1].strip()
+            new_message['content'] = clean_content
+        
+        cleaned_prompt['messages'].append(new_message)
+    
+    return cleaned_prompt
+
+
 def read_config_for_hf_waitress_prompt_formatting() -> tuple[bool, bool]:
     try:
         vision = read_hf_config(['vision'])['vision']
@@ -6139,7 +6527,7 @@ def read_config_for_hf_waitress_prompt_formatting() -> tuple[bool, bool]:
         handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
 
 
-def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_sequence_id:int, system_prompt:str, skip_system_prompt:bool) -> str:
+def prepare_prompt_for_jinja_auto_templating(formatted_prompt:str, user_query:str, current_sequence_id:int, system_prompt:str, skip_system_prompt:bool) -> str:
 
     print("\n\nFormatting prompt for hf-waitress\n\n")
 
@@ -6163,8 +6551,9 @@ def format_prompt_for_hf_waitress(formatted_prompt:str, user_query:str, current_
             if current_sequence_id > 0:
                 history_prompt_json = json.loads(formatted_prompt)
                 new_message = {"role":"user", "content":user_query}
-                history_prompt_json['messages'].append(new_message)
-                updated_history_prompt_json = json.dumps(history_prompt_json, indent=4)
+                history_prompt_json_without_think_tags = clean_think_tags_from_prompt(history_prompt_json)
+                history_prompt_json_without_think_tags['messages'].append(new_message)
+                updated_history_prompt_json = json.dumps(history_prompt_json_without_think_tags, indent=4)
                 if vision:  
                     formatted_prompt = updated_history_prompt_json  # return json object
                 else:
@@ -6316,7 +6705,7 @@ def prepare_quick_response_for_special_model(full_prompt:str, user_query:str, cu
     print("\n\nPreparing special model response\n\n")
     try:
         is_diffusers = local_llm_server == 'hfw-diffusers'
-        formatted_prompt = format_prompt_for_hf_waitress(
+        formatted_prompt = prepare_prompt_for_jinja_auto_templating(
             formatted_prompt="" if is_diffusers else full_prompt, 
             user_query=user_query, 
             current_sequence_id=0 if is_diffusers else current_sequence_id, 
@@ -6394,11 +6783,12 @@ def read_request_data_for_tools_response(request: Request) -> tuple[str, str, st
 
 def get_full_prompt_for_server(local_llm_server: str, full_prompt: str, user_query: str, current_sequence_id: int, base_template: str, local_llm_chat_template_format: str, skip_system_prompt: bool) -> str:
     if local_llm_server == 'llama-cpp':
-        formatted_updated_prompt = prompt_formatting_module.manually_format_prompt_with_prompt_template(full_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
+        # formatted_updated_prompt = prompt_formatting_module.manually_format_prompt_with_prompt_template(full_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
+        formatted_updated_prompt = prepare_prompt_for_jinja_auto_templating(full_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
     elif local_llm_server == 'hf-waitress':
-        formatted_updated_prompt = format_prompt_for_hf_waitress(full_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
+        formatted_updated_prompt = prepare_prompt_for_jinja_auto_templating(full_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
     elif local_llm_server == 'hfw-vision':
-        formatted_updated_prompt = format_prompt_for_hf_waitress(full_prompt, user_query, current_sequence_id, "", True)  # No base_template for hfw-vision
+        formatted_updated_prompt = prepare_prompt_for_jinja_auto_templating(full_prompt, user_query, current_sequence_id, "", True)  # No base_template for hfw-vision
     # print("Returning formatted_prompt: ", formatted_updated_prompt)
     return formatted_updated_prompt
 
@@ -6492,7 +6882,7 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
 
     try:
         # Initialize Chroma Client and collection
-        chroma_client = chromadb.PersistentClient(path=vector_db_path, settings=chromadb.Settings(allow_reset=True))
+        chroma_client = chromadb.PersistentClient(path=str(vector_db_path), settings=chromadb.Settings(allow_reset=True))
         collection = chroma_client.get_or_create_collection(name="knowledge_domain", metadata={"hnsw:space": "cosine"}) # By default, ChromaDB returns the L2 distance (lower is better), but we want cosine distance (higher is better)
 
         query_embedding = embedding_model.encode(user_query)
@@ -6970,8 +7360,7 @@ def assemble_chunks_for_graph_rag(docs, user_query=None):
         for count, doc in enumerate(docs):
 
             try:
-                chunk_source_filepath = str(doc.metadata.get('source'))
-                source_filename = os.path.basename(chunk_source_filepath)
+                source_filename = pathlib.Path(rf"{str(doc.metadata.get('source'))}").resolve().name
 
                 page_number_list = []
                 try:    # page numbers while useful are non-essential which is why I'm wrapping in a dedicated try-except block that does not raise an error!
@@ -7118,7 +7507,7 @@ def make_request_to_hf_waitress(user_query:str):
         handle_local_error("Could not get request params for generic HF-Waitress request, encountered error: ", e)
 
     try:
-        payload = format_prompt_for_hf_waitress(formatted_prompt="", user_query=user_query, current_sequence_id=0, system_prompt="", skip_system_prompt=True)
+        payload = prepare_prompt_for_jinja_auto_templating(formatted_prompt="", user_query=user_query, current_sequence_id=0, system_prompt="", skip_system_prompt=True)
         json_payload = json.dumps(payload)
     except Exception as e:
         handle_local_error("Could not format prompt for generic HF-Waitress request, encountered error: ", e)
@@ -7401,22 +7790,34 @@ def construct_citation_html(pdf_tab_buttons_set: set[str], pdf_tab_content_set: 
         handle_local_error("Could not construct citation html, encountered error: ", e)
 
 
-def save_pdf_to_download_dir(doc_name: str, stream_session_id: str):
+def save_pdf_to_download_dir(doc_name: str, stream_session_id: str) -> str:
+    '''
+    Save a PDF to the download directory.
+
+    Args:
+        - doc_name: str of the document name
+        - stream_session_id: str of the stream session ID
+
+    Returns:
+        - str: The name of the saved PDF
+
+    Raises:
+        - Exception: If the PDF cannot be saved
+    '''
 
     try:
         read_return = read_config(['upload_folder', 'highlighted_docs'])
-        upload_folder = read_return['upload_folder']
-        highlighted_pdfs_path = read_return['highlighted_docs']
     except Exception as e:
         handle_local_error("Missing upload_folder in config.json for method save-pdf_to_download_dir. Error: ", e)
 
     try:
-        doc_name_without_extension = os.path.splitext(doc_name)[0]
-        pdf_path = os.path.join(upload_folder, doc_name_without_extension + ".pdf")
-        output_file_name = f"{doc_name_without_extension}_{stream_session_id}.pdf"        
-        output_pdf_path = os.path.join(highlighted_pdfs_path, output_file_name)
+        doc_name_without_extension = pathlib.Path(rf"{doc_name}").resolve().stem    # .stem() returns a string
+        pdf_path = pathlib.Path(rf"{str(read_return['upload_folder'])}").resolve() / pathlib.Path(doc_name_without_extension).with_suffix(".pdf").name
+
+        output_file_name = f"{doc_name_without_extension}_{stream_session_id}.pdf"
+        output_pdf_path = pathlib.Path(rf"{str(read_return['highlighted_docs'])}").resolve() / output_file_name
         
-        shutil.copy2(pdf_path, output_pdf_path) # .copy2() preserves the file permissions and metadata, and is similar to `cp -p`, while .copy() is similar to `cp`
+        shutil.copy2(str(pdf_path), str(output_pdf_path)) # .copy2() preserves the file permissions and metadata, and is similar to `cp -p`, while .copy() is similar to `cp`
 
         return output_file_name
     except Exception as e:
@@ -7630,21 +8031,22 @@ def get_references():
         handle_error_no_return("Error determining if RAG was used in method get-references - Could not check the queries dict. Proceeding without RAG. Encountered error: ", e)
 
     if local_llm_server == 'llama-cpp':
-        formatted_user_prompt += prompt_formatting_module.append_eot_token_to_llm_response(local_llm_chat_template_format, llm_response)
+        # formatted_user_prompt += prompt_formatting_module.append_eot_token_to_llm_response(local_llm_chat_template_format, llm_response)
+        local_llm_chat_template_format = "llama-cpp-jinja"
     elif local_llm_server == 'hf-waitress':
         local_llm_chat_template_format = "hf-transformers"
-        flux_diffusers = determine_if_flux_diffusers_is_enabled()
-        if flux_diffusers:
+        if determine_if_flux_diffusers_is_enabled():
             do_rag = False
-        else:
-            if perform_graph_rag:
-                try:
-                    last_context_index = formatted_user_prompt.rindex("The following context might be helpful in answering the user query above.")
-                    graph_context_trimmed_prompt = formatted_user_prompt[:last_context_index]
-                    formatted_user_prompt = graph_context_trimmed_prompt + '"}]}'   # proper closing of the JSON array
-                except Exception as e:
-                    handle_error_no_return("Trimming RAG context unnecessary, skipping. Encountered error: ", e)
-            formatted_user_prompt = get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response)
+        # else:
+    
+    if perform_graph_rag:
+        try:
+            last_context_index = formatted_user_prompt.rindex("The following context might be helpful in answering the user query above.")
+            graph_context_trimmed_prompt = formatted_user_prompt[:last_context_index]
+            formatted_user_prompt = graph_context_trimmed_prompt + '"}]}'   # proper closing of the JSON array
+        except Exception as e:
+            handle_error_no_return("Trimming RAG context unnecessary, skipping. Encountered error: ", e)
+    formatted_user_prompt = get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response)
 
     if not do_rag:
         print("\n\nRAG Citations unnecessary, storing chat history and returning\n\n")
@@ -7655,7 +8057,7 @@ def get_references():
                 stored_datetime, chat_id = update_record_in_history_db(chat_id, stream_session_id, user_query, user_query_html, llm_response)
         except Exception as e:
             handle_error_no_return("Could not store or update chat history DB in get-references(), encountered error: ", e)
-        return jsonify({'success': True, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
+        return jsonify({'success': True, 'response': llm_response, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
     
 
     print("\n\nFetching Citations\n\n")
@@ -7693,28 +8095,31 @@ def parse_arguments():
 
     # Even if a parser object could not be created, a read_request will write & return defaults
     try:
-        read_return = read_config(['lars_host', 'lars_port', 'hf_waitress_access_url', 'hf_waitress_serving_url', 'hf_waitress_server_port', 'llama_cpp_access_url', 'llama_cpp_serving_url', 'llama_cpp_server_port'])
-        lars_host = str(read_return['lars_host'])
-        lars_port = int(read_return['lars_port'])
-        hf_waitress_access_url = str(read_return['hf_waitress_access_url'])
-        hf_waitress_serving_url = str(read_return['hf_waitress_serving_url'])
-        hf_waitress_server_port = int(read_return['hf_waitress_server_port'])
-        llama_cpp_access_url = str(read_return['llama_cpp_access_url'])
-        llama_cpp_serving_url = str(read_return['llama_cpp_serving_url'])
-        llama_cpp_server_port = int(read_return['llama_cpp_server_port'])
+        read_return = read_config(
+            [
+                'lars_host',
+                'lars_port',
+                'hf_waitress_access_url',
+                'hf_waitress_serving_url',
+                'hf_waitress_server_port',
+                'llama_cpp_access_url',
+                'llama_cpp_serving_url', 
+                'llama_cpp_server_port'
+            ]
+        )
     except Exception as e:
         handle_error_no_return("Could not get host and port from hf_config.json, encountered error: ", e)
 
     if parser:
         parser.add_argument("--reset_to_defaults", action="store_true", default=False, help="Use default settings")
-        parser.add_argument("--lars_host", type=str, default=lars_host, help="Specify the host to be used by the server. Remembers previously set value and falls-back to 0.0.0.0 as a default.")
-        parser.add_argument("--lars_port", type=int, default=lars_port, help="Specify the port to be used by the server. Remembers previously set value and falls-back to 5000 as a default.")
-        parser.add_argument("--hf_waitress_access_url", type=str, default=hf_waitress_access_url, help="Specify the access URL to be used by the HF-Waitress server. Remembers previously set value and falls-back to localhost as a default.")
-        parser.add_argument("--hf_waitress_serving_url", type=str, default=hf_waitress_serving_url, help="Specify the serving URL to be used by the HF-Waitress server. Remembers previously set value and falls-back to 0.0.0.0 as a default.")
-        parser.add_argument("--hf_waitress_server_port", type=int, default=hf_waitress_server_port, help="Specify the port to be used by the HF-Waitress server. Remembers previously set value and falls-back to 9069 as a default.")
-        parser.add_argument("--llama_cpp_access_url", type=str, default=llama_cpp_access_url, help="Specify the access URL to be used by the Llama-CPP server. Remembers previously set value and falls-back to localhost as a default.")
-        parser.add_argument("--llama_cpp_serving_url", type=str, default=llama_cpp_serving_url, help="Specify the serving URL to be used by the Llama-CPP server. Remembers previously set value and falls-back to 0.0.0.0 as a default.")
-        parser.add_argument("--llama_cpp_server_port", type=int, default=llama_cpp_server_port, help="Specify the port to be used by the Llama-CPP server. Remembers previously set value and falls-back to 8080 as a default.")
+        parser.add_argument("--lars_host", type=str, default=read_return['lars_host'], help="Specify the host to be used by the server. Remembers previously set value. Default: 0.0.0.0")
+        parser.add_argument("--lars_port", type=int, default=read_return['lars_port'], help="Specify the port to be used by the server. Remembers previously set value. Default: 5000")
+        parser.add_argument("--hf_waitress_access_url", type=str, default=read_return['hf_waitress_access_url'], help="Specify the access URL to be used by the HF-Waitress server. Remembers previously set value. Default: localhost")
+        parser.add_argument("--hf_waitress_serving_url", type=str, default=read_return['hf_waitress_serving_url'], help="Specify the serving URL to be used by the HF-Waitress server. Remembers previously set value. Default: 0.0.0.0")
+        parser.add_argument("--hf_waitress_server_port", type=int, default=read_return['hf_waitress_server_port'], help="Specify the port to be used by the HF-Waitress server. Remembers previously set value. Default: 9069")
+        parser.add_argument("--llama_cpp_access_url", type=str, default=read_return['llama_cpp_access_url'], help="Specify the access URL to be used by the Llama-CPP server. Remembers previously set value. Default: localhost")
+        parser.add_argument("--llama_cpp_serving_url", type=str, default=read_return['llama_cpp_serving_url'], help="Specify the serving URL to be used by the Llama-CPP server. Remembers previously set value. Default: 0.0.0.0")
+        parser.add_argument("--llama_cpp_server_port", type=int, default=read_return['llama_cpp_server_port'], help="Specify the port to be used by the Llama-CPP server. Remembers previously set value. Default: 8080")
 
         args = parser.parse_args()
         # print(f"\n\nparser.parse_args():\n\n{args}\n\n")
@@ -7764,11 +8169,9 @@ def parse_arguments():
 def get_host_and_port():
     try:
         read_return = read_config(['lars_host', 'lars_port'])
-        lars_host = str(read_return['lars_host'])
-        lars_port = int(read_return['lars_port'])
-        return lars_host, lars_port
+        return read_return['lars_host'], read_return['lars_port']
     except Exception as e:
-        handle_error_no_return("Could not get host and port from hf_config.json, encountered error: ", e)
+        handle_error_no_return("Could not get host and port from config.json, encountered error: ", e)
 
 
 if __name__ == '__main__':
