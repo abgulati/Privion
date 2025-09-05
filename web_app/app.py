@@ -249,12 +249,21 @@ def write_config(config_updates:dict, filename:str='config.json') -> dict:
         'use_local_llm',
         'local_llm_server',
         'use_azure_open_ai',
-        'use_gpu',
         'model_choice',
         'local_llm_chat_template_format',
-        'local_llm_context_length',
-        'local_llm_max_new_tokens',
-        'local_llm_gpu_layers',
+        'llama_cpp_context_length',
+        'llama_cpp_max_new_tokens',
+        'llama_cpp_use_gpu',
+        'llama_cpp_gpu_layers',
+        'llama_cpp_unified_kv_buffer',
+        'llama_cpp_disable_kv_offloading',
+        'llama_cpp_key_cache_data_type',
+        'llama_cpp_value_cache_data_type',
+        'llama_cpp_no_of_seqs_to_par_decode',
+        'llama_cpp_offload_to_devices',
+        'llama_cpp_cpu_only_moe',
+        'llama_cpp_mlock',
+        'llama_cpp_no_nmap',
         'base_template',
         'skip_system_prompt',
         'hf_waitress_serving_url',
@@ -385,7 +394,6 @@ def read_config(keys:list, default_value=None, filename='config.json') -> dict:
                 'force_enable_rag':False,
                 'force_disable_rag':False,
                 'use_local_llm':True,
-                'use_gpu':True,
                 'use_gpu_for_embeddings':False,
                 'azure_cv_free_tier':True,
                 'use_azure_open_ai':False,
@@ -397,13 +405,23 @@ def read_config(keys:list, default_value=None, filename='config.json') -> dict:
                 'llm_filter_citations':True,
                 'local_llm_model_type':'llama',
                 'local_llm_chat_template_format':'llama3',
-                'local_llm_context_length':8192,
-                'local_llm_max_new_tokens':2048,
-                'local_llm_gpu_layers':47,
-                'local_llm_temperature':0.8,
-                'local_llm_top_k':40,
-                'local_llm_top_p':0.95,
-                'local_llm_min_p':0.05,
+                'llama_cpp_use_gpu':False,
+                'llama_cpp_context_length':4096,
+                'llama_cpp_max_new_tokens':-1,
+                'llama_cpp_gpu_layers':25,
+                'llama_cpp_unified_kv_buffer':False,
+                'llama_cpp_disable_kv_offloading':False,
+                'llama_cpp_key_cache_data_type':'f16',
+                'llama_cpp_value_cache_data_type':'f16',
+                'llama_cpp_no_of_seqs_to_par_decode':1,
+                'llama_cpp_offload_to_devices':'none',
+                'llama_cpp_cpu_only_moe':False,
+                'llama_cpp_mlock':False,
+                'llama_cpp_no_nmap':False,
+                'llama_cpp_temperature':0.8,
+                'llama_cpp_top_k':40,
+                'llama_cpp_top_p':0.9,
+                'llama_cpp_min_p':0.1,
                 'local_llm_n_keep':0,
                 'llama_cpp_server_timeout_seconds':3,
                 'llama_cpp_server_retry_attempts':200,
@@ -2702,8 +2720,8 @@ def get_request_params_for_local_llm_server(formatted_prompt=""):
     try:
         read_return = read_config([
             'local_llm_server', 'hf_waitress_access_url', 'hf_waitress_server_port', 
-            'llama_cpp_access_url', 'llama_cpp_server_port', 'local_llm_temperature', 
-            'local_llm_top_k', 'local_llm_top_p', 'local_llm_min_p', 'graph_chunk_overlap'
+            'llama_cpp_access_url', 'llama_cpp_server_port', 'llama_cpp_temperature', 
+            'llama_cpp_top_k', 'llama_cpp_top_p', 'llama_cpp_min_p', 'graph_chunk_overlap'
         ])
     except Exception as e:
         handle_local_error("Could not read request params from config.json, encountered error: ", e)
@@ -2739,10 +2757,10 @@ def get_request_params_for_local_llm_server(formatted_prompt=""):
     else:   # llama.cpp LLMs
         payload = {
             'prompt': formatted_prompt,
-            'temperature': read_return['local_llm_temperature'],
-            'top_k': read_return['local_llm_top_k'],
-            'top_p': read_return['local_llm_top_p'],
-            'min_p': read_return['local_llm_min_p'],
+            'temperature': read_return['llama_cpp_temperature'],
+            'top_k': read_return['llama_cpp_top_k'],
+            'top_p': read_return['llama_cpp_top_p'],
+            'min_p': read_return['llama_cpp_min_p'],
             'chunk_overlap': read_return['graph_chunk_overlap']
         }
 
@@ -5523,31 +5541,71 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
     
     # Read the config values for the llama.cpp server:
     try:
-        read_return = read_config(['model_dir', 'model_choice', 'local_llm_context_length', 'local_llm_max_new_tokens', 'local_llm_gpu_layers', 'llama_cpp_server_timeout_seconds', 'llama_cpp_server_retry_attempts', 'use_gpu'])
+        read_return = read_config(
+            [
+                'model_dir',
+                'model_choice', 
+                'llama_cpp_context_length', 
+                'llama_cpp_max_new_tokens',
+                'llama_cpp_gpu_layers', 
+                'llama_cpp_server_timeout_seconds',
+                'llama_cpp_server_retry_attempts',
+                'llama_cpp_use_gpu',
+                'llama_cpp_unified_kv_buffer',
+                'llama_cpp_disable_kv_offloading',
+                'llama_cpp_key_cache_data_type',
+                'llama_cpp_value_cache_data_type',
+                'llama_cpp_no_of_seqs_to_par_decode',
+                'llama_cpp_mlock',
+                'llama_cpp_no_nmap',
+                'llama_cpp_offload_to_devices',
+                'llama_cpp_cpu_only_moe'
+            ]
+        )
         llama_cpp_base_url = get_url_for_server('llama-cpp')
-        # cpp_model = os.path.join(read_return['model_dir'], read_return['model_choice'])
         cpp_model = str(pathlib.Path(rf"{read_return['model_dir']}").resolve() / read_return['model_choice'])
     except Exception as e:
         return handle_api_error("Error with core configuration in config.json for llama.cpp server starter method: ", e)
 
-    if not read_return['use_gpu']:
-        read_return['local_llm_gpu_layers'] = 0
+    if not read_return['llama_cpp_use_gpu']:
+        read_return['llama_cpp_gpu_layers'] = 0
 
     try:
-        # cpp_app = ['llama-server', '-m', cpp_model, '--jinja', '-ngl', str(read_return['local_llm_gpu_layers']), '-c', str(read_return['local_llm_context_length']), '-n', str(read_return['local_llm_max_new_tokens']), '--host', '0.0.0.0']
-        cpp_app = f'llama-server -m {cpp_model} --jinja -ngl {read_return["local_llm_gpu_layers"]} -c {read_return["local_llm_context_length"]} -n {read_return["local_llm_max_new_tokens"]} --host 0.0.0.0'
+        llama_cpp_command_list = [
+            'llama-server',
+            f'--model {cpp_model}',
+            f'--n-gpu-layers {read_return["llama_cpp_gpu_layers"]}',
+            f'--ctx-size {read_return["llama_cpp_context_length"]}',
+            f'--n-predict {read_return["llama_cpp_max_new_tokens"]}',
+            f'--cache-type-k {read_return["llama_cpp_key_cache_data_type"]}',
+            f'--cache-type-v {read_return["llama_cpp_value_cache_data_type"]}',
+            f'--parallel {read_return["llama_cpp_no_of_seqs_to_par_decode"]}',
+            f'--device {read_return["llama_cpp_offload_to_devices"]}',
+            '--kv-unified' if read_return['llama_cpp_unified_kv_buffer'] else '',
+            '--flash-attn' if flash_attention_is_installed() else '',
+            '--no-kv-offload' if read_return['llama_cpp_disable_kv_offloading'] else '',
+            '--mlock' if read_return['llama_cpp_mlock'] else '',
+            '--no-mmap' if read_return['llama_cpp_no_nmap'] else '',
+            '--cpu-moe' if read_return['llama_cpp_cpu_only_moe'] else '',
+            '--jinja',
+            '--host 127.0.0.1',
+            '--port 8080'
+        ]
+        llama_cpp_launch_command = ' '.join(llama_cpp_command_list)
+        print(f"Launching llama.cpp server with command: {llama_cpp_launch_command}")
 
-        if flash_attention_is_installed():
-            cpp_app += ' -fa'
+        #cpp_app = f'llama-server -m {cpp_model} --jinja -ngl {read_return["llama_cpp_gpu_layers"]} -c {read_return["llama_cpp_context_length"]} -n {read_return["llama_cpp_max_new_tokens"]} --host 0.0.0.0'
+        # if flash_attention_is_installed():
+        #     cpp_app += ' --flash-attn'
 
         if platform.system() == 'Windows':
             # LLAMA_CPP_PROCESS = subprocess.Popen(cpp_app, creationflags=subprocess.CREATE_NEW_CONSOLE)
-            windows_command = f'start cmd /k "{cpp_app}"'  # /c - closes window after command finishes, /k - keeps window open (useful for debugging)
+            windows_command = f'start cmd /k "{llama_cpp_launch_command}"'  # /c - closes window after command finishes, /k - keeps window open (useful for debugging)
             LLAMA_CPP_PROCESS = subprocess.Popen(windows_command, shell=True)
         else:           
             # Platform & container agnostic:
             with open('llama_cpp_server_output_log.txt', 'w') as f:
-                LLAMA_CPP_PROCESS = subprocess.Popen(cpp_app, stdout=f, stderr=subprocess.STDOUT, text=True)    #stdout has already been redirected to the file, so simply direct stderr to stdout!
+                LLAMA_CPP_PROCESS = subprocess.Popen(llama_cpp_launch_command, stdout=f, stderr=subprocess.STDOUT, text=True)    #stdout has already been redirected to the file, so simply direct stderr to stdout!
 
     except Exception as e:
         return handle_api_error("Could not launch llama.cpp process, encountered error: ", e)
