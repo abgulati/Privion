@@ -5536,10 +5536,8 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
     if precheck_result['skip_fresh_start']:
         return precheck_result
     
-    # Reset the flags to False as we're launching a new server:
-    LLM_CHANGE_RELOAD_TRIGGER_SET = False
+    LLM_CHANGE_RELOAD_TRIGGER_SET = False       # Reset the flags to False as we're launching a new server:
     
-    # Read the config values for the llama.cpp server:
     try:
         read_return = read_config(
             [
@@ -5594,12 +5592,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
         llama_cpp_launch_command = ' '.join(llama_cpp_command_list)
         print(f"Launching llama.cpp server with command: {llama_cpp_launch_command}")
 
-        #cpp_app = f'llama-server -m {cpp_model} --jinja -ngl {read_return["llama_cpp_gpu_layers"]} -c {read_return["llama_cpp_context_length"]} -n {read_return["llama_cpp_max_new_tokens"]} --host 0.0.0.0'
-        # if flash_attention_is_installed():
-        #     cpp_app += ' --flash-attn'
-
         if platform.system() == 'Windows':
-            # LLAMA_CPP_PROCESS = subprocess.Popen(cpp_app, creationflags=subprocess.CREATE_NEW_CONSOLE)
             windows_command = f'start cmd /k "{llama_cpp_launch_command}"'  # /c - closes window after command finishes, /k - keeps window open (useful for debugging)
             LLAMA_CPP_PROCESS = subprocess.Popen(windows_command, shell=True)
         else:           
