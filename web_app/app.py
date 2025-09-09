@@ -246,11 +246,10 @@ def write_config(config_updates:dict, filename:str='config.json') -> dict:
         
     restart_required = False
     llm_trigger_keys_for_app_restart = [
-        'use_local_llm',
         'local_llm_server',
+        'use_local_llm',
         'use_azure_open_ai',
         'model_choice',
-        'local_llm_chat_template_format',
         'llama_cpp_context_length',
         'llama_cpp_max_new_tokens',
         'llama_cpp_use_gpu',
@@ -273,10 +272,13 @@ def write_config(config_updates:dict, filename:str='config.json') -> dict:
             
     for key in llm_trigger_keys_for_app_restart:
         if key in config_updates and config_updates[key] != config.get(key):
-            global LLM_CHANGE_RELOAD_TRIGGER_SET
-            LLM_CHANGE_RELOAD_TRIGGER_SET = True
-            restart_required = True
-            break
+            if key == 'local_llm_server':
+                restart_required = True # we want the page to refresh but don't need to set the llama.cpp server reload trigger just for this as we a server restart will not be required if no other settings have changed.
+            else:
+                global LLM_CHANGE_RELOAD_TRIGGER_SET
+                LLM_CHANGE_RELOAD_TRIGGER_SET = True
+                restart_required = True
+                break
 
     config.update(config_updates)
 
@@ -404,7 +406,7 @@ def read_config(keys:list, default_value=None, filename='config.json') -> dict:
                 'force_re_extract':False,
                 'llm_filter_citations':True,
                 'local_llm_model_type':'llama',
-                'local_llm_chat_template_format':'llama3',
+                'local_llm_chat_template_format':'Tranformers-AutoTokenizer',
                 'llama_cpp_use_gpu':False,
                 'llama_cpp_context_length':4096,
                 'llama_cpp_max_new_tokens':-1,
@@ -422,7 +424,7 @@ def read_config(keys:list, default_value=None, filename='config.json') -> dict:
                 'llama_cpp_top_k':40,
                 'llama_cpp_top_p':0.9,
                 'llama_cpp_min_p':0.1,
-                'local_llm_n_keep':0,
+                'llama_cpp_n_keep':0,
                 'llama_cpp_server_timeout_seconds':3,
                 'llama_cpp_server_retry_attempts':200,
                 'hf_waitress_server_timeout_seconds':3,
@@ -2516,7 +2518,7 @@ def get_request_params_for_graph_entity_extraction_model(rag_response_mode: bool
     return grapher_url, headers, exl2_quantize_graph_model
 
 
-def get_graphing_request_payload(chunk, exl2_quantize_graph_model):
+def get_graphing_request_payload(chunk:str, exl2_quantize_graph_model:bool) -> str:
     payload_content = str(chunk) + "\n<knowledge_graph>"
 
     if exl2_quantize_graph_model:
@@ -2533,7 +2535,7 @@ def get_graphing_request_payload(chunk, exl2_quantize_graph_model):
     return payload
 
 
-def hf_waitress_non_streaming_request_response_handler(endpoint_url, headers, payload):
+def hf_waitress_non_streaming_api_handler(endpoint_url:str, headers:dict, payload:str) -> str:
     print(f"\nHF-Waitress Non-Streaming Request Response Handler Invoked\n")
     try:
         response = requests.post(endpoint_url, headers=headers, data=payload)
@@ -2543,7 +2545,7 @@ def hf_waitress_non_streaming_request_response_handler(endpoint_url, headers, pa
         handle_local_error("Failed /completions request to extract entities and relationships from chunk, encountered error: ", e)
 
 
-def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payload, cache_filepath: pathlib.Path = None) -> dict:
+def hf_waitress_exl2_graph_api_stream_handler(endpoint_url:str, headers:dict, payload:str, cache_filepath: pathlib.Path = None) -> dict:
     '''
     Handle the response from the exl2-grapher API
 
@@ -2623,10 +2625,10 @@ def hf_waitress_bulk_stream_request_response_handler(endpoint_url, headers, payl
         handle_local_error("Failed request to exl2-stream or exl2-grapher APIs, encountered error: ", e)
 
 
-def graphing_request_response_handler(grapher_url, headers, payload):
+def graphing_request_response_handler(grapher_url:str, headers:dict, payload:str) -> dict:
     print(f"\nHF-Waitress Non-Streaming Graphing-Request Response Handler Invoked\n")
     try:
-        response = hf_waitress_non_streaming_request_response_handler(grapher_url, headers, payload)
+        response = hf_waitress_non_streaming_api_handler(grapher_url, headers, payload)
         print(f"\nResponse (Entities and Relationships): {response}\n")
         return ast.literal_eval(response)
     except Exception as e:
@@ -2657,7 +2659,7 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
     if exl2_quantize_graph_model:   # invoke exl2-grapher API
         try:
             payload = json.dumps({"chunk_entities": chunk_entities, "rag_response_mode": rag_response_mode})
-            full_response = hf_waitress_bulk_stream_request_response_handler(grapher_url, headers, payload, cache_filepath)
+            full_response = hf_waitress_exl2_graph_api_stream_handler(grapher_url, headers, payload, cache_filepath)
             # print(f"\nExl2 Bulk-Graphing Response (Entities and Relationships):\n\n{full_response}\n")
             return full_response
         except Exception as e:
@@ -2707,66 +2709,12 @@ def get_graph_db_client():
         handle_local_error("Could not obtain Graph DB Client, encountered error: ", e)
 
 
-def sanitize_names(name):
+def sanitize_names(name:str) -> str:
     name_str = str(name).lower()
     sanitized = re.sub(r'[^a-zA-Z0-9]', '_', name_str)  # Matches all non-alphanumeric characters and replaces them with an underscore as OpenCypher spec disallows them in node names
     if sanitized[0].isdigit():
         sanitized = 'n_' + sanitized    # OpenCypher spec disallows digits at the beginning of a node name, even if they're strings eg "2025"!
     return sanitized
-
-
-# UNUSED - For general purpose use with HF-Waitress or llama.cpp LLMs:
-def get_request_params_for_local_llm_server(formatted_prompt=""):
-    try:
-        read_return = read_config([
-            'local_llm_server', 'hf_waitress_access_url', 'hf_waitress_server_port', 
-            'llama_cpp_access_url', 'llama_cpp_server_port', 'llama_cpp_temperature', 
-            'llama_cpp_top_k', 'llama_cpp_top_p', 'llama_cpp_min_p', 'graph_chunk_overlap'
-        ])
-    except Exception as e:
-        handle_local_error("Could not read request params from config.json, encountered error: ", e)
-
-    headers = {'Content-Type': 'application/json'}
-
-    if read_return['local_llm_server'] == 'hf-waitress':
-
-        payload = formatted_prompt
-        base_url = f"http://{read_return['hf_waitress_access_url']}:{read_return['hf_waitress_server_port']}"
-
-        try:
-            read_hf_return = read_hf_config(['exl2', 'max_new_tokens', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p'])
-            exl2 = str(read_hf_return['exl2']).lower() == 'true'
-        except Exception as e:
-            handle_local_error("Could not read hf-waitress config, encountered error: ", e)
-        
-        headers['X-Max-New-Tokens'] = str(read_hf_return['max_new_tokens'])
-        headers['X-Temperature'] = str(read_hf_return['temperature'])
-        headers['X-Top-K'] = str(read_hf_return['top_k'])
-        headers['X-Top-P'] = str(read_hf_return['top_p'])
-        
-        if not exl2:
-            headers['X-Return-Full-Text'] = 'False'
-            headers['X-Min-P'] = str(read_hf_return['min_p'])
-            headers['X-Do-Sample'] = str(read_hf_return['do_sample'])
-            endpoint_url = f"{base_url}/completions"
-        else:
-            payload = json.dumps(formatted_prompt)
-            headers['Connection'] = 'keep-alive'
-            endpoint_url = f"{base_url}/exl2_grapher"
-    
-    else:   # llama.cpp LLMs
-        payload = {
-            'prompt': formatted_prompt,
-            'temperature': read_return['llama_cpp_temperature'],
-            'top_k': read_return['llama_cpp_top_k'],
-            'top_p': read_return['llama_cpp_top_p'],
-            'min_p': read_return['llama_cpp_min_p'],
-            'chunk_overlap': read_return['graph_chunk_overlap']
-        }
-
-        endpoint_url = f"http://{read_return['llama_cpp_access_url']}:{read_return['llama_cpp_server_port']}/completion"
-
-    return endpoint_url, headers, payload, exl2
 
 
 def get_request_params_for_graph_summarizer_model():
@@ -2913,7 +2861,7 @@ def summary_generator_for_graph_db(chunk_entities=None, cache_filepath: pathlib.
 
             try:
                 payload = json.dumps({"chunk_entities": chunk_entities})
-                full_response = hf_waitress_bulk_stream_request_response_handler(summarizer_url, headers, payload, cache_filepath)
+                full_response = hf_waitress_exl2_graph_api_stream_handler(summarizer_url, headers, payload, cache_filepath)
                 # print(f"\nExl2 Bulk-Summary Generation Response:\n\n{full_response}\n")
                 return full_response
             except Exception as e:
@@ -5536,7 +5484,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
     if precheck_result['skip_fresh_start']:
         return precheck_result
     
-    LLM_CHANGE_RELOAD_TRIGGER_SET = False       # Reset the flags to False as we're launching a new server:
+    LLM_CHANGE_RELOAD_TRIGGER_SET = False       # Reset the flags to False as we're launching a new server - Do NOT reset before prechecks, and do not force-set LLAMA_CPP_PROCESS to None as it may be running!
     
     try:
         read_return = read_config(
@@ -5569,36 +5517,64 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
         read_return['llama_cpp_gpu_layers'] = 0
 
     try:
-        llama_cpp_command_list = [
+        # Build arg list (no shell; each token separate)
+        llama_cpp_args = [
             'llama-server',
-            f'--model {cpp_model}',
-            f'--n-gpu-layers {read_return["llama_cpp_gpu_layers"]}',
-            f'--ctx-size {read_return["llama_cpp_context_length"]}',
-            f'--n-predict {read_return["llama_cpp_max_new_tokens"]}',
-            f'--cache-type-k {read_return["llama_cpp_key_cache_data_type"]}',
-            f'--cache-type-v {read_return["llama_cpp_value_cache_data_type"]}',
-            f'--parallel {read_return["llama_cpp_no_of_seqs_to_par_decode"]}',
-            f'--device {read_return["llama_cpp_offload_to_devices"]}',
-            '--kv-unified' if read_return['llama_cpp_unified_kv_buffer'] else '',
-            '--flash-attn' if flash_attention_is_installed() else '',
-            '--no-kv-offload' if read_return['llama_cpp_disable_kv_offloading'] else '',
-            '--mlock' if read_return['llama_cpp_mlock'] else '',
-            '--no-mmap' if read_return['llama_cpp_no_nmap'] else '',
-            '--cpu-moe' if read_return['llama_cpp_cpu_only_moe'] else '',
+            '--model', cpp_model,
+            '--n-gpu-layers', str(read_return["llama_cpp_gpu_layers"]),
+            '--ctx-size', str(read_return["llama_cpp_context_length"]),
+            '--n-predict', str(read_return["llama_cpp_max_new_tokens"]),
+            '--cache-type-k', str(read_return["llama_cpp_key_cache_data_type"]),
+            '--cache-type-v', str(read_return["llama_cpp_value_cache_data_type"]),
+            '--parallel', str(read_return["llama_cpp_no_of_seqs_to_par_decode"]),
+            '--device', str(read_return["llama_cpp_offload_to_devices"]),
             '--jinja',
-            '--host 127.0.0.1',
-            '--port 8080'
+            '--host', '127.0.0.1',
+            '--port', '8080'
         ]
-        llama_cpp_launch_command = ' '.join(llama_cpp_command_list)
-        print(f"Launching llama.cpp server with command: {llama_cpp_launch_command}")
+        if read_return['llama_cpp_unified_kv_buffer']:
+            llama_cpp_args.append('--kv-unified')
+        if flash_attention_is_installed():
+            llama_cpp_args.append('--flash-attn')
+        if read_return['llama_cpp_disable_kv_offloading']:
+            llama_cpp_args.append('--no-kv-offload')
+        if read_return['llama_cpp_mlock']:
+            llama_cpp_args.append('--mlock')
+        if read_return['llama_cpp_no_nmap']:
+            llama_cpp_args.append('--no-mmap')
+        if read_return['llama_cpp_cpu_only_moe']:
+            llama_cpp_args.append('--cpu-moe')
+
+        print(f"\n\nLaunching llama.cpp server with args: {llama_cpp_args}\n\n")
 
         if platform.system() == 'Windows':
-            windows_command = f'start cmd /k "{llama_cpp_launch_command}"'  # /c - closes window after command finishes, /k - keeps window open (useful for debugging)
-            LLAMA_CPP_PROCESS = subprocess.Popen(windows_command, shell=True)
+            # with open('llama_cpp_server_output_log.txt', 'w') as f:
+            #     LLAMA_CPP_PROCESS = subprocess.Popen(
+            #         llama_cpp_args,
+            #         stdout=f,
+            #         stderr=subprocess.STDOUT,
+            #         text=True,
+            #         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+            #     )
+            LLAMA_CPP_PROCESS = subprocess.Popen(llama_cpp_args, creationflags=subprocess.CREATE_NEW_CONSOLE)   # only for testing & debugging, see note below!
+            '''
+            ## Why CREATE_NEW_CONSOLE is less reliable than CREATE_NEW_PROCESS_GROUP:
+            
+                - Control events don't reach the child: Python's send_signal(signal.CTRL_BREAK_EVENT) uses GenerateConsoleCtrlEvent, which only delivers to processes that share 
+                the same console as the caller. With CREATE_NEW_CONSOLE, the child is in a different console, so the event is dropped.
+                
+                - Process group targeting requires same console: Even with CREATE_NEW_PROCESS_GROUP, Windows won't deliver the control event to a process group in another console. 
+                You'd have to attach to that console first (not something subprocess does).
+
+                - Graceful shutdown becomes hit-or-miss: In a separate console, you typically fall back to terminate()/kill(), which is less graceful and can leave resources in a 
+                bad state. This can be observed when invoking `utils.send_ctrl_c_to_process()` on the LLAMA-CPP_PROCESS.
+
+                - Logging trade-offs: CREATE_NEW_CONSOLE shows output in a new window but makes file redirection and unified logging harder unless you manually wire stdout/stderr.
+            '''
         else:           
             # Platform & container agnostic:
             with open('llama_cpp_server_output_log.txt', 'w') as f:
-                LLAMA_CPP_PROCESS = subprocess.Popen(llama_cpp_launch_command, stdout=f, stderr=subprocess.STDOUT, text=True)    #stdout has already been redirected to the file, so simply direct stderr to stdout!
+                LLAMA_CPP_PROCESS = subprocess.Popen(llama_cpp_args, stdout=f, stderr=subprocess.STDOUT, text=True)    #stdout has already been redirected to the file, so simply direct stderr to stdout!
 
     except Exception as e:
         return handle_api_error("Could not launch llama.cpp process, encountered error: ", e)
@@ -6578,9 +6554,9 @@ def read_config_for_hf_waitress_prompt_formatting() -> tuple[bool, bool]:
         handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
 
 
-def prepare_prompt_for_jinja_auto_templating(formatted_prompt:str, user_query:str, current_sequence_id:int, system_prompt:str, skip_system_prompt:bool) -> str:
+def prepare_prompt_for_auto_templating(formatted_prompt:str, user_query:str, current_sequence_id:int, system_prompt:str, skip_system_prompt:bool) -> dict:
 
-    print("\n\nFormatting prompt for hf-waitress\n\n")
+    print("\n\nFormatting prompt for Transformers-AutoTokenizer / Jinja2-based Auto-Templating\n\n")
 
     try:
         vision, flux_diffusers = read_config_for_hf_waitress_prompt_formatting()
@@ -6588,65 +6564,34 @@ def prepare_prompt_for_jinja_auto_templating(formatted_prompt:str, user_query:st
         handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
 
     try:
-    
-        # double curly braces necessitated by Python's f-string syntax, to escape the inner curly braces in the JSON string
         if flux_diffusers:
-            formatted_prompt = f'''
-            {{
-                "messages": [
-                    {{"prompt": {json.dumps(user_query)}}}
-                ]
-            }}
-            '''
+            return {"messages": [{"prompt": json.dumps(user_query)}]}
+            
         else:
             if current_sequence_id > 0:
-                history_prompt_json = json.loads(formatted_prompt)
+                # load & clean chat history object
+                messages_dict_with_history = json.loads(formatted_prompt)
+                messages_without_think_tags = clean_think_tags_from_prompt(messages_dict_with_history)
+
+                # create and append new message
                 new_message = {"role":"user", "content":user_query}
-                history_prompt_json_without_think_tags = clean_think_tags_from_prompt(history_prompt_json)
-                history_prompt_json_without_think_tags['messages'].append(new_message)
-                updated_history_prompt_json = json.dumps(history_prompt_json_without_think_tags, indent=4)
-                if vision:  
-                    formatted_prompt = updated_history_prompt_json  # return json object
-                else:
-                    formatted_prompt = str(updated_history_prompt_json)
+                messages_without_think_tags['messages'].append(new_message)
+                
+                return messages_without_think_tags
+            
             else:   # first message in chat
                 if vision:
-                    formatted_prompt = {
-                        "messages": [
-                            {
-                                "role": "user", 
-                                "content": [
-                                    {"type": "image"},
-                                    {"type": "text", "text": user_query}
-                                ]
-                            }
-                        ]
-                    }
-                    formatted_prompt = json.dumps(formatted_prompt) # Convert to a JSON string
+                    return {"messages": [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": user_query}]}]}
                 else:
                     if skip_system_prompt:
-                        first_prompt_json = f'''
-                        {{
-                                "messages": [
-                                    {{"role": "user", "content": {json.dumps(user_query)}}}
-                                ]
-                            }}
-                        '''
+                        return {"messages": [{"role": "user", "content": json.dumps(user_query)}]}
+                        
                     else:
-                        first_prompt_json = f'''
-                        {{
-                                "messages": [
-                                    {{"role": "system", "content": {json.dumps(system_prompt)}}},
-                                    {{"role": "user", "content": {json.dumps(user_query)}}}
-                                ]
-                            }}
-                        '''                    
+                        return {"messages": [{"role": "system", "content": json.dumps(system_prompt)}, {"role": "user", "content": json.dumps(user_query)}]}
 
-                    formatted_prompt = str(first_prompt_json)
     except Exception as e:
         handle_error_no_return("Could not format prompt for hf-waitress in method format-prompt_for_hf_waitress, encountered error: ", e)
 
-    return formatted_prompt
 
 
 def get_hf_waitress_formatted_user_prompt(formatted_user_prompt: str, llm_response: str) -> str:
@@ -6707,28 +6652,16 @@ def get_session_id_and_vector_key(reusable_ssid:str = None) -> tuple[str, str]:
 
 def read_config_for_llm_response_setup() -> dict:
     try:
-        read_return = read_config([
+        return read_config([
             'local_llm_server',
             'selected_embedding_model',
             'force_enable_rag', 
             'force_disable_rag', 
-            'local_llm_chat_template_format', 
             'base_template',
             'fetch_top_k_results_from_vectordb', 
             'filter_top_k_results_by_reranking', 
             'skip_system_prompt'
         ])
-        return {
-            'force_enable_rag': read_return['force_enable_rag'],
-            'selected_embedding_model': read_return['selected_embedding_model'],
-            'force_disable_rag': read_return['force_disable_rag'],
-            'local_llm_chat_template_format': read_return['local_llm_chat_template_format'],
-            'base_template': read_return['base_template'],
-            'local_llm_server': read_return['local_llm_server'],
-            'fetch_top_k_results_from_vectordb': read_return['fetch_top_k_results_from_vectordb'],
-            'filter_top_k_results_by_reranking': read_return['filter_top_k_results_by_reranking'],
-            'skip_system_prompt': str(read_return['skip_system_prompt']).lower() == 'true'
-        }
     except Exception as e:
         handle_local_error("Could not read config for setup-for_local_llm_response, encountered error: ", e)
 
@@ -6756,7 +6689,7 @@ def prepare_quick_response_for_special_model(full_prompt:str, user_query:str, cu
     print("\n\nPreparing special model response\n\n")
     try:
         is_diffusers = local_llm_server == 'hfw-diffusers'
-        formatted_prompt = prepare_prompt_for_jinja_auto_templating(
+        messages_dict = prepare_prompt_for_auto_templating(
             formatted_prompt="" if is_diffusers else full_prompt, 
             user_query=user_query, 
             current_sequence_id=0 if is_diffusers else current_sequence_id, 
@@ -6767,7 +6700,7 @@ def prepare_quick_response_for_special_model(full_prompt:str, user_query:str, cu
             "success": True, 
             "stream_session_id": stream_session_id,
             "llm_set_rag_config": DISABLED_CONFIG,
-            "formatted_user_prompt": formatted_prompt, 
+            "formatted_user_prompt": json.dumps(messages_dict), 
             "sequence_id":new_sequence_id, 
             "server_type":local_llm_server
         }
@@ -6832,16 +6765,13 @@ def read_request_data_for_tools_response(request: Request) -> tuple[str, str, st
         handle_local_error("Could not read request data for tool-invocation API, encountered error: ", e)
 
 
-def get_full_prompt_for_server(local_llm_server: str, full_prompt: str, user_query: str, current_sequence_id: int, base_template: str, local_llm_chat_template_format: str, skip_system_prompt: bool) -> str:
+def get_full_prompt_for_server(local_llm_server: str, full_prompt: str, user_query: str, current_sequence_id: int, base_template: str, skip_system_prompt: bool) -> str:
     if local_llm_server == 'llama-cpp':
-        # formatted_updated_prompt = prompt_formatting_module.manually_format_prompt_with_prompt_template(full_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
-        formatted_updated_prompt = prepare_prompt_for_jinja_auto_templating(full_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
+        return json.dumps(prepare_prompt_for_auto_templating(full_prompt, user_query, current_sequence_id, base_template, skip_system_prompt))
     elif local_llm_server == 'hf-waitress':
-        formatted_updated_prompt = prepare_prompt_for_jinja_auto_templating(full_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
+        return json.dumps(prepare_prompt_for_auto_templating(full_prompt, user_query, current_sequence_id, base_template, skip_system_prompt))
     elif local_llm_server == 'hfw-vision':
-        formatted_updated_prompt = prepare_prompt_for_jinja_auto_templating(full_prompt, user_query, current_sequence_id, "", True)  # No base_template for hfw-vision
-    # print("Returning formatted_prompt: ", formatted_updated_prompt)
-    return formatted_updated_prompt
+        return json.dumps(prepare_prompt_for_auto_templating(full_prompt, user_query, current_sequence_id, "", True))  # No base_template for hfw-vision
 
 
 def get_ids_for_llm_response_setup(stream_session_id:str, chat_id:str, sequence_id:str = None, regeneration_request:bool = False, reuse_ssid:bool = False) -> tuple[str, str, int]:
@@ -6903,11 +6833,11 @@ def handle_special_model_case(local_llm_server:str, current_sequence_id:int, fil
     return local_llm_server, None   # Likely hf-waitress, but not multi-modal (hfw-diffusers or hfw-vision)
 
 
-def handle_force_disabled_rag(local_llm_server:str, full_prompt:str, user_query:str, current_sequence_id:int, stream_session_id:str, regeneration_request:bool, base_template:str, local_llm_chat_template_format:str, skip_system_prompt:bool) -> Response:
+def handle_force_disabled_rag(local_llm_server:str, full_prompt:str, user_query:str, current_sequence_id:int, stream_session_id:str, regeneration_request:bool, base_template:str, skip_system_prompt:bool) -> Response:
     print(f"\nForce disabling RAG for request ID {stream_session_id}\n")
     reject_rag()
     try:
-        formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, full_prompt, user_query, current_sequence_id, base_template, local_llm_chat_template_format, skip_system_prompt)
+        formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, full_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
     except Exception as e:
         return handle_api_error("Could not get formatted_updated_prompt in method setup_for_streaming_response, encountered error: ", e)
     if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1 # Increment the seqID only for regular requests (as seqID stays the same when regenerating a response), or if it's currently 0.
@@ -7495,7 +7425,17 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
     return summary_report, reranked_summaries_list_descending
 
 
-def hf_waitress_streaming_request_response_handler(endpoint_url, headers, payload):
+def llama_cpp_non_streaming_api_handler(endpoint_url:str, headers:dict, payload:str) -> str:
+    print(f"\nLLama.cpp Non-Streaming Request Response Handler Invoked\n")
+    try:
+        response = requests.post(endpoint_url, headers=headers, data=payload)
+        response.raise_for_status()  # Raise an exception for bad status codes so we can catch them in the except block
+        return response.json()['choices'][0]['message']['content']
+    except Exception as e:
+        handle_local_error(f"Failed request to LLama.cpp {endpoint_url} API, encountered error: ", e)
+
+
+def hf_waitress_streaming_api_handler(endpoint_url:str, headers:dict, payload:str) -> str:
     print(f"\nHF-Waitress Streaming Request Response Handler Invoked\n")
     try:
         response = requests.post(endpoint_url, headers=headers, data=payload, stream=True)
@@ -7527,46 +7467,82 @@ def hf_waitress_streaming_request_response_handler(endpoint_url, headers, payloa
         handle_local_error(f"Failed request to HF-Waitress {endpoint_url} API, encountered error: ", e)
 
 
-def get_request_params_for_generic_hf_waitress_request():
+def get_request_params_for_llm_api(messages_dict:dict, stream:bool=False) -> tuple[str, dict, str, str, bool]:
     try:
-        hf_config_data = read_hf_config(['exl2'])
-        config_data = read_config(['hf_waitress_access_url', 'hf_waitress_server_port'])
-        exl2 = str(hf_config_data['exl2']).lower() == 'true'
+        read_return = read_config([
+            'local_llm_server', 'hf_waitress_access_url', 'hf_waitress_server_port', 
+            'llama_cpp_access_url', 'llama_cpp_server_port', 'llama_cpp_temperature', 
+            'llama_cpp_top_k', 'llama_cpp_top_p', 'llama_cpp_min_p'
+        ])
+        local_llm_server = read_return['local_llm_server'].lower().strip()
     except Exception as e:
-        handle_local_error("Could not get graphing request params, encountered error: ", e)
+        handle_local_error("Could not read request params from config.json, encountered error: ", e)
 
-    headers = {
-        'Content-Type': 'application/json'
-    }
+    headers = {'Content-Type': 'application/json'}
 
-    waitress_url = f"http://{config_data['hf_waitress_access_url']}:{config_data['hf_waitress_server_port']}"
+    if local_llm_server == 'hf-waitress':
 
-    if not exl2:
-        headers['X-Return-Full-Text'] = 'False'
-        waitress_url += "/completions_stream"
+        json_payload = json.dumps(messages_dict)
+        base_url = f"http://{read_return['hf_waitress_access_url']}:{read_return['hf_waitress_server_port']}"
+
+        try:
+            read_hf_return = read_hf_config(['exl2'])
+            exl2 = str(read_hf_return['exl2']).lower() == 'true'
+        except Exception as e:
+            handle_local_error("Could not read hf-waitress config, encountered error: ", e)
+        
+        if not exl2:
+            headers['X-Return-Full-Text'] = 'False'
+            endpoint_url = f"{base_url}/completions_stream" if stream else f"{base_url}/completions"
+        elif exl2 and stream:
+            headers['Connection'] = 'keep-alive'
+            endpoint_url = f"{base_url}/exl2_stream"
+        else:
+            handle_local_error("Invalid local LLM server, encountered error: ", e)
+
+        return endpoint_url, headers, json_payload, local_llm_server, exl2
+    
+    elif local_llm_server == 'llama-cpp':   # llama.cpp LLMs
+        messages_dict['stream'] = stream
+        messages_dict['temperature'] = read_return['llama_cpp_temperature']
+        messages_dict['top_k'] = read_return['llama_cpp_top_k']
+        messages_dict['top_p'] = read_return['llama_cpp_top_p']
+        messages_dict['min_p'] = read_return['llama_cpp_min_p']
+        json_payload = json.dumps(messages_dict)
+
+        endpoint_url = f"http://{read_return['llama_cpp_access_url']}:{read_return['llama_cpp_server_port']}/v1/chat/completions"
+        
+        return endpoint_url, headers, json_payload, local_llm_server, False
+
     else:
-        headers['Connection'] = 'keep-alive'
-        waitress_url += "/exl2_stream"
-
-    return waitress_url, headers, exl2
+        handle_local_error("Invalid local LLM server, encountered error: ", e)
 
 
-def make_request_to_hf_waitress(user_query:str):
+def make_request_to_llm_server(user_query:str) -> str:
     try:
-        waitress_url, headers, _ = get_request_params_for_generic_hf_waitress_request()
+        local_llm_server = read_config(['local_llm_server'])['local_llm_server'].lower().strip()
     except Exception as e:
-        handle_local_error("Could not get request params for generic HF-Waitress request, encountered error: ", e)
+        handle_local_error("Could not determine local LLM server, encountered error: ", e)
 
     try:
-        payload = prepare_prompt_for_jinja_auto_templating(formatted_prompt="", user_query=user_query, current_sequence_id=0, system_prompt="", skip_system_prompt=True)
-        json_payload = json.dumps(payload)
+        messages_dict = prepare_prompt_for_auto_templating(formatted_prompt="", user_query=user_query, current_sequence_id=0, system_prompt="", skip_system_prompt=True)
     except Exception as e:
         handle_local_error("Could not format prompt for generic HF-Waitress request, encountered error: ", e)
 
     try:
-        return hf_waitress_streaming_request_response_handler(waitress_url, headers, json_payload)
+        if local_llm_server == 'hf-waitress':
+            waitress_url, headers, json_payload, _, _ = get_request_params_for_llm_api(messages_dict=messages_dict, stream=True)
+            return hf_waitress_streaming_api_handler(waitress_url, headers, json_payload)
+        
+        elif local_llm_server == 'llama-cpp':
+            llama_cpp_url, headers, json_payload, _, _ = get_request_params_for_llm_api(messages_dict=messages_dict, stream=False)
+            return llama_cpp_non_streaming_api_handler(llama_cpp_url, headers, json_payload)
+
+        else:
+            handle_local_error("Invalid local LLM server, encountered error: ", e)
+    
     except Exception as e:
-        handle_local_error("Error making request to HF-Waitress, encountered error: ", e)
+        handle_local_error(f"Could not make request to LLM server - {local_llm_server}, encountered error: ", e)
 
 
 def parse_service_response(response:str):
@@ -7634,9 +7610,9 @@ def determine_response_service(user_query:str, force_enable_rag:bool = False) ->
         handle_local_error("Could not get service request prompt, encountered error: ", e)
 
     try:
-        full_response = make_request_to_hf_waitress(service_request_prompt)
+        full_response = make_request_to_llm_server(service_request_prompt)
     except Exception as e:
-        handle_local_error("Could not make streaming request to HF-Waitress, encountered error: ", e)
+        handle_local_error("Could not make service-determination request to LLM server, encountered error: ", e)
     
     try:
         selected_service = parse_service_response(full_response)
@@ -7748,7 +7724,7 @@ def determine_service_and_ids_for_query():
         return handle_api_error("Error determining appropriate model type and server for determine-service_and_ids_for_query: ", e)
     
     if (config['force_disable_rag'] or regenerate_with_citations_force_disabled):
-        return handle_force_disabled_rag(local_llm_server, full_prompt, user_query, current_sequence_id, stream_session_id, regeneration_request, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
+        return handle_force_disabled_rag(local_llm_server, full_prompt, user_query, current_sequence_id, stream_session_id, regeneration_request, config['base_template'], config['skip_system_prompt'])
     
     print(f"\n\nSpecial cases addressed, determining service and returning\n\n")
 
@@ -7762,7 +7738,7 @@ def determine_service_and_ids_for_query():
     try:    
         formatted_updated_prompt = None # In case RAG or other additional preparation is needed, the client must make another request to obtain the final query, so it won't be set here.
         if llm_set_rag_config == DISABLED_CONFIG:   # On the other hand, if no further preparation is needed, the client need not make another request to obtain the final query, so set final here.
-            formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, full_prompt, user_query, current_sequence_id, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])  # Get full prompt for server
+            formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, full_prompt, user_query, current_sequence_id, config['base_template'], config['skip_system_prompt'])  # Get full prompt for server
             # NOTE: seq_id should be incremented later (done below) as the prompt must be formatted accordingly if this is the first message in a chat! 
     except Exception as e:
         return handle_api_error("Could not get formatted_updated_prompt in method determine-service_and_ids_for_query, encountered error: ", e)
@@ -7814,7 +7790,7 @@ def invoke_tools_for_query():
         handle_error_no_return("Could not process RAG results, encountered error: ", e)   # No need to reject-rag as get-vector_results_for_get_references() handles any issues.
     
     try:    # Get full prompt for server - NOTE: seq_id should be incremented later as the prompt must be formatted accordingly if this is the first message in a chat!
-        formatted_updated_prompt = get_full_prompt_for_server(config['local_llm_server'], full_prompt, user_query, current_sequence_id, config['base_template'], config['local_llm_chat_template_format'], config['skip_system_prompt'])
+        formatted_updated_prompt = get_full_prompt_for_server(config['local_llm_server'], full_prompt, user_query, current_sequence_id, config['base_template'], config['skip_system_prompt'])
     except Exception as e:
         return handle_api_error("Could not get formatted_updated_prompt in method invoke-tools_for_query, encountered error: ", e)
 
@@ -8011,7 +7987,7 @@ def prepare_model_response_for_storage_to_history_db(download_link_html: str, ll
     return model_response_for_history_db
 
 
-def determine_if_flux_diffusers_is_enabled() -> bool:
+def flux_diffusers_is_enabled() -> bool:
     try:
         hf_read_return = read_hf_config(['flux_diffusers'])
         flux_diffusers = str(hf_read_return['flux_diffusers']).lower() == 'true'
@@ -8051,13 +8027,10 @@ def get_request_parameters_for_get_references(request: Request) -> tuple[str, st
 
 def read_config_for_get_references() -> tuple[str, str, str, str, bool]:
     try:
-        read_return = read_config(['local_llm_server', 'local_llm_chat_template_format', 'perform_graph_rag'])
-        local_llm_server = read_return['local_llm_server']
-        local_llm_chat_template_format = read_return['local_llm_chat_template_format']
-        perform_graph_rag = str(read_return['perform_graph_rag']).lower() == 'true'
-        return local_llm_server, local_llm_chat_template_format, perform_graph_rag
+        read_return = read_config(['local_llm_server', 'perform_graph_rag'])
+        return read_return['local_llm_server'], read_return['perform_graph_rag']
     except Exception as e:
-        handle_local_error("Could not read config.json in method read_config_for_get_references(), encountered error: ", e)
+        handle_local_error("Could not read config.json in method read-config_for_get_references(), encountered error: ", e)
 
 
 @app.route('/get_references', methods=['POST'])
@@ -8066,7 +8039,7 @@ def get_references():
     print("\n\nStoring History Post-Response -- Determining if Citations are Necessary\n\n")
 
     try:
-        local_llm_server, local_llm_chat_template_format, perform_graph_rag = read_config_for_get_references()
+        local_llm_server, perform_graph_rag = read_config_for_get_references()
     except Exception as e:
         return handle_api_error("Missing values in config.json when attempting to get-references. Error: ", e)
 
@@ -8082,13 +8055,11 @@ def get_references():
         handle_error_no_return("Error determining if RAG was used in method get-references - Could not check the queries dict. Proceeding without RAG. Encountered error: ", e)
 
     if local_llm_server == 'llama-cpp':
-        # formatted_user_prompt += prompt_formatting_module.append_eot_token_to_llm_response(local_llm_chat_template_format, llm_response)
         local_llm_chat_template_format = "llama-cpp-jinja"
     elif local_llm_server == 'hf-waitress':
-        local_llm_chat_template_format = "hf-transformers"
-        if determine_if_flux_diffusers_is_enabled():
+        local_llm_chat_template_format = "Transformers-AutoTokenizer"
+        if flux_diffusers_is_enabled():
             do_rag = False
-        # else:
     
     if perform_graph_rag:
         try:
