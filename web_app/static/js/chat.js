@@ -349,6 +349,7 @@ async function handleToolUse(stream_session_id, userInput, current_chat_id, llm_
     const invoke_tools_response = await invokeTools(stream_session_id, userInput, current_chat_id, llm_set_rag_config, regeneration_request, sequence_id_from_previous_request);
     const invoke_tools_data = await invoke_tools_response.json();
     const {reused_stream_session_id, tool_formatted_user_prompt, sequence_id, reconfirmed_server_type} = invoke_tools_data;
+    console.log("tool_formatted_user_prompt: ", JSON.parse(tool_formatted_user_prompt));
     setSequenceId(sequence_id);
     appendSequenceIdToUserMessage(uniqueId, stream_session_id, regeneration_request, sequence_id);
     return {reused_stream_session_id, tool_formatted_user_prompt, reconfirmed_server_type};
@@ -380,7 +381,7 @@ function handleSetupResponse(data) {
     const {llm_set_rag_config, stream_session_id, formatted_user_prompt, sequence_id, server_type} = data;   // using object-destructuring (ES6-2015) to extract and set specific values from the data object in a single step!
     const {do_rag, perform_graph_rag} = llm_set_rag_config;
     const tool_use = (do_rag || perform_graph_rag) ? true : false;
-
+    console.log("formatted_user_prompt: ", JSON.parse(formatted_user_prompt));
     setSequenceId(sequence_id);
     appendSequenceIdToUserMessage(data.user_message_html_unique_id, stream_session_id, data.regeneration_request, sequence_id);
 
