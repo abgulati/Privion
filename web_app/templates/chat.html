@@ -610,7 +610,7 @@
 
                                             <br>
 
-                                            <div  id="localLlmTemplateSelection" style="width: 100%;">
+                                            <div  id="localLlmTemplateSelection" style="width: 100%; display: none;">
                                                 <label style="margin-bottom: 3px;">Select a Prompt-Template Format</label>
                                                 <br>
                                                 <select class="modal-selects" name="llm_template_choice" id="llmTemplateDropdown" style="width: 100%; max-width: 60vh;">
@@ -715,7 +715,7 @@
                                                     <br>
         
                                                     <div id="nkeep_value">
-                                                        <label for="nkeepSlider">Prompt-tokens retained when context-size exceeded (n_keep, -1 to retain all): </label>
+                                                        <label for="nkeepSlider">Prompt-tokens retained when context-size exceeded (n_keep) [Default: 0 | Retain All: -1]: </label>
                                                         <input type="number" id="nkeepSlider" name="nkeepSlider" min="-1" class="settings-input-fields" value="0">
                                                     </div>
                                                     
