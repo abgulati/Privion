@@ -68,18 +68,18 @@ function initializeUI() {
 
 
 function setUIValues(values) {
-    document.getElementById('NumbGpuLayers').value = values.local_llm_gpu_layers;
-    document.getElementById('LlmCtxLgt').value = values.local_llm_context_length;
-    document.getElementById('MaxNewToks').value = values.local_llm_max_new_tokens;
-    document.getElementById('tempSlider').value = values.local_llm_temperature;
-    document.getElementById('tempSliderValue').textContent = values.local_llm_temperature;
-    document.getElementById('topkSlider').value = values.local_llm_top_k;
-    document.getElementById('topkSliderValue').textContent = values.local_llm_top_k;
-    document.getElementById('toppSlider').value = values.local_llm_top_p;
-    document.getElementById('toppSliderValue').textContent = values.local_llm_top_p;
-    document.getElementById('minpSlider').value = values.local_llm_min_p;
-    document.getElementById('minpSliderValue').textContent = values.local_llm_min_p;
-    document.getElementById('nkeepSlider').value = values.local_llm_n_keep;
+    document.getElementById('NumbGpuLayers').value = values.llama_cpp_gpu_layers;
+    document.getElementById('LlmCtxLgt').value = values.llama_cpp_context_length;
+    document.getElementById('MaxNewToks').value = values.llama_cpp_max_new_tokens;
+    document.getElementById('tempSlider').value = values.llama_cpp_temperature;
+    document.getElementById('tempSliderValue').textContent = values.llama_cpp_temperature;
+    document.getElementById('topkSlider').value = values.llama_cpp_top_k;
+    document.getElementById('topkSliderValue').textContent = values.llama_cpp_top_k;
+    document.getElementById('toppSlider').value = values.llama_cpp_top_p;
+    document.getElementById('toppSliderValue').textContent = values.llama_cpp_top_p;
+    document.getElementById('minpSlider').value = values.llama_cpp_min_p;
+    document.getElementById('minpSliderValue').textContent = values.llama_cpp_min_p;
+    document.getElementById('nkeepSlider').value = values.llama_cpp_n_keep;
 }
 
 
@@ -89,7 +89,6 @@ function loadCoreLarsConfig() {
         'local_llm_server',
         'model_choice',
         'use_local_llm',
-        'use_gpu',
         'embedding_models_list',
         'selected_embedding_model',
         'reranker_models_list',
@@ -114,7 +113,6 @@ function loadCoreLarsConfig() {
         'docling_do_cell_matching',
         'docling_cuda_use_flash_attention_2',
         'docling_num_threads',
-        'local_llm_chat_template_format',
         'force_enable_rag',
         'force_disable_rag',
         'enable_graph_rag',
@@ -166,14 +164,15 @@ function loadCoreLarsConfig() {
         'min_lexical_similarity_threshold',
         'base_template',
         'vision_ocr_prompt',
-        'local_llm_gpu_layers',
-        'local_llm_context_length',
-        'local_llm_max_new_tokens',
-        'local_llm_temperature',
-        'local_llm_top_k',
-        'local_llm_top_p',
-        'local_llm_min_p',
-        'local_llm_n_keep',
+        'llama_cpp_use_gpu',
+        'llama_cpp_gpu_layers',
+        'llama_cpp_context_length',
+        'llama_cpp_max_new_tokens',
+        'llama_cpp_temperature',
+        'llama_cpp_top_k',
+        'llama_cpp_top_p',
+        'llama_cpp_min_p',
+        'llama_cpp_n_keep',
         'azure_cv_free_tier',
         'skip_system_prompt',
         'force_extract_previously_extracted_text',
@@ -974,8 +973,8 @@ function initializeHfwUrlComponents(hf_waitress_serving_url, hf_waitress_access_
 function initializeLLMTabComponents(values) {
     initializeLocalLLMServerDropdown(values.local_llm_server);
     initializeModelDropdown(values.model_choice);   
-    initializeLLMTemplateDropdown(values.local_llm_chat_template_format);
-    initializeGPURadioButtons(values.use_gpu);
+    //initializeLLMTemplateDropdown(values.local_llm_chat_template_format);
+    initializeGPURadioButtons(values.llama_cpp_use_gpu);
     initializeLLMRadioButtons(values.use_local_llm, values.model_choice);
     initializeHfwUrlComponents(values.hf_waitress_serving_url, values.hf_waitress_access_url, values.hf_waitress_server_port);
     initializeEventListenersForLLMTab();

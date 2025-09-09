@@ -15,16 +15,15 @@ function getLlmConfig() {
         config.local_llm_server = document.getElementById('local_llm_server_select_dropdown').value;
         if (config.local_llm_server === "llama-cpp") {
             config.model_choice = document.getElementById('modelDropdown').value;
-            config.local_llm_chat_template_format = document.getElementById('llmTemplateDropdown').value;
-            config.use_gpu = document.getElementById('gpu_radio_yes').checked;
-            config.local_llm_gpu_layers = parseInt(document.getElementById('NumbGpuLayers').value);
-            config.local_llm_context_length = parseInt(document.getElementById('LlmCtxLgt').value);
-            config.local_llm_max_new_tokens = parseInt(document.getElementById('MaxNewToks').value);
-            config.local_llm_temperature = parseFloat(document.getElementById('tempSlider').value);
-            config.local_llm_top_k = parseInt(document.getElementById('topkSlider').value);
-            config.local_llm_top_p = parseFloat(document.getElementById('toppSlider').value);
-            config.local_llm_min_p = parseFloat(document.getElementById('minpSlider').value);
-            config.local_llm_n_keep = parseInt(document.getElementById('nkeepSlider').value);
+            config.llama_cpp_use_gpu = document.getElementById('gpu_radio_yes').checked;
+            config.llama_cpp_gpu_layers = parseInt(document.getElementById('NumbGpuLayers').value);
+            config.llama_cpp_context_length = parseInt(document.getElementById('LlmCtxLgt').value);
+            config.llama_cpp_max_new_tokens = parseInt(document.getElementById('MaxNewToks').value);
+            config.llama_cpp_temperature = parseFloat(document.getElementById('tempSlider').value);
+            config.llama_cpp_top_k = parseInt(document.getElementById('topkSlider').value);
+            config.llama_cpp_top_p = parseFloat(document.getElementById('toppSlider').value);
+            config.llama_cpp_min_p = parseFloat(document.getElementById('minpSlider').value);
+            config.llama_cpp_n_keep = parseInt(document.getElementById('nkeepSlider').value);
         } else if (config.local_llm_server === "hf-waitress") {
             config.hf_waitress_serving_url = document.getElementById('HfwServingUrl').value;
             config.hf_waitress_access_url = document.getElementById('HfwAccessUrl').value;
