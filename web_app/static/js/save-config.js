@@ -15,8 +15,17 @@ function getLlmConfig() {
         config.local_llm_server = document.getElementById('local_llm_server_select_dropdown').value;
         if (config.local_llm_server === "llama-cpp") {
             config.model_choice = document.getElementById('modelDropdown').value;
-            config.llama_cpp_use_gpu = document.getElementById('gpu_radio_yes').checked;
+            config.llama_cpp_use_gpu = document.getElementById('UseGpu').checked;
             config.llama_cpp_gpu_layers = parseInt(document.getElementById('NumbGpuLayers').value);
+            config.llama_cpp_unified_kv_buffer = document.getElementById('UnifiedKvBuffer').checked;
+            config.llama_cpp_disable_kv_offloading = document.getElementById('DisableKvOffloading').checked;
+            config.llama_cpp_key_cache_data_type = document.getElementById('KeyCacheDataType').value;
+            config.llama_cpp_value_cache_data_type = document.getElementById('ValueCacheDataType').value;
+            config.llama_cpp_no_of_seqs_to_par_decode = parseInt(document.getElementById('NoOfSeqsToParDecode').value);
+            config.llama_cpp_offload_to_devices = document.getElementById('OffloadToDevices').value;
+            config.llama_cpp_cpu_only_moe = document.getElementById('CpuOnlyMoe').checked;
+            config.llama_cpp_mlock = document.getElementById('Mlock').checked;
+            config.llama_cpp_no_nmap = document.getElementById('NoNmap').checked;
             config.llama_cpp_context_length = parseInt(document.getElementById('LlmCtxLgt').value);
             config.llama_cpp_max_new_tokens = parseInt(document.getElementById('MaxNewToks').value);
             config.llama_cpp_temperature = parseFloat(document.getElementById('tempSlider').value);

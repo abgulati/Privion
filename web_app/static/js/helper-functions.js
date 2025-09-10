@@ -817,20 +817,28 @@ function setDefaultTemplate() {
 
 
 function resetLlmAdvancedDefaults() {
-    document.getElementById('gpu_radio_yes').checked = true;
-    document.getElementById('gpu_radio_no').checked = false;
-    document.getElementById("NumbGpuLayers").disabled = false;
-    document.getElementById('NumbGpuLayers').value = "47";
-    document.getElementById('LlmCtxLgt').value = "8192";
-    document.getElementById('MaxNewToks').value = "2048";
+    document.getElementById('UseGpu').checked = false;
+    document.getElementById("NumbGpuLayers").disabled = true;
+    document.getElementById('NumbGpuLayers').value = "0";
+    document.getElementById('LlmCtxLgt').value = "4096";
+    document.getElementById('UnifiedKvBuffer').checked = false;
+    document.getElementById('DisableKvOffloading').checked = false;
+    document.getElementById('KeyCacheDataType').value = "f16";
+    document.getElementById('ValueCacheDataType').value = "f16";
+    document.getElementById('NoOfSeqsToParDecode').value = "1";
+    document.getElementById('OffloadToDevices').value = "none";
+    document.getElementById('CpuOnlyMoe').checked = false;
+    document.getElementById('Mlock').checked = false;
+    document.getElementById('NoNmap').checked = false;
+    document.getElementById('MaxNewToks').value = "-1";
     document.getElementById('tempSlider').value = "0.8";
     document.getElementById('tempSliderValue').textContent = "0.8"
     document.getElementById('topkSlider').value = "40";
     document.getElementById('topkSliderValue').textContent = "40";
-    document.getElementById('toppSlider').value = "0.95";
-    document.getElementById('toppSliderValue').textContent = "0.95";
-    document.getElementById('minpSlider').value = "0.05";
-    document.getElementById('minpSliderValue').textContent = "0.05";
+    document.getElementById('toppSlider').value = "0.9";
+    document.getElementById('toppSliderValue').textContent = "0.9";
+    document.getElementById('minpSlider').value = "0.1";
+    document.getElementById('minpSliderValue').textContent = "0.1";
     document.getElementById('nkeepSlider').value = "0";
 }
 

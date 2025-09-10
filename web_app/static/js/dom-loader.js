@@ -67,22 +67,6 @@ function initializeUI() {
 }
 
 
-function setUIValues(values) {
-    document.getElementById('NumbGpuLayers').value = values.llama_cpp_gpu_layers;
-    document.getElementById('LlmCtxLgt').value = values.llama_cpp_context_length;
-    document.getElementById('MaxNewToks').value = values.llama_cpp_max_new_tokens;
-    document.getElementById('tempSlider').value = values.llama_cpp_temperature;
-    document.getElementById('tempSliderValue').textContent = values.llama_cpp_temperature;
-    document.getElementById('topkSlider').value = values.llama_cpp_top_k;
-    document.getElementById('topkSliderValue').textContent = values.llama_cpp_top_k;
-    document.getElementById('toppSlider').value = values.llama_cpp_top_p;
-    document.getElementById('toppSliderValue').textContent = values.llama_cpp_top_p;
-    document.getElementById('minpSlider').value = values.llama_cpp_min_p;
-    document.getElementById('minpSliderValue').textContent = values.llama_cpp_min_p;
-    document.getElementById('nkeepSlider').value = values.llama_cpp_n_keep;
-}
-
-
 function loadCoreLarsConfig() {
     appendStreamInfo("Loading core LARS config...", 'waiting');
     const initKeysToRead = [
@@ -168,6 +152,15 @@ function loadCoreLarsConfig() {
         'llama_cpp_gpu_layers',
         'llama_cpp_context_length',
         'llama_cpp_max_new_tokens',
+        'llama_cpp_unified_kv_buffer',
+        'llama_cpp_disable_kv_offloading',
+        'llama_cpp_key_cache_data_type',
+        'llama_cpp_value_cache_data_type',
+        'llama_cpp_no_of_seqs_to_par_decode',
+        'llama_cpp_offload_to_devices',
+        'llama_cpp_cpu_only_moe',
+        'llama_cpp_mlock',
+        'llama_cpp_no_nmap',
         'llama_cpp_temperature',
         'llama_cpp_top_k',
         'llama_cpp_top_p',
@@ -203,26 +196,11 @@ function loadCoreLarsConfig() {
         return response.json()
     })
     .then(data => {
-        setUIValues(data.values);
         return data.values;
     })
     .catch(error => {
         errorHandler("reading config.json", "/config_reader_api", String(error.message));
     });
-}
-
-
-function initializeLocalLLMServerDropdown(local_llm_server) {
-    const llmServerDd = document.getElementById('local_llm_server_select_dropdown');
-    for (let option of llmServerDd.options) {
-        if (option.value == local_llm_server) {
-            option.selected = true;
-            break;
-        }
-    }
-
-    document.getElementById('llama_cpp_div').style.display = local_llm_server === 'llama-cpp' ? 'block' : 'none';
-    document.getElementById('hf_waitress_div').style.display = local_llm_server === 'hf-waitress' ? 'block' : 'none';
 }
 
 
@@ -278,7 +256,7 @@ function loadCoreHfConfig() {
         return data.values;
     })
     .catch(error => {
-        errorHandler("reading hf_config.json (likely means the HF-Waitress server is offline)", "loadCoreHfConfig()", String(error.message))
+        errorHandler("reading hf_config.json (likely means the HF-Waitress server is offline)", "load-CoreHfConfig()", String(error.message))
         appendStreamInfo(`Error: ${String(error.message)}`, 'failure');
     });
 }
@@ -591,8 +569,68 @@ function initializeHfwServerConfig() {
             setHfSlidersAndTextAreas(hf_values);
         })
         .catch(error => {
-            errorHandler("initializing HF-Waitress Server config (likely means the HF-Waitress server is offline)", "initializeHfwServerConfig()", String(error.message));
+            errorHandler("initializing HF-Waitress Server config (likely means the HF-Waitress server is offline)", "initialize-HfwServerConfig()", String(error.message));
         });
+}
+
+
+function setLlamaCppDropdowns(values) {
+    const keyCacheDataType = document.getElementById('KeyCacheDataType');
+    for (let option of keyCacheDataType.options) {
+        if (option.value == values.llama_cpp_key_cache_data_type) {
+            option.selected = true;
+            break;
+        }
+    }
+    const valueCacheDataType = document.getElementById('ValueCacheDataType');
+    for (let option of valueCacheDataType.options) {
+        if (option.value == values.llama_cpp_value_cache_data_type) {
+            option.selected = true;
+            break;
+        }
+    }
+}
+
+
+function setLlamaCppCheckboxes(values) {
+    document.getElementById('UseGpu').checked = values.llama_cpp_use_gpu;
+    document.getElementById('UnifiedKvBuffer').checked = values.llama_cpp_unified_kv_buffer;
+    document.getElementById('DisableKvOffloading').checked = values.llama_cpp_disable_kv_offloading;
+    document.getElementById('CpuOnlyMoe').checked = values.llama_cpp_cpu_only_moe;
+    document.getElementById('Mlock').checked = values.llama_cpp_mlock;
+    document.getElementById('NoNmap').checked = values.llama_cpp_no_nmap;
+}
+
+
+function setLlamaCppValues(values) {
+    document.getElementById('NumbGpuLayers').value = values.llama_cpp_gpu_layers;
+    document.getElementById('LlmCtxLgt').value = values.llama_cpp_context_length;
+    document.getElementById('NoOfSeqsToParDecode').value = values.llama_cpp_no_of_seqs_to_par_decode;
+    document.getElementById('OffloadToDevices').value = values.llama_cpp_offload_to_devices;
+    document.getElementById('MaxNewToks').value = values.llama_cpp_max_new_tokens;
+    document.getElementById('tempSlider').value = values.llama_cpp_temperature;
+    document.getElementById('tempSliderValue').textContent = values.llama_cpp_temperature;
+    document.getElementById('topkSlider').value = values.llama_cpp_top_k;
+    document.getElementById('topkSliderValue').textContent = values.llama_cpp_top_k;
+    document.getElementById('toppSlider').value = values.llama_cpp_top_p;
+    document.getElementById('toppSliderValue').textContent = values.llama_cpp_top_p;
+    document.getElementById('minpSlider').value = values.llama_cpp_min_p;
+    document.getElementById('minpSliderValue').textContent = values.llama_cpp_min_p;
+    document.getElementById('nkeepSlider').value = values.llama_cpp_n_keep;
+}
+
+
+function initializeLocalLLMServerDropdown(local_llm_server) {
+    const llmServerDd = document.getElementById('local_llm_server_select_dropdown');
+    for (let option of llmServerDd.options) {
+        if (option.value == local_llm_server) {
+            option.selected = true;
+            break;
+        }
+    }
+
+    document.getElementById('llama_cpp_div').style.display = local_llm_server === 'llama-cpp' ? 'block' : 'none';
+    document.getElementById('hf_waitress_div').style.display = local_llm_server === 'hf-waitress' ? 'block' : 'none';
 }
 
 
@@ -644,12 +682,6 @@ function initializeLLMTemplateDropdown(local_llm_chat_template_format) {
 }
 
 
-function initializeGPURadioButtons(use_gpu) {
-    document.getElementById('gpu_radio_yes').checked = use_gpu;
-    document.getElementById('gpu_radio_no').checked = !use_gpu;
-}
-
-
 function initializeLLMRadioButtons(use_local_llm, model_choice) {
     var useLocalLlm = document.getElementById('local_llm_radio_button');
     var useApiLlm = document.getElementById('api_llm_radio_button');
@@ -671,6 +703,14 @@ function initializeLLMRadioButtons(use_local_llm, model_choice) {
         }
         useApiLlm.checked = true;
     }
+}
+
+
+function initializeHfwUrlComponents(hf_waitress_serving_url, hf_waitress_access_url, hf_waitress_server_port) {
+    document.getElementById('HfwServingUrl').value = hf_waitress_serving_url;
+    document.getElementById('HfwAccessUrl').value = hf_waitress_access_url;
+    document.getElementById('HfwPort').value = hf_waitress_server_port;
+    setHfwUrl(hf_waitress_access_url, hf_waitress_server_port);
 }
 
 
@@ -719,8 +759,8 @@ function toggleLlmApiForm() {   // Show or hide API form:
 
 
 function toggleNGL() {  // Enable or disable ngl based on use_gpu
-    var selection = document.querySelector('input[name="use_gpu"]:checked').value;
-    if(selection === 'y') {
+    var selection = document.getElementById('UseGpu').checked;
+    if(selection) {
         document.getElementById("NumbGpuLayers").disabled = false;
     } else {
         document.getElementById('NumbGpuLayers').value = "0";
@@ -850,8 +890,7 @@ function initializeEventListenersForLLMTab() {
     document.getElementById('llmApiDropdown').addEventListener('change', toggleLlmApiForm);
 
     // Event Listener for toggle GPU:
-    document.getElementById('gpu_radio_yes').addEventListener('change', toggleNGL);
-    document.getElementById('gpu_radio_no').addEventListener('change', toggleNGL);
+    document.getElementById('UseGpu').addEventListener('change', toggleNGL);
 
     // Event listener for toggle Vision:
     document.getElementById('hf_waitress_vision_yes').addEventListener('change', toggleHfwVisionConfig);
@@ -962,19 +1001,13 @@ function initializeEventListenersForLLMTabSliders() {
 }
 
 
-function initializeHfwUrlComponents(hf_waitress_serving_url, hf_waitress_access_url, hf_waitress_server_port) {
-    document.getElementById('HfwServingUrl').value = hf_waitress_serving_url;
-    document.getElementById('HfwAccessUrl').value = hf_waitress_access_url;
-    document.getElementById('HfwPort').value = hf_waitress_server_port;
-    setHfwUrl(hf_waitress_access_url, hf_waitress_server_port);
-}
-
-
 function initializeLLMTabComponents(values) {
+    setLlamaCppValues(values);
+    setLlamaCppCheckboxes(values);
+    setLlamaCppDropdowns(values);
     initializeLocalLLMServerDropdown(values.local_llm_server);
     initializeModelDropdown(values.model_choice);   
     //initializeLLMTemplateDropdown(values.local_llm_chat_template_format);
-    initializeGPURadioButtons(values.llama_cpp_use_gpu);
     initializeLLMRadioButtons(values.use_local_llm, values.model_choice);
     initializeHfwUrlComponents(values.hf_waitress_serving_url, values.hf_waitress_access_url, values.hf_waitress_server_port);
     initializeEventListenersForLLMTab();

@@ -650,28 +650,115 @@
         
                                                     <div class="settings-requiring-restart-container">
         
-                                                        <div id="gpu_choice" class="restart-settings-group">
-                                                            <label>Use GPU?</label>
-                                                            <input type="radio" id="gpu_radio_yes" name="use_gpu" value="y" style="margin-left: 7px;"> Yes (NvCUDA)
-                                                            <input type="radio" id="gpu_radio_no" name="use_gpu" value="n" style="margin-left: 7px;"> No
-                                                            <br><label for="NumbGpuLayers">Number of Model-layers to offload to the GPU (-ngl): </label>
-                                                            <input type="number" id="NumbGpuLayers" name="NumbGpuLayers" min="-1" class="settings-input-fields" value="47">
+                                                        <div id="use_gpu" class="restart-settings-group">
+                                                            <input type="checkbox" id="UseGpu" name="UseGpu" style="margin-left: 7px;">
+                                                            <label for="UseGpu">Use GPU? [default: Disabled]</label>
+                                                        </div>
+
+                                                        <br>
+
+                                                        <div id="llm_numb_gpu_layers" class="restart-settings-group">
+                                                            <label for="NumbGpuLayers">Number of Model-layers to Offload to the GPU (--n-gpu-layers) [default: 0, 0 = no offloading]: </label>
+                                                            <input type="number" id="NumbGpuLayers" name="NumbGpuLayers" min="-1" class="settings-input-fields" value="0" disabled>
                                                         </div>
             
                                                         <br>
             
-                                                        <div id="ctx_length" class="restart-settings-group">
-                                                            <label for="LlmCtxLgt">Context-Length (-c): </label>
-                                                            <input type="number" id="LlmCtxLgt" name="LlmCtxLgt" min="128" class="settings-input-fields" value="8192">
+                                                        <div id="llm_ctx_length" class="restart-settings-group">
+                                                            <label for="LlmCtxLgt">Context-Length (--ctx-size) [default: 4096, 0 = loaded from model]: </label>
+                                                            <input type="number" id="LlmCtxLgt" name="LlmCtxLgt" min="128" class="settings-input-fields" value="4096">
                                                         </div>
             
                                                         <br>
             
                                                         <div id="llm_max_new_tokens" class="restart-settings-group">
-                                                            <label for="MaxNewToks">Maximum tokens to predict (-n): </label>
-                                                            <input type="number" id="MaxNewToks" name="MaxNewToks" min="-1" class="settings-input-fields" value="2048">
+                                                            <label for="MaxNewToks">Maximum Tokens to Predict (--n-predict) [default: -1, -1 = infinity]: </label>
+                                                            <input type="number" id="MaxNewToks" name="MaxNewToks" min="-1" class="settings-input-fields" value="-1">
                                                         </div>
         
+                                                        <br>
+
+                                                        <div id="llm_unified_kv_buffer" class="restart-settings-group">
+                                                            <input type="checkbox" id="UnifiedKvBuffer" name="UnifiedKvBuffer" style="margin-left: 7px;">
+                                                            <label for="UnifiedKvBuffer">Unified KV Buffer (--kv-unified) [default: Disabled]</label>
+                                                        </div>
+        
+                                                        <br>
+
+                                                        <div id="llm_disable_kv_offloading" class="restart-settings-group">
+                                                            <input type="checkbox" id="DisableKvOffloading" name="DisableKvOffloading" style="margin-left: 7px;">
+                                                            <label for="DisableKvOffloading">Disable KV Offloading (--no-kv-offload) [default: Disabled]</label>
+                                                        </div>
+
+                                                        <br>
+
+                                                        <div id="llm_key_cache_data_type" class="restart-settings-group">
+                                                            <label for="KeyCacheDataType">Key Cache Data Type (--cache-type-k): </label>
+                                                             <select class="modal-selects" id="KeyCacheDataType">
+                                                                <option value="f32">f32</option>
+                                                                <option value="f16">f16 (Default)</option>
+                                                                <option value="bf16">bf16</option>
+                                                                <option value="q8_0">q8_0</option>
+                                                                <option value="q4_0">q4_0</option>
+                                                                <option value="q4_1">q4_1</option>
+                                                                <option value="iq4_nl">iq4_nl</option>
+                                                                <option value="q5_0">q5_0</option>
+                                                                <option value="q5_1">q5_1</option>
+                                                             </select>
+                                                        </div>
+                                                        
+                                                        <br>
+
+                                                        <div id="llm_value_cache_data_type" class="restart-settings-group">
+                                                            <label for="ValueCacheDataType">Value Cache Data Type (--cache-type-v): </label>
+                                                             <select class="modal-selects" id="ValueCacheDataType">
+                                                                <option value="f32">f32</option>
+                                                                <option value="f16">f16 (Default)</option>
+                                                                <option value="bf16">bf16</option>
+                                                                <option value="q8_0">q8_0</option>
+                                                                <option value="q4_0">q4_0</option>
+                                                                <option value="q4_1">q4_1</option>
+                                                                <option value="iq4_nl">iq4_nl</option>
+                                                                <option value="q5_0">q5_0</option>
+                                                                <option value="q5_1">q5_1</option>
+                                                             </select>
+                                                        </div>
+
+                                                        <br>
+
+                                                        <div id="llm_no_of_seqs_to_par_decode" class="restart-settings-group">
+                                                            <label for="NoOfSeqsToParDecode">Number of Sequences to Decode in Parallel (--parallel) [default: 1]: </label>
+                                                            <input type="number" id="NoOfSeqsToParDecode" name="NoOfSeqsToParDecode" min="1" class="settings-input-fields" value="1">
+                                                        </div>
+
+                                                        <br>
+
+                                                        <div id="llm_offload_to_devices" class="restart-settings-group">
+                                                            <label for="OffloadToDevices">Offload to Devices (--device) [default: none | none = no offloading | run `llama-server --list-devices` to see available devices]: </label>
+                                                            <input type="text" id="OffloadToDevices" name="OffloadToDevices" value="none">
+                                                        </div>
+
+                                                        <br>
+
+                                                        <div id="llm_cpu_only_moe" class="restart-settings-group">
+                                                            <input type="checkbox" id="CpuOnlyMoe" name="CpuOnlyMoe" style="margin-left: 7px;">
+                                                            <label for="CpuOnlyMoe">CPU-only MOE (--cpu-moe) [default: Disabled]</label>
+                                                        </div>
+
+                                                        <br>
+
+                                                        <div id="llm_mlock" class="restart-settings-group">
+                                                            <input type="checkbox" id="Mlock" name="Mlock" style="margin-left: 7px;">
+                                                            <label for="Mlock">Mlock (--mlock) [default: Disabled]</label>
+                                                        </div>
+
+                                                        <br>
+
+                                                        <div id="llm_no_nmap" class="restart-settings-group">
+                                                            <input type="checkbox" id="NoNmap" name="NoNmap" style="margin-left: 7px;">
+                                                            <label for="NoNmap">No Mmap (--no-mmap) [default: Disabled]</label>
+                                                        </div>
+
                                                         <br>
         
                                                         <div class="restart-warning">
@@ -683,7 +770,7 @@
                                                     <br>
         
                                                     <div id="temperature_value">
-                                                        <label for="tempSlider">Temperature (Randomness of generated text): </label>
+                                                        <label for="tempSlider">Temperature (Randomness of generated text) [default: 0.8]: </label>
                                                         <input type="range" id="tempSlider" name="tempSlider" min="0" max="2" step="0.1" value="0.8">
                                                         <span id="tempSliderValue">0.8</span>
                                                     </div>
@@ -691,7 +778,7 @@
                                                     <br>
         
                                                     <div id="topk_value">
-                                                        <label for="topkSlider">Limit to K most probable tokens (top_k): </label>
+                                                        <label for="topkSlider">Limit to K most probable tokens (top_k) [default: 40]: </label>
                                                         <input type="range" id="topkSlider" name="topkSlider" min="-1" max="100" step="1" value="40">
                                                         <span id="topkSliderValue">40</span>
                                                     </div>
@@ -699,17 +786,17 @@
                                                     <br>
         
                                                     <div id="topp_value">
-                                                        <label for="toppSlider">Limit to a subset of tokens with a cumulative probability above (top_p): </label>
-                                                        <input type="range" id="toppSlider" name="toppSlider" min="0" max="1" step="0.01" value="0.95">
-                                                        <span id="toppSliderValue">0.95</span>
+                                                        <label for="toppSlider">Limit to a subset of tokens with a cumulative probability above (top_p) [default: 0.9]: </label>
+                                                        <input type="range" id="toppSlider" name="toppSlider" min="0" max="1" step="0.01" value="0.9">
+                                                        <span id="toppSliderValue">0.9</span>
                                                     </div>
         
                                                     <br>
         
                                                     <div id="minp_value">
-                                                        <label for="minpSlider">Minimum probability for considering a token, relative to most likely (min_p): </label>
-                                                        <input type="range" id="minpSlider" name="minpSlider" min="0" max="1" step="0.01" value="0.05">
-                                                        <span id="minpSliderValue">0.05</span>
+                                                        <label for="minpSlider">Minimum probability for considering a token, relative to most likely (min_p) [default: 0.1]: </label>
+                                                        <input type="range" id="minpSlider" name="minpSlider" min="0" max="1" step="0.01" value="0.1">
+                                                        <span id="minpSliderValue">0.1</span>
                                                     </div>
         
                                                     <br>
