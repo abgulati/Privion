@@ -7,6 +7,7 @@ function getLlmConfig() {
     const update_azure_gpt_config = document.getElementById('update_azure_gpt').checked;
 
     let config = {
+        'exclusive_server_mode': document.getElementById('exclusive_server_mode_checkbox').checked,
         'use_local_llm': useLocalLlmRadioButton.checked,
         'use_azure_open_ai':false
     };

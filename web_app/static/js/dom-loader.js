@@ -71,6 +71,7 @@ function loadCoreLarsConfig() {
     appendStreamInfo("Loading core LARS config...", 'waiting');
     const initKeysToRead = [
         'local_llm_server',
+        'exclusive_server_mode',
         'model_choice',
         'use_local_llm',
         'embedding_models_list',
@@ -620,7 +621,9 @@ function setLlamaCppValues(values) {
 }
 
 
-function initializeLocalLLMServerDropdown(local_llm_server) {
+function initializeLocalLLMServerDropdown(local_llm_server, exclusive_server_mode) {
+    document.getElementById('exclusive_server_mode_checkbox').checked = exclusive_server_mode;
+    
     const llmServerDd = document.getElementById('local_llm_server_select_dropdown');
     for (let option of llmServerDd.options) {
         if (option.value == local_llm_server) {
@@ -1005,7 +1008,7 @@ function initializeLLMTabComponents(values) {
     setLlamaCppValues(values);
     setLlamaCppCheckboxes(values);
     setLlamaCppDropdowns(values);
-    initializeLocalLLMServerDropdown(values.local_llm_server);
+    initializeLocalLLMServerDropdown(values.local_llm_server, values.exclusive_server_mode);
     initializeModelDropdown(values.model_choice);   
     //initializeLLMTemplateDropdown(values.local_llm_chat_template_format);
     initializeLLMRadioButtons(values.use_local_llm, values.model_choice);
