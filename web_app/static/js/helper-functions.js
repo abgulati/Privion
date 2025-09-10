@@ -1201,7 +1201,8 @@ function checkLocalLLMServerStatus() {
         }
     })
     .catch(error => {
-        errorHandler("checking local LLM server status", "check-LocalLLMServerStatus()", String(error.message))
+        //errorHandler("checking local LLM server status", "check-LocalLLMServerStatus()", String(error.message));
+        appendStreamInfo('Error: Could not check local LLM server status (server likely offline)', 'failure');
     });
 }
 

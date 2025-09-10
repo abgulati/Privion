@@ -257,8 +257,8 @@ function loadCoreHfConfig() {
         return data.values;
     })
     .catch(error => {
-        errorHandler("reading hf_config.json (likely means the HF-Waitress server is offline)", "load-CoreHfConfig()", String(error.message))
-        appendStreamInfo(`Error: ${String(error.message)}`, 'failure');
+        //errorHandler("reading hf_config.json (likely means the HF-Waitress server is offline)", "load-CoreHfConfig()", String(error.message))
+        appendStreamInfo('Error: Could not read HF-Waitress config.json (likely means the HF-Waitress server is offline)', 'failure');
     });
 }
 
@@ -570,7 +570,8 @@ function initializeHfwServerConfig() {
             setHfSlidersAndTextAreas(hf_values);
         })
         .catch(error => {
-            errorHandler("initializing HF-Waitress Server config (likely means the HF-Waitress server is offline)", "initialize-HfwServerConfig()", String(error.message));
+            // errorHandler("initializing HF-Waitress Server config (likely means the HF-Waitress server is offline)", "initialize-HfwServerConfig()", String(error.message));
+            appendStreamInfo('Error: Could not initialize HF-Waitress Server config (likely means the HF-Waitress server is offline)', 'failure');
         });
 }
 
@@ -623,7 +624,7 @@ function setLlamaCppValues(values) {
 
 function initializeLocalLLMServerDropdown(local_llm_server, exclusive_server_mode) {
     document.getElementById('exclusive_server_mode_checkbox').checked = exclusive_server_mode;
-    
+
     const llmServerDd = document.getElementById('local_llm_server_select_dropdown');
     for (let option of llmServerDd.options) {
         if (option.value == local_llm_server) {
