@@ -82,6 +82,16 @@ except Exception as e:
     print(f"Could not import Docling OCR, skipping. If not installed, please run `pip install docling`. Encountered error: {e}")
 
 try:
+    from azure.cognitiveservices.vision.computervision import ComputerVisionClient
+    from msrest.authentication import CognitiveServicesCredentials
+    from azure.ai.formrecognizer import DocumentAnalysisClient
+    from azure.core.credentials import AzureKeyCredential
+    from azure.core.exceptions import HttpResponseError
+    import azure.ai.vision as sdk
+except Exception as e:
+    print(f"Could not import Azure libraries for ComputerVision & Document-Intelligence OCR. WARNING: These services will not work, use a local OCR service instead. Encountered error: {e}")
+
+try:
     from graph_clustering import apply_leiden_clustering
 except Exception as e:
     print(f"Could not import graph_clustering (likely not installed), skipping. Encountered error: {e}")
@@ -330,7 +340,7 @@ def read_config(keys:list, default_value=None, filename='config.json') -> dict:
     
     return_dict = {}
     update_config_dict = {}
-    base_directory = config.get('base_directory', '/app/lars_storage')   # specifying default if not found
+    base_directory = config.get('base_directory', '/app/lars_storage')   # base_directory is written to config after platform detection and the correct value will be present by the time other app directories are requested 
 
     for key in keys:
         if key in config:
@@ -694,14 +704,6 @@ def config_writer_api():
 BASE_DIRECTORY = ""
 
 if platform.system() == 'Windows':
-    from azure.cognitiveservices.vision.computervision import ComputerVisionClient
-    from msrest.authentication import CognitiveServicesCredentials
-    from azure.ai.formrecognizer import DocumentAnalysisClient
-    from azure.core.credentials import AzureKeyCredential
-    from azure.core.exceptions import HttpResponseError
-    import azure.ai.vision as sdk
-    
-    #BASE_DIRECTORY = 'C:/lars_storage'
     try:
         read_return = read_config(['windows_base_directory'])   #passing list of values to read
         BASE_DIRECTORY = str(read_return['windows_base_directory']) #received dict of key:values
@@ -709,14 +711,6 @@ if platform.system() == 'Windows':
         handle_local_error("Could not read windows_base_directory on boot, encountered error: ", e)
 
 elif platform.system() == 'Linux':
-    from azure.cognitiveservices.vision.computervision import ComputerVisionClient
-    from msrest.authentication import CognitiveServicesCredentials
-    from azure.ai.formrecognizer import DocumentAnalysisClient
-    from azure.core.credentials import AzureKeyCredential
-    from azure.core.exceptions import HttpResponseError
-    import azure.ai.vision as sdk
-    
-    #BASE_DIRECTORY = '/app/lars_storage'
     try:
         read_return = read_config(['unix_and_docker_base_directory'])
         BASE_DIRECTORY = str(read_return['unix_and_docker_base_directory'])
@@ -724,7 +718,6 @@ elif platform.system() == 'Linux':
         handle_local_error("Could not read unix_and_docker_base_directory on boot, encountered error: ", e)
 
 else:   #Likely 'Darwin' and hence MacOS
-    #BASE_DIRECTORY = 'app'
     try:
         read_return = read_config(['mac_base_directory'])
         BASE_DIRECTORY = str(read_return['mac_base_directory'])
@@ -741,11 +734,11 @@ except Exception as e:
 # 1. Everytime the app runs, the OS platform is detected and the appropriate OS-specific base directory is requested above
 # 2. If this is the very first run:
 #   a. read_config does not find the directory data in config.json
-#   b. the else clause is triggered and defaults are written to config.json and subsequently returned
-# 3. If this isn't the very first run, read_config simply returns the OS specific directory (windows_base_directory, unix_and_docker_base_directory, and mac_base_directory)
+#   b. The methods `else` clause is triggered and defaults are written to config.json and subsequently returned
+# 3. If this isn't the very first run, read_config simply returns the OS specific directory (windows_base_directory, unix_and_docker_base_directory, or mac_base_directory)
 # 4. Basis this, BASE_DIRECTORY is written to config.json
 # 5. This setup ensures that:
-#   a. directories are set correctly at each run
+#   a. Directories are set correctly at each run
 #   b. The user can set their preferred directory by easily editing config.json!
 
 # Having set the values for the directories above, proceed to actually create them on disk IF they don't alread exist!
