@@ -169,7 +169,7 @@ function loadCoreLarsConfig() {
         'llama_cpp_n_keep',
         'azure_cv_free_tier',
         'skip_system_prompt',
-        'force_extract_previously_extracted_text',
+        'force_re_extract',
         'vision_llm_local_url',
         'kosmos_local_url',
         'kosmos_task',
@@ -1549,7 +1549,7 @@ function initializeOCRTabListeners() {
 
 
 function initializeOCRFormValues(values) {
-    if (values.force_extract_previously_extracted_text) { document.getElementById('force_extract_previously_extracted_text_checkbox').checked = true; }
+    if (values.force_re_extract) { document.getElementById('force_extract_previously_extracted_text_checkbox').checked = true; }
     if (values.kosmos_local_url) { document.getElementById('kosmos_api_url').value = values.kosmos_local_url; }
     if (values.kosmos_task) { document.getElementById('kosmos_task').value = values.kosmos_task; }
     if (values.kosmos_threshold) { document.getElementById('kosmos_threshold').value = values.kosmos_threshold; }
