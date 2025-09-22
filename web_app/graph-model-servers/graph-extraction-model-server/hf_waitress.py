@@ -39,6 +39,7 @@ import argparse
 import platform
 import datetime
 import logging
+import pathlib
 import base64
 import shutil   # Shell Utilities is part of Python's standard library and is used for file operations
 import queue
@@ -107,7 +108,82 @@ os.environ['HF_HUB_DISABLE_XET'] = 'true'
 
 
 
+########################---------------------config setup---------------------###############################
+def _early_os_default_base_dir():
+    try:
+        sysname = platform.system()
+    except Exception as e:
+        print(f"Could not determine OS, defaulting to 'app' dir. Encountered error: {e}")
+        sysname = ''
+    if sysname == 'Windows':
+        return 'C:/waitress_storage'
+    elif sysname == 'Linux':
+        return '/app/lars_storage'
+    else:   # For Darwin (Mac) and otherwise
+        return 'app'
+
+
+def _early_resolve_base_and_config():
+    # Code-local bootstrap pointer (same dir as app.py)
+    bootstrap_path = os.path.join(os.getcwd(), 'waitress_storage_config.json')
+    base = _early_os_default_base_dir()
+    cfg_base = os.getcwd()
+    if os.path.exists(bootstrap_path):
+        try:
+            with open(bootstrap_path, 'r') as f:
+                boot = json.load(f) or {}
+            base = boot.get('base_directory', base)
+            cfg_base = boot.get('config_base', cfg_base)
+        except Exception as e:
+            print(f"Could not read waitress_storage_config.json, defaulting to base dir: {base}. Encountered error: {e}")
+
+    try:
+        os.makedirs(base, exist_ok=True)
+    except Exception as e:
+        print(f"Could not create base directory: {base}. Encountered error: {e}")
+    
+    cfg_path = os.path.join(cfg_base, 'hf_config.json')
+    return base, cfg_path, bootstrap_path
+
+BASE_DIRECTORY, CONFIG_PATH, BOOTSTRAP_PATH = _early_resolve_base_and_config()
+
+# Create real config if missing - no error handling as an exception should stop execution!
+if not os.path.exists(CONFIG_PATH):
+    with open(CONFIG_PATH, 'w') as file:
+        json.dump({}, file, indent=4)
+
+# Update config with base_directory
+try:
+    with open(CONFIG_PATH, 'r+') as file:   # Unlike w, r+ allows updates without overwriting the whole file, but requires seek & truncation alongside the dump!
+        config = json.load(file)
+        '''
+        TODO: `if config.get('base_directory') != BASE_DIRECTORY:`, then move contents of old dir to new dir! 
+        Invoke: `_move_contents_of_old_dir_to_new_dir(old_dir, new_dir)`
+        Verify if referencing system can handle moves first!
+        '''
+        config['base_directory'] = BASE_DIRECTORY
+        file.seek(0)    # move file-pointer back to the start of the file before writing!
+        json.dump(config, file, indent=4)
+        file.truncate()    # truncate the file in case new config data is shorter than the original data! Eg: 'very_long_dir_name' -> 'short_dir_name'!
+except Exception as e:
+    print(f"Could not read config.json, encountered error: {e}")
+
+# Ensure botstrap contains only base_directory (so users can move by editing this one knob!)
+try:
+    with open(BOOTSTRAP_PATH, 'w') as file:
+        json.dump({'base_directory': str(pathlib.Path(BASE_DIRECTORY).resolve()), 'config_base': str(pathlib.Path(CONFIG_PATH).resolve().parent)}, file, indent=4)
+except Exception as e:
+    print(f"Could not write bootstrap storage_config.json, encountered error: {e}")
+
+#######################################################################################################
+
+
+
 #########################------------Setup & Handle Logging-------------###############################
+LOGS_DIR = os.path.join(os.getcwd(), 'waitress_server_logs')
+os.makedirs(LOGS_DIR, exist_ok=True)
+LOG_PATH = os.path.join(LOGS_DIR, 'hf_server_log.log')
+
 try:
     # 1 - Create a logger
     LOGGER = logging.getLogger('my_logger')
@@ -115,7 +191,7 @@ try:
 
     # 2 - Create a RotatingFileHandler
     # maxBytes: 1024 * 1024 * 5 Bytes = 5MB max file size per log, 2 backups = 3 files total
-    handler = RotatingFileHandler('hf_server_log.log', maxBytes=1024*1024*5, backupCount=2)
+    handler = RotatingFileHandler(LOG_PATH, maxBytes=1024*1024*5, backupCount=2)
     handler.setLevel(logging.ERROR)
 
     # 3 - Create a formatter and set it for the handler
@@ -189,26 +265,14 @@ def handle_model_loading_error(message:str, exception:Exception=None, target:str
 
 ############################------------configuration manager-------------###############################
 
-if not os.path.exists('hf_config.json'):
-    '''
-    Initializes an empty JSON configuration file named 'hf_config.json' if it doesn't exist.
-    '''
-    with config_writer_semaphore:
-        try:
-            with open('hf_config.json', 'w') as file:
-                json.dump({}, file)
-        except Exception as e:
-            handle_error_no_return("Could not init hf_config.json, encountered error: ", e)
-
-
-def write_config(config_updates:dict, filename:str='hf_config.json') -> dict:
+def write_config(config_updates:dict, filename:str=None) -> dict:
     '''
     Method to write app configuration to hf_config.json.\n
     Acquires a semaphore to prevent concurrent writes to the file.
     
     Args:
-        - config_updates: dict of key:values to be written to docling_parser_config.json
-        - filename: name of the file to write to, defaults to 'docling_parser_config.json'
+        - config_updates: dict of key:values to be written to hf_config.json
+        - filename: name of the file to write to, defaults to None which sets to CONFIG_PATH
 
     Returns:
         - Confirmation of success: {success: True}
@@ -216,6 +280,8 @@ def write_config(config_updates:dict, filename:str='hf_config.json') -> dict:
     Raises:
         - Exception: If the file cannot be written to
     '''
+
+    filename = filename or CONFIG_PATH
 
     with config_writer_semaphore:
 
@@ -296,7 +362,7 @@ def write_config(config_updates:dict, filename:str='hf_config.json') -> dict:
         return {'success': True, 'restart_required':restart_required, 'hard_reboot_required':hard_reboot_required}
             
 
-def read_config(keys:list, default_value=None, filename='hf_config.json') -> dict:
+def read_config(keys:list, default_value=None, filename=None) -> dict:
     '''
     Method to read app configuration from hf_config.json. Central method to configure safe application defaults.
     Acquires a semaphore to prevent concurrent reads to the file.
@@ -304,7 +370,7 @@ def read_config(keys:list, default_value=None, filename='hf_config.json') -> dic
     Args:
         - keys: list of keys to read from hf_config.json
         - default_value: default value to return if a key is not found in hf_config.json, defaults to None
-        - filename: name of the file to read from, defaults to 'hf_config.json'
+        - filename: name of the file to read from, defaults to None which sets to CONFIG_PATH
 
     Returns:
         - dict of key:values read from hf_config.json
@@ -312,6 +378,8 @@ def read_config(keys:list, default_value=None, filename='hf_config.json') -> dic
     Raises:
         - KeyError: If a key is not found in hf_config.json and no default value has been defined
     '''
+
+    filename = filename or CONFIG_PATH
 
     with reader_semaphore:
     
@@ -325,16 +393,13 @@ def read_config(keys:list, default_value=None, filename='hf_config.json') -> dic
         
         return_dict = {}
         update_config_dict = {}
-        base_directory = hf_config.get('base_directory', '/app/waitress_storage')   # specifying default if not found
+        base_directory = hf_config.get('base_directory', BASE_DIRECTORY)   # specifying default if not found
 
         for key in keys:
             if key in hf_config:
                 return_dict[key] = hf_config[key]
             else:
                 default_value = {
-                    'windows_base_directory':'C:/waitress_storage',
-                    'unix_and_docker_base_directory':'/app/waitress_storage',
-                    'mac_base_directory':'waitress_storage',
                     'upload_folder':base_directory + '/uploaded_files_for_vision_inferencing',
                     'generated_images_folder':base_directory + '/generated_images',
                     'transformer_models_folder':base_directory + '/transformer_models',
@@ -630,33 +695,6 @@ def shutdown_hf_waitress():
 
 
 #########################------------Setup Directories-------------###############################
-BASE_DIRECTORY = ""
-
-if platform.system() == 'Windows':
-    try:
-        read_return = read_config(['windows_base_directory'])   #passing list of values to read
-        BASE_DIRECTORY = str(read_return['windows_base_directory']) #received dict of key:values
-    except Exception as e:
-        handle_local_error("Could not read windows_base_directory on boot, encountered error: ", e)
-
-elif platform.system() == 'Linux':
-    try:
-        read_return = read_config(['unix_and_docker_base_directory'])
-        BASE_DIRECTORY = str(read_return['unix_and_docker_base_directory'])
-    except Exception as e:
-        handle_local_error("Could not read unix_and_docker_base_directory on boot, encountered error: ", e)
-
-else:   #Likely 'Darwin' and hence MacOS
-    try:
-        read_return = read_config(['mac_base_directory'])
-        BASE_DIRECTORY = str(read_return['mac_base_directory'])
-    except Exception as e:
-        handle_local_error("Could not read mac_base_directory on boot, encountered error: ", e)
-
-try:
-    write_config({'base_directory':BASE_DIRECTORY})
-except Exception as e:
-    handle_local_error("Could not write OS BASE_DIRECTORY on boot, encountered error: ", e)
 
 
 ###---Notes on the above workflow:---###
@@ -671,11 +709,6 @@ except Exception as e:
 #   b. The user can set their preferred directory by easily editing config.json!
 
 # Having set the values for the directories above, proceed to actually create them on disk IF they don't alread exist!
-
-try:
-    os.makedirs(BASE_DIRECTORY, exist_ok=True)
-except Exception as e:
-    handle_local_error("Failed to create Base App Directory, encountered error: ", e)
 
 try:
     read_return = read_config(['upload_folder', 'generated_images_folder', 'transformer_models_folder', 'knowledge_graph_cache_dir'])
@@ -1177,7 +1210,7 @@ def parse_arguments():
             try:
                 # Empty hf_config.json
                 config_writer_semaphore.acquire()
-                with open('hf_config.json', 'w') as file:
+                with open(CONFIG_PATH, 'w') as file:
                     json.dump({}, file, indent=4)
                 config_writer_semaphore.release()
                 

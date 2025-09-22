@@ -166,7 +166,80 @@ GDRIVE_CREDS = None
 
 
 
+########################---------------------config setup---------------------###############################
+def _early_os_default_base_dir():
+    try:
+        sysname = platform.system()
+    except Exception as e:
+        print(f"Could not determine OS, defaulting to 'app' dir. Encountered error: {e}")
+        sysname = ''
+    if sysname == 'Windows':
+        return 'C:/privion_lars_storage'
+    elif sysname == 'Linux':
+        return '/app/privion_lars_storage'
+    else:   # For Darwin (Mac) and otherwise
+        return 'app'
+
+
+def _early_resolve_base_and_config():
+    # Code-local bootstrap pointer (same dir as app.py)
+    bootstrap_path = os.path.join(os.getcwd(), 'storage_config.json')
+    base = _early_os_default_base_dir()
+    if os.path.exists(bootstrap_path):
+        try:
+            with open(bootstrap_path, 'r') as f:
+                boot = json.load(f) or {}
+            base = boot.get('base_directory', base)
+        except Exception as e:
+            print(f"Could not read storage_config.json, defaulting to base dir: {base}. Encountered error: {e}")
+
+    try:
+        os.makedirs(base, exist_ok=True)
+    except Exception as e:
+        print(f"Could not create base directory: {base}. Encountered error: {e}")
+    
+    cfg_path = os.path.join(base, 'config.json')
+    return base, cfg_path, bootstrap_path
+
+BASE_DIRECTORY, CONFIG_PATH, BOOTSTRAP_PATH = _early_resolve_base_and_config()
+
+# Create real config if missing - no error handling as an exception should stop execution
+if not os.path.exists(CONFIG_PATH):
+    with open(CONFIG_PATH, 'w') as file:
+        json.dump({}, file, indent=4)
+
+# Update config with base_directory
+try:
+    with open(CONFIG_PATH, 'r+') as file:   # Unlike w, r+ allows updates without overwriting the whole file, but requires seek & truncation alongside the dump!
+        config = json.load(file)
+        '''
+        TODO: `if config.get('base_directory') != BASE_DIRECTORY:`, then move contents of old dir to new dir! 
+        Invoke: `_move_contents_of_old_dir_to_new_dir(old_dir, new_dir)`
+        Verify if referencing system can handle moves first!
+        '''
+        config['base_directory'] = BASE_DIRECTORY
+        file.seek(0)    # move file-pointer back to the start of the file before writing!
+        json.dump(config, file, indent=4)
+        file.truncate()    # truncate the file in case new config data is shorter than the original data! Eg: 'very_long_dir_name' -> 'short_dir_name'!
+except Exception as e:
+    print(f"Could not read config.json, encountered error: {e}")
+
+# Ensure botstrap contains only base_directory (so users can move by editing this one knob!)
+try:
+    with open(BOOTSTRAP_PATH, 'w') as file:
+        json.dump({'base_directory': str(pathlib.Path(BASE_DIRECTORY).resolve())}, file, indent=4)
+except Exception as e:
+    print(f"Could not write bootstrap storage_config.json, encountered error: {e}")
+
+#######################################################################################################
+
+
+
 #########################------------Setup & Handle Logging-------------###############################
+LOGS_DIR = os.path.join(BASE_DIRECTORY, 'logs')
+os.makedirs(LOGS_DIR, exist_ok=True)
+LOG_PATH = os.path.join(LOGS_DIR, 'privion_lars_server_log.log')
+
 try:
     # 1 - Create a logger
     LOGGER = logging.getLogger('my_logger')
@@ -174,7 +247,7 @@ try:
 
     # 2 - Create a RotatingFileHandler
     # maxBytes: 1024 * 1024 * 5 Bytes = 5MB max file size per log, 2 backups = 3 files total
-    handler = RotatingFileHandler('lars_server_log.log', maxBytes=1024*1024*5, backupCount=2)
+    handler = RotatingFileHandler(LOG_PATH, maxBytes=1024*1024*5, backupCount=2)
     handler.setLevel(logging.ERROR)
 
     # 3 - Create a formatter and set it for the handler
@@ -220,24 +293,13 @@ def handle_error_no_return(message:str, exception:Exception=None):
 
 ############################------------configuration manager-------------###############################
 
-if not os.path.exists('config.json'):
-    '''
-    Initializes an empty JSON configuration file named 'config.json' if it doesn't exist.
-    '''
-    try:
-        with open('config.json', 'w') as file:
-            json.dump({}, file)
-    except Exception as e:
-        handle_error_no_return("Could not init config.json. Multiple app restarts may be required to get the app to init correctly. Printing error and proceeding: ", e)
-
-
-def write_config(config_updates:dict, filename:str='config.json') -> dict:
+def write_config(config_updates:dict, filename:str=None) -> dict:
     '''
     Method to write app configuration to config.json.\n
     
     Args:
         - config_updates: dict of key:values to be written to config.json
-        - filename: name of the file to write to, defaults to 'config.json'
+        - filename: name of the file to write to, defaults to None which sets to CONFIG_PATH
 
     Returns:
         - Confirmation of success: {success: True}
@@ -245,6 +307,8 @@ def write_config(config_updates:dict, filename:str='config.json') -> dict:
     Raises:
         - Exception: If the file cannot be written to
     '''
+
+    filename = filename or CONFIG_PATH
 
     # First, open existing config file (if present) to read-in current settings, fallback to an empty dict if file does not exist:
     try:
@@ -302,11 +366,12 @@ def write_config(config_updates:dict, filename:str='config.json') -> dict:
     return {'success': True, 'restart_required':restart_required}
 
 
-def safe_write_config(config_updates:dict, filename:str='config.json') -> dict:
+def safe_write_config(config_updates:dict, filename:str=None) -> dict:
     '''
     Wrapper for write-config() that handles errors silently.
     Directly invoke write-config() instead of this method anytime a write-specific error must be raised!
     '''
+    filename = filename or CONFIG_PATH
     try:
         return write_config(config_updates, filename)
     except Exception as e:
@@ -314,14 +379,14 @@ def safe_write_config(config_updates:dict, filename:str='config.json') -> dict:
         return {'success': False, 'restart_required': False}
 
 
-def read_config(keys:list, default_value=None, filename='config.json') -> dict:
+def read_config(keys:list, default_value=None, filename=None) -> dict:
     '''
     Method to read app configuration from config.json. Central method to configure safe application defaults.
     
     Args:
         - keys: list of keys to read from config.json
         - default_value: default value to return if a key is not found in config.json, defaults to None
-        - filename: name of the file to read from, defaults to 'config.json'
+        - filename: name of the file to read from, defaults to None which sets to CONFIG_PATH
 
     Returns:
         - dict of key:values read from config.json
@@ -329,6 +394,8 @@ def read_config(keys:list, default_value=None, filename='config.json') -> dict:
     Raises:
         - KeyError: If a key is not found in config.json and no default value has been defined
     '''
+
+    filename = filename or CONFIG_PATH
     
     # Open config file to read-in all current params:
     try:
@@ -340,16 +407,13 @@ def read_config(keys:list, default_value=None, filename='config.json') -> dict:
     
     return_dict = {}
     update_config_dict = {}
-    base_directory = config.get('base_directory', '/app/lars_storage')   # base_directory is written to config after platform detection and the correct value will be present by the time other app directories are requested 
+    base_directory = config.get('base_directory', BASE_DIRECTORY)   # base_directory is written to config after platform detection and the correct value will be present by the time other app directories are requested 
 
     for key in keys:
         if key in config:
             return_dict[key] = config[key]
         else:
             default_value = {
-                'windows_base_directory':'C:/lars_storage',
-                'unix_and_docker_base_directory':'/app/lars_storage',
-                'mac_base_directory':'app',
                 'upload_folder':base_directory + '/uploaded_pdfs',
                 'sqlite_images_db':base_directory + '/images_database_main.db',
                 'sqlite_history_db':base_directory + '/chat_history.db',
@@ -367,7 +431,7 @@ def read_config(keys:list, default_value=None, filename='config.json') -> dict:
                 'graph_extraction_model_directory_name': 'graph-extraction-model-server',
                 'graph_summary_generator_directory_name': 'graph-summary-generator-server',
                 'local_llm_server':'hf-waitress',
-                'exclusive_server_mode':False,  # If True, only one main LLM server instance will be allowed to run at a time. For example, when launching llama.cpp, HF-Waitress will be shut down.
+                'exclusive_server_mode':True,  # If True, only one main LLM server instance will be allowed to run at a time. For example, when launching llama.cpp, HF-Waitress will be shut down.
                 'model_choice':'Meta-Llama-3-8B-Instruct.f16.gguf',
                 'vision_llm_local_url':"http://localhost:9069/completions",
                 'kosmos_local_url':"http://localhost:25000",
@@ -639,16 +703,23 @@ def read_config(keys:list, default_value=None, filename='config.json') -> dict:
     return return_dict
 
 
-def read_hf_config(keys:list, default_value=None, filename='hf_config.json') -> dict:
+def read_hf_config(keys:list, default_value=None, filename='waitress_storage_config.json') -> dict:
     
     # Open hf_config file to read-in all current params:
     try:
         with open(filename, 'r') as file:
+            hf_storage_config = json.load(file)
+            hf_config_location = hf_storage_config.get('config_base')
+    except Exception as e:
+        handle_error_no_return("Could not read hf_storage_config.json, encountered error: ", e)
+    
+    try:
+        with open(hf_config_location, 'r') as file:
             hf_config = json.load(file)
     except Exception as e:
         handle_error_no_return("Could not read hf_config.json, encountered error: ", e)
         return {key: default_value for key in keys}     #because a read scenario wherein hf_config.json does not exist shouldn't occur!
-    
+
     return_dict = {}
 
     for key in keys:
@@ -701,33 +772,6 @@ def config_writer_api():
 
 
 #########################------------Setup Directories-------------###############################
-BASE_DIRECTORY = ""
-
-if platform.system() == 'Windows':
-    try:
-        read_return = read_config(['windows_base_directory'])   #passing list of values to read
-        BASE_DIRECTORY = str(read_return['windows_base_directory']) #received dict of key:values
-    except Exception as e:
-        handle_local_error("Could not read windows_base_directory on boot, encountered error: ", e)
-
-elif platform.system() == 'Linux':
-    try:
-        read_return = read_config(['unix_and_docker_base_directory'])
-        BASE_DIRECTORY = str(read_return['unix_and_docker_base_directory'])
-    except Exception as e:
-        handle_local_error("Could not read unix_and_docker_base_directory on boot, encountered error: ", e)
-
-else:   #Likely 'Darwin' and hence MacOS
-    try:
-        read_return = read_config(['mac_base_directory'])
-        BASE_DIRECTORY = str(read_return['mac_base_directory'])
-    except Exception as e:
-        handle_local_error("Could not read mac_base_directory on boot, encountered error: ", e)
-
-try:
-    write_config({'base_directory':BASE_DIRECTORY})
-except Exception as e:
-    handle_local_error("Could not write OS BASE_DIRECTORY on boot, encountered error: ", e)
 
 
 ###---Notes on the above workflow:---###
@@ -742,12 +786,7 @@ except Exception as e:
 #   b. The user can set their preferred directory by easily editing config.json!
 
 # Having set the values for the directories above, proceed to actually create them on disk IF they don't alread exist!
-
-try:
-    os.makedirs(BASE_DIRECTORY, exist_ok=True)
-except Exception as e:
-    handle_local_error("Failed to create Base App Directory, encountered error: ", e)
-        
+       
 try:
     read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 
         'docs_to_knowledge_graph_dir', 'upload_staging_folder', 'graph_db_data_directory'])
@@ -769,23 +808,6 @@ except Exception as e:
 app.config['UPLOAD_FOLDER'] = read_return['upload_folder']
 app.config['DOWNLOAD_FOLDER'] = read_return['highlighted_docs']
 app.config['UPLOAD_STAGING_FOLDER'] = read_return['upload_staging_folder']
-
-
-def clean_text_string(text_to_be_cleaned:str) -> str:
-    
-    # Clean text
-    # text_to_be_cleaned = text_to_be_cleaned.replace("►", "").replace("■", "").replace("▼", "")
-    # text_to_be_cleaned = text_to_be_cleaned.replace("Confidential Copy \n            for \n         DKPPU", "")
-    #clean_text = re.sub(r'\n(?=[a-z.])', ' ', text)     # replaces newline chars immediately followed by a small-letter or dot with a space as they're likely to be the same sentence split-up across lines.
-    clean_text = re.sub(r'\n+', '\n', text_to_be_cleaned)
-
-    # This regex substitutes anything that is not a word character or whitespace with an empty string.
-    clean_text = re.sub(r'[^\w\s]', ' ', clean_text)
-
-    # This regex substitutes any sequence of whitespace characters with a single space.
-    clean_text = re.sub(r'\s+', ' ', clean_text).strip()
-
-    return clean_text
 
 ############################----------------------------------------------###############################
 
@@ -2132,7 +2154,6 @@ def PDFtoTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
                             ocr_text = ""
                         
                     try:
-                        #clean_text = clean_text_string(text)
                         text_to_write = pypdf2_text if len(pypdf2_text) >= len(ocr_text) else ocr_text
                         output_text_file.write(f"[PAGE:{current_page_num}]\n{text_to_write}\n")
                     except Exception as e:
@@ -5527,8 +5548,8 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
         ]
         if read_return['llama_cpp_unified_kv_buffer']:
             llama_cpp_args.append('--kv-unified')
-        if flash_attention_is_installed():
-            llama_cpp_args.append('--flash-attn')
+        if flash_attention_is_installed():  
+            llama_cpp_args.extend(['--flash-attn', 'on'])
         if read_return['llama_cpp_disable_kv_offloading']:
             llama_cpp_args.append('--no-kv-offload')
         if read_return['llama_cpp_mlock']:
@@ -5539,8 +5560,13 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             llama_cpp_args.append('--cpu-moe')
 
         print(f"\n\nLaunching llama.cpp server with args: {llama_cpp_args}\n\n")
+        # full_command = ' '.join(llama_cpp_args)
+        # print(f"Full command: {full_command}\n\n")
 
         if platform.system() == 'Windows':
+            # windows_command = f'start cmd /k "{full_command}"'  # /c - closes window after command finishes, /k - keeps window open (useful for debugging)
+            # LLAMA_CPP_PROCESS = subprocess.Popen(windows_command, shell=True)
+
             # with open('llama_cpp_server_output_log.txt', 'w') as f:
             #     LLAMA_CPP_PROCESS = subprocess.Popen(
             #         llama_cpp_args,
@@ -8142,8 +8168,8 @@ def parse_arguments():
         if args.reset_to_defaults:
             print("\n\nLoading Server with Safe Defaults\n\n")
             try:
-                # Empty hf_config.json
-                with open('hf_config.json', 'w') as file:
+                # Empty config.json
+                with open(CONFIG_PATH, 'w') as file:
                     json.dump({}, file, indent=4)
                 
                 # Set defaults
