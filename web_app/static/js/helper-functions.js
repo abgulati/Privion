@@ -744,7 +744,7 @@ function startFalkorDB() {
         }
     })
     .catch(error => {
-        errorHandler("starting FalkorDB", "/start_falkordb", String(error.message))
+        console.error("Error starting FalkorDB, skipping: ", error);
     });
 }
 
