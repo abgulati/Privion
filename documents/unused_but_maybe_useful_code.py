@@ -5553,3 +5553,20 @@ def setup_for_local_llm_response():
 
 
 ##############---End of Old setup_for_local_llm_response Code ---##############
+
+
+def clean_text_string(text_to_be_cleaned:str) -> str:
+    
+    # Clean text
+    # text_to_be_cleaned = text_to_be_cleaned.replace("►", "").replace("■", "").replace("▼", "")
+    # text_to_be_cleaned = text_to_be_cleaned.replace("Confidential Copy \n            for \n         DKPPU", "")
+    #clean_text = re.sub(r'\n(?=[a-z.])', ' ', text)     # replaces newline chars immediately followed by a small-letter or dot with a space as they're likely to be the same sentence split-up across lines.
+    clean_text = re.sub(r'\n+', '\n', text_to_be_cleaned)
+
+    # This regex substitutes anything that is not a word character or whitespace with an empty string.
+    clean_text = re.sub(r'[^\w\s]', ' ', clean_text)
+
+    # This regex substitutes any sequence of whitespace characters with a single space.
+    clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+
+    return clean_text
