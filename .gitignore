@@ -36,6 +36,7 @@ web_app/gdrive_auth/
 web_app/exllamav2/
 web_app/graph-model-servers/graph-extraction-model-server/exllamav2/
 web_app/graph-model-servers/graph-summary-generator-server/exllamav2/
+documents/refinements_research/Docling-OCR/
 
 # Generated images
 web_app/text_only_input_image.png
