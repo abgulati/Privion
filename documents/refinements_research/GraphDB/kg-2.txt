@@ -1,0 +1,129 @@
+llama-server -m .\inkbot-13b-8k-0.2.Q6_K.gguf -ngl 45 -c 8192 --rope-freq-scale 0.5
+
+Input:
+
+{
+    "temperature":0.1,
+    "top_k":40,
+    "top_p":0.95,
+    "min_p":0.05,
+    "n_keep":0,
+    "stream":false,
+    "prompt": "<#meta#>\n- Date: 13th Feb 2025\n- Task: kg\n<#system#>\nYou are an AI assistant who will help the user with all their information requests.\n<#chat#>\n<#user#>\nYour task is to construct a comprehensive Temporal Knowledge Graph\n1. Read and understand the Document: Familiarize yourself with the essential elements, including (but not limited to) ideas, events, people, organizations, impacts, and key points, along with any explicitly mentioned or inferred dates or chronology\n   - Pretend the date found in 'Date' is the current date\n   - Create an inferred chronology (e.g., 'before the car crash' or 'shortly after police arrived') when exact dates or times are not available\n\n2. Create Nodes: Designate each of the essential elements identified earlier as a node with a unique ID using random letters from the greek alphabet. Populate each node with relevant details.\n\n3. Establish and Describe Edges: Determine the relationships between nodes, forming the edges of your knowledge graph. For each edge:\n   - Specify the nodes it connects\n   - Describe the relationship and its direction\n   - Assign a confidence level (high, medium, low) indicating the certainty of the connection\n\n4. Represent All Nodes: Make sure all nodes are included in the edge list\n<#user_context#>\n[PAGE:2]\nBusiness Unit Summary Intel previously announced the implementation of an internal foundry operating model which took effect in the first quarter of 2024 and created a foundry relationship between its Intel Products business collectively CCG DCAI and NEX and its Intel Foundry business including Foundry Technology Development Foundry Manufacturing and Supply Chain and Foundry Services formerly IFS The foundry operating model is a key component of the company s strategy and is designed to reshape operational dynamics and drive greater transparency accountability and focus on costs and efficiency The company also previously announced its intent to operate Altera an Intel Company previously Intel s Programmable Solutions Group as a standalone business beginning in the first quarter of 2024 Altera was previously included in DCAI s segment results As a result of these changes the company modified its segment reporting in the first quarter of 2024 to align to this new operating model All prior period segment data has been retrospectively adjusted to reflect the way the company internally receives information and manages and monitors its operating segment performance starting in fiscal year 2024 There are no changes to Intel s consolidated financial statements for any prior periods Business Unit Revenue and Trends Q1 2024 vs Q1 2023 Intel Products Client Computing Group CCG 7 5 billion up31 Data Center and AI DCAI 3 0 billion up5 Network and Edge NEX 1 4 billion down 8 Total Intel Products revenue 11 9 billion up17 Intel Foundry 4 4 billion down 10 All other Altera 342 million down 58 Mobileye 239 million down 48 Other 194 million up17 Total all other revenue 775 million down 46 Intersegment eliminations 4 4 billion Total net revenue 12 7 billion up9 Intel Products Highlights CCG Intel continues to advance its mission to bring AI everywhere As of the end of the first quarter more than 5 million AI PCs have shipped since the December 2023 launch of Intel Core Ultra processors supported by more than 100 software vendors Intel expects to exceed its prior forecast of 40 million AI PCs by the end of 2024 DCAI At Intel Vision the company introduced the Intel Gaudi 3 AI accelerator projected to deliver on average 50 faster inference and 40 greater inference power efficiency than Nvidia H1001 on leading generative AI GenAI models Intel also announced new Intel Gaudi accelerator customers and partners including NAVER Dell Technologies Bosch Supermicro and many others Additionally the next generation E core Intel Xeon code named Sierra Forest achieved product release this week and Intel expects Granite Rapids to be released in the third quarter NEX At Mobile World Congress in Barcelona Intel introduced the new Intel Edge Platform a modular open software platform enabling enterprises to develop deploy and manage edge and AI applications at scale The Intel Edge Platform has broad ecosystem support from Amazon Web Services Lenovo Red Hat SAP and Wipro Intel also announced the Open Platform for Enterprise AI which aims to accelerate secure cost effective GenAI deployments for businesses by driving interoperability across a diverse and heterogeneous ecosystem starting with retrieval augmented generation RAG 1 NV H100 comparison based on NVIDIA published data as of March 28 2024 Reported numbers are per GPU Vs Intel Gaudi 3 projections for LLAMA2 7B LLAMA2 70B Falcon 180B Power efficiency for both Nvidia and Gaudi 3 based on internal estimates Results may vary Intel Page 2\n[PAGE:3]\nIntel Foundry Highlights At its inaugural Direct Connect event in February Intel launched Intel Foundry the world s first systems foundry for the AI era supported by nearly 300 ecosystem partners in attendance At Direct Connect Intel Foundry announced an increased expected lifetime deal value for external customers of more than 15 billion Intel continues to drive customer adoption of Intel 18A with a major U S aerospace and defense customer committing to Intel 18A bringing Intel Foundry s external customer commitments on Intel 18A to six This quarter Microsoft also announced its plans to design a chip on Intel 18A Intel unveiled its process technology roadmap beyond its five nodes in four years process goal adding Intel 14A to its leading edge node lineup following Intel 18A and announcing several specialized node evolutions for Intel 3 Intel 18A and Intel 14A to enable customers to develop and deliver products tailored to their specific needs Intel Foundry has a strong pipeline of nearly 50 customer test chips and has engagements with almost every foundry customer in the industry on advanced packaging including five design awards Also during the quarter Intel convened more than 140 organizations across the industry at its inaugural Sustainability Summit Advancing sustainability efforts across the semiconductor ecosystem is a critical step as Intel works to become the industry s most sustainable foundry The company shared notable progress as of the end of 2023 including preliminary estimates showing that Intel used 99 renewable electricity in its factories worldwide and achieved net positive water in the United States Costa Rica Mexico and India Q2 2024 Dividend The company announced that its board of directors has declared a quarterly dividend of 0 125 per share on the company s common stock which will be payable June 1 2024 to shareholders of record as of May 7 2024 Business Outlook Intel s guidance for the second quarter of 2024 includes both GAAP and non GAAP estimates Reconciliations between GAAP and non GAAP financial measures are included below Q2 2024 GAAP Non GAAP Revenue 12 5 13 5 billion Gross Margin 40 2 43 5 Tax Rate 61 13 Earnings Loss Per Share Attributable to Intel Diluted 0 05 0 10 Actual results may differ materially from Intel s business outlook as a result of among other things the factors described under Forward Looking Statements below The gross margin and EPS outlook are based on the mid point of the revenue range Earnings Webcast Intel will hold a public webcast at 2 p m PDT today to discuss the results for its first quarter of 2024 The live public webcast can be accessed on Intel s Investor Relations website at www intc com The corresponding earnings presentation and webcast replay will also be available on the site Forward Looking Statements This release contains forward looking statements that involve a number of risks and uncertainties Words such as accelerate achieve aim ambitions anticipate believe committed continue could designed estimate expect forecast future goals grow guidance intend likely may might milestones next generation objective on track opportunity outlook pending plan position possible potential predict progress ramp roadmap seek should strive targets to be upcoming will would and variations of such words and similar expressions are intended to identify such forward looking statements which may include statements regarding Intel Page 3\n<#bot#>"
+}
+
+
+Model Output:
+
+nodes:
+  - id: Alpha
+    event: Implementation of an internal foundry operating model
+    date: 2024-01
+  - id: Beta
+    event: Intel Products business and Intel Foundry business separation
+    date: 2024-01
+  - id: Gamma
+    event: Altera spun off as a standalone business
+    date: 2024-01
+  - id: Delta
+    event: Modification of segment reporting to align with new operating model
+    date: 2024-01
+  - id: Epsilon
+    event: Intel Products revenue
+    date: Q1 2024
+    result: $11.9 billion, up 17% YoY
+  - id: Zeta
+    event: Intel Foundry revenue
+    date: Q1 2024
+    result: $4.4 billion, down 10% YoY
+  - id: Eta
+    event: Altera revenue
+    date: Q1 2024
+    result: $342 million, down 58% YoY
+  - id: Theta
+    event: Mobileye revenue
+    date: Q1 2024
+    result: $239 million, down 48% YoY
+  - id: Iota
+    event: Intel's sustainability efforts
+    date: 2023
+    result: Nearly 99% renewable electricity used in factories, net positive water in select regions
+  - id: Kappa
+    event: Intel Direct Connect event
+    date: 2024-02
+  - id: Lambda
+    event: Intel's dividend announcement
+    date: 2024-06-01
+  - id: Mu
+    event: Q2 2024 business outlook
+    date: 2024-04
+    result: GAAP revenue $12.5 billion, GAAP gross margin 40.2%, GAAP EPS $0.05
+  - id: Nu
+    event: Q2 2024 earnings webcast
+    date: 2024-04
+  - id: Xi
+    event: Intel's forward-looking statements
+    date: 2024-04
+    result: Potential risks and uncertainties
+edges:
+  Alpha:
+    - id: Beta
+      description: led to
+      confidence: high
+  Beta:
+    - id: Delta
+      description: resulted in
+      confidence: high
+  Delta:
+    - id: Epsilon
+      description: affected
+      confidence: high
+    - id: Zeta
+      description: affected
+      confidence: high
+    - id: Eta
+      description: affected
+      confidence: high
+    - id: Theta
+      description: affected
+      confidence: high
+  Epsilon:
+    - id: Epsilon
+      description: increased by
+      confidence: high
+  Zeta:
+    - id: Zeta
+      description: decreased by
+      confidence: high
+  Eta:
+    - id: Eta
+      description: decreased by
+      confidence: high
+  Theta:
+    - id: Theta
+      description: decreased by
+      confidence: high
+  Iota:
+    - id: Iota
+      description: is a part of
+      confidence: high
+  Kappa:
+    - id: Beta
+      description: announced at
+      confidence: high
+  Lambda:
+    - id: Beta
+      description: announced by
+      confidence: high
+  Mu:
+    - id: Beta
+      description: is an outlook for
+      confidence: high
+  Nu:
+    - id: Beta
+      description: discusses
+      confidence: high
+  Xi:
+    - id: Beta
+      description: are related to
+      confidence: high

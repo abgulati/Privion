@@ -1,0 +1,285 @@
+###Prompt:
+
+
+Write a cypher query based on the following example:
+
+```
+g.query("""CREATE (:Rider {name:'Valentino Rossi'})-[:rides]->(:Team {name:'Yamaha'}),
+                  (:Rider {name:'Dani Pedrosa'})-[:rides]->(:Team {name:'Honda'}),
+                  (:Rider {name:'Andrea Dovizioso'})-[:rides]->(:Team {name:'Ducati'})""")
+```
+
+For the following text:
+
+```
+[PAGE:2]\nBusiness Unit Summary Intel previously announced the implementation of an internal foundry operating model which took effect in the first quarter of 2024 and created a foundry relationship between its Intel Products business collectively CCG DCAI and NEX and its Intel Foundry business including Foundry Technology Development Foundry Manufacturing and Supply Chain and Foundry Services formerly IFS The foundry operating model is a key component of the company s strategy and is designed to reshape operational dynamics and drive greater transparency accountability and focus on costs and efficiency The company also previously announced its intent to operate Altera an Intel Company previously Intel s Programmable Solutions Group as a standalone business beginning in the first quarter of 2024 Altera was previously included in DCAI s segment results As a result of these changes the company modified its segment reporting in the first quarter of 2024 to align to this new operating model All prior period segment data has been retrospectively adjusted to reflect the way the company internally receives information and manages and monitors its operating segment performance starting in fiscal year 2024 There are no changes to Intel s consolidated financial statements for any prior periods Business Unit Revenue and Trends Q1 2024 vs Q1 2023 Intel Products Client Computing Group CCG 7 5 billion up31 Data Center and AI DCAI 3 0 billion up5 Network and Edge NEX 1 4 billion down 8 Total Intel Products revenue 11 9 billion up17 Intel Foundry 4 4 billion down 10 All other Altera 342 million down 58 Mobileye 239 million down 48 Other 194 million up17 Total all other revenue 775 million down 46 Intersegment eliminations 4 4 billion Total net revenue 12 7 billion up9 Intel Products Highlights CCG Intel continues to advance its mission to bring AI everywhere As of the end of the first quarter more than 5 million AI PCs have shipped since the December 2023 launch of Intel Core Ultra processors supported by more than 100 software vendors Intel expects to exceed its prior forecast of 40 million AI PCs by the end of 2024 DCAI At Intel Vision the company introduced the Intel Gaudi 3 AI accelerator projected to deliver on average 50 faster inference and 40 greater inference power efficiency than Nvidia H1001 on leading generative AI GenAI models Intel also announced new Intel Gaudi accelerator customers and partners including NAVER Dell Technologies Bosch Supermicro and many others Additionally the next generation E core Intel Xeon code named Sierra Forest achieved product release this week and Intel expects Granite Rapids to be released in the third quarter NEX At Mobile World Congress in Barcelona Intel introduced the new Intel Edge Platform a modular open software platform enabling enterprises to develop deploy and manage edge and AI applications at scale The Intel Edge Platform has broad ecosystem support from Amazon Web Services Lenovo Red Hat SAP and Wipro Intel also announced the Open Platform for Enterprise AI which aims to accelerate secure cost effective GenAI deployments for businesses by driving interoperability across a diverse and heterogeneous ecosystem starting with retrieval augmented generation RAG 1 NV H100 comparison based on NVIDIA published data as of March 28 2024 Reported numbers are per GPU Vs Intel Gaudi 3 projections for LLAMA2 7B LLAMA2 70B Falcon 180B Power efficiency for both Nvidia and Gaudi 3 based on internal estimates Results may vary Intel Page 2\n[PAGE:3]\nIntel Foundry Highlights At its inaugural Direct Connect event in February Intel launched Intel Foundry the world s first systems foundry for the AI era supported by nearly 300 ecosystem partners in attendance At Direct Connect Intel Foundry announced an increased expected lifetime deal value for external customers of more than 15 billion Intel continues to drive customer adoption of Intel 18A with a major U S aerospace and defense customer committing to Intel 18A bringing Intel Foundry s external customer commitments on Intel 18A to six This quarter Microsoft also announced its plans to design a chip on Intel 18A Intel unveiled its process technology roadmap beyond its five nodes in four years process goal adding Intel 14A to its leading edge node lineup following Intel 18A and announcing several specialized node evolutions for Intel 3 Intel 18A and Intel 14A to enable customers to develop and deliver products tailored to their specific needs Intel Foundry has a strong pipeline of nearly 50 customer test chips and has engagements with almost every foundry customer in the industry on advanced packaging including five design awards Also during the quarter Intel convened more than 140 organizations across the industry at its inaugural Sustainability Summit Advancing sustainability efforts across the semiconductor ecosystem is a critical step as Intel works to become the industry s most sustainable foundry The company shared notable progress as of the end of 2023 including preliminary estimates showing that Intel used 99 renewable electricity in its factories worldwide and achieved net positive water in the United States Costa Rica Mexico and India Q2 2024 Dividend The company announced that its board of directors has declared a quarterly dividend of 0 125 per share on the company s common stock which will be payable June 1 2024 to shareholders of record as of May 7 2024 Business Outlook Intel s guidance for the second quarter of 2024 includes both GAAP and non GAAP estimates Reconciliations between GAAP and non GAAP financial measures are included below Q2 2024 GAAP Non GAAP Revenue 12 5 13 5 billion Gross Margin 40 2 43 5 Tax Rate 61 13 Earnings Loss Per Share Attributable to Intel Diluted 0 05 0 10 Actual results may differ materially from Intel s business outlook as a result of among other things the factors described under Forward Looking Statements below The gross margin and EPS outlook are based on the mid point of the revenue range Earnings Webcast Intel will hold a public webcast at 2 p m PDT today to discuss the results for its first quarter of 2024 The live public webcast can be accessed on Intel s Investor Relations website at www intc com The corresponding earnings presentation and webcast replay will also be available on the site Forward Looking Statements This release contains forward looking statements that involve a number of risks and uncertainties Words such as accelerate achieve aim ambitions anticipate believe committed continue could designed estimate expect forecast future goals grow guidance intend likely may might milestones next generation objective on track opportunity outlook pending plan position possible potential predict progress ramp roadmap seek should strive targets to be upcoming will would and variations of such words and similar expressions are intended to identify such forward looking statements which may include statements regarding Intel Page 3
+```
+
+ Identifying all the entities and their relationships in the provided text to generate a cypher query based on the provided example.
+
+
+
+###Output (Cyphers Only):
+
+
+1) DeepSeek-R1:
+
+CREATE (:BusinessUnit {name: 'Intel Products'})-[:HAS_SUBSIDIARY]->(:BusinessUnit {name: 'CCG'}),
+       (:BusinessUnit {name: 'Intel Products'})-[:HAS_SUBSIDIARY]->(:BusinessUnit {name: 'DCAI'}),
+       (:BusinessUnit {name: 'Intel Products'})-[:HAS_SUBSIDIARY]->(:BusinessUnit {name: 'NEX'}),
+       (:BusinessUnit {name: 'Intel Foundry'})-[:HAS_DIVISION]->(:Division {name: 'Foundry Technology Development'}),
+       (:BusinessUnit {name: 'Intel Foundry'})-[:HAS_DIVISION]->(:Division {name: 'Foundry Manufacturing and Supply Chain'}),
+       (:BusinessUnit {name: 'Intel Foundry'})-[:HAS_DIVISION]->(:Division {name: 'Foundry Services'}),
+       (:BusinessUnit {name: 'All Other'})-[:HAS_SUBSIDIARY]->(:Company {name: 'Altera'}),
+       (:BusinessUnit {name: 'All Other'})-[:HAS_SUBSIDIARY]->(:Company {name: 'Mobileye'})
+
+
+
+2) Claude-3.5-Sonnet:
+
+CREATE 
+// Business Units
+(:BusinessUnit {name: 'Intel Products'}),
+(:BusinessUnit {name: 'Intel Foundry'}),
+(:BusinessUnit {name: 'CCG', revenue: '7.5 billion', growth: '+31%'}),
+(:BusinessUnit {name: 'DCAI', revenue: '3.0 billion', growth: '+5%'}),
+(:BusinessUnit {name: 'NEX', revenue: '1.4 billion', growth: '-8%'}),
+(:BusinessUnit {name: 'Altera', revenue: '342 million', growth: '-58%'}),
+(:BusinessUnit {name: 'Mobileye', revenue: '239 million', growth: '-48%'}),
+
+// Products
+(:Product {name: 'Intel Core Ultra'}),
+(:Product {name: 'Intel Gaudi 3'}),
+(:Product {name: 'Intel Xeon Sierra Forest'}),
+(:Product {name: 'Intel Edge Platform'}),
+
+// Customers
+(:Customer {name: 'Microsoft'}),
+(:Customer {name: 'NAVER'}),
+(:Customer {name: 'Dell Technologies'}),
+(:Customer {name: 'Bosch'}),
+(:Customer {name: 'Supermicro'}),
+
+// Create relationships
+(ip:BusinessUnit {name: 'Intel Products'})-[:CONTAINS]->(ccg:BusinessUnit {name: 'CCG'}),
+(ip)-[:CONTAINS]->(dcai:BusinessUnit {name: 'DCAI'}),
+(ip)-[:CONTAINS]->(nex:BusinessUnit {name: 'NEX'}),
+
+// Product relationships
+(ccg)-[:PRODUCES]->(ultra:Product {name: 'Intel Core Ultra'}),
+(dcai)-[:PRODUCES]->(gaudi:Product {name: 'Intel Gaudi 3'}),
+(dcai)-[:PRODUCES]->(xeon:Product {name: 'Intel Xeon Sierra Forest'}),
+(nex)-[:PRODUCES]->(edge:Product {name: 'Intel Edge Platform'}),
+
+// Customer relationships
+(gaudi)<-[:USES]-(naver:Customer {name: 'NAVER'}),
+(gaudi)<-[:USES]-(dell:Customer {name: 'Dell Technologies'}),
+(gaudi)<-[:USES]-(bosch:Customer {name: 'Bosch'}),
+(gaudi)<-[:USES]-(super:Customer {name: 'Supermicro'})
+
+
+
+3) Claude-3-Opus:
+
+CREATE 
+  (:BusinessUnit {name:'Intel Products'})-[:INCLUDES]->(:Group {name:'Client Computing Group (CCG)'}),
+  (:BusinessUnit {name:'Intel Products'})-[:INCLUDES]->(:Group {name:'Data Center and AI (DCAI)'}),
+  (:BusinessUnit {name:'Intel Products'})-[:INCLUDES]->(:Group {name:'Network and Edge (NEX)'}),
+  
+  (:BusinessUnit {name:'Intel Foundry'}),
+  
+  (:BusinessUnit {name:'All other'})-[:INCLUDES]->(:Company {name:'Altera'}),
+  (:BusinessUnit {name:'All other'})-[:INCLUDES]->(:Company {name:'Mobileye'}),
+  (:BusinessUnit {name:'All other'})-[:INCLUDES]->(:Group {name:'Other'}),
+
+  (:Group {name:'Client Computing Group (CCG)'})-[:LAUNCHED {date:'December 2023'}]->(:Product {name:'Intel Core Ultra processors'}),
+  (:Group {name:'Client Computing Group (CCG)'})-[:EXPECTS_TO_EXCEED {amount:'40 million', by:'end of 2024'}]->(:Product {name:'AI PCs'}),
+
+  (:Group {name:'Data Center and AI (DCAI)'})-[:INTRODUCED]->(:Product {name:'Intel Gaudi 3 AI accelerator'}),
+  (:Group {name:'Data Center and AI (DCAI)'})-[:HAS_CUSTOMERS_AND_PARTNERS]->(:Company {name:'NAVER'}),
+  (:Group {name:'Data Center and AI (DCAI)'})-[:HAS_CUSTOMERS_AND_PARTNERS]->(:Company {name:'Dell Technologies'}),  
+  (:Group {name:'Data Center and AI (DCAI)'})-[:HAS_CUSTOMERS_AND_PARTNERS]->(:Company {name:'Bosch'}),
+  (:Group {name:'Data Center and AI (DCAI)'})-[:HAS_CUSTOMERS_AND_PARTNERS]->(:Company {name:'Supermicro'}),
+  (:Group {name:'Data Center and AI (DCAI)'})-[:RELEASED {status:'product release', date:'this week'}]->(:Product {name:'Sierra Forest'}),
+  (:Group {name:'Data Center and AI (DCAI)'})-[:EXPECTS_TO_RELEASE {date:'third quarter'}]->(:Product {name:'Granite Rapids'}),
+
+  (:Group {name:'Network and Edge (NEX)'})-[:INTRODUCED]->(:Platform {name:'Intel Edge Platform'}),
+  (:Group {name:'Network and Edge (NEX)'})-[:ANNOUNCED]->(:Platform {name:'Open Platform for Enterprise AI'}),
+
+  (:BusinessUnit {name:'Intel Foundry'})-[:LAUNCHED {event:'Direct Connect'}]->(:Service {name:'systems foundry for the AI era'}),
+  (:BusinessUnit {name:'Intel Foundry'})-[:HAS_ECOSYSTEM_PARTNERS {amount:'nearly 300'}]->(:Event {name:'Direct Connect'}),
+  (:BusinessUnit {name:'Intel Foundry'})-[:HAS_CUSTOMER_COMMITMENTS {amount:'six', product:'Intel 18A'}]->(:Customer {type:'external'}),
+  (:BusinessUnit {name:'Intel Foundry'})-[:HAS_CUSTOMER_COMMITMENT {product:'Intel 18A'}]->(:Company {name:'Microsoft'}),
+  (:BusinessUnit {name:'Intel Foundry'})-[:UNVEILED]->(:Roadmap {name:'process technology roadmap'}),
+  (:Roadmap {name:'process technology roadmap'})-[:INCLUDES]->(:Node {name:'Intel 14A'}),
+  (:Roadmap {name:'process technology roadmap'})-[:INCLUDES]->(:Node {name:'Intel 18A'}),
+  (:Roadmap {name:'process technology roadmap'})-[:INCLUDES]->(:Node {name:'Intel 3'}),
+  (:BusinessUnit {name:'Intel Foundry'})-[:HAS_PIPELINE {amount:'nearly 50'}]->(:Product {name:'customer test chips'}),
+  (:BusinessUnit {name:'Intel Foundry'})-[:HAS_ENGAGEMENTS {scope:'advanced packaging'}]->(:Customer {type:'foundry'}),
+  (:BusinessUnit {name:'Intel Foundry'})-[:CONVENED {event:'Sustainability Summit'}]->(:Organization {amount:'more than 140'})
+
+
+
+4) o3-Mini:
+
+g.query("""CREATE
+  // Core company and business units
+  (intel:Company {name: 'Intel'}),
+  (products:BusinessUnit {name: 'Intel Products', revenue: '11.9B (up 17%)'}),
+  (foundry:BusinessUnit {name: 'Intel Foundry', revenue: '4.4B (down 10%)'}),
+  (others:BusinessUnit {name: 'All Other', revenue: '775M (down 46%)'}),
+
+  // Intel Products segments
+  (ccg:Segment {name: 'Client Computing Group', revenue: '7.5B (up 31%)'}),
+  (dcai:Segment {name: 'Data Center and AI', revenue: '3.0B (up 5%)'}),
+  (nex:Segment {name: 'Network and Edge', revenue: '1.4B (down 8%)'}),
+
+  // Other standalone units
+  (altera:BusinessUnit {name: 'Altera', revenue: '342M (down 58%)'}),
+  (mobileye:BusinessUnit {name: 'Mobileye', revenue: '239M (down 48%)'}),
+  (other:BusinessUnit {name: 'Other', revenue: '194M (up 17%)'}),
+
+  // Relationships between Intel and its units
+  (intel)-[:HAS_UNIT]->(products),
+  (intel)-[:HAS_UNIT]->(foundry),
+  (intel)-[:HAS_UNIT]->(others),
+
+  // Intel Products is composed of segments
+  (products)-[:COMPRISES]->(ccg),
+  (products)-[:COMPRISES]->(dcai),
+  (products)-[:COMPRISES]->(nex),
+
+  // Introduce the Foundry Operating Model strategy (effective Q1 2024)
+  (model:Strategy {name: 'Internal Foundry Operating Model', effective: 'Q1 2024'}),
+  (intel)-[:IMPLEMENTED]->(model),
+  (products)-[:RELATES_TO {relation: 'Foundry Relationship'}]->(foundry),
+
+  // CCG highlights: AI PCs and Core Ultra Processors
+  (ccg)-[:SHIPPED {metric: '>5M AI PCs'}]->(:Product {name: 'Intel Core Ultra Processors'}),
+
+  // DCAI highlights: Intel Gaudi 3 AI Accelerator and partners
+  (dcai)-[:INTRODUCED]->(:Product {name: 'Intel Gaudi 3 AI Accelerator', performance: '50% faster inference, 40% greater efficiency'}),
+  (dcai)-[:HAS_PARTNER]->(:Company {name: 'NAVER'}),
+  (dcai)-[:HAS_PARTNER]->(:Company {name: 'Dell Technologies'}),
+  (dcai)-[:HAS_PARTNER]->(:Company {name: 'Bosch'}),
+  (dcai)-[:HAS_PARTNER]->(:Company {name: 'Supermicro'}),
+
+  // NEX highlights: Intel Edge Platform and Open Platform for Enterprise AI
+  (nex)-[:INTRODUCED]->(:Product {name: 'Intel Edge Platform', description: 'Modular open platform for developing and managing edge and AI applications'}),
+  (nex)-[:ANNOUNCED]->(:Product {name: 'Open Platform for Enterprise AI', purpose: 'Accelerate secure, cost-effective GenAI deployments'}),
+
+  // Intel Foundry Highlights from page 3:
+  (foundry)-[:LAUNCHED_AT {event: 'Direct Connect', month: 'February'}]->(:Event {name: 'Intel Direct Connect'}),
+  (foundry)-[:HAS_COMMITMENT]->(:Product {name: 'Intel 18A'}),
+  (foundry)-[:EVOLVED_TO]->(:Product {name: 'Intel 14A'}),
+  (foundry)-[:EVOLVED_TO]->(:Product {name: 'Intel 3'}),
+  (foundry)-[:HOSTED_EVENT]->(:Event {name: 'Sustainability Summit', organizations: 140}),
+
+  // Financial events:
+  (intel)-[:ANNOUNCED]->(:FinancialEvent {name: 'Dividend Declaration', dividend: '0.125 per share', payDate: 'June 1 2024', recordDate: 'May 7 2024'}),
+  (intel)-[:PRESENTED]->(:FinancialOutlook {quarter: 'Q2 2024', GAAPRevenue: '12.5-13.5B', GrossMargin: '40.2-43.5%', TaxRate: '61-13', EPS: '0.05-0.10'})
+""")
+
+
+
+5) OpenThinker-32B-5.0-bpw w/ RAG System Prompt:
+
+```cypher
+g.query(\"\"\"
+CREATE
+(:BusinessUnit {name: 'Intel Products'})-[:foundry]->(:BusinessUnit {name: 'Intel Foundry'}),
+(:BusinessUnit {name: 'Altera'}),
+(:BusinessUnit {name: 'Mobileye'}),
+(:BusinessUnit {name: 'All other'}),
+(:BusinessUnit {name: 'Other'})
+\"\"\")
+```
+
+
+
+6) Mistral-Small-24B-Instruct-6.0-bpw w/ default prompt:
+
+```cypher
+CREATE
+(:BusinessUnit {name:'Intel Products'})-[:CONTAINS]->(:BusinessUnit {name:'Client Computing Group'}),
+(:BusinessUnit {name:'Intel Products'})-[:CONTAINS]->(:BusinessUnit {name:'Data Center and AI'}),
+(:BusinessUnit {name:'Intel Products'})-[:CONTAINS]->(:BusinessUnit {name:'Network and Edge'}),
+(:BusinessUnit {name:'Intel Foundry'})-[:CONTAINS]->(:BusinessUnit {name:'Foundry Technology Development'}),
+(:BusinessUnit {name:'Intel Foundry'})-[:CONTAINS]->(:BusinessUnit {name:'Foundry Manufacturing and Supply Chain'}),
+(:BusinessUnit {name:'Intel Foundry'})-[:CONTAINS]->(:BusinessUnit {name:'Foundry Services'}),
+(:BusinessUnit {name:'Intel Products'})-[:CONTAINS]->(:BusinessUnit {name:'Altera'}),
+(:BusinessUnit {name:'Intel Products'})-[:CONTAINS]->(:BusinessUnit {name:'Mobileye'}),
+(:Product {name:'Intel Core Ultra processors'})-[:SUPPORTED_BY]->(:Entity {name:'More than 100 software vendors'}),
+(:Product {name:'Intel Gaudi 3 AI accelerator'})-[:INTRODUCED_AT]->(:Event {name:'Intel Vision'}),
+(:Product {name:'Intel Xeon'})-[:RELEASED_IN]->(:Quarter {name:'Q1 2024'}),
+(:Product {name:'Intel Edge Platform'})-[:INTRODUCED_AT]->(:Event {name:'Mobile World Congress'}),
+(:Product {name:'Open Platform for Enterprise AI'})-[:AIMS_TO]->(:Goal {name:'Accelerate secure cost-effective GenAI deployments'}),
+(:Product {name:'Intel 18A'})-[:COMMITTED_BY]->(:Customer {name:'U.S. aerospace and defense customer'}),
+(:Product {name:'Intel 18A'})-[:USED_BY]->(:Customer {name:'Microsoft'}),
+(:Product {name:'Intel 14A'})-[:ANNOUNCED_AS]->(:PartOf {name:'Process technology roadmap'}),
+(:Product {name:'Intel 3'})-[:ANNOUNCED_AS]->(:PartOf {name:'Process technology roadmap'}),
+(:Event {name:'Intel Vision'})-[:INTRODUCED]->(:Product {name:'Intel Gaudi 3 AI accelerator'}),
+(:Event {name:'Mobile World Congress'})-[:INTRODUCED]->(:Product {name:'Intel Edge Platform'}),
+(:Event {name:'Direct Connect event'})-[:LAUNCHED]->(:BusinessUnit {name:'Intel Foundry'}),
+(:Event {name:'Sustainability Summit'})-[:FOCUSED_ON]->(:Goal {name:'Sustainability efforts'}),
+(:Product {name:'Intel Gaudi 3 AI accelerator'})-[:PARTNERS_WITH]->(:Partner {name:'NAVER'}),
+(:Product {name:'Intel Gaudi 3 AI accelerator'})-[:PARTNERS_WITH]->(:Partner {name:'Dell Technologies'}),
+(:Product {name:'Intel Gaudi 3 AI accelerator'})-[:PARTNERS_WITH]->(:Partner {name:'Bosch'}),
+(:Product {name:'Intel Gaudi 3 AI accelerator'})-[:PARTNERS_WITH]->(:Partner {name:'Supermicro'}),
+(:Product {name:'Intel Edge Platform'})-[:SUPPORTED_BY]->(:Partner {name:'Amazon Web Services'}),
+(:Product {name:'Intel Edge Platform'})-[:SUPPORTED_BY]->(:Partner {name:'Lenovo'}),
+(:Product {name:'Intel Edge Platform'})-[:SUPPORTED_BY]->(:Partner {name:'Red Hat'}),
+(:Product {name:'Intel Edge Platform'})-[:SUPPORTED_BY]->(:Partner {name:'SAP'}),
+(:Product {name:'Intel Edge Platform'})-[:SUPPORTED_BY]->(:Partner {name:'Wipro'}),
+(:Product {name:'Intel 18A'})-[:COMMITTED_BY]->(:Customer {name:'U.S. aerospace and defense customer'}),
+(:Product {name:'Intel 18A'})-[:USED_BY]->(:Customer {name:'Microsoft'}),
+(:BusinessUnit {name:'Intel Products'})-[:REVENUE]->(:FinancialMetric {name:'Q1 2024 vs Q1 2023'}),
+(:BusinessUnit {name:'Intel Foundry'})-[:REVENUE]->(:FinancialMetric {name:'Q1 2024 vs Q1 2023'}),
+(:BusinessUnit {name:'Altera'})-[:REVENUE]->(:FinancialMetric {name:'Q1 2024 vs Q1 2023'}),
+(:BusinessUnit {name:'Mobileye'})-[:REVENUE]->(:FinancialMetric {name:'Q1 2024 vs Q1 2023'}),
+(:BusinessUnit {name:'Other'})-[:REVENUE]->(:FinancialMetric {name:'Q1 2024 vs Q1 2023'}),
+(:Entity {name:'Intersegment eliminations'})-[:REVENUE]->(:FinancialMetric {name:'Q1 2024'}),
+(:Entity {name:'Total net revenue'})-[:REVENUE]->(:FinancialMetric {name:'Q1 2024'}),
+(:Entity {name:'Dividend'})-[:DECLARED]->(:FinancialMetric {name:'Q2 2024'})
+```
+
+
+
+7) Microsoft Phi-4-Instruct-6.0-bpw:
+
+```cypher
+CREATE
+(:BusinessUnit {name: 'Intel Products'})-[:INCLUDES]->(:SubUnit {name: 'Client Computing Group', revenue: '7.5 billion', change: 'up31'}),
+(:BusinessUnit {name: 'Intel Products'})-[:INCLUDES]->(:SubUnit {name: 'Data Center and AI', revenue: '3.0 billion', change: 'up5'}),
+(:BusinessUnit {name: 'Intel Products'})-[:INCLUDES]->(:SubUnit {name: 'Network and Edge', revenue: '1.4 billion', change: 'down 8'}),
+(:BusinessUnit {name: 'Intel Products'})-[:INCLUDES]->(:SubUnit {name: 'Total Intel Products', revenue: '11.9 billion', change: 'up17'}),
+(:BusinessUnit {name: 'Intel Foundry', revenue: '4.4 billion', change: 'down 10'}),
+(:BusinessUnit {name: 'Altera', revenue: '342 million', change: 'down 58'}),
+(:BusinessUnit {name: 'Mobileye', revenue: '239 million', change: 'down 48'}),
+(:BusinessUnit {name: 'Other', revenue: '194 million', change: 'up17'}),
+(:BusinessUnit {name: 'All Other Revenue', revenue: '775 million', change: 'down 46'}),
+(:BusinessUnit {name: 'Intersegment Eliminations', revenue: '4.4 billion'}),
+(:BusinessUnit {name: 'Total Net Revenue', revenue: '12.7 billion', change: 'up9'}),
+(:Product {name: 'Intel Core Ultra processors'}),
+(:Product {name: 'Intel Gaudi 3 AI accelerator'}),
+(:Product {name: 'Intel Xeon Sierra Forest'}),
+(:Product {name: 'Intel Edge Platform'}),
+(:Product {name: 'Intel 18A'}),
+(:Product {name: 'Intel 14A'}),
+(:Event {name: 'Direct Connect event'}),
+(:Event {name: 'Mobile World Congress'}),
+(:Event {name: 'Sustainability Summit'}),
+(:Partner {name: 'NAVER'}),
+(:Partner {name: 'Dell Technologies'}),
+(:Partner {name: 'Bosch'}),
+(:Partner {name: 'Supermicro'}),
+(:Partner {name: 'Amazon Web Services'}),
+(:Partner {name: 'Lenovo'}),
+(:Partner {name: 'Red Hat'}),
+(:Partner {name: 'SAP'}),
+(:Partner {name: 'Wipro'}),
+(:Partner {name: 'Microsoft'}),
+(:Metric {name: 'Gross Margin', value: '40.2% to 43.5%'}),
+(:Metric {name: 'Tax Rate', value: '61% to 13%'}),
+(:Metric {name: 'Earnings Per Share', value: '0.05 to 0.10'})
+```

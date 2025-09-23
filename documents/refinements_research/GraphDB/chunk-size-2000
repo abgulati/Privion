@@ -1,0 +1,251 @@
+CHUNK SIZE: 2000
+
+
+1:
+
+"Exhibit 99 1 Intel Corporation 2200 Mission College Blvd Santa Clara CA 95054 1549 News Release Intel Reports Second Quarter 2024 Financial Results Announces 10 Billion Cost Reduction Plan to Increase Efficiency and Market Competitiveness NEWS SUMMARY Second quarter revenue of 12 8 billion down 1 year over year YoY Second quarter GAAP earnings loss per share EPS attributable to Intel was 0 38 non GAAP EPS attributable to Intel was 0 02 Forecasting third quarter 2024 revenue of 12 5 billion to 13 5 billion expecting third quarter GAAP EPS attributable to Intel of 0 24 non GAAP EPS attributable to Intel of 0 03 Implementing comprehensive reduction in spending including a more than 15 headcount reduction to resize and refocus Suspending dividend starting in the fourth quarter of 2024 The company reiterates its long term commitment to a competitive dividend as cash flows improve to sustainably higher levels Achieved key milestones on Intel 18A with the 1 0 Process Design Kit PDK released and key power on of first client and server products on Intel 18A Panther Lake and Clearwater Forest SANTA CLARA Calif Aug 1 2024 Intel Corporation today reported second quarter 2024 financial results Our Q2 financial performance was disappointing even as we hit key product and process technology milestones Second half trends are more challenging than we previously expected and we are leveraging our new operating model to take decisive actions that will improve operating and capital efficiencies while accelerating our IDM 2 0 transformation said Pat Gelsinger Intel CEO These actions combined with the launch of Intel 18A next year to regain process technology leadership will strengthen our position in the market improve our profitability an d create shareholder value Second quarter results were impacted by gross margin headwinds from the accelerated ramp of our AI PC product higher than typical charges related to non core businesses and the impact from unused capacity said David Zinsner Intel CFO By implementing our spending reductions we are taking proactive steps to improve our profits and strengthen our balance sheet "
+
+
+{
+   "nodes":[
+      {
+         "type":"organization",
+         "name":"Intel Corporation"
+      },
+      {
+         "type":"location",
+         "name":"Santa Clara, CA"
+      },
+      {
+         "type":"person",
+         "name":"Pat Gelsinger"
+      },
+      {
+         "type":"person",
+         "name":"David Zinsner"
+      },
+      {
+         "type":"object",
+         "name":"Intel 18A"
+      },
+      {
+         "type":"object",
+         "name":"Process Design Kit (PDK)"
+      },
+      {
+         "type":"object",
+         "name":"AI PC product"
+      },
+      {
+         "type":"object",
+         "name":"10 Billion Cost Reduction Plan"
+      },
+      {
+         "type":"object",
+         "name":"third quarter 2024 revenue"
+      },
+      {
+         "type":"object",
+         "name":"non GAAP EPS"
+      },
+      {
+         "type":"object",
+         "name":"GAAP EPS"
+      },
+      {
+         "type":"object",
+         "name":"headcount reduction"
+      },
+      {
+         "type":"object",
+         "name":"dividend"
+      }
+   ],
+   "relationships":[
+      {
+         "source":"Intel Corporation",
+         "target":"Santa Clara, CA",
+         "relationship":"headquarters"
+      },
+      {
+         "source":"Pat Gelsinger",
+         "target":"Intel Corporation",
+         "relationship":"CEO"
+      },
+      {
+         "source":"David Zinsner",
+         "target":"Intel Corporation",
+         "relationship":"CFO"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"10 Billion Cost Reduction Plan",
+         "relationship":"announced"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"third quarter 2024 revenue",
+         "relationship":"forecasted"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"non GAAP EPS",
+         "relationship":"attributable to Intel"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"GAAP EPS",
+         "relationship":"attributable to Intel"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"headcount reduction",
+         "relationship":"implementing"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"dividend",
+         "relationship":"suspending"
+      },
+      {
+         "source":"Intel 18A",
+         "target":"Process Design Kit (PDK)",
+         "relationship":"released"
+      },
+      {
+         "source":"Intel 18A",
+         "target":"client and server products",
+         "relationship":"key power on"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"AI PC product",
+         "relationship":"ramp-up"
+      }
+   ]
+}
+
+
+2:
+
+"We expect these actions to meaningfully improve liquidity and reduce our debt balance while enabling us to make the right investments to drive long term value for shareholders Cost Reduction Plan As Intel nears the completion of rebuilding a sustainable engine of process technology leadership it announced a series of initiatives to create a sustainable financial engine that accelerates profitable growth enables further operational efficiency and agility and creates capacity for ongoing strategic investment in technology and manufacturing leadership These initiatives follow the establishment of separate financial reporting for Intel Products and Intel Foundry which provides a clean sheet view of the business and has uncovered significant opportunities Exhibit 99 1 to drive meaningful operational and cost efficiencies The actions include structural and operating realignment across the company headcount reductions and operating expense and capital expenditure reductions of more than 10 billion in 2025 compared to previous estimates As a result of these actions Intel aims to achieve clear line of sight toward a sustainable business model with the ongoing financial resources and liquidity needed to support the company s long term strategy The plan will enable the next phase of the company s multiyear transformation strategy and is focused on four key priorities Reducing Operating Expenses The company will streamline its operations and meaningfully cut spending and headcount reducing non GAAP R D and marketing general and administrative MG A to approximately 20 billion in 2024 and approximately 17 5 billion in 2025 with further reduct ions expected in 2026 Intel expects to reduce headcount by greater than 15 with the majority completed by the end of 2024 Reducing Capital Expenditures With the end of its historic five nodes in four years journey firmly in sight Intel is now shifting its focus toward capital efficiency and investment levels aligned to market requirements "
+
+
+{
+   "nodes":[
+      {
+         "type":"organization",
+         "name":"Intel"
+      },
+      {
+         "type":"object",
+         "name":"Cost Reduction Plan"
+      },
+      {
+         "type":"object",
+         "name":"process technology leadership"
+      },
+      {
+         "type":"object",
+         "name":"financial reporting"
+      },
+      {
+         "type":"object",
+         "name":"operational efficiency"
+      },
+      {
+         "type":"object",
+         "name":"strategic investment"
+      },
+      {
+         "type":"object",
+         "name":"headcount reductions"
+      },
+      {
+         "type":"object",
+         "name":"operating expenses"
+      },
+      {
+         "type":"object",
+         "name":"capital expenditures"
+      },
+      {
+         "type":"object",
+         "name":"non GAAP R D and marketing MG A"
+      },
+      {
+         "type":"date",
+         "name":"2025"
+      },
+      {
+         "type":"date",
+         "name":"2024"
+      },
+      {
+         "type":"date",
+         "name":"2026"
+      }
+   ],
+   "relationships":[
+      {
+         "source":"Intel",
+         "target":"Cost Reduction Plan",
+         "relationship":"announced"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"process technology leadership",
+         "relationship":"aims to rebuild"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"financial reporting",
+         "relationship":"establishes separate reports for Intel Products and Intel Foundry"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"operational efficiency",
+         "relationship":"enables"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"strategic investment",
+         "relationship":"creates capacity for"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"headcount reductions",
+         "relationship":"includes"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"operating expenses",
+         "relationship":"reduces"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"capital expenditures",
+         "relationship":"reduces"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"non GAAP R D and marketing MG A",
+         "relationship":"reduces"
+      },
+      {
+         "source":"Intel",
+         "target":"2025",
+         "relationship":"expects to achieve"
+      },
+      {
+         "source":"Intel",
+         "target":"2024",
+         "relationship":"expects to achieve"
+      },
+      {
+         "source":"Intel",
+         "target":"2026",
+         "relationship":"expects further reductions"
+      }
+   ]
+}

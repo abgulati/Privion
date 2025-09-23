@@ -1,0 +1,219 @@
+CHUNK SIZE: 500
+
+1:
+
+"Exhibit 99 1 Intel Corporation 2200 Mission College Blvd Santa Clara CA 95054 1549 News Release Intel Reports Second Quarter 2024 Financial Results Announces 10 Billion Cost Reduction Plan to Increase Efficiency and Market Competitiveness NEWS SUMMARY Second quarter revenue of 12 8 billion down 1 year over year YoY Second quarter GAAP earnings loss per share EPS attributable to Intel was 0 38 non GAAP EPS attributable to Intel was 0 02 Forecasting third quarter 2024 revenue of 12 5 billion"
+
+
+{
+   "nodes":[
+      {
+         "type":"organization",
+         "name":"Intel Corporation"
+      },
+      {
+         "type":"location",
+         "name":"Santa Clara, CA"
+      },
+      {
+         "type":"object",
+         "name":"News Release"
+      },
+      {
+         "type":"date",
+         "name":"Second Quarter 2024"
+      },
+      {
+         "type":"object",
+         "name":"10 Billion Cost Reduction Plan"
+      },
+      {
+         "type":"object",
+         "name":"GAAP earnings loss per share"
+      },
+      {
+         "type":"object",
+         "name":"non GAAP EPS"
+      },
+      {
+         "type":"object",
+         "name":"third quarter 2024 revenue"
+      }
+   ],
+   "relationships":[
+      {
+         "source":"Intel Corporation",
+         "target":"News Release",
+         "relationship":"published"
+      },
+      {
+         "source":"News Release",
+         "target":"Second Quarter 2024",
+         "relationship":"financial results"
+      },
+      {
+         "source":"Second Quarter 2024",
+         "target":"12.8 billion",
+         "relationship":"revenue"
+      },
+      {
+         "source":"Second Quarter 2024",
+         "target":"0.38",
+         "relationship":"GAAP earnings loss per share"
+      },
+      {
+         "source":"Second Quarter 2024",
+         "target":"0.02",
+         "relationship":"non GAAP EPS"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"10 Billion Cost Reduction Plan",
+         "relationship":"announced"
+      },
+      {
+         "source":"Second Quarter 2024",
+         "target":"12.5 billion",
+         "relationship":"forecasted third quarter revenue"
+      }
+   ]
+}
+
+
+
+
+2:
+
+"to 13 5 billion expecting third quarter GAAP EPS attributable to Intel of 0 24 non GAAP EPS attributable to Intel of 0 03 Implementing comprehensive reduction in spending including a more than 15 headcount reduction to resize and refocus Suspending dividend starting in the fourth quarter of 2024 The company reiterates its long term commitment to a competitive dividend as cash flows improve to sustainably higher levels Achieved key milestones on Intel 18A with the 1 0 Process Design Kit PDK"
+
+{
+   "nodes":[
+      {
+         "type":"organization",
+         "name":"Intel"
+      },
+      {
+         "type":"object",
+         "name":"GAAP EPS"
+      },
+      {
+         "type":"object",
+         "name":"non GAAP EPS"
+      },
+      {
+         "type":"event",
+         "name":"headcount reduction"
+      },
+      {
+         "type":"date",
+         "name":"fourth quarter of 2024"
+      },
+      {
+         "type":"object",
+         "name":"Process Design Kit"
+      },
+      {
+         "type":"object",
+         "name":"Intel 18A"
+      }
+   ],
+   "relationships":[
+      {
+         "source":"Intel",
+         "target":"GAAP EPS",
+         "relationship":"attributable to"
+      },
+      {
+         "source":"Intel",
+         "target":"non GAAP EPS",
+         "relationship":"attributable to"
+      },
+      {
+         "source":"Intel",
+         "target":"headcount reduction",
+         "relationship":"implementing"
+      },
+      {
+         "source":"Intel",
+         "target":"fourth quarter of 2024",
+         "relationship":"suspending dividend"
+      },
+      {
+         "source":"Intel",
+         "target":"Process Design Kit",
+         "relationship":"achieving milestones on"
+      },
+      {
+         "source":"Intel",
+         "target":"Intel 18A",
+         "relationship":"achieving milestones on"
+      }
+   ]
+}
+
+
+
+3:
+
+"released and key power on of first client and server products on Intel 18A Panther Lake and Clearwater Forest SANTA CLARA Calif Aug 1 2024 Intel Corporation today reported second quarter 2024 financial results Our Q2 financial performance was disappointing even as we hit key product and process technology milestones Second half trends are more challenging than we previously expected and we are leveraging our new operating model to take decisive actions that will improve operating and capital efficiencies"
+
+
+{
+   "nodes":[
+      {
+         "type":"organization",
+         "name":"Intel Corporation"
+      },
+      {
+         "type":"location",
+         "name":"SANTA CLARA, California"
+      },
+      {
+         "type":"date",
+         "name":"August 1, 2024"
+      },
+      {
+         "type":"object",
+         "name":"Intel 18A Panther Lake"
+      },
+      {
+         "type":"object",
+         "name":"Clearwater Forest"
+      },
+      {
+         "type":"event",
+         "name":"second quarter 2024 financial results"
+      },
+      {
+         "type":"object",
+         "name":"operating model"
+      }
+   ],
+   "relationships":[
+      {
+         "source":"Intel Corporation",
+         "target":"second quarter 2024 financial results",
+         "relationship":"reported"
+      },
+      {
+         "source":"second quarter 2024 financial results",
+         "target":"Intel 18A Panther Lake",
+         "relationship":"key product"
+      },
+      {
+         "source":"second quarter 2024 financial results",
+         "target":"Clearwater Forest",
+         "relationship":"key product"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"operating model",
+         "relationship":"leveraging"
+      },
+      {
+         "source":"SANTA CLARA, California",
+         "target":"Intel Corporation",
+         "relationship":"headquarters"
+      }
+   ]
+}

@@ -1,0 +1,313 @@
+CHUNK SIZE: 1000
+
+
+1:
+
+"Exhibit 99 1 Intel Corporation 2200 Mission College Blvd Santa Clara CA 95054 1549 News Release Intel Reports Second Quarter 2024 Financial Results Announces 10 Billion Cost Reduction Plan to Increase Efficiency and Market Competitiveness NEWS SUMMARY Second quarter revenue of 12 8 billion down 1 year over year YoY Second quarter GAAP earnings loss per share EPS attributable to Intel was 0 38 non GAAP EPS attributable to Intel was 0 02 Forecasting third quarter 2024 revenue of 12 5 billion to 13 5 billion expecting third quarter GAAP EPS attributable to Intel of 0 24 non GAAP EPS attributable to Intel of 0 03 Implementing comprehensive reduction in spending including a more than 15 headcount reduction to resize and refocus Suspending dividend starting in the fourth quarter of 2024 The company reiterates its long term commitment to a competitive dividend as cash flows improve to sustainably higher levels Achieved key milestones on Intel 18A with the 1 0 Process Design Kit PDK released and key power on of first client and server products"
+
+
+{
+   "nodes":[
+      {
+         "type":"organization",
+         "name":"Intel Corporation"
+      },
+      {
+         "type":"location",
+         "name":"Santa Clara, CA"
+      },
+      {
+         "type":"object",
+         "name":"10 Billion Cost Reduction Plan"
+      },
+      {
+         "type":"object",
+         "name":"Intel 18A"
+      },
+      {
+         "type":"object",
+         "name":"1.0 Process Design Kit (PDK)"
+      },
+      {
+         "type":"object",
+         "name":"client products"
+      },
+      {
+         "type":"object",
+         "name":"server products"
+      },
+      {
+         "type":"date",
+         "name":"Second Quarter 2024"
+      },
+      {
+         "type":"date",
+         "name":"Third Quarter 2024"
+      },
+      {
+         "type":"object",
+         "name":"GAAP earnings loss per share"
+      },
+      {
+         "type":"object",
+         "name":"non GAAP earnings per share"
+      },
+      {
+         "type":"object",
+         "name":"headcount reduction"
+      }
+   ],
+   "relationships":[
+      {
+         "source":"Intel Corporation",
+         "target":"Santa Clara, CA",
+         "relationship":"headquarters"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"10 Billion Cost Reduction Plan",
+         "relationship":"announced"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"Second Quarter 2024",
+         "relationship":"financial results"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"Third Quarter 2024",
+         "relationship":"forecasting revenue"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"GAAP earnings loss per share",
+         "relationship":"attributable to Intel"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"non GAAP earnings per share",
+         "relationship":"attributable to Intel"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"headcount reduction",
+         "relationship":"implementing"
+      },
+      {
+         "source":"Intel Corporation",
+         "target":"Intel 18A",
+         "relationship":"key milestone achieved"
+      },
+      {
+         "source":"Intel 18A",
+         "target":"1.0 Process Design Kit (PDK)",
+         "relationship":"released"
+      },
+      {
+         "source":"Intel 18A",
+         "target":"client products",
+         "relationship":"key power on"
+      },
+      {
+         "source":"Intel 18A",
+         "target":"server products",
+         "relationship":"key power on"
+      }
+   ]
+}
+
+
+
+2:
+
+"on Intel 18A Panther Lake and Clearwater Forest SANTA CLARA Calif Aug 1 2024 Intel Corporation today reported second quarter 2024 financial results Our Q2 financial performance was disappointing even as we hit key product and process technology milestones Second half trends are more challenging than we previously expected and we are leveraging our new operating model to take decisive actions that will improve operating and capital efficiencies while accelerating our IDM 2 0 transformation said Pat Gelsinger Intel CEO These actions combined with the launch of Intel 18A next year to regain process technology leadership will strengthen our position in the market improve our profitability an d create shareholder value Second quarter results were impacted by gross margin headwinds from the accelerated ramp of our AI PC product higher than typical charges related to non core businesses and the impact from unused capacity said David Zinsner Intel CFO By implementing our spending reductions we are taking proactive steps to improve our profits"
+
+
+{
+   "nodes":[
+      {
+         "type":"organization",
+         "name":"Intel Corporation"
+      },
+      {
+         "type":"person",
+         "name":"Pat Gelsinger"
+      },
+      {
+         "type":"person",
+         "name":"David Zinsner"
+      },
+      {
+         "type":"object",
+         "name":"Intel 18A"
+      },
+      {
+         "type":"location",
+         "name":"Santa Clara, California"
+      },
+      {
+         "type":"date",
+         "name":"August 1, 2024"
+      },
+      {
+         "type":"event",
+         "name":"second quarter 2024 financial results"
+      },
+      {
+         "type":"object",
+         "name":"AI PC product"
+      },
+      {
+         "type":"object",
+         "name":"process technology"
+      }
+   ],
+   "relationships":[
+      {
+         "source":"Intel Corporation",
+         "target":"second quarter 2024 financial results",
+         "relationship":"reported"
+      },
+      {
+         "source":"Pat Gelsinger",
+         "target":"Intel Corporation",
+         "relationship":"CEO"
+      },
+      {
+         "source":"David Zinsner",
+         "target":"Intel Corporation",
+         "relationship":"CFO"
+      },
+      {
+         "source":"Intel 18A",
+         "target":"process technology",
+         "relationship":"launching next year"
+      },
+      {
+         "source":"Santa Clara, California",
+         "target":"Intel Corporation",
+         "relationship":"headquarters"
+      },
+      {
+         "source":"second quarter 2024 financial results",
+         "target":"gross margin headwinds",
+         "relationship":"impacted by"
+      },
+      {
+         "source":"second quarter 2024 financial results",
+         "target":"AI PC product",
+         "relationship":"accelerated ramp"
+      },
+      {
+         "source":"second quarter 2024 financial results",
+         "target":"non core businesses",
+         "relationship":"charges related to"
+      },
+      {
+         "source":"second quarter 2024 financial results",
+         "target":"unused capacity",
+         "relationship":"impact from"
+      }
+   ]
+}
+
+
+
+
+
+3:
+
+"and strengthen our balance sheet We expect these actions to meaningfully improve liquidity and reduce our debt balance while enabling us to make the right investments to drive long term value for shareholders Cost Reduction Plan As Intel nears the completion of rebuilding a sustainable engine of process technology leadership it announced a series of initiatives to create a sustainable financial engine that accelerates profitable growth enables further operational efficiency and agility and creates capacity for ongoing strategic investment in technology and manufacturing leadership These initiatives follow the establishment of separate financial reporting for Intel Products and Intel Foundry which provides a clean sheet view of the business and has uncovered significant opportunities Exhibit 99 1 to drive meaningful operational and cost efficiencies The actions include structural and operating realignment across the company headcount reductions and operating expense and capital expenditure reductions of more than 10 billion in 2025 compared to previous estimates"
+
+
+{
+   "nodes":[
+      {
+         "type":"organization",
+         "name":"Intel"
+      },
+      {
+         "type":"object",
+         "name":"Cost Reduction Plan"
+      },
+      {
+         "type":"object",
+         "name":"process technology leadership"
+      },
+      {
+         "type":"object",
+         "name":"financial reporting"
+      },
+      {
+         "type":"object",
+         "name":"operational efficiency"
+      },
+      {
+         "type":"object",
+         "name":"strategic investment"
+      },
+      {
+         "type":"object",
+         "name":"headcount reductions"
+      },
+      {
+         "type":"object",
+         "name":"operating expense"
+      },
+      {
+         "type":"object",
+         "name":"capital expenditure"
+      },
+      {
+         "type":"date",
+         "name":"2025"
+      }
+   ],
+   "relationships":[
+      {
+         "source":"Intel",
+         "target":"Cost Reduction Plan",
+         "relationship":"announced"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"process technology leadership",
+         "relationship":"rebuilds"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"financial reporting",
+         "relationship":"establishes separate reports for Intel Products and Intel Foundry"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"operational efficiency",
+         "relationship":"enables"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"strategic investment",
+         "relationship":"creates capacity for"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"headcount reductions",
+         "relationship":"includes"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"operating expense",
+         "relationship":"reduces"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"capital expenditure",
+         "relationship":"reduces"
+      },
+      {
+         "source":"Cost Reduction Plan",
+         "target":"2025",
+         "relationship":"estimates"
+      }
+   ]
+}

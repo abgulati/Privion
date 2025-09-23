@@ -1,0 +1,148 @@
+python .\hf_waitress.py --model_id=Metin/Gemma-2-2B-TR-Knowledge-Graph
+
+Input:
+
+{
+    "messages": 
+    [ 
+        {"role": "user", "content": "[PAGE:2]\nBusiness Unit Summary Intel previously announced the implementation of an internal foundry operating model which took effect in the first quarter of 2024 and created a foundry relationship between its Intel Products business collectively CCG DCAI and NEX and its Intel Foundry business including Foundry Technology Development Foundry Manufacturing and Supply Chain and Foundry Services formerly IFS The foundry operating model is a key component of the company s strategy and is designed to reshape operational dynamics and drive greater transparency accountability and focus on costs and efficiency The company also previously announced its intent to operate Altera an Intel Company previously Intel s Programmable Solutions Group as a standalone business beginning in the first quarter of 2024 Altera was previously included in DCAI s segment results As a result of these changes the company modified its segment reporting in the first quarter of 2024 to align to this new operating model All prior period segment data has been retrospectively adjusted to reflect the way the company internally receives information and manages and monitors its operating segment performance starting in fiscal year 2024 There are no changes to Intel s consolidated financial statements for any prior periods Business Unit Revenue and Trends Q1 2024 vs Q1 2023 Intel Products Client Computing Group CCG 7 5 billion up31 Data Center and AI DCAI 3 0 billion up5 Network and Edge NEX 1 4 billion down 8 Total Intel Products revenue 11 9 billion up17 Intel Foundry 4 4 billion down 10 All other Altera 342 million down 58 Mobileye 239 million down 48 Other 194 million up17 Total all other revenue 775 million down 46 Intersegment eliminations 4 4 billion Total net revenue 12 7 billion up9 Intel Products Highlights CCG Intel continues to advance its mission to bring AI everywhere As of the end of the first quarter more than 5 million AI PCs have shipped since the December 2023 launch of Intel Core Ultra processors supported by more than 100 software vendors Intel expects to exceed its prior forecast of 40 million AI PCs by the end of 2024 DCAI At Intel Vision the company introduced the Intel Gaudi 3 AI accelerator projected to deliver on average 50 faster inference and 40 greater inference power efficiency than Nvidia H1001 on leading generative AI GenAI models Intel also announced new Intel Gaudi accelerator customers and partners including NAVER Dell Technologies Bosch Supermicro and many others Additionally the next generation E core Intel Xeon code named Sierra Forest achieved product release this week and Intel expects Granite Rapids to be released in the third quarter NEX At Mobile World Congress in Barcelona Intel introduced the new Intel Edge Platform a modular open software platform enabling enterprises to develop deploy and manage edge and AI applications at scale The Intel Edge Platform has broad ecosystem support from Amazon Web Services Lenovo Red Hat SAP and Wipro Intel also announced the Open Platform for Enterprise AI which aims to accelerate secure cost effective GenAI deployments for businesses by driving interoperability across a diverse and heterogeneous ecosystem starting with retrieval augmented generation RAG 1 NV H100 comparison based on NVIDIA published data as of March 28 2024 Reported numbers are per GPU Vs Intel Gaudi 3 projections for LLAMA2 7B LLAMA2 70B Falcon 180B Power efficiency for both Nvidia and Gaudi 3 based on internal estimates Results may vary Intel Page 2\n[PAGE:3]\nIntel Foundry Highlights At its inaugural Direct Connect event in February Intel launched Intel Foundry the world s first systems foundry for the AI era supported by nearly 300 ecosystem partners in attendance At Direct Connect Intel Foundry announced an increased expected lifetime deal value for external customers of more than 15 billion Intel continues to drive customer adoption of Intel 18A with a major U S aerospace and defense customer committing to Intel 18A bringing Intel Foundry s external customer commitments on Intel 18A to six This quarter Microsoft also announced its plans to design a chip on Intel 18A Intel unveiled its process technology roadmap beyond its five nodes in four years process goal adding Intel 14A to its leading edge node lineup following Intel 18A and announcing several specialized node evolutions for Intel 3 Intel 18A and Intel 14A to enable customers to develop and deliver products tailored to their specific needs Intel Foundry has a strong pipeline of nearly 50 customer test chips and has engagements with almost every foundry customer in the industry on advanced packaging including five design awards Also during the quarter Intel convened more than 140 organizations across the industry at its inaugural Sustainability Summit Advancing sustainability efforts across the semiconductor ecosystem is a critical step as Intel works to become the industry s most sustainable foundry The company shared notable progress as of the end of 2023 including preliminary estimates showing that Intel used 99 renewable electricity in its factories worldwide and achieved net positive water in the United States Costa Rica Mexico and India Q2 2024 Dividend The company announced that its board of directors has declared a quarterly dividend of 0 125 per share on the company s common stock which will be payable June 1 2024 to shareholders of record as of May 7 2024 Business Outlook Intel s guidance for the second quarter of 2024 includes both GAAP and non GAAP estimates Reconciliations between GAAP and non GAAP financial measures are included below Q2 2024 GAAP Non GAAP Revenue 12 5 13 5 billion Gross Margin 40 2 43 5 Tax Rate 61 13 Earnings Loss Per Share Attributable to Intel Diluted 0 05 0 10 Actual results may differ materially from Intel s business outlook as a result of among other things the factors described under Forward Looking Statements below The gross margin and EPS outlook are based on the mid point of the revenue range Earnings Webcast Intel will hold a public webcast at 2 p m PDT today to discuss the results for its first quarter of 2024 The live public webcast can be accessed on Intel s Investor Relations website at www intc com The corresponding earnings presentation and webcast replay will also be available on the site Forward Looking Statements This release contains forward looking statements that involve a number of risks and uncertainties Words such as accelerate achieve aim ambitions anticipate believe committed continue could designed estimate expect forecast future goals grow guidance intend likely may might milestones next generation objective on track opportunity outlook pending plan position possible potential predict progress ramp roadmap seek should strive targets to be upcoming will would and variations of such words and similar expressions are intended to identify such forward looking statements which may include statements regarding Intel Page 3\n<knowledge_graph>"}
+    ] 
+}
+
+
+Model Output (Gemma2-2B):
+
+{
+    "nodes": [
+        {
+            "type": "organization",
+            "name": "Intel"
+        },
+        {
+            "type": "object",
+            "name": "Intel Products"
+        },
+        {
+            "type": "object",
+            "name": "Intel Foundry"
+        },
+        {
+            "type": "object",
+            "name": "Altera"
+        },
+        {
+            "type": "object",
+            "name": "Intel Core Ultra"
+        },
+        {
+            "type": "object",
+            "name": "Intel Gaudi 3"
+        },
+        {
+            "type": "object",
+            "name": "Intel Xeon Sierra Forest"
+        },
+        {
+            "type": "object",
+            "name": "Intel Edge Platform"
+        },
+        {
+            "type": "object",
+            "name": "Open Platform for Enterprise AI"
+        },
+        {
+            "type": "object",
+            "name": "Intel 18A"
+        },
+        {
+            "type": "object",
+            "name": "Intel 14A"
+        },
+        {
+            "type": "object",
+            "name": "Sustainability Summit"
+        },
+        {
+            "type": "object",
+            "name": "GAAP"
+        },
+        {
+            "type": "object",
+            "name": "non GAAP"
+        },
+        {
+            "type": "object",
+            "name": "dividend"
+        },
+        {
+            "type": "object",
+            "name": "earnings webcast"
+        },
+        {
+            "type": "object",
+            "name": "forward looking statements"
+        }
+    ],
+    "relationships": [
+        {
+            "source": "Intel",
+            "target": "Intel Products",
+            "relationship": "business unit"
+        },
+        {
+            "source": "Intel",
+            "target": "Intel Foundry",
+            "relationship": "business unit"
+        },
+        {
+            "source": "Intel",
+            "target": "Altera",
+            "relationship": "business unit"
+        },
+        {
+            "source": "Intel Products",
+            "target": "Intel Core Ultra",
+            "relationship": "product"
+        },
+        {
+            "source": "Intel Foundry",
+            "target": "Intel Gaudi 3",
+            "relationship": "product"
+        },
+        {
+            "source": "Intel Foundry",
+            "target": "Intel Xeon Sierra Forest",
+            "relationship": "product"
+        },
+        {
+            "source": "Intel Foundry",
+            "target": "Intel Edge Platform",
+            "relationship": "product"
+        },
+        {
+            "source": "Intel Foundry",
+            "target": "Open Platform for Enterprise AI",
+            "relationship": "product"
+        },
+        {
+            "source": "Intel Foundry",
+            "target": "Intel 18A",
+            "relationship": "product"
+        },
+        {
+            "source": "Intel Foundry",
+            "target": "Intel 14A",
+            "relationship": "product"
+        },
+        {
+            "source": "Intel",
+            "target": "Sustainability Summit",
+            "relationship": "event"
+        },
+        {
+            "source": "Intel",
+            "target": "dividend",
+            "relationship": "announcement"
+        }
+    ]
+}
