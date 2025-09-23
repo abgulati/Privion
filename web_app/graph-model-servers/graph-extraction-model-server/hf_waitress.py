@@ -58,6 +58,9 @@ from flask_cors import CORS
 
 from waitress import serve
 
+if not os.path.exists(os.path.join(os.getcwd(), 'exllamav2')):
+    subprocess.run(['git', 'clone', '-b', 'v0.3.2', 'https://github.com/turboderp-org/exllamav2.git'], check=True)  # check=True raises an exception on non-zero exit code
+
 app = Flask(__name__)
 CORS(app)
 
@@ -127,13 +130,13 @@ def _early_resolve_base_and_config():
     # Code-local bootstrap pointer (same dir as app.py)
     bootstrap_path = os.path.join(os.getcwd(), 'waitress_storage_config.json')
     base = _early_os_default_base_dir()
-    cfg_base = os.getcwd()
+    cfg_path = os.path.join(os.getcwd(), 'hf_config.json')
     if os.path.exists(bootstrap_path):
         try:
             with open(bootstrap_path, 'r') as f:
                 boot = json.load(f) or {}
             base = boot.get('base_directory', base)
-            cfg_base = boot.get('config_base', cfg_base)
+            cfg_path = boot.get('config_path', cfg_path)
         except Exception as e:
             print(f"Could not read waitress_storage_config.json, defaulting to base dir: {base}. Encountered error: {e}")
 
@@ -142,7 +145,6 @@ def _early_resolve_base_and_config():
     except Exception as e:
         print(f"Could not create base directory: {base}. Encountered error: {e}")
     
-    cfg_path = os.path.join(cfg_base, 'hf_config.json')
     return base, cfg_path, bootstrap_path
 
 BASE_DIRECTORY, CONFIG_PATH, BOOTSTRAP_PATH = _early_resolve_base_and_config()
@@ -171,7 +173,7 @@ except Exception as e:
 # Ensure botstrap contains only base_directory (so users can move by editing this one knob!)
 try:
     with open(BOOTSTRAP_PATH, 'w') as file:
-        json.dump({'base_directory': str(pathlib.Path(BASE_DIRECTORY).resolve()), 'config_base': str(pathlib.Path(CONFIG_PATH).resolve().parent)}, file, indent=4)
+        json.dump({'base_directory': str(pathlib.Path(BASE_DIRECTORY).resolve()), 'config_path': str(pathlib.Path(CONFIG_PATH).resolve())}, file, indent=4)
 except Exception as e:
     print(f"Could not write bootstrap storage_config.json, encountered error: {e}")
 

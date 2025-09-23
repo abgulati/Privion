@@ -709,7 +709,7 @@ def read_hf_config(keys:list, default_value=None, filename='waitress_storage_con
     try:
         with open(filename, 'r') as file:
             hf_storage_config = json.load(file)
-            hf_config_location = hf_storage_config.get('config_base')
+            hf_config_location = hf_storage_config.get('config_path')
     except Exception as e:
         handle_error_no_return("Could not read hf_storage_config.json, encountered error: ", e)
     
