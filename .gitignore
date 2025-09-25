@@ -49,3 +49,4 @@ web_app/text_only_input_image.png
 documents/LARS-Training-1-DC.pptx
 documents/LARS-Training-1.pptx
 web_app/llama_cpp_server_output_log.txt
+web_app/ha_device_modules/*.json
