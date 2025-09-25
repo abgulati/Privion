@@ -50,3 +50,4 @@ documents/LARS-Training-1-DC.pptx
 documents/LARS-Training-1.pptx
 web_app/llama_cpp_server_output_log.txt
 web_app/ha_device_modules/*.json
+web_app/gdrive_token.json
