@@ -1,3 +1,5 @@
+from privion_config_concierge import read_hf_config
+
 import json
 
 def get_user_query_for_relationship_summary(source, target, relationship, summary, chunk):
@@ -140,6 +142,16 @@ def get_service_request_prompt(user_query:str):
             *   Basic requests about the AI itself (e.g., "What is your name?", "What can you do?").
             *   Common knowledge facts not requiring lookup in specific databases (e.g., "What is the capital of France?").
 
+    4. **Home Assistant**
+        *   **Function:** Carry out real-world tasks, such as turning on/off lights, setting alarms, controlling thermostats, etc.
+        *   **Use ONLY for:**
+            *   Requests related to home automation or smart home devices (e.g., "Turn on the living room light", "Set the alarm for 7 AM", "Switch on or off the TV", etc.).
+            *   Basic requests about the home environment (e.g., "What's the temperature in the living room?", "Is the front door locked?", "Is the oven on?", etc.).
+            *   Any other requests related to home automation or smart home devices.
+            *   It is NOT for:**
+                *   Questions about the AI itself (e.g., "What is your name?", "What can you do?").
+                *   Common knowledge facts or data facts lookups better suited for RAG or GraphDB.
+
     ---
 
     ### Guiding Principle:
@@ -171,6 +183,73 @@ def get_service_request_prompt(user_query:str):
     }}
     ```
     """
+
+
+def clean_think_tags_from_prompt(formatted_prompt:str) -> str:
+    """
+    Creates a new list of messages with <think></think> tags cleaned.
+    This is because llama.cpp's Jinja parser cannot handle those tags!
+    This function does not modify the original list.
+    """
+    cleaned_prompt = {"messages": []}
+    for message in formatted_prompt['messages']:
+        new_message = message.copy()    # Create a copy to avoid modifying the original
+        
+        if "</think>" in new_message['content']:
+            clean_content = new_message['content'].split("</think>", 1)[-1].strip()
+            new_message['content'] = clean_content
+        
+        cleaned_prompt['messages'].append(new_message)
+    
+    return cleaned_prompt
+
+
+def read_config_for_hf_waitress_prompt_formatting() -> tuple[bool, bool]:
+    try:
+        vision = read_hf_config(['vision'])['vision']
+        flux_diffusers = read_hf_config(['flux_diffusers'])['flux_diffusers']
+        return vision, flux_diffusers
+    except Exception as e:
+        print("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
+
+
+def prepare_prompt_for_auto_templating(formatted_prompt:str, user_query:str, current_sequence_id:int, system_prompt:str, skip_system_prompt:bool) -> dict:
+
+    print("\n\nFormatting prompt for Transformers-AutoTokenizer / Jinja2-based Auto-Templating\n\n")
+
+    try:
+        vision, flux_diffusers = read_config_for_hf_waitress_prompt_formatting()
+    except Exception as e:
+        print("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
+
+    try:
+        if flux_diffusers:
+            return {"messages": [{"prompt": json.dumps(user_query)}]}
+            
+        else:
+            if current_sequence_id > 0:
+                # load & clean chat history object
+                messages_dict_with_history = json.loads(formatted_prompt)
+                messages_without_think_tags = clean_think_tags_from_prompt(messages_dict_with_history)
+
+                # create and append new message
+                new_message = {"role":"user", "content":user_query}
+                messages_without_think_tags['messages'].append(new_message)
+                
+                return messages_without_think_tags
+            
+            else:   # first message in chat
+                if vision:
+                    return {"messages": [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": user_query}]}]}
+                else:
+                    if skip_system_prompt:
+                        return {"messages": [{"role": "user", "content": json.dumps(user_query)}]}
+                        
+                    else:
+                        return {"messages": [{"role": "system", "content": json.dumps(system_prompt)}, {"role": "user", "content": json.dumps(user_query)}]}
+
+    except Exception as e:
+        print("Could not format prompt for hf-waitress in method format-prompt_for_hf_waitress, encountered error: ", e)
 
 
 def manually_format_prompt_with_prompt_template(formatted_prompt:str, user_query:str, current_sequence_id:int, base_template:str, local_llm_chat_template_format:str, skip_system_prompt=False) -> str:
@@ -351,3 +430,46 @@ def trim_response(response, start_substring, end_substring, include_start_substr
     except Exception as e:
         print(f"Failed to trim response, encountered error: {e}")
         return response
+    
+
+#############################----------------Home Assistant Stuff!----------------###############################
+
+def get_core_prompt_for_butler_tools_config(user_query:str, all_services_with_descriptions:dict) -> str:
+    return f"""You are a home automation assistant tasked with assisting the user in performing real-world actions, such as turning on/off lights or other appliances such as TVs, setting alarms, controlling thermostats, etc.
+
+    You will be given a user query, and you will need to determine the best service to perform the task basis the tool's description and the user's query.
+
+    ### Service List:
+    {all_services_with_descriptions}
+
+    ### User Query:
+    <user_query>
+    {user_query}
+    </user_query>
+
+    ### Output Format (Strict JSON):
+    ```json
+    {{
+        "service": "service name here"
+    }}
+    ```
+    NOTE: STATE SERVICE NAME EXACTLY AS IT IS IN THE SERVICE LIST.
+    """
+
+def request_action_analysis_prompt(user_query:str, action_result:dict) -> str:
+    return f"""A service execution action was attempted in accordance with a user request. Below are both, the user request and the outcome of the attempted service execution action:
+
+    ### User Request:
+    <user_request>
+    {user_query}
+    </user_request>
+
+    ### Action Result:
+    <action_result>
+    {action_result}
+    </action_result>
+
+    Please provide a status update on the service execution action. Was the action successful? If not, any reasons provided as to why not? Thank you!
+    """
+
+#############################----------------------------------------------#################################
