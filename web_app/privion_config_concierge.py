@@ -33,6 +33,7 @@ def write_config(config_updates:dict, filename=None) -> dict:
         print("Could not read config.json when attempting to write, encountered error: ", e)
         
     restart_required = False
+    skip_reload_trigger = False
     llm_trigger_keys_for_app_restart = [
         'local_llm_server',
         'use_local_llm',
@@ -61,11 +62,11 @@ def write_config(config_updates:dict, filename=None) -> dict:
     for key in llm_trigger_keys_for_app_restart:
         if key in config_updates and config_updates[key] != config.get(key):
             if key == 'local_llm_server':
-                restart_required = True # we want the page to refresh but don't need to set the llama.cpp server reload trigger just for this as we a server restart will not be required if no other settings have changed.
+                restart_required = True # we want the page to refresh but don't set the llama.cpp reload trigger just yet as a server restart is unnecessary if no other settings have changed.
+                skip_reload_trigger = True
             else:
-                global LLM_CHANGE_RELOAD_TRIGGER_SET
-                LLM_CHANGE_RELOAD_TRIGGER_SET = True
                 restart_required = True
+                skip_reload_trigger = False
                 break
 
     config.update(config_updates)
@@ -77,7 +78,7 @@ def write_config(config_updates:dict, filename=None) -> dict:
     except Exception as e:
         raise Exception(f"Could not update config.json, encountered error: {e}")
      
-    return {'success': True, 'restart_required':restart_required}
+    return {'success': True, 'restart_required':restart_required, 'skip_reload_trigger':skip_reload_trigger}
 
 
 def safe_write_config(config_updates:dict, filename=None) -> dict:

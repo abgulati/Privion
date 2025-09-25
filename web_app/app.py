@@ -740,6 +740,9 @@ def config_writer_api():
     
     try:
         write_return = write_config(config_updates)
+        if write_return['restart_required'] and not write_return['skip_reload_trigger']:
+            global LLM_CHANGE_RELOAD_TRIGGER_SET
+            LLM_CHANGE_RELOAD_TRIGGER_SET = True
     except Exception as e:
         return handle_api_error("Server-side error - could not write keys to config.json. Encountered error: ", e)
     
