@@ -196,6 +196,8 @@ function handleServiceSelectionMessage(llm_set_rag_config, traceManager) {
         traceManager.startStep("The LLM has Elected to Use Search-Tools. Executing Tech Stack: RAG - Semantic & Lexical Search with Re-Ranking & Filtering...");
     } else if (llm_set_rag_config['do_rag'] && llm_set_rag_config['perform_graph_rag']) {
         traceManager.startStep("The LLM has Elected to Use Deep Research Mode. Executing Tech Stack: RAG [Semantic & Lexical Search] + GraphRAG [In-Depth Analysis] with Re-Ranking & Filtering...");
+    } else if (llm_set_rag_config['butler_mode']) {
+        traceManager.startStep("Butler Mode Engaged! Navigating Real-World to Perform Requested Action...");
     } else {
         traceManager.startStep("The LLM has Elected to Respond Directly - No Tools Required...");
     }
@@ -379,8 +381,8 @@ function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, r
 
 function handleSetupResponse(data) {
     const {llm_set_rag_config, stream_session_id, formatted_user_prompt, sequence_id, server_type} = data;   // using object-destructuring (ES6-2015) to extract and set specific values from the data object in a single step!
-    const {do_rag, perform_graph_rag} = llm_set_rag_config;
-    const tool_use = (do_rag || perform_graph_rag) ? true : false;
+    const {do_rag, perform_graph_rag, butler_mode} = llm_set_rag_config;
+    const tool_use = (do_rag || perform_graph_rag || butler_mode) ? true : false;
     console.log("formatted_user_prompt: ", JSON.parse(formatted_user_prompt));
     setSequenceId(sequence_id);
     appendSequenceIdToUserMessage(data.user_message_html_unique_id, stream_session_id, data.regeneration_request, sequence_id);
