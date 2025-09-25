@@ -137,7 +137,6 @@ def lg_webos_tv_turn_off(ip_address:str):
     return asyncio.run(lg_webos_tv_module.webos_pair_connect_and_power_off_async(ip_address))
 
 
-
 def execute_butler_tool(service_name:str) -> dict:
     '''
     Executes a butler tool.
