@@ -1,0 +1,33 @@
+{
+    "services": {
+        
+        "wol_turn_on_device": {
+            "name": "WOL Turn On Device",
+            "description": "Sends a 'magic packet' to wake up a device with 'Wake-On-LAN' capabilities.",
+            "fields": {
+                "mac_address": {
+                    "required": true,
+                    "example": "aa:bb:cc:dd:ee:ff"
+                },
+                "broadcast_address": {
+                    "default": "255.255.255.255"
+                },
+                "broadcast_port": {
+                    "default": 9
+                }
+            }
+        },
+
+        "lg_webos_tv_turn_off": {
+            "name": "LG WebOS TV Turn Off",
+            "description": "Turns off an LG WebOS TV.",
+            "fields": {
+                "ip_address": {
+                    "required": true,
+                    "example": "192.168.1.142"
+                }
+            }
+        }
+
+    }
+}
