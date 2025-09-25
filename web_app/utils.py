@@ -9,6 +9,7 @@ import multiprocessing
 
 from pynvml import *
 
+from privion_config_concierge import read_config
 
 def empty_cuda_cache():
     print("\n\nEmptying CUDA cache (in a separate process)\n\n")
@@ -98,6 +99,25 @@ def safe_empty_cuda_cache(timeout:int=10):
 
     except Exception:
         print("\nReturning without emptying CUDA cache\n")
+
+
+def get_url_for_server(server_to_check):
+    if server_to_check == 'llama-cpp':
+        try:
+            read_return = read_config(['llama_cpp_access_url', 'llama_cpp_server_port'])
+            return f'http://{read_return["llama_cpp_access_url"]}:{read_return["llama_cpp_server_port"]}'
+        except Exception as e:
+            print("Could not read llama_cpp_access_url and llama_cpp_server_port from config.json, using default localhost:8080 instead. Encountered error: ", e)
+            return 'http://localhost:8080'
+    elif server_to_check == 'hf-waitress':
+        try:
+            read_return = read_config(['hf_waitress_access_url', 'hf_waitress_server_port'])
+            return f'http://{read_return["hf_waitress_access_url"]}:{read_return["hf_waitress_server_port"]}'
+        except Exception as e:
+            print("Could not read hf_waitress_access_url and hf_waitress_server_port from config.json, using default localhost:9069 instead. Encountered error: ", e)
+            return 'http://localhost:9069'
+    else:
+        raise Exception(f"Invalid server choice, expected 'llama-cpp' or 'hf-waitress', received: {server_to_check}")
 
 
 def is_local_server_online(server_base_url:str) -> dict:
