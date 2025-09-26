@@ -1,9 +1,9 @@
 {
     "services": {
         
-        "wol_turn_on_device": {
-            "name": "WOL Turn On Device",
-            "description": "Sends a 'magic packet' to wake up a device with 'Wake-On-LAN' capabilities.",
+        "wol_turn_on_tv": {
+            "name": "WOL Turn On TV",
+            "description": "Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.",
             "fields": {
                 "mac_address": {
                     "required": true,

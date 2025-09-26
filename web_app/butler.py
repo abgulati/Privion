@@ -106,11 +106,11 @@ def get_all_services_with_descriptions_from_butler_tools_config() -> dict:
 
 
 ### TOOL DEFS:
-def wol_turn_on_device(mac_address:str, broadcast_ip:str = '255.255.255.255', port:int = 9):
+def wol_turn_on_tv(mac_address:str, broadcast_ip:str = '255.255.255.255', port:int = 9):
     '''
-    Uses Wake-On-LAN (WOL) to turn on a device.
+    Uses Wake-On-LAN (WOL) to turn on a TV.
     Args:
-        mac_address: The MAC address of the device to turn on.
+        mac_address: The MAC address of the TV to turn on.
         broadcast_ip: The IP address to broadcast the WOL packet to.
         port: The port to send the WOL packet to.
     Returns:
@@ -144,9 +144,9 @@ def execute_butler_tool(service_name:str) -> dict:
     # butler_tool_details = get_service_details_from_butler_tools_config(service_name)
     # butler_tool_execution_result = butler_tool_details['function'](**butler_tool_details['fields'])
 
-    if service_name == 'wol_turn_on_device':
-        print("Executing WOL turn-on device tool...")
-        return wol_turn_on_device('a4:36:c7:58:3f:18', '192.168.1.142', 9)
+    if service_name == 'wol_turn_on_tv':
+        print("Executing WOL turn-on TV tool...")
+        return wol_turn_on_tv('a4:36:c7:58:3f:18', '192.168.1.142', 9)
     elif service_name == 'lg_webos_tv_turn_off':
         print("Executing LG WebOS TV turn-off tool...")
         return lg_webos_tv_turn_off('192.168.1.142')
