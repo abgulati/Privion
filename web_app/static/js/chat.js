@@ -904,7 +904,7 @@ async function requestFormattedPrompt(regeneration_request=false, regenerate_wit
         const totalContent = await fetchEventStream(final_server_type, final_formatted_user_prompt, responseIDs.responseContentID, chatContainer, file);
 
         // 3- get-References()
-        if (tool_use) {
+        if (tool_use && !llm_set_rag_config.butler_mode) {
             traceManager.startStep('Fetching Document References...');
             displayProcessingStatus('Fetching any references...');
         }
