@@ -147,6 +147,9 @@ def get_service_request_prompt(user_query:str):
         *   **Use ONLY for:**
             *   Requests related to home automation or smart home devices (e.g., "Turn on the living room light", "Set the alarm for 7 AM", "Switch on or off the TV", etc.).
             *   Basic requests about the home environment (e.g., "What's the temperature in the living room?", "Is the front door locked?", "Is the oven on?", etc.).
+            *   The user says something like "I'm bored" or "entertain me" and implies a real-world action by asking if you can do something about it. 
+            *   The user asks you to do something for a third person, such as a family member or friend, etc.
+            *   The user may use common slang terms when referring to appliances, such as "idiot box" for a TV or "jbl" or "flip" for bluetooth speakers, etc.
             *   Any other requests related to home automation or smart home devices.
             *   It is NOT for:**
                 *   Questions about the AI itself (e.g., "What is your name?", "What can you do?").
@@ -437,8 +440,14 @@ def trim_response(response, start_substring, end_substring, include_start_substr
 def get_core_prompt_for_butler_tools_config(user_query:str, all_services_with_descriptions:dict) -> str:
     return f"""You are a home automation assistant tasked with assisting the user in performing real-world actions, such as turning on/off lights or other appliances such as TVs, setting alarms, controlling thermostats, etc.
 
+    Do keep in mind that the user may use common slang terms when referring to appliances, such as "idiot box" for a TV or "jbl" or "flip" for bluetooth speakers, etc.
+
     You will be given a user query, and you will need to determine the best service to perform the task basis the tool's description and the user's query.
 
+    Pay attention to negation in the user query, for example, if told "not the idiot box", elect to turn off the TV!
+
+    IMPORTANT: There may be multiple services associated with a single device, such as dedciated "on" and "off" services for a TV, etc.
+    
     ### Service List:
     {all_services_with_descriptions}
 
