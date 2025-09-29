@@ -101,6 +101,7 @@ function loadCoreLarsConfig() {
         'force_enable_rag',
         'force_disable_rag',
         'enable_graph_rag',
+        'enable_butler_mode_selection',
         'upload_doc_to_graph_db',
         'graph_rag_context_length_limit_chars',
         'graph_chunk_size',
@@ -1606,6 +1607,16 @@ function initializeGoogleDriveTabComponents(values) {
 }
 
 
+function initializeButlerTabCheckboxes(values) {
+    document.getElementById('enable_butler_mode_selection').checked = values.enable_butler_mode_selection;
+}
+
+
+function initializeButlerTabComponents(values) {
+    initializeButlerTabCheckboxes(values);
+}
+
+
 function initializeSettingsModalTabCycleListener() {
     // Now that all on-load setup for Modal-Setting's Tabs based on config.json is completed, set listeners to cycle between tabs:
     let options = document.querySelectorAll('[data-content]');
@@ -1747,6 +1758,7 @@ document.addEventListener("DOMContentLoaded", function() {
             initializeGraphRAGTabComponents(values);
             initializeOCRTabComponents(values);
             initializeGoogleDriveTabComponents(values);
+            initializeButlerTabComponents(values);
             initializeSettingsModalTabCycleListener();
             local_llm_server = values.local_llm_server;
             return startLLMServer();

@@ -115,7 +115,85 @@ def get_user_query_for_node_summary(name, node_type, summary, chunk):
         """
 
 
-def get_service_request_prompt(user_query:str):
+
+#############################----------Start Service-Request-Prompt-Building Methods----------#############################
+
+def _append_query_and_output_specs_to_service_request_prompt(user_query:str) -> str:
+    return f"""
+    ### User Query:
+    <user_query>
+    {user_query}
+    </user_query>
+
+    ---
+
+    ### Output Format (Strict JSON):
+    ```json
+    {{
+        "service": "service name here"
+    }}
+    ```
+    """
+
+
+def _append_butler_guidelines_to_service_request_prompt() -> str:
+    return f"""
+    4. **Home Assistant**
+    *   **Function:** Carry out real-world tasks, such as turning on/off lights, setting alarms, controlling thermostats, etc.
+    *   **Use ONLY for:**
+        *   Requests related to home automation or smart home devices (e.g., "Turn on the living room light", "Set the alarm for 7 AM", "Switch on or off the TV", etc.).
+        *   Basic requests about the home environment (e.g., "What's the temperature in the living room?", "Is the front door locked?", "Is the oven on?", etc.).
+        *   The user says something like "I'm bored" or "entertain me" and implies a real-world action by asking if you can do something about it. 
+        *   The user asks you to do something for a third person, such as a family member or friend, etc.
+        *   The user may use common slang terms when referring to appliances, such as "idiot box" for a TV or "jbl" or "flip" for bluetooth speakers, etc.
+        *   Any other requests related to home automation or smart home devices.
+        *   **It is NOT for:**
+            *   Questions about the AI itself (e.g., "What is your name?", "What can you do?").
+            *   Common knowledge facts or data facts lookups better suited for RAG or GraphDB.
+
+    ---
+    ### Guiding Principle:
+    Focus on the **core intent**: Is the user asking for specific **data points** (even multiple for comparison) -> **RAG**, or are they asking for **analysis, synthesis, interpretation, or understanding relationships** -> **GraphDB**?
+    Also, consider if the user is asking for (or indirectly implies) a **real-world action** to be performed -> **Home Assistant**.
+
+    ---
+
+    ### Decision Flow (Follow these steps):
+
+    1.  **Assess Core Need:** Does the query ask for specific facts/values (RAG) or analysis/synthesis/interpretation (GraphDB)? A real-world action (Home Assistant)? Check if it's a simple conversation (Direct Response).
+    2.  **Consider Keywords (as supporting evidence):**
+        *   **Strong RAG indicators:** "What is/was [specific value]...", "When was...", "Who is...", "List...", "Specific figure for...", "Value of X vs Y...", "How much/many...". *Note: "How was [metric]" often implies asking for the value, favouring RAG unless context clearly demands analysis.*
+        *   **Strong GraphDB indicators:** "Analyze...", "Summarize...", "Compare [performance/trends/strategies]...", "Why...", "How did [X relate to Y]...", "Trends...", "Overall performance...", "Correlate...", "Relationship between...", "Risks/Opportunities...".
+        *   **Strong Home Assistant indicators:** "Turn on/off [appliance such as TV, speaker, etc.]", "Set the alarm for [time]", "Can you do [implies real-world action]", "I [or friend / family-member / third-person] am/are bored, anything you can do?" etc.
+    3.  **Select the Service:** Based on the core need (Step 1) and supported by keywords (Step 2), choose the single most appropriate service. Prioritize the core need over ambiguous keywords.
+
+    ---
+
+    """
+
+
+def _append_only_rag_guidelines_to_service_request_prompt() -> str:
+    return f"""
+    ---
+    ### Guiding Principle:
+    Focus on the **core intent**: Is the user asking for specific **data points** (even multiple for comparison) -> **RAG**, or are they asking for **analysis, synthesis, interpretation, or understanding relationships** -> **GraphDB**?
+
+    ---
+
+    ### Decision Flow (Follow these steps):
+
+    1.  **Assess Core Need:** Does the query ask for specific facts/values (RAG) or analysis/synthesis/interpretation (GraphDB)? A real-world action (Home Assistant)? Check if it's a simple conversation (Direct Response).
+    2.  **Consider Keywords (as supporting evidence):**
+        *   **Strong RAG indicators:** "What is/was [specific value]...", "When was...", "Who is...", "List...", "Specific figure for...", "Value of X vs Y...", "How much/many...". *Note: "How was [metric]" often implies asking for the value, favouring RAG unless context clearly demands analysis.*
+        *   **Strong GraphDB indicators:** "Analyze...", "Summarize...", "Compare [performance/trends/strategies]...", "Why...", "How did [X relate to Y]...", "Trends...", "Overall performance...", "Correlate...", "Relationship between...", "Risks/Opportunities...".
+    3.  **Select the Service:** Based on the core need (Step 1) and supported by keywords (Step 2), choose the single most appropriate service. Prioritize the core need over ambiguous keywords.
+
+    ---
+
+    """
+
+
+def _initialize_base_service_request_prompt() -> str:
     return f"""You're orchestrating a RAG system, and your task is to select the **single best service** from the list below to address the user's query, following the rules precisely.
 
     ### Services & Usage Rules:
@@ -142,50 +220,23 @@ def get_service_request_prompt(user_query:str):
             *   Basic requests about the AI itself (e.g., "What is your name?", "What can you do?").
             *   Common knowledge facts not requiring lookup in specific databases (e.g., "What is the capital of France?").
 
-    4. **Home Assistant**
-        *   **Function:** Carry out real-world tasks, such as turning on/off lights, setting alarms, controlling thermostats, etc.
-        *   **Use ONLY for:**
-            *   Requests related to home automation or smart home devices (e.g., "Turn on the living room light", "Set the alarm for 7 AM", "Switch on or off the TV", etc.).
-            *   Basic requests about the home environment (e.g., "What's the temperature in the living room?", "Is the front door locked?", "Is the oven on?", etc.).
-            *   The user says something like "I'm bored" or "entertain me" and implies a real-world action by asking if you can do something about it. 
-            *   The user asks you to do something for a third person, such as a family member or friend, etc.
-            *   The user may use common slang terms when referring to appliances, such as "idiot box" for a TV or "jbl" or "flip" for bluetooth speakers, etc.
-            *   Any other requests related to home automation or smart home devices.
-            *   It is NOT for:**
-                *   Questions about the AI itself (e.g., "What is your name?", "What can you do?").
-                *   Common knowledge facts or data facts lookups better suited for RAG or GraphDB.
-
-    ---
-
-    ### Guiding Principle:
-    Focus on the **core intent**: Is the user asking for specific **data points** (even multiple for comparison) -> **RAG**, or are they asking for **analysis, synthesis, interpretation, or understanding relationships** -> **GraphDB**?
-
-    ---
-
-    ### Decision Flow (Follow these steps):
-
-    1.  **Assess Core Need:** Does the query ask for specific facts/values (RAG) or analysis/synthesis/interpretation (GraphDB)? Check if it's a simple conversation (Direct Response).
-    2.  **Consider Keywords (as supporting evidence):**
-        *   **Strong RAG indicators:** "What is/was [specific value]...", "When was...", "Who is...", "List...", "Specific figure for...", "Value of X vs Y...", "How much/many...". *Note: "How was [metric]" often implies asking for the value, favouring RAG unless context clearly demands analysis.*
-        *   **Strong GraphDB indicators:** "Analyze...", "Summarize...", "Compare [performance/trends/strategies]...", "Why...", "How did [X relate to Y]...", "Trends...", "Overall performance...", "Correlate...", "Relationship between...", "Risks/Opportunities...".
-    3.  **Select the Service:** Based on the core need (Step 1) and supported by keywords (Step 2), choose the single most appropriate service. Prioritize the core need over ambiguous keywords.
-
-    ---
-
-    ### User Query:
-    <user_query>
-    {user_query}
-    </user_query>
-
-    ---
-
-    ### Output Format (Strict JSON):
-    ```json
-    {{
-        "service": "service name here"
-    }}
-    ```
     """
+
+
+def get_service_request_prompt(user_query:str, enable_butler_mode_selection:bool = False) -> str:
+    service_request_prompt = _initialize_base_service_request_prompt()
+    
+    if enable_butler_mode_selection:
+        service_request_prompt += _append_butler_guidelines_to_service_request_prompt()
+    else:
+        service_request_prompt += _append_only_rag_guidelines_to_service_request_prompt()
+    
+    service_request_prompt += _append_query_and_output_specs_to_service_request_prompt(user_query)
+    
+    return service_request_prompt
+
+
+#############################----------End Service-Request-Prompt-Building Methods----------#############################
 
 
 def clean_think_tags_from_prompt(formatted_prompt:str) -> str:

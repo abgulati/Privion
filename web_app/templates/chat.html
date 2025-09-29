@@ -225,7 +225,8 @@
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option5">GraphRAG Settings</a>
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option6">OCR Options</a>
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option7">Google Drive Loader</a>
-                                <a href="#" class="list-group-item list-group-item-action" data-content="option8">Additional Settings</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option8">Butler Settings</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option9">Additional Settings</a>
                                 <!--Add as Needed-->
                             </div>
 
@@ -1027,7 +1028,7 @@
                     
                                      <div>
                                         <input type="checkbox" id="force_disable_rag_checkbox" name="force_disable_rag">
-                                        <label for="force_disable_rag_checkbox">Force Disable RAG</label>
+                                        <label for="force_disable_rag_checkbox">Force Disable RAG & All Services</label>
                                     </div>
                                     
                                     <br>
@@ -1761,6 +1762,21 @@
                                 </div>
 
                                 <div id="option8" class="d-none">
+                                    <!--Option 6 Content-->
+                                    <h5>Butler (Home Assistant) Settings</h5>
+                                    
+                                    <br>
+                                    
+                                    <div class="form-group">
+                                        <input type="checkbox" id="enable_butler_mode_selection" name="enable_butler_mode_selection">
+                                        <label for="enable_butler_mode_selection">Enable Butler Mode Selection</label>
+                                    </div>
+                                    
+                                    <br>
+                                
+                                </div>
+
+                                <div id="option9" class="d-none">
                                     <!--Option 6 Content-->
                                     <h5>Additional Settings</h5>
                                     <br>

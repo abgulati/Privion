@@ -6659,7 +6659,8 @@ def read_config_for_llm_response_setup() -> dict:
             'base_template',
             'fetch_top_k_results_from_vectordb', 
             'filter_top_k_results_by_reranking', 
-            'skip_system_prompt'
+            'skip_system_prompt',
+            'enable_butler_mode_selection'
         ])
     except Exception as e:
         handle_local_error("Could not read config for setup-for_local_llm_response, encountered error: ", e)
@@ -7591,7 +7592,7 @@ DEFAULT_CONFIG = {'do_rag': True, 'perform_graph_rag': False, 'butler_mode': Fal
 DISABLED_CONFIG = {'do_rag': False, 'perform_graph_rag': False, 'butler_mode': False}
 
 
-def determine_response_service(user_query:str, force_enable_rag:bool = False) -> dict:
+def determine_response_service(user_query:str, force_enable_rag:bool = False, enable_butler_mode_selection:bool = False) -> dict:
     """
     Determines which service should handle the user query. Accepts args to override the LLM's selection.
     
@@ -7605,7 +7606,7 @@ def determine_response_service(user_query:str, force_enable_rag:bool = False) ->
     print(f"\nDetermining response service...\n")
 
     try:
-        service_request_prompt = prompt_formatting_module.get_service_request_prompt(user_query)
+        service_request_prompt = prompt_formatting_module.get_service_request_prompt(user_query, enable_butler_mode_selection)
     except Exception as e:
         handle_local_error("Could not get service request prompt, encountered error: ", e)
 
@@ -7733,7 +7734,7 @@ def determine_service_and_ids_for_query():
     print(f"\n\nSpecial cases addressed, determining service and returning\n\n")
 
     try:
-        llm_set_rag_config = determine_response_service(user_query, (config['force_enable_rag'] or regenerate_with_citations_force_enabled))
+        llm_set_rag_config = determine_response_service(user_query, (config['force_enable_rag'] or regenerate_with_citations_force_enabled), config['enable_butler_mode_selection'])
     except Exception as e:
         handle_error_no_return("Could not determine response service, defaulting to use Naive RAG. Encountered error: ", e)
         safe_write_config(DEFAULT_CONFIG)

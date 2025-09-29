@@ -292,6 +292,14 @@ function getGoogleDriveConfig() {
 }
 
 
+function getButlerConfig() {
+    config = {
+        'enable_butler_mode_selection': document.getElementById('enable_butler_mode_selection').checked
+    };
+    return config;
+}
+
+
 function getHfWaitressConfig() {
     let hf_config = {
         'model_id': document.getElementById('hf-waitress-llm-custom-dropdown-selected-value').textContent,
@@ -558,7 +566,8 @@ function handleSaveChanges() {
         ...getRagConfig(),
         ...getGraphRAGConfig(),
         ...getOcrConfig(),
-        ...getGoogleDriveConfig()
+        ...getGoogleDriveConfig(),
+        ...getButlerConfig()
     };
 
     let hfSavePromise;  // Declaring the variable that will hold the promise returned by handle-HfWaitressChanges(). Defaulting will result in a race condition, so we'll need to handle the Promise chain manually.

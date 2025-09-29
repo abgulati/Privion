@@ -188,6 +188,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                 'llama_cpp_server_port':8080,
                 'do_rag':True,
                 'butler_mode':False,
+                'enable_butler_mode_selection':False,
                 'force_enable_rag':False,
                 'force_disable_rag':False,
                 'use_local_llm':True,
