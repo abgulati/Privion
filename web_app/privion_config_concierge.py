@@ -61,7 +61,7 @@ def write_config(config_updates:dict, filename=None) -> dict:
             
     for key in llm_trigger_keys_for_app_restart:
         if key in config_updates and config_updates[key] != config.get(key):
-            if key == 'local_llm_server':
+            if key == 'local_llm_server' or key == 'base_template':
                 restart_required = True # we want the page to refresh but don't set the llama.cpp reload trigger just yet as a server restart is unnecessary if no other settings have changed.
                 skip_reload_trigger = True
             else:
