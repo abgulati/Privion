@@ -2840,33 +2840,25 @@ def summary_generator_for_graph_db(chunk_entities=None, cache_filepath: pathlib.
     except Exception as e:
         handle_local_error("Could not bring graph summarizer model online, encountered error: ", e)
 
-    local_llm_server = read_config(['local_llm_server'])['local_llm_server']
-    exl2 = str(read_hf_config(['exl2'])['exl2']).lower() == 'true'
+    exl2 = str(read_hf_config(['exl2'])['exl2']).lower() == 'true'        
+    
+    if exl2:
 
-    if local_llm_server == 'hf-waitress':
-        
-        summarizer_url = ""
-        if exl2:
+        try:
+            summarizer_url, headers, _ = get_request_params_for_graph_summarizer_model()
+        except Exception as e:
+            handle_local_error("Could not get graphing request params, encountered error: ", e)
 
-            try:
-                summarizer_url, headers, _ = get_request_params_for_graph_summarizer_model()
-            except Exception as e:
-                handle_local_error("Could not get graphing request params, encountered error: ", e)
+        try:
+            payload = json.dumps({"chunk_entities": chunk_entities})
+            full_response = hf_waitress_exl2_graph_api_stream_handler(summarizer_url, headers, payload, cache_filepath)
+            # print(f"\nExl2 Bulk-Summary Generation Response:\n\n{full_response}\n")
+            return full_response
+        except Exception as e:
+            handle_local_error("Error with request to exl2-grapher API, encountered error: ", e)
 
-            try:
-                payload = json.dumps({"chunk_entities": chunk_entities})
-                full_response = hf_waitress_exl2_graph_api_stream_handler(summarizer_url, headers, payload, cache_filepath)
-                # print(f"\nExl2 Bulk-Summary Generation Response:\n\n{full_response}\n")
-                return full_response
-            except Exception as e:
-                handle_local_error("Error with request to exl2-grapher API, encountered error: ", e)
-
-        else:
-            # TODO: Implement non-exl2 bulk-summary generation with /completions
-            pass
-
-    elif local_llm_server == 'llama-cpp':
-        # TODO: Implement llama-cpp summary generation
+    else:
+        # TODO: Implement non-exl2 bulk-summary generation with /completions
         pass
 
 
@@ -3077,7 +3069,7 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
             except Exception as e:
                 handle_error_no_return(f"Could not store entities and relationships for chunk {chunk_number} in {selected_knowledge_domain} graph DB, encountered error: ", e)
     except Exception as e:
-        handle_local_error("Could not iterate over chunk entities, encountered error: ", e)
+        handle_local_error("Could not iterate over chunk entities for storage in {selected_knowledge_domain} graph DB, encountered error: ", e)
 
     print(f"\nSuccessfully stored {len(chunk_entities)} chunks in {selected_knowledge_domain} graph DB\n")
     return True
