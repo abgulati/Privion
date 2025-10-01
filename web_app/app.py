@@ -3075,6 +3075,53 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
     return True
 
 
+def append_graph_entities_to_chunks(chunks, complete_chunk_entities):
+    '''
+    Appends `entities_and_relationships` to RAG chunks. Receives a complete chunk_entities dict:
+
+    complete_chunk_entities = {
+        '<graph_chunk_number>': {
+            '<entities_and_relationships>': '<node_relationships_dict>',
+            '<chunk_text>': '<text>',
+            '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
+            '<source_doc_name>': '<name>'
+        }
+    }
+    (created by assemble-chunks_for_graph_db and updated by extract-all_entities_and_relationships)
+
+    And updates 'chunks' basis the source_chunks key to include the `entities_and_relationships`:
+
+    chunks = [
+        {
+            'content': '<text>',
+            'source_link': '<source_link>',]
+            'source': '<filename>',
+            'page_number': '<page_number>',
+            'entities_and_relationships': '<node_relationships_dict>'
+        }
+    ]
+    (created by chunk-docs_with_page_numbers)
+
+    By adding this data to the chunks, we no longer need to launch the graph extraction model when executing GraphRAG,
+    saving massive time and significant resources!
+
+    While graph-chunk sizes ('chunk_text' in chunk_entities) are typically larger than plain RAG chunks ('content' in chunks) as
+    graph entity extraction benefits from greater context than the 200-300 word chunks used in plain RAG to match the typical search-query length,
+    by storing entities and relationships derived from multiple chunks into individual chunks, we benefit from an overlap effect when performing GraphRAG!
+    '''
+    try:
+        for _, chunk_data in complete_chunk_entities.items():
+            try:
+                for source_chunk in chunk_data['source_chunks']:
+                    chunks[source_chunk]['entities_and_relationships'] = chunk_data['entities_and_relationships']
+            except Exception as e:
+                handle_error_no_return(f"Could not append graph entities to RAG chunk {source_chunk} in complete_chunk_entities, encountered error: ", e)
+
+        return chunks
+    except Exception as e:
+        handle_local_error("Could not append graph entities to RAG chunks, encountered error: ", e)
+
+
 def bring_graph_db_online():    # launch FalkorDB Docker container
     print(f"\nLaunching FalkorDB Docker container...\n")
 
@@ -3310,7 +3357,7 @@ def assemble_chunks_for_graph_db(chunks):
                     'page_number': page_number_list
                 }   # Clean-up left to the garbage collector as we're at the end of the loop!
             except Exception as e:
-                handle_error_no_return(f"Error processing final batch of chunks in assemble_chunks_for_graph_db(), encountered error: ", e)
+                handle_error_no_return(f"Error processing final batch of chunks in assemble-chunks_for_graph_db(), encountered error: ", e)
     except Exception as e:
         handle_local_error(f"Error assembling chunks for graph DB, encountered error: ", e)
 
@@ -3407,13 +3454,14 @@ def read_graph_generator_config():
 
 def graph_generator(chunks:list[dict], input_filepath:pathlib.Path) -> bool:
     '''
-    Assembles document chunks (via assemble_chunks_for_graph_db()) into a dictionary of entities for storage to the GraphDB:
+    Assembles document chunks (via assemble-chunks_for_graph_db()) into a dictionary of entities for storage to the GraphDB:
 
     chunk_entities = {
         '<graph_chunk_number>': {
             '<chunk_text>': '<text>',
             '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
-            '<source_doc_name>': '<name>'
+            '<source_doc_name>': '<name>',
+            '<page_number>': '<page_number>'
         }
     }
 
@@ -3482,6 +3530,11 @@ def graph_generator(chunks:list[dict], input_filepath:pathlib.Path) -> bool:
         except Exception as e:
             handle_error_no_return("Could not apply Leiden clustering to the graph, encountered error: ", e)
 
+    try:
+        chunks_with_graph_entities = append_graph_entities_to_chunks(chunks, complete_chunk_entities)
+    except Exception as e:
+        handle_local_error("Could not append graph entities to chunks, encountered error: ", e)
+
     print(f"\n\nCompleted Graph Generator at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
     return True
 
@@ -3525,6 +3578,7 @@ def whoosh_embed_and_graph_doc_chunks(input_filepath:pathlib.Path) -> tuple[int,
     try:
         chunks = chunk_docs_with_page_numbers(input_filepath, chunk_sz) # Generates a list of dictionaries, each containing 'content', 'source', and 'page_number' as keys
         if len(chunks) > 0:
+            
             if not perform_only_graph_rag:
                 
                 try:
@@ -7351,7 +7405,7 @@ def assemble_chunks_for_graph_rag(docs, user_query=None):
 
                 graph_chunk_count += 1
             except Exception as e:
-                handle_error_no_return(f"Error processing context document number {count} of {len(docs)} documents in assemble_chunks_for_graph_db(), encountered error: ", e)
+                handle_error_no_return(f"Error processing context document number {count} of {len(docs)} documents in assemble-chunks_for_graph_db(), encountered error: ", e)
 
     except Exception as e:
         handle_local_error(f"Could not assemble chunk_entities dictionary for GraphRAG, encountered error: ", e)
@@ -7361,7 +7415,7 @@ def assemble_chunks_for_graph_rag(docs, user_query=None):
 
 def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
     '''
-    Assembles document chunks into a dictionary of entities (via the assemble_chunks_for_graph_rag method, check it for detailed documentation on the structure of docs and chunk_entities) for queries on the GraphDB.
+    Assembles document chunks into a dictionary of entities (via the assemble-chunks_for_graph_rag method, check it for detailed documentation on the structure of docs and chunk_entities) for queries on the GraphDB.
 
     These chunk_entities are then passed to the graphing model which will process each graph_chunk and append the `entities_and_relationships` key to each chunk_entities dict:
         
@@ -7382,6 +7436,7 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
         handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
 
     try:
+
         chunk_entities = assemble_chunks_for_graph_rag(docs, user_query)
     except Exception as e:
         handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
