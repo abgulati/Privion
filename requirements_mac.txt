@@ -1,4 +1,5 @@
 accelerate>=1.7.0
+aiowebostv>=0.7.5
 blobfile>=3.0.0
 chromadb>=1.0.12
 diffusers>=0.33.1
@@ -35,6 +36,7 @@ azure-cognitiveservices-vision-computervision>=0.9.1
 azure-common>=1.1.28
 azure-core>=1.34.0
 urlextract>=1.9.0
+wakeonlan>=3.1.0
 whoosh>=2.7.4
 waitress>=3.0.2
 werkzeug>=3.1.3
