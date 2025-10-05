@@ -295,417 +295,6 @@ def handle_error_no_return(message:str, exception:Exception=None):
 ############################----------------------------------------------###############################
 
 
-
-############################------------configuration manager-------------###############################
-
-# def write_config(config_updates:dict, filename:str=None) -> dict:
-#     '''
-#     Method to write app configuration to config.json.\n
-    
-#     Args:
-#         - config_updates: dict of key:values to be written to config.json
-#         - filename: name of the file to write to, defaults to None which sets to CONFIG_PATH
-
-#     Returns:
-#         - Confirmation of success: {success: True}
-
-#     Raises:
-#         - Exception: If the file cannot be written to
-#     '''
-
-#     filename = filename or CONFIG_PATH
-
-#     # First, open existing config file (if present) to read-in current settings, fallback to an empty dict if file does not exist:
-#     try:
-#         with open(filename, 'r') as file:
-#             config = json.load(file)
-#     except Exception as e:
-#         config = {}     #init emply config dict
-#         handle_error_no_return("Could not read config.json when attempting to write, encountered error: ", e)
-        
-#     restart_required = False
-#     llm_trigger_keys_for_app_restart = [
-#         'local_llm_server',
-#         'use_local_llm',
-#         'use_azure_open_ai',
-#         'model_choice',
-#         'llama_cpp_context_length',
-#         'llama_cpp_max_new_tokens',
-#         'llama_cpp_use_gpu',
-#         'llama_cpp_gpu_layers',
-#         'llama_cpp_unified_kv_buffer',
-#         'llama_cpp_disable_kv_offloading',
-#         'llama_cpp_key_cache_data_type',
-#         'llama_cpp_value_cache_data_type',
-#         'llama_cpp_no_of_seqs_to_par_decode',
-#         'llama_cpp_offload_to_devices',
-#         'llama_cpp_cpu_only_moe',
-#         'llama_cpp_mlock',
-#         'llama_cpp_no_nmap',
-#         'base_template',
-#         'skip_system_prompt',
-#         'hf_waitress_serving_url',
-#         'hf_waitress_access_url',
-#         'hf_waitress_server_port'
-#     ]
-            
-#     for key in llm_trigger_keys_for_app_restart:
-#         if key in config_updates and config_updates[key] != config.get(key):
-#             if key == 'local_llm_server':
-#                 restart_required = True # we want the page to refresh but don't need to set the llama.cpp server reload trigger just for this as we a server restart will not be required if no other settings have changed.
-#             else:
-#                 global LLM_CHANGE_RELOAD_TRIGGER_SET
-#                 LLM_CHANGE_RELOAD_TRIGGER_SET = True
-#                 restart_required = True
-#                 break
-
-#     config.update(config_updates)
-
-#     # Write updated config.json:
-#     try:
-#         with open(filename, 'w') as file:
-#             json.dump(config, file, indent=4)
-#     except Exception as e:
-#         handle_local_error("Could not update config.json, encountered error: ", e)
-     
-#     return {'success': True, 'restart_required':restart_required}
-
-
-# def safe_write_config(config_updates:dict, filename:str=None) -> dict:
-#     '''
-#     Wrapper for write-config() that handles errors silently.
-#     Directly invoke write-config() instead of this method anytime a write-specific error must be raised!
-#     '''
-#     filename = filename or CONFIG_PATH
-#     try:
-#         return write_config(config_updates, filename)
-#     except Exception as e:
-#         handle_error_no_return("Could not write to config.json, encountered error: ", e)
-#         return {'success': False, 'restart_required': False}
-
-
-# def read_config(keys:list, default_value=None, filename=None) -> dict:
-#     '''
-#     Method to read app configuration from config.json. Central method to configure safe application defaults.
-    
-#     Args:
-#         - keys: list of keys to read from config.json
-#         - default_value: default value to return if a key is not found in config.json, defaults to None
-#         - filename: name of the file to read from, defaults to None which sets to CONFIG_PATH
-
-#     Returns:
-#         - dict of key:values read from config.json
-
-#     Raises:
-#         - KeyError: If a key is not found in config.json and no default value has been defined
-#     '''
-
-#     filename = filename or CONFIG_PATH
-    
-#     # Open config file to read-in all current params:
-#     try:
-#         with open(filename, 'r') as file:
-#             config = json.load(file)
-#     except Exception as e:
-#         handle_error_no_return("Could not read config.json, encountered error: ", e)
-#         return {key: default_value for key in keys}     #because a read scenario wherein config.json does not exist shouldn't occur!
-    
-#     return_dict = {}
-#     update_config_dict = {}
-#     base_directory = config.get('base_directory', BASE_DIRECTORY)   # base_directory is written to config after platform detection and the correct value will be present by the time other app directories are requested 
-
-#     for key in keys:
-#         if key in config:
-#             return_dict[key] = config[key]
-#         else:
-#             default_value = {
-#                 'upload_folder':base_directory + '/uploaded_pdfs',
-#                 'sqlite_images_db':base_directory + '/images_database_main.db',
-#                 'sqlite_history_db':base_directory + '/chat_history.db',
-#                 'sqlite_docs_loaded_db':base_directory + '/docs_loaded.db',
-#                 'model_dir':base_directory + '/models',
-#                 'highlighted_docs':base_directory + '/highlighted_pdfs',
-#                 'ocr_pdfs':base_directory + '/ocr_pdfs',
-#                 'pdfs_to_txts':base_directory + '/pdfs_to_txts',
-#                 'docs_to_knowledge_graph_dir': base_directory + '/docs_to_knowledge_graph',
-#                 'upload_staging_folder':base_directory + '/upload_staging',
-#                 'upload_staging_db':base_directory + '/upload_staging.db',
-#                 'knowledge_domain_base_directory': base_directory + '/knowledge_domains',
-#                 'graph_db_data_directory': base_directory + '/graph_db_data',
-#                 'graph_models_base_directory_name': 'graph-model-servers',
-#                 'graph_extraction_model_directory_name': 'graph-extraction-model-server',
-#                 'graph_summary_generator_directory_name': 'graph-summary-generator-server',
-#                 'local_llm_server':'hf-waitress',
-#                 'exclusive_server_mode':True,  # If True, only one main LLM server instance will be allowed to run at a time. For example, when launching llama.cpp, HF-Waitress will be shut down.
-#                 'model_choice':'Meta-Llama-3-8B-Instruct.f16.gguf',
-#                 'vision_llm_local_url':"http://localhost:9069/completions",
-#                 'kosmos_local_url':"http://localhost:25000",
-#                 'kosmos_task':'ocr',
-#                 'kosmos_threshold':30,
-#                 'kosmos_offload_vram':True,
-#                 'kosmos_container_name':'kosmos-2.5',
-#                 'min_char_threshold_for_backup_ocr':1000,
-#                 'minimum_free_vram_for_kosmos_ocr':10240,
-#                 'ocr_service_choice':'Docling',
-#                 'backup_ocr_service_choice':'Backup-Docling',
-#                 'docling_pipeline':'standard',
-#                 'docling_vlm_model':'phi4_transformers',
-#                 'docling_ocr_model':'easyocr',
-#                 'docling_do_ocr':True,
-#                 'docling_do_code_enrichment':False,
-#                 'docling_do_formula_enrichment':False,
-#                 'docling_do_table_structure':True,
-#                 'docling_do_picture_classification':False,
-#                 'docling_do_picture_description':False,
-#                 'docling_table_structure_mode':'accurate',
-#                 'docling_do_cell_matching':True,
-#                 'docling_cuda_use_flash_attention_2':False,
-#                 'docling_force_full_page_ocr':False,
-#                 'docling_num_threads':4,
-#                 'force_ocr':False,
-#                 'lars_host':'0.0.0.0',
-#                 'lars_port':5000,
-#                 'hf_waitress_serving_url':'0.0.0.0',    # the serving URL is where the HF-Waitress server is listening for requests, and is specified in the serve() launch command of the Flask/Waitress WSGI server. 0.0.0.0 means all interfaces.
-#                 'hf_waitress_access_url':'localhost',   # the access URL is the URL that the HF-Waitress server is accessible to clients for API calls, localhost means only from the local machine.
-#                 'hf_waitress_server_port':9069,
-#                 'llama_cpp_serving_url':'0.0.0.0',
-#                 'llama_cpp_access_url':'localhost',
-#                 'llama_cpp_server_port':8080,
-#                 'do_rag':True,
-#                 'butler_mode':False,
-#                 'force_enable_rag':False,
-#                 'force_disable_rag':False,
-#                 'use_local_llm':True,
-#                 'use_gpu_for_embeddings':False,
-#                 'azure_cv_free_tier':True,
-#                 'use_azure_open_ai':False,
-#                 'azure_openai_api_type':'azure',
-#                 'azure_openai_api_version':'2023-05-15',
-#                 'azure_openai_max_tokens':4096,
-#                 'azure_openai_temperature':0.7,
-#                 'force_re_extract':False,
-#                 'llm_filter_citations':True,
-#                 'local_llm_model_type':'llama',
-#                 'local_llm_chat_template_format':'Tranformers-AutoTokenizer',
-#                 'llama_cpp_use_gpu':False,
-#                 'llama_cpp_context_length':4096,
-#                 'llama_cpp_max_new_tokens':-1,
-#                 'llama_cpp_gpu_layers':25,
-#                 'llama_cpp_unified_kv_buffer':False,
-#                 'llama_cpp_disable_kv_offloading':False,
-#                 'llama_cpp_key_cache_data_type':'f16',
-#                 'llama_cpp_value_cache_data_type':'f16',
-#                 'llama_cpp_no_of_seqs_to_par_decode':1,
-#                 'llama_cpp_offload_to_devices':'none',
-#                 'llama_cpp_cpu_only_moe':False,
-#                 'llama_cpp_mlock':False,
-#                 'llama_cpp_no_nmap':False,
-#                 'llama_cpp_temperature':0.8,
-#                 'llama_cpp_top_k':40,
-#                 'llama_cpp_top_p':0.9,
-#                 'llama_cpp_min_p':0.1,
-#                 'llama_cpp_n_keep':0,
-#                 'llama_cpp_server_timeout_seconds':3,
-#                 'llama_cpp_server_retry_attempts':200,
-#                 'hf_waitress_server_timeout_seconds':3,
-#                 'hf_waitress_server_retry_attempts':200,
-#                 'whoosh_search_weighting':'BM25F',
-#                 'fetch_top_k_results_from_whoosh':50,
-#                 'fetch_top_k_results_from_vectordb':50,
-#                 'filter_top_k_results_by_reranking':11,
-#                 'min_semantic_similarity_threshold':0.5,
-#                 'min_lexical_similarity_threshold':3.0,
-#                 'chunk_size':250,
-#                 'chunk_overlap':0,
-#                 'enable_graph_rag':True,
-#                 'perform_graph_rag':True,   # Determined & managed by the LLM
-#                 'perform_only_graph_rag':False, # dev flag only for testing
-#                 'upload_doc_to_graph_db':True,
-#                 'graph_chunk_size':1500,    # Larger chunks are better because they provide more context for the model to identify meaningful entities and relationships
-#                 'graph_chunk_overlap':300,  # 20% overlap for a 1500 char chunk: provides very reasonable overlap while not being too redundant.
-#                 'graph_generator_model_list':[
-#                     'Metin/Gemma-2-2B-TR-Knowledge-Graph',
-#                     'google/gemma-2-2b-it',
-#                     'google/gemma-2-9b-it'
-#                 ],
-#                 'graph_generator_model':'Metin/Gemma-2-2B-TR-Knowledge-Graph',
-#                 'graph_model_server_port':9070,
-#                 'graph_model_access_url':'localhost',
-#                 'quantize_graph_model':'n',
-#                 'quantize_graph_model_bits':'int8',
-#                 'exl2_quantize_graph_model':True,
-#                 'exl2_quantize_graph_model_bpw':8.0,
-#                 'graph_summarizer_model_list':[
-#                     "google/gemma-3-4b-it",
-#                     "microsoft/Phi-4-mini-instruct",
-#                     "google/gemma-3-1b-it",
-#                     "google/gemma-3-27b-it",
-#                     "Qwen/Qwen3-14B",
-#                     "Qwen/Qwen3-30B-A3B",
-#                     "Qwen/Qwen3-14B",
-#                     "Qwen/Qwen3-0.6B",
-#                     "nvidia/Llama-3_3-Nemotron-Super-49B-v1",
-#                     "Qwen/Qwen3-32B",
-#                     "Qwen/QwQ-32B",
-#                     "mistralai/Mistral-Small-24B-Instruct-2501",
-#                     "microsoft/phi-4",
-#                     "meta-llama/Llama-3.2-11B-Vision-Instruct",
-#                     "meta-llama/Llama-3.2-1B-Instruct",
-#                     "meta-llama/Llama-3.2-3B-Instruct",
-#                     "black-forest-labs/FLUX.1-schnell",
-#                     "black-forest-labs/FLUX.1-dev",
-#                     "mistralai/Mistral-Nemo-Instruct-2407",
-#                     "meta-llama/Meta-Llama-3.1-8B-Instruct",
-#                     "meta-llama/Meta-Llama-3.1-70B-Instruct",
-#                     "meta-llama/Meta-Llama-3.1-405B-Instruct-FP8",
-#                     "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4",
-#                     "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
-#                     "microsoft/Phi-3.5-mini-instruct",
-#                     "microsoft/Phi-3.5-MoE-instruct",
-#                     "microsoft/Phi-3-mini-4k-instruct",
-#                     "microsoft/Phi-3-mini-128k-instruct",
-#                     "microsoft/Phi-3-small-8k-instruct",
-#                     "microsoft/Phi-3-small-128k-instruct",
-#                     "microsoft/Phi-3-medium-4k-instruct",
-#                     "microsoft/Phi-3-medium-128k-instruct",
-#                     "CohereForAI/c4ai-command-r-plus",
-#                     "CohereForAI/c4ai-command-r-v01",
-#                     "google/gemma-2-2b-it",
-#                     "google/gemma-2-9b-it",
-#                     "google/gemma-2-27b-it",
-#                     "Qwen/Qwen2-7B-Instruct",
-#                     "Qwen/Qwen2-72B-Instruct",
-#                     "Qwen/Qwen2.5-Coder-32B-Instruct",
-#                     "Qwen/Qwen2.5-1.5B-Instruct",
-#                     "Qwen/QwQ-32B-Preview",
-#                     "Qwen/Qwen2.5-0.5B-Instruct",
-#                     "Qwen/Qwen2.5-3B-Instruct",
-#                     "Qwen/Qwen2.5-14B-Instruct",
-#                     "deepseek-ai/DeepSeek-R1",
-#                     "open-thoughts/OpenThinker-32B"
-#                 ],
-#                 'graph_summarizer_model':'google/gemma-2-2b-it',
-#                 'graph_summarizer_server_port':9071,
-#                 'graph_summarizer_access_url':'localhost',
-#                 'quantize_graph_summarizer_model':'n',
-#                 'quantize_graph_summarizer_model_bits':'int8',
-#                 'exl2_quantize_graph_summarizer_model':True,
-#                 'exl2_quantize_graph_summarizer_model_bpw':8.0,
-#                 'graph_db_server_host':'localhost',
-#                 'assign_host_port_to_graph_db_server':6379,
-#                 'assign_host_port_to_graph_db_ui':3000,
-#                 'launch_graph_db_with_ui':True,
-#                 'apply_clustering_to_graph_db_on_doc_load': False,
-#                 'graph_model_max_new_tokens':4096,
-#                 'graph_model_max_seq_len':15360,
-#                 'graph_model_temperature':0.1,
-#                 'graph_model_do_sample':True,
-#                 'graph_model_top_k':40,
-#                 'graph_model_top_p':0.95,
-#                 'graph_model_min_p':0.05,
-#                 'minimum_free_vram_for_graph_extraction_model':7168,
-#                 'graph_summarizer_max_new_tokens':8192,
-#                 'graph_summarizer_max_seq_len':15360,
-#                 'graph_summarizer_temperature':0.15,
-#                 'graph_summarizer_do_sample':True,
-#                 'graph_summarizer_top_k':40,
-#                 'graph_summarizer_top_p':0.95,
-#                 'graph_summarizer_min_p':0.05,
-#                 'minimum_free_vram_for_graph_summarizer_model':7168,
-#                 'skip_summary_generation':False,    # dev flag only for testing
-#                 'reuse_graph_extraction_cache_without_validation':False,
-#                 'reuse_graph_summary_cache_without_validation':False,
-#                 'reuse_graph_extraction_cache_with_validation':True,
-#                 'reuse_graph_summary_cache_with_validation':True,
-#                 'graph_rag_context_length_limit_chars':25000,
-#                 'base_template': (
-#                             "You are a helpful assistant deployed in a Retrieval Augmented Generation (RAG) system.\n"
-#                             "Please link to source citations after every significant point and wherever else applicable in your response, by providing the complete 'source_link' link.\n"
-#                             "Thank you!\n"                            
-#                 ),
-#                 'vision_ocr_prompt': (
-#                             "Please OCR the attached image line-by-line as accurately as possible.\n"
-#                             "If the image contains a table, output cell contents with their row and column indices. Include row and column name headers too. Follow this formatting example:\n"
-#                             "[Row 0 (name:<header-name>), Column 0 (name:<header-name>): <cell-data>; Row 0 (name:<header-name>), Column 1 (name:<header-name>): <cell-data>;] etc.\n"
-#                             "The extracted text will be converted into embeddings and used for semantic search, so extracting as much detail as possible, while maintaining formatting integrity and tabular context is crucially important.\n"
-#                             "Please output only the text extracted from the image, without any other text, code, or markup. Please no yapping!\n"
-#                             "Don't even say stuff like 'Here's the OCR'ed text from the image' or 'Here's the text extracted from the image' or anything like that. Just output the text.\n"
-#                             "Thank you!"
-#                 ),
-#                 'skip_system_prompt':False,
-#                 'embedding_models_list':[
-#                     'sentence-transformers/all-mpnet-base-v2',
-#                     'Qwen/Qwen3-Embedding-0.6B',
-#                     'Qwen/Qwen3-Embedding-4B',
-#                     'Qwen/Qwen3-Embedding-8B',
-#                     'BAAI/bge-small-en-v1.5',
-#                     'BAAI/bge-base-en-v1.5',
-#                     'BAAI/bge-large-en-v1.5',
-#                     'nvidia/NV-Embed-v2'
-#                 ],
-#                 'selected_embedding_model':'sentence-transformers/all-mpnet-base-v2',
-#                 'reranker_models_list':[
-#                     'all-MiniLM-L6-v2',
-#                     'Qwen/Qwen3-Reranker-0.6B',
-#                     'Qwen/Qwen3-Reranker-4B',
-#                     'Qwen/Qwen3-Reranker-8B',
-#                     'BAAI/bge-small-en-v1.5',
-#                     'BAAI/bge-base-en-v1.5',
-#                     'BAAI/bge-large-en-v1.5'
-#                 ],
-#                 'selected_reranker_model':'all-MiniLM-L6-v2',
-#                 'use_embedding_model_for_reranking':True,
-#                 'knowledge_domain_list':[
-#                     'General',
-#                     'Technical',
-#                     'Legal',
-#                     'Financial',
-#                     'Medical',
-#                     'Business',
-#                     'Education',
-#                     'Casual'
-#                 ],
-#                 'selected_knowledge_domain':'General'
-#             }.get(key, 'undefined') # "implicit string concatenation" used for keys with large-string values!
-
-#             if default_value == 'undefined':
-#                 raise KeyError(f"Key \'{key}\' not found in config.json and no default value has been defined either.\n")
-            
-#             return_dict[key] = default_value
-#             update_config_dict[key] = default_value
-
-#     if update_config_dict: safe_write_config(update_config_dict)   # write defaults to config.json
-    
-#     return return_dict
-
-
-# def read_hf_config(keys:list, default_value=None, filename='waitress_storage_config.json') -> dict:
-    
-#     # Open hf_config file to read-in all current params:
-#     try:
-#         with open(filename, 'r') as file:
-#             hf_storage_config = json.load(file)
-#             hf_config_location = hf_storage_config.get('config_path')
-#     except Exception as e:
-#         handle_error_no_return("Could not read hf_storage_config.json, encountered error: ", e)
-    
-#     try:
-#         with open(hf_config_location, 'r') as file:
-#             hf_config = json.load(file)
-#     except Exception as e:
-#         handle_error_no_return("Could not read hf_config.json, encountered error: ", e)
-#         return {key: default_value for key in keys}     #because a read scenario wherein hf_config.json does not exist shouldn't occur!
-
-#     return_dict = {}
-
-#     for key in keys:
-#         if key in hf_config:
-#             return_dict[key] = hf_config[key]
-#         else:
-#             return_dict[key] = default_value
-
-#     return return_dict
-
 from privion_config_concierge import read_config, write_config, read_hf_config, safe_write_config
 
 # Method for API route to read from config.json
@@ -996,7 +585,8 @@ def create_whoosh_index_in_folder(whoosh_index_folder:pathlib.Path):
         content=TEXT(stored=True),
         source_link=ID(stored=True),
         source=ID(stored=True),
-        page_number=ID(stored=True)
+        page_number=ID(stored=True),
+        entities_and_relationships=ID(stored=True)
     )
 
     # Create a directory for persistent storage of the index to disk
@@ -1053,7 +643,8 @@ def whoosh_indexer(new_chunks:list[dict]):
                 content=chunk['content'], 
                 source_link=chunk['source_link'],
                 source=chunk['source'], 
-                page_number=str(chunk['page_number'])
+                page_number=str(chunk['page_number']),
+                entities_and_relationships=str(chunk.get('entities_and_relationships', {}))
             )
         
         writer.commit()
@@ -1063,7 +654,7 @@ def whoosh_indexer(new_chunks:list[dict]):
         handle_local_error("Failed to write to Whoosh Index, encountered error: ", e)
 
 
-def search_whoosh_index(query):
+def search_whoosh_index(query:str) -> list[dict]:
 
     print("Searching Whoosh Index")
     
@@ -1073,7 +664,7 @@ def search_whoosh_index(query):
         whoosh_search_weighting = read_return['whoosh_search_weighting']
         min_lexical_similarity_threshold = float(read_return['min_lexical_similarity_threshold'])  # Like semantic search with ChromaDB, higher scores indicate better matches but the range with Whoosh is different!
     except Exception as e:
-        handle_local_error("Missing whoosh config in config.json for method search_whoosh_index. Error: ", e)
+        handle_local_error("Missing whoosh config in config.json for method search-whoosh_index. Error: ", e)
 
     try:
         whoosh_index_folder = determine_whoosh_index_folder()
@@ -1104,6 +695,7 @@ def search_whoosh_index(query):
                     'source_link': result['source_link'],
                     'source': result['source'],
                     'page_number': result['page_number'],
+                    'entities_and_relationships': result['entities_and_relationships'],
                     'score': result.score
                 }
                 for result in results
@@ -1125,6 +717,7 @@ def search_whoosh_index(query):
                         'source_link': result['source_link'],
                         'source': result['source'],
                         'page_number': result['page_number'],
+                        'entities_and_relationships': result['entities_and_relationships'],
                         'score': result.score
                     }
                     for result in lenient_results
@@ -2406,7 +1999,7 @@ def core_embedder(chunks:list[dict], selected_embedding_model:str, path_to_knowl
 
     # Convert Chunks to Document objects:
     try:    # To generate a list of Document objects, each containing a 'page_content' string, and a 'metadata' dictionary with 'source_link', 'page_number', and 'source' keys
-        numbered_splits = [Document(page_content=chunk['content'], metadata={'source_link':chunk['source_link'], 'page_number': chunk['page_number'], 'source': chunk['source']}) for chunk in chunks]
+        numbered_splits = [Document(page_content=chunk['content'], metadata={'source_link':chunk['source_link'], 'page_number': chunk['page_number'], 'source': chunk['source'], 'entities_and_relationships': str(chunk.get('entities_and_relationships', {}))}) for chunk in chunks]
     except Exception as e:
         handle_local_error("Failed to convert chunks to Document objects for storage to VectorDB, encountered error: ", e)
 
@@ -3077,7 +2670,7 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
 
 def append_graph_entities_to_chunks(chunks, complete_chunk_entities):
     '''
-    Appends `entities_and_relationships` to RAG chunks. Receives a complete chunk_entities dict:
+    Appends `entities_and_relationships` to regular-RAG doc chunks. Receives a complete chunk_entities dict:
 
     complete_chunk_entities = {
         '<graph_chunk_number>': {
@@ -3087,14 +2680,14 @@ def append_graph_entities_to_chunks(chunks, complete_chunk_entities):
             '<source_doc_name>': '<name>'
         }
     }
-    (created by assemble-chunks_for_graph_db and updated by extract-all_entities_and_relationships)
+    (created by convert-doc_chunks_to_graph_entities and updated by extract-all_entities_and_relationships)
 
-    And updates 'chunks' basis the source_chunks key to include the `entities_and_relationships`:
+    And updates 'chunks' basis the 'source_chunks' key to include the `entities_and_relationships`:
 
     chunks = [
         {
             'content': '<text>',
-            'source_link': '<source_link>',]
+            'source_link': '<source_link>',
             'source': '<filename>',
             'page_number': '<page_number>',
             'entities_and_relationships': '<node_relationships_dict>'
@@ -3103,23 +2696,38 @@ def append_graph_entities_to_chunks(chunks, complete_chunk_entities):
     (created by chunk-docs_with_page_numbers)
 
     By adding this data to the chunks, we no longer need to launch the graph extraction model when executing GraphRAG,
-    saving massive time and significant resources!
+    saving massive time and significant resources (~8GB VRAM savings)!
 
     While graph-chunk sizes ('chunk_text' in chunk_entities) are typically larger than plain RAG chunks ('content' in chunks) as
     graph entity extraction benefits from greater context than the 200-300 word chunks used in plain RAG to match the typical search-query length,
     by storing entities and relationships derived from multiple chunks into individual chunks, we benefit from an overlap effect when performing GraphRAG!
     '''
-    try:
-        for _, chunk_data in complete_chunk_entities.items():
-            try:
-                for source_chunk in chunk_data['source_chunks']:
-                    chunks[source_chunk]['entities_and_relationships'] = chunk_data['entities_and_relationships']
-            except Exception as e:
-                handle_error_no_return(f"Could not append graph entities to RAG chunk {source_chunk} in complete_chunk_entities, encountered error: ", e)
+    for _, chunk_data in complete_chunk_entities.items():
+        
+        try:
+            for source_chunk in chunk_data['source_chunks']:
+                
+                try:    # try to extend existing metadata...
 
-        return chunks
-    except Exception as e:
-        handle_local_error("Could not append graph entities to RAG chunks, encountered error: ", e)
+                    if not isinstance(source_chunk, int) or source_chunk < 0 or source_chunk >= len(chunks):
+                        continue    # index guard (fallback won't help if out of range!)
+
+                    chunks[source_chunk]['entities_and_relationships']['nodes'].extend(chunk_data['entities_and_relationships']['nodes'])
+                    chunks[source_chunk]['entities_and_relationships']['relationships'].extend(chunk_data['entities_and_relationships']['relationships'])
+                except (KeyError, TypeError, AttributeError):  # ...or append afresh!
+                    chunks[source_chunk]['entities_and_relationships'] = chunk_data['entities_and_relationships']
+
+                '''
+                Here, we follow Python's "EAFP" style: "Easier to Ask Forgiveness Than Permission"!
+                That is, if we were to perform safety checks in an effort to catch any potential issue before extending, we'd have a ton of 'if' checks:
+                if isinstance dict, if is instance list, if is instance int, if is instance str, etc. This would be a nightmare to maintain and read.
+                Then there would be the length checking if blank etc, just terrible.
+                Instead, we simply try to extend and catch relevant exceptions to handle them with a safe fallback: fresh append!
+                '''
+        except Exception as e:
+            handle_error_no_return(f"Could not append graph entities to RAG chunk {source_chunk} in complete_chunk_entities, encountered error: ", e)
+
+    return chunks
 
 
 def bring_graph_db_online():    # launch FalkorDB Docker container
@@ -3295,7 +2903,7 @@ def generate_graph_communities():
     return jsonify({"message": "Graph communities generated successfully"}), 200
 
 
-def assemble_chunks_for_graph_db(chunks):
+def convert_doc_chunks_to_graph_entities(chunks:list[dict]) -> dict:
     '''
     Assembles document chunks into a dictionary of entities for storage to the GraphDB:
     '''
@@ -3304,8 +2912,8 @@ def assemble_chunks_for_graph_db(chunks):
         graph_chunk_size = int(read_return.get('graph_chunk_size', 1500))
         graph_chunk_overlap = int(read_return.get('graph_chunk_overlap', 300))
         
-        graphing_chunk = ""
-        chunks_in_storage_queue = []    # chunks will be combined upto `graph_chunk_size` and stored here
+        graphing_chunk = ""     # chunks will be combined upto `graph_chunk_size` and stored here
+        chunks_in_storage_queue = []    # V.Important for graph-generator()! Serves as 'source_chunks' which are later mapped to extracted graph entities by append-graph_entities_to_chunks()
         source_filename = ""
         page_number_list = []
         chunk_entities = {}
@@ -3454,7 +3062,7 @@ def read_graph_generator_config():
 
 def graph_generator(chunks:list[dict], input_filepath:pathlib.Path) -> bool:
     '''
-    Assembles document chunks (via assemble-chunks_for_graph_db()) into a dictionary of entities for storage to the GraphDB:
+    Assembles document chunks (via convert-doc_chunks_to_graph_entities()) into a dictionary of entities for storage to the GraphDB:
 
     chunk_entities = {
         '<graph_chunk_number>': {
@@ -3465,11 +3073,12 @@ def graph_generator(chunks:list[dict], input_filepath:pathlib.Path) -> bool:
         }
     }
 
-    This is then passed to the graphing model which will process each graph_chunk and append the `entities_and_relationships` key to each chunk_entities dict:
+    This is then passed to the graphing model which will process each graph_chunk and append the `entities_and_relationships` key to each chunk_entity in the dict:
         
         '<entities_and_relationships>': {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"},...], "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"},...]}
 
-    The final `chunk_entities` dict is then passed to the `store-entities_and_relationships_in_graph_db()` function which will invoke the summary generator if applicable, and then store the entities and relationships in the GraphDB.
+    The final `chunk_entities` dict is then passed to the `store-entities_and_relationships_in_graph_db()` function which will invoke the summary generator if applicable, 
+    and proceed to store all entities and relationships in the GraphDB.
 
     Future TODO: Split work across multiple instances of the Graphing Model and Summarizer LLM. Requires minimum two GPUs.
     '''
@@ -3504,7 +3113,7 @@ def graph_generator(chunks:list[dict], input_filepath:pathlib.Path) -> bool:
             handle_local_error("Could not bring graphing model online, encountered error: ", e)
 
         try:
-            chunk_entities = assemble_chunks_for_graph_db(chunks)
+            chunk_entities = convert_doc_chunks_to_graph_entities(chunks)
         except Exception as e:
             handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
 
@@ -3536,7 +3145,7 @@ def graph_generator(chunks:list[dict], input_filepath:pathlib.Path) -> bool:
         handle_local_error("Could not append graph entities to chunks, encountered error: ", e)
 
     print(f"\n\nCompleted Graph Generator at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-    return True
+    return chunks_with_graph_entities
 
 
 def read_embeddings_config() -> tuple[str, pathlib.Path, int, int, bool, bool]:
@@ -3578,9 +3187,14 @@ def whoosh_embed_and_graph_doc_chunks(input_filepath:pathlib.Path) -> tuple[int,
     try:
         chunks = chunk_docs_with_page_numbers(input_filepath, chunk_sz) # Generates a list of dictionaries, each containing 'content', 'source', and 'page_number' as keys
         if len(chunks) > 0:
+
+            if upload_doc_to_graph_db:
+                try:
+                    chunks = graph_generator(chunks, input_filepath)
+                except Exception as e:
+                    handle_error_no_return("Could not graph chunks, skipping. Encountered error: ", e)
             
             if not perform_only_graph_rag:
-                
                 try:
                     whoosh_indexer(chunks)
                 except Exception as e:
@@ -3594,11 +3208,6 @@ def whoosh_embed_and_graph_doc_chunks(input_filepath:pathlib.Path) -> tuple[int,
             else:
                 print("Performing only graph RAG")
             
-            if upload_doc_to_graph_db:
-                try:
-                    graph_generator(chunks, input_filepath)
-                except Exception as e:
-                    handle_error_no_return("Could not graph chunks, skipping. Encountered error: ", e)
             print("Document added to knowledge domain.")
         else:
             print("No chunks generated, skipping indexing and embedding")
@@ -6468,7 +6077,7 @@ def update_record_in_history_db(
     return formatted_datetime, chat_id
 
 
-def rerank_results_ml(query, documents, top_n=5):
+def rerank_results_ml(query:str, documents:list[Document], top_n:int=5) -> list[Document]:
     print("\n\nReranking Invoked\n\n")
 
     try:
@@ -6571,74 +6180,6 @@ def get_formatted_prompt_from_history_db(chat_id, sequence_id):
     return formatted_prompt
 
 
-# def clean_think_tags_from_prompt(formatted_prompt:str) -> str:
-#     """
-#     Creates a new list of messages with <think></think> tags cleaned.
-#     This is because llama.cpp's Jinja parser cannot handle those tags!
-#     This function does not modify the original list.
-#     """
-#     cleaned_prompt = {"messages": []}
-#     for message in formatted_prompt['messages']:
-#         new_message = message.copy()    # Create a copy to avoid modifying the original
-        
-#         if "</think>" in new_message['content']:
-#             clean_content = new_message['content'].split("</think>", 1)[-1].strip()
-#             new_message['content'] = clean_content
-        
-#         cleaned_prompt['messages'].append(new_message)
-    
-#     return cleaned_prompt
-
-
-# def read_config_for_hf_waitress_prompt_formatting() -> tuple[bool, bool]:
-#     try:
-#         vision = read_hf_config(['vision'])['vision']
-#         flux_diffusers = read_hf_config(['flux_diffusers'])['flux_diffusers']
-#         return vision, flux_diffusers
-#     except Exception as e:
-#         handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
-
-
-# def prepare_prompt_for_auto_templating(formatted_prompt:str, user_query:str, current_sequence_id:int, system_prompt:str, skip_system_prompt:bool) -> dict:
-
-#     print("\n\nFormatting prompt for Transformers-AutoTokenizer / Jinja2-based Auto-Templating\n\n")
-
-#     try:
-#         vision, flux_diffusers = read_config_for_hf_waitress_prompt_formatting()
-#     except Exception as e:
-#         handle_error_no_return("Could not read exl2 details from config.json / hf-config.json, encountered error: ", e)
-
-#     try:
-#         if flux_diffusers:
-#             return {"messages": [{"prompt": json.dumps(user_query)}]}
-            
-#         else:
-#             if current_sequence_id > 0:
-#                 # load & clean chat history object
-#                 messages_dict_with_history = json.loads(formatted_prompt)
-#                 messages_without_think_tags = clean_think_tags_from_prompt(messages_dict_with_history)
-
-#                 # create and append new message
-#                 new_message = {"role":"user", "content":user_query}
-#                 messages_without_think_tags['messages'].append(new_message)
-                
-#                 return messages_without_think_tags
-            
-#             else:   # first message in chat
-#                 if vision:
-#                     return {"messages": [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": user_query}]}]}
-#                 else:
-#                     if skip_system_prompt:
-#                         return {"messages": [{"role": "user", "content": json.dumps(user_query)}]}
-                        
-#                     else:
-#                         return {"messages": [{"role": "system", "content": json.dumps(system_prompt)}, {"role": "user", "content": json.dumps(user_query)}]}
-
-#     except Exception as e:
-#         handle_error_no_return("Could not format prompt for hf-waitress in method format-prompt_for_hf_waitress, encountered error: ", e)
-
-
-
 def get_hf_waitress_formatted_user_prompt(formatted_user_prompt: str, llm_response: str) -> str:
     history_prompt_json = json.loads(formatted_user_prompt)
     new_response = {"role":"assistant", "content":llm_response}
@@ -6647,24 +6188,51 @@ def get_hf_waitress_formatted_user_prompt(formatted_user_prompt: str, llm_respon
     return str(updated_history_prompt_json)
 
 
-def combine_and_deduplicate_search_results(whoosh_results, vector_results):
+def map_graph_entities_to_filtered_docs(combined_docs:list[Document], graph_entities_map:dict) -> list[Document]:
+    print("\n\nMapping graph entities to filtered docs\n\n")
+    for doc in combined_docs:
+        try:
+            doc.metadata['entities_and_relationships'] = graph_entities_map[doc.metadata['unique_id']]
+        except Exception as e:
+            handle_error_no_return("Could not map graph entities to doc, skipping. Encountered error: ", e)
+            doc.metadata['entities_and_relationships'] = {}
+    return combined_docs
+
+
+def combine_and_deduplicate_search_results(whoosh_results:list[dict], vector_results:list[Document]) -> tuple[list[Document], dict]:
     print("\n\nCombining whoosh and vector results\n\n")
 
     combined_results = []
+    graph_entities_map = {}
 
     # Convert whoosh results to Document objects
     for result in whoosh_results:
+        temp_unique_id = str(uuid.uuid4())
         combined_results.append(Document(
             page_content=result['content'].strip().replace('\n', ' '),
             metadata={
                 'source_link': result['source_link'],
                 'source': result['source'],
-                'page_number': result['page_number']
+                'page_number': result['page_number'],
+                'unique_id': temp_unique_id
             }
         ))
+        graph_entities_map[temp_unique_id] = result['entities_and_relationships']
 
-    # Add the vector results to the combined results
-    combined_results.extend(vector_results)
+    # Add the vector results to the combined results - Unfortunately can't do in a single elegant line as we're also deciding whether to include graph entities or not!
+    # combined_results.extend(vector_results)   # To keep this unchanged, we'd have to re-search the vectorDB to include or exclude graph entities, which is way worse!
+    for doc in vector_results:
+        temp_unique_id = str(uuid.uuid4())
+        combined_results.append(Document(
+            page_content=doc.page_content,
+            metadata={
+                'source_link': doc.metadata['source_link'],
+                'source': doc.metadata['source'],
+                'page_number': doc.metadata['page_number'],
+                'unique_id': temp_unique_id
+            }
+        ))
+        graph_entities_map[temp_unique_id] = doc.metadata['entities_and_relationships']
 
     # Filter out any duplicate documents based on page_content
     try:
@@ -6677,9 +6245,9 @@ def combine_and_deduplicate_search_results(whoosh_results, vector_results):
 
         combined_results = unique_results
     except Exception as e:
-        handle_error_no_return("Could not filter out duplicate documents in method combine_and_deduplicate_search_results. Returning all results. Encountered error: ", e)
+        handle_error_no_return("Could not filter out duplicate documents in method combine-and_deduplicate_search_results. Returning all results. Encountered error: ", e)
     
-    return combined_results
+    return combined_results, graph_entities_map
 
 
 def get_session_id_and_vector_key(reusable_ssid:str = None) -> tuple[str, str]:
@@ -6890,7 +6458,7 @@ def handle_force_disabled_rag(local_llm_server:str, full_prompt:str, user_query:
     return jsonify({"success": True, "stream_session_id": stream_session_id, "llm_set_rag_config": DISABLED_CONFIG, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
 
 
-def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results_from_vectordb: int):
+def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results_from_vectordb: int) -> list[Document]:
     print("Searching vectorDB")
 
     min_semantic_similarity_threshold = float(read_config(['min_semantic_similarity_threshold'])['min_semantic_similarity_threshold'])
@@ -6986,7 +6554,7 @@ def extract_content_source_and_page_data_from_summary_text(summary_text: str) ->
         return summary_text, "", []
 
 
-def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length_limit_chars: int, user_query: str) -> str:
+def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length_limit_chars: int, user_query: str) -> tuple[str, list[Document]]:
     print(f"\n\nGetting summary report\n\n")
     
     summary_report = set()
@@ -7070,7 +6638,7 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
             except Exception as e:
                 handle_error_no_return("Could not rerank search results, skipping. Encountered error: ", e)
                 reranked_summaries_list_ascending = summary_doc_objects
-            reranked_summaries_list_descending = reranked_summaries_list_ascending[::-1]    # The `rerank_results_ml` method returns a list of docs in ascending order of relevance, so we need to reverse it so we may iterate starting with the most relevant docs!
+            reranked_summaries_list_descending = reranked_summaries_list_ascending[::-1]    # The `rerank-results_ml` method returns a list of docs in ascending order of relevance, so we need to reverse it so we may iterate starting with the most relevant docs!
             for doc in reranked_summaries_list_descending:
                 if len(textual_summary_report) + len(str(doc.page_content)) > graph_rag_context_length_limit_chars:
                     break
@@ -7246,7 +6814,7 @@ def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, ge
     return relationships_with_existing_summaries
 
 
-def get_summaries_from_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB):
+def get_summaries_from_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB) -> dict:
     '''
     Receives a merged chunk_entities dict, which is the result of the merge-chunk_entities_for_graph_rag method:
 
@@ -7254,12 +6822,11 @@ def get_summaries_from_graph_db(chunk_entities: dict, selected_knowledge_domain:
         '0': {
             '<entities_and_relationships>': '<complete_entities_and_relationships_dict>',
             '<chunk_text>': '<text>',
-            '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
             '<source_doc_name>': '<name>'
         }
     }
 
-    And for each node and relationship in the associated list in the 'entities_and_relationships' dict, we check for existing summaries in the GraphDB.
+    And for each node and relationship in the 'entities_and_relationships' dict, checks for existing summaries in the GraphDB.
     '''
 
     print(f"\nStoring entities and relationships in {selected_knowledge_domain} graph DB\n")
@@ -7295,51 +6862,50 @@ def merge_chunk_entities_for_graph_rag(chunk_entities: dict) -> dict:
         '<graph_chunk_number_1>': {
             '<entities_and_relationships>': '<node_relationships_dict>',
             '<chunk_text>': '<text>',
-            '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
-            '<source_doc_name>': '<name>'
+            '<source_doc_name>': '<name>',
+            '<page_number>': '<page_number>'
         },
         '<graph_chunk_number_2>': {
             '<entities_and_relationships>': '<node_relationships_dict>',
             '<chunk_text>': '<text>',
-            '<source_chunks>': '<chunk_numbers>', #eg: [12,13,14]
-            '<source_doc_name>': '<name>'
+            '<source_doc_name>': '<name>',
+            '<page_number>': '<page_number>'
         },
         ...
     }
 
     And returns a merged chunk_entities dict, because all entities and relationships are extracted from RAG context (user-query + semantic & lexical search results),
-    and merging will allow for de-duplication of nodes and relationships in the get_summary step. For querying the GraphDB, we only need a de-duplicated list of nodes & relationships.
+    and merging will allow for de-duplication of nodes and relationships in the get_summary step, which is all we need for querying the GraphDB: nodes & relationships.
+
+    NOTE: Check docstring in assemble-chunks_for_graph_rag() for more details on the specific keys present! The 'page_number' key is not merged as that would be useless!
     '''
 
     # print(f"\n\nMerging chunk entities for graph RAG. Received chunk_entities: \n {chunk_entities}\n\n")
     print(f"\nMerging chunk entities for graph RAG.\n")
 
-    try:
-        chunk_entities_merged = {0: {
-            'chunk_text': '',
-            'entities_and_relationships': {
-                'nodes': [],
-                'relationships': []
-            },
-            'source_chunks': [],
-            'source_doc_name': ''
-        }}
+    chunk_entities_merged = {0: {
+        'chunk_text': '',
+        'entities_and_relationships': {
+            'nodes': [],
+            'relationships': []
+        },
+        'source_doc_name': ''
+    }}
         
-        for _, chunk_data in chunk_entities.items():
+    for _, chunk_data in chunk_entities.items():
+        try:
             chunk_entities_merged[0]['chunk_text'] += f"{chunk_data['chunk_text']} "
             chunk_entities_merged[0]['entities_and_relationships']['nodes'].extend(chunk_data['entities_and_relationships']['nodes'])   # extend() is used to add multiple elements to the end of the list...
             chunk_entities_merged[0]['entities_and_relationships']['relationships'].extend(chunk_data['entities_and_relationships']['relationships'])   # and we don't care about de-duplicating here as that'll happen anyways in the get_summaries step!
-            chunk_entities_merged[0]['source_chunks'].extend(chunk_data['source_chunks'])
             chunk_entities_merged[0]['source_doc_name'] += f"{chunk_data['source_doc_name']} "
-        
-        # print(f"\n\nMerged chunk entities for graph RAG. Resulting chunk_entities_merged: \n {chunk_entities_merged}\n\n")
-        return chunk_entities_merged
-    except Exception as e:
-        handle_error_no_return("Could not merge chunk entities for graph RAG, proceeding with original chunk_entities dict. WARNING: Duplicates may be present and negatively impact response quality! Encountered error: ", e)
-        return chunk_entities
+
+        except Exception as e:
+            handle_error_no_return("Could not merge chunk entities for graph RAG, proceeding with original chunk_entities dict. WARNING: Duplicates may be present, negatively impacting the context window! Encountered error: ", e)
+
+    return chunk_entities_merged
 
 
-def assemble_chunks_for_graph_rag(docs, user_query=None):
+def assemble_chunks_for_graph_rag(docs:list[Document], user_query:str=None) -> dict:
     '''
     Transforms docs, which is a list of Document objects:
 
@@ -7347,8 +6913,10 @@ def assemble_chunks_for_graph_rag(docs, user_query=None):
             Document(
                 page_content = '<page_content>',
                 metadata = {
+                    'source_link': '<source_link>',
                     'source': '<source_filepath>',
-                    'page_number': '<page_number>'
+                    'page_number': '<page_number>',
+                    'entities_and_relationships': '<entities_and_relationships>'
                 }
             ),
             ...
@@ -7358,26 +6926,36 @@ def assemble_chunks_for_graph_rag(docs, user_query=None):
 
         chunk_entities = {
             '<graph_chunk_number>': {
-                'chunk_text': '<text>',
-                'source_chunks': '<chunk_numbers>', #eg: [12,13,14]
-                'source_doc_name': '<name>'
+                'chunk_text': '<page_content>',
+                'source_doc_name': '<source_filepath>',
+                'page_number': '<page_number>',
+                'entities_and_relationships': '<entities_and_relationships>'
             },
             ...
         }
     
-    For the purposes of GraphRAG's query-response pipeline.
-    Since chunk content is not necessarily contigous document content, we need to treat each chunk as a separate entity.
+    for the purposes of GraphRAG's query-response pipeline.
+    
+    NOTE: While 'source_doc_name' and 'page_number' data is being added here, it's unnecessary for the GraphRAG query-response pipeline, because this data is directly
+    obtained from the GraphDB itself at a later step: In get-summaries_from_graph_db(), the get-summaries_for_all_nodes() and get-summaries_for_all_relationships()
+    methods are used to obtain the 'source_doc_name' and 'page_number' data for each node and relationship respectively, by setting get_source_documents=True.
+
+    The main source doc and page number data isobtained from the summary in the GraphDB, as summaries always end with the following pattern:
+
+        {Source Document Name: AMD_Q4_and_FY_24_EarningsRelease_FINAL}{Page Number(s): [8]}  # For example...
+    
+    In fact, 'chunk_text' is also unnecessary as only the nodes and relationships are needed for GraphRAG, not the actual text!
+    So they're all simply added here incase this data proves useful for some future use-case!
     '''
     try:
         chunk_entities = {}
-        graph_chunk_count = 1
+        graph_chunk_count = 1   # Same init as in convert-doc_chunks_to_graph_entities()
 
         if user_query is not None:  # For GraphRAG response query-pipeline, we need to add the user query as a chunk
             user_query = user_query.replace("'", "").replace("<br>", "").replace("?", "")
             user_query_chunk_text = f"Do not attempt to answer any query that follows, simply proceed to extract nodes and relationships from the following text:\n{user_query}"
             chunk_entities[graph_chunk_count] = {
                 'chunk_text': user_query_chunk_text,
-                'source_chunks': [],
                 'source_doc_name': 'user_query'
             }
             graph_chunk_count += 1
@@ -7394,15 +6972,14 @@ def assemble_chunks_for_graph_rag(docs, user_query=None):
                     page_number_list.append(int(doc.metadata.get('page_number')))
                     page_number_list = list(set(page_number_list))   # Remove duplicates
                 except Exception as e:
-                    handle_error_no_return(f"Could not obtain page number from context document number {count} of {len(docs)} documents, encountered error: ", e)
+                    handle_error_no_return(f"Could not obtain page number from context document number {count} of {len(docs)} documents, skipping. Encountered error: ", e)
 
                 chunk_entities[graph_chunk_count] = {
                     'chunk_text': str(doc.page_content).strip().replace("'", ""),
-                    'source_chunks': [count],
                     'source_doc_name': source_filename,
-                    'page_number': page_number_list
-                }
-
+                    'page_number': page_number_list,
+                    'entities_and_relationships': ast.literal_eval(doc.metadata.get('entities_and_relationships', '{}'))
+                }   # check note in the docstring for more details on which keys are added here and why!
                 graph_chunk_count += 1
             except Exception as e:
                 handle_error_no_return(f"Error processing context document number {count} of {len(docs)} documents in assemble-chunks_for_graph_db(), encountered error: ", e)
@@ -7413,33 +6990,31 @@ def assemble_chunks_for_graph_rag(docs, user_query=None):
     return chunk_entities
 
 
-def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
+def execute_graph_rag(user_query:str, docs_with_graph_entities: list[Document]) -> str:
     '''
-    Assembles document chunks into a dictionary of entities (via the assemble-chunks_for_graph_rag method, check it for detailed documentation on the structure of docs and chunk_entities) for queries on the GraphDB.
+    Assembles document chunks into a dictionary of entities via convert-doc_chunks_to_graph_entities(); check append-graph_entities_to_chunks() for detailed
+    documentation on the structure of docs and chunk_entities.
 
-    These chunk_entities are then passed to the graphing model which will process each graph_chunk and append the `entities_and_relationships` key to each chunk_entities dict:
+    These chunk_entities are then passed to the graphing model which will process each graph_chunk and append the `entities_and_relationships` key 
+    to each chunk_entities dict:
         
-        '<entities_and_relationships>': {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"},...], "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"},...]}
+        '<entities_and_relationships>': {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"},...], 
+        "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"},...]}
 
-    The various chunk_entities in the dict are then merged into a singular chunk_entity for querying the GraphDB to obtain summaries (as we're only interested in a de-duplicated list of nodes & relationships for GraphDB-queries). 
-    The merge_chunk_entities_for_graph_rag and get_summaries_from_graph_db methods are respectively used for this purpose.
+    The various chunk_entities in the dict are then merged into a singular chunk_entity for querying the GraphDB to obtain summaries (as we're only interested
+    in a de-duplicated list of nodes & relationships for GraphDB-queries). 
+    The merge-chunk_entities_for_graph_rag and get-summaries_from_graph_db methods are respectively used for this purpose.
 
-    The obtained summaries are deduplicated and formatted into a summary report via the get-summary_report method, and finally re-ranked and trimmed to obtain the final graphRAG context, which is then returned.
+    The obtained summaries are deduplicated and formatted into a summary report via get-summary_report(), and finally re-ranked and trimmed to obtain the
+    final graphRAG context, which is then returned.
     '''
     
     print(f"\n\nExecuting GraphRAG. Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
     try:
         bring_graph_db_online()
-        bring_graph_extraction_model_online()
     except Exception as e:
         handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
-
-    try:
-
-        chunk_entities = assemble_chunks_for_graph_rag(docs, user_query)
-    except Exception as e:
-        handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
     
     try:
         selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']    
@@ -7449,12 +7024,16 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
         handle_local_error(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB, encountered error: ", e)
 
     try:
-        complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities=chunk_entities, rag_response_mode=True)
+        complete_chunk_entities = assemble_chunks_for_graph_rag(docs_with_graph_entities, user_query=None)
+        print(f"\n\nlen of complete_chunk_entities: \n {len(complete_chunk_entities.items())}\n\n")
+        for item in list(complete_chunk_entities.items()):
+            print(f"\n\n{item}\n\n")
     except Exception as e:
-        handle_local_error("Failed to extract entities and relationships from chunk entities, encountered error: ", e)
+        handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
 
     try:
         merged_graph_rag_entities_and_relationships_dict = merge_chunk_entities_for_graph_rag(complete_chunk_entities)
+        print(f"\n\nlen of merged_graph_rag_entities_and_relationships_dict: \n {len(merged_graph_rag_entities_and_relationships_dict)}\n\n")
     except Exception as e:
         handle_local_error("Fatal error merging chunk entities for GraphRAG: ", e)
 
@@ -7470,126 +7049,6 @@ def execute_graph_rag(user_query:str, docs: list[Document]) -> str:
         handle_local_error("Could not get summary report, encountered error: ", e)
 
     return summary_report, reranked_summaries_list_descending
-
-
-# def llama_cpp_non_streaming_api_handler(endpoint_url:str, headers:dict, payload:str) -> str:
-#     print(f"\nLLama.cpp Non-Streaming Request Response Handler Invoked\n")
-#     try:
-#         response = requests.post(endpoint_url, headers=headers, data=payload)
-#         response.raise_for_status()  # Raise an exception for bad status codes so we can catch them in the except block
-#         return response.json()['choices'][0]['message']['content']
-#     except Exception as e:
-#         handle_local_error(f"Failed request to LLama.cpp {endpoint_url} API, encountered error: ", e)
-
-
-# def hf_waitress_streaming_api_handler(endpoint_url:str, headers:dict, payload:str) -> str:
-#     print(f"\nHF-Waitress Streaming Request Response Handler Invoked\n")
-#     try:
-#         response = requests.post(endpoint_url, headers=headers, data=payload, stream=True)
-#         response.raise_for_status()  # Raise an exception for bad status codes so we can catch them in the except block
-
-#         full_response = ""
-#         for line in response.iter_lines(decode_unicode=True):
-#             if line:
-#                 if line.startswith("data:"):
-#                     event_data = line[6:].strip()
-#                     try:
-#                         token = str(json.loads(event_data))
-#                         full_response += token
-#                     except json.JSONDecodeError as e:
-#                         handle_error_no_return(f"Failed to parse event data: {event_data}, encountered error: ", e)
-#                 elif line.startswith("event: END"):
-#                     break
-#                 else:
-#                     print(f"\nUnexpected Line Format: {line}\n")
-
-#         if not full_response:
-#             print("\nWarning: No response from exl2-stream / exl2-grapher request\n")
-#             return None
-
-#         print("\nCompleted, returning response\n")
-#         return full_response
-        
-#     except Exception as e:
-#         handle_local_error(f"Failed request to HF-Waitress {endpoint_url} API, encountered error: ", e)
-
-
-# def get_request_params_for_llm_api(messages_dict:dict, stream:bool=False) -> tuple[str, dict, str, str, bool]:
-#     try:
-#         read_return = read_config([
-#             'local_llm_server', 'hf_waitress_access_url', 'hf_waitress_server_port', 
-#             'llama_cpp_access_url', 'llama_cpp_server_port', 'llama_cpp_temperature', 
-#             'llama_cpp_top_k', 'llama_cpp_top_p', 'llama_cpp_min_p'
-#         ])
-#         local_llm_server = read_return['local_llm_server'].lower().strip()
-#     except Exception as e:
-#         handle_local_error("Could not read request params from config.json, encountered error: ", e)
-
-#     headers = {'Content-Type': 'application/json'}
-
-#     if local_llm_server == 'hf-waitress':
-
-#         json_payload = json.dumps(messages_dict)
-#         base_url = f"http://{read_return['hf_waitress_access_url']}:{read_return['hf_waitress_server_port']}"
-
-#         try:
-#             read_hf_return = read_hf_config(['exl2'])
-#             exl2 = str(read_hf_return['exl2']).lower() == 'true'
-#         except Exception as e:
-#             handle_local_error("Could not read hf-waitress config, encountered error: ", e)
-        
-#         if not exl2:
-#             headers['X-Return-Full-Text'] = 'False'
-#             endpoint_url = f"{base_url}/completions_stream" if stream else f"{base_url}/completions"
-#         elif exl2 and stream:
-#             headers['Connection'] = 'keep-alive'
-#             endpoint_url = f"{base_url}/exl2_stream"
-#         else:
-#             raise Exception(f"Invalid local LLM server, expected 'hf-waitress' or 'llama-cpp', received: {local_llm_server}")
-
-#         return endpoint_url, headers, json_payload, local_llm_server, exl2
-    
-#     elif local_llm_server == 'llama-cpp':   # llama.cpp LLMs
-#         messages_dict['stream'] = stream
-#         messages_dict['temperature'] = read_return['llama_cpp_temperature']
-#         messages_dict['top_k'] = read_return['llama_cpp_top_k']
-#         messages_dict['top_p'] = read_return['llama_cpp_top_p']
-#         messages_dict['min_p'] = read_return['llama_cpp_min_p']
-#         json_payload = json.dumps(messages_dict)
-
-#         endpoint_url = f"http://{read_return['llama_cpp_access_url']}:{read_return['llama_cpp_server_port']}/v1/chat/completions"
-        
-#         return endpoint_url, headers, json_payload, local_llm_server, False
-
-#     else:
-#         raise Exception(f"Invalid local LLM server, expected 'hf-waitress' or 'llama-cpp', received: {local_llm_server}")
-
-
-# def make_request_to_llm_server(user_query:str) -> str:
-#     try:
-#         local_llm_server = read_config(['local_llm_server'])['local_llm_server'].lower().strip()
-#     except Exception as e:
-#         handle_local_error("Could not determine local LLM server, encountered error: ", e)
-
-#     try:
-#         messages_dict = prepare_prompt_for_auto_templating(formatted_prompt="", user_query=user_query, current_sequence_id=0, system_prompt="", skip_system_prompt=True)
-#     except Exception as e:
-#         handle_local_error("Could not format prompt for generic HF-Waitress request, encountered error: ", e)
-
-#     try:
-#         if local_llm_server == 'hf-waitress':
-#             waitress_url, headers, json_payload, _, _ = get_request_params_for_llm_api(messages_dict=messages_dict, stream=True)
-#             return hf_waitress_streaming_api_handler(waitress_url, headers, json_payload)
-        
-#         elif local_llm_server == 'llama-cpp':
-#             llama_cpp_url, headers, json_payload, _, _ = get_request_params_for_llm_api(messages_dict=messages_dict, stream=False)
-#             return llama_cpp_non_streaming_api_handler(llama_cpp_url, headers, json_payload)
-
-#         else:
-#             handle_local_error("Invalid local LLM server, encountered error: ", e)
-    
-#     except Exception as e:
-#         handle_local_error(f"Could not make request to LLM server - {local_llm_server}, encountered error: ", e)
 
 
 def parse_service_response(response:str):
@@ -7708,7 +7167,7 @@ def execute_search_tools_on_query(user_query:str, embedding_function:str, llm_se
 
     combined_docs = []
     try:
-        combined_docs = combine_and_deduplicate_search_results(whoosh_results, filtered_docs)   # Combine the whoosh and vector results
+        combined_docs, graph_entities_map = combine_and_deduplicate_search_results(whoosh_results, filtered_docs)   # Combine the whoosh and vector results
     except Exception as e:
         handle_error_no_return("Could not combine and deduplicate search results, skipping. Encountered error: ", e)
         combined_docs = filtered_docs
@@ -7729,7 +7188,8 @@ def execute_search_tools_on_query(user_query:str, embedding_function:str, llm_se
     graph_rag_context = None
     if perform_graph_rag and llm_set_config.get('do_rag', True) and enable_graph_rag:   # All conditions must be met for GraphRAG to be performed!
         try:
-            graph_rag_context, reranked_summaries_list_descending = execute_graph_rag(user_query, docs)
+            docs_with_graph_entities = map_graph_entities_to_filtered_docs(docs, graph_entities_map)
+            graph_rag_context, reranked_summaries_list_descending = execute_graph_rag(user_query, docs_with_graph_entities)
             if reranked_summaries_list_descending != []:
                 return reranked_summaries_list_descending, llm_set_config.get('do_rag', True), graph_rag_context
         except Exception as e:
@@ -7937,7 +7397,7 @@ def obtain_singular_page_number_from_url(page_number: str) -> str:
                 page_number = ast.literal_eval(page_number)
                 page_number = page_number[0] if len(page_number) > 0 else "1"
             except Exception as e:
-                handle_error_no_return("Could not ast.literal_eval page_number, returning 1. Encountered error: ", e)
+                handle_error_no_return(f"Could not ast.literal_eval page_number string {page_number}, returning 1. Encountered error: ", e)
                 return "1"
         
         return str(page_number)
