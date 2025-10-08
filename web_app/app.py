@@ -2433,7 +2433,7 @@ def summary_generator_for_graph_db(chunk_entities=None, cache_filepath: pathlib.
     except Exception as e:
         handle_local_error("Could not bring graph summarizer model online, encountered error: ", e)
 
-    exl2 = str(read_hf_config(['exl2'])['exl2']).lower() == 'true'        
+    exl2 = str(read_config(['exl2_quantize_graph_summarizer_model'])['exl2_quantize_graph_summarizer_model']).lower() == 'true'        
     
     if exl2:
 
@@ -3276,7 +3276,11 @@ def store_to_chat_history_db(
         handle_local_error("Missing keys in config.json for method store-local_llm_chat_history_to_db. Error: ", e)
 
     if local_llm_server == "hf-waitress":
-        model_choice = read_hf_config(['model_id'])['model_id']
+        try:
+            model_choice = read_hf_config(['model_id'])['model_id']
+        except Exception as e:
+            handle_error_no_return("Could not read model_id from hf_config.json, setting to 'unknown'. Encountered error: ", e)
+            model_choice = 'unknown'
 
     # Connect to or create the DB
     try:
@@ -5281,7 +5285,10 @@ def run_prechecks_for_hf_waitress_server_starter(exclusive_server_mode: bool, ha
     hf_waitress_server_running, llama_cpp_server_running = False, False
     hf_waitress_base_url = get_url_for_server('hf-waitress')
     llama_cpp_base_url = get_url_for_server('llama-cpp')
-    model_choice = read_hf_config(['model_id'])['model_id']
+    try:
+        model_choice = read_hf_config(['model_id'])['model_id']
+    except Exception as e:
+        handle_local_error("Could not read model_id from hf_config.json - prechecks failed. Encountered error: ", e)
 
     if exclusive_server_mode and LLAMA_CPP_PROCESS is not None:
         llama_cpp_shutdown_result = utils.shutdown_local_llm_server_process(LLAMA_CPP_PROCESS)
@@ -5334,15 +5341,21 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
     try:
         precheck_result = run_prechecks_for_hf_waitress_server_starter(exclusive_server_mode, hard_reboot_required)
     except Exception as e:
-        return handle_api_error("Could not run prechecks for HF-Waitress server starter, encountered error: ", e)
+        handle_error_no_return("Could not run prechecks for HF-Waitress server starter, proceeding with safe defaults for first launch. Encountered error: ", e)
     
-    if precheck_result['skip_fresh_start']:
+    if precheck_result.get('skip_fresh_start', False):
         return precheck_result
+    
+    try:
+        hf_read_return = read_hf_config(['model_id', 'awq', 'use_flash_attention_2', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux', 'vision', 'exl2'])
+    except Exception as e:
+        handle_error_no_return("Could not read hf_config.json - proceeding with safe defaults for first launch. Encountered error: ", e)
+        hf_read_return = {}
 
     try:
-        hf_read_return = read_hf_config(['awq', 'use_flash_attention_2', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux', 'vision', 'exl2'])
         lars_read_return = read_config(['hf_waitress_server_timeout_seconds', 'hf_waitress_server_retry_attempts'])
         hf_waitress_base_url = get_url_for_server('hf-waitress')
+        safe_default_model_id = 'Qwen/Qwen2.5-1.5B-Instruct'
     except Exception as e:
         return handle_api_error("Could not read hf_config.json, encountered error: ", e)
     
@@ -5350,19 +5363,20 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
     
     hf_waitress_host, hf_waitress_port = get_hf_waitress_serving_host_and_port()
     launch_args = f'--host={hf_waitress_host} --port={hf_waitress_port} '
-    if hf_read_return['awq']:
+    launch_args += f'--model={hf_read_return.get('model_id', safe_default_model_id)} '
+    if hf_read_return.get('awq', False):
         launch_args += '--awq '
-    if hf_read_return['use_flash_attention_2']:
+    if hf_read_return.get('use_flash_attention_2', False):
         launch_args += '--use_flash_attention_2 '
-    if hf_read_return['flux_diffusers']:
+    if hf_read_return.get('flux_diffusers', False):
         launch_args += '--flux_diffusers '
-    if hf_read_return['flux_low_vram_optimizations']:
+    if hf_read_return.get('flux_low_vram_optimizations', True):
         launch_args += '--flux_low_vram_optimizations '
-    if hf_read_return['load_quantized_flux']:
+    if hf_read_return.get('load_quantized_flux', False):
         launch_args += '--load_quantized_flux '
-    if hf_read_return['vision']:
+    if hf_read_return.get('vision', False):
         launch_args += '--vision '
-    if hf_read_return['exl2']:
+    if hf_read_return.get('exl2', False):
         launch_args += '--exl2 '
     launch_args = launch_args.strip()
     base_command = 'python' if platform.system() == 'Windows' else 'python3'
@@ -5391,7 +5405,7 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
         for _ in range(lars_read_return['hf_waitress_server_retry_attempts']):
             if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
                 print("\n\nHF-Waitress server launched succesfully with model! Returning.\n\n")
-                return {'success': True, 'llm_model': read_hf_config(['model_id'])['model_id'], 'hf_waitress_server_running': True, 'llama_cpp_server_running': precheck_result['llama_cpp_server_running'], 'skip_fresh_start': False, 'reboot_failed': False}
+                return {'success': True, 'llm_model': hf_read_return.get('model_id', safe_default_model_id), 'hf_waitress_server_running': True, 'llama_cpp_server_running': precheck_result['llama_cpp_server_running'], 'skip_fresh_start': False, 'reboot_failed': False}
             time.sleep(lars_read_return['hf_waitress_server_timeout_seconds'])
     except Exception as e:
         handle_error_no_return("Could not check server status after launch attempt, printing error and retrying: ", e)
