@@ -5342,6 +5342,7 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
         precheck_result = run_prechecks_for_hf_waitress_server_starter(exclusive_server_mode, hard_reboot_required)
     except Exception as e:
         handle_error_no_return("Could not run prechecks for HF-Waitress server starter, proceeding with safe defaults for first launch. Encountered error: ", e)
+        precheck_result = {}
     
     if precheck_result.get('skip_fresh_start', False):
         return precheck_result
