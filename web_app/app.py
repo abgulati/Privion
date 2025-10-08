@@ -5363,7 +5363,7 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
     
     hf_waitress_host, hf_waitress_port = get_hf_waitress_serving_host_and_port()
     launch_args = f'--host={hf_waitress_host} --port={hf_waitress_port} '
-    launch_args += f'--model={hf_read_return.get('model_id', safe_default_model_id)} '
+    launch_args += f"--model={hf_read_return.get('model_id', safe_default_model_id)} "
     if hf_read_return.get('awq', False):
         launch_args += '--awq '
     if hf_read_return.get('use_flash_attention_2', False):
