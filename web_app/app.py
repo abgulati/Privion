@@ -5357,6 +5357,7 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
         lars_read_return = read_config(['hf_waitress_server_timeout_seconds', 'hf_waitress_server_retry_attempts'])
         hf_waitress_base_url = get_url_for_server('hf-waitress')
         safe_default_model_id = 'Qwen/Qwen2.5-1.5B-Instruct'
+        model_id = hf_read_return.get('model_id', safe_default_model_id)
     except Exception as e:
         return handle_api_error("Could not read hf_config.json, encountered error: ", e)
     
@@ -5364,7 +5365,7 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
     
     hf_waitress_host, hf_waitress_port = get_hf_waitress_serving_host_and_port()
     launch_args = f'--host={hf_waitress_host} --port={hf_waitress_port} '
-    launch_args += f"--model={hf_read_return.get('model_id', safe_default_model_id)} "
+    launch_args += f'--model={model_id} '
     if hf_read_return.get('awq', False):
         launch_args += '--awq '
     if hf_read_return.get('use_flash_attention_2', False):
@@ -5405,13 +5406,13 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
     try:
         for _ in range(lars_read_return['hf_waitress_server_retry_attempts']):
             if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
-                print("\n\nHF-Waitress server launched succesfully with model! Returning.\n\n")
-                return {'success': True, 'llm_model': hf_read_return.get('model_id', safe_default_model_id), 'hf_waitress_server_running': True, 'llama_cpp_server_running': precheck_result['llama_cpp_server_running'], 'skip_fresh_start': False, 'reboot_failed': False}
+                print(f"\n\nHF-Waitress server launched succesfully with model: {model_id}! Returning.\n\n")
+                return {'success': True, 'llm_model': model_id, 'hf_waitress_server_running': True, 'llama_cpp_server_running': precheck_result.get('llama_cpp_server_running', False), 'skip_fresh_start': False, 'reboot_failed': False}
             time.sleep(lars_read_return['hf_waitress_server_timeout_seconds'])
     except Exception as e:
         handle_error_no_return("Could not check server status after launch attempt, printing error and retrying: ", e)
 
-    return {'success': False, 'llm_model': None, 'hf_waitress_server_running': False, 'llama_cpp_server_running': precheck_result['llama_cpp_server_running'], 'skip_fresh_start': False, 'reboot_failed': precheck_result['reboot_failed']}
+    return {'success': False, 'llm_model': None, 'hf_waitress_server_running': False, 'llama_cpp_server_running': precheck_result.get('llama_cpp_server_running', False), 'skip_fresh_start': False, 'reboot_failed': precheck_result.get('reboot_failed', False)}
 
 
 @app.route('/hf_waitress_server_starter_endpoint', methods=['POST'])
