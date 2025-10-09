@@ -1,0 +1,4 @@
+# IMP: Install these AFTER the main `requirements.txt` and the correct version of PyTorch, in that order!
+nemo_toolkit>=2.5.0
+nemo_toolkit[asr]
+sacrebleu>=2.5.1
