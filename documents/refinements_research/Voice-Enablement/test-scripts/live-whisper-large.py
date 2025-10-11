@@ -62,7 +62,7 @@ SILENCE_DURATION_S = 1.5  # Duration of silence to consider as a pause
 MIN_CHUNK_DURATION_S = 0.25  # Minimum duration of a chunk to consider for padding
 MIN_CONTEXT_S = 11 # If audio is shorter than this, we'll pad it
 STALE_BUFFER_TIMEOUT_S = 20.0   # How long to wait before checking for staleness.
-MIN_MEANINGFUL_SAMPLES = 1 * samplerate  # Max samples to be considered "stale noise". 16000 samples = 1 second every STALE_BUFFER_TIMEOUT_S can be considered stale, any more and it must be processed.
+MIN_MEANINGFUL_SAMPLES = 1.5 * samplerate  # Max samples to be considered "stale noise". 16000 samples = 1 second every STALE_BUFFER_TIMEOUT_S can be considered stale, any more and it must be processed.
 
 # The nonsensical phrase to pad with. Make it unique!
 PADDING_TEXT = " tony is quiet silent for too long I must not keep master waiting bad dooby must obey and transcribe dooby good servant will transcribe otherwise I will be severely punished"
