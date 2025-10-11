@@ -45,6 +45,11 @@ web_app/text_only_input_image.png
 # *.jpg
 # *.jpeg
 
+# Audio files
+*.wav
+*.mp3
+*.flac
+
 # docs
 documents/LARS-Training-1-DC.pptx
 documents/LARS-Training-1.pptx
