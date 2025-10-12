@@ -13,6 +13,41 @@ import os
 import io   # For in-memory audio file
 
 
+####---GLobals!---####
+
+# --- Real-time Audio Processing ---
+audio_queue = queue.Queue()
+is_recording = threading.Event()
+samplerate = 16000  # Whisper expects 16kHz
+
+# Config for Intelligent Padding:
+VOLUME_THRESHOLD = 0.04  # Adjust this threshold based on your environment
+SILENCE_DURATION_S = 1.5  # Duration of silence to consider as a pause
+MIN_CHUNK_DURATION_S = 0.25  # Minimum duration of a chunk to consider it for processing
+MIN_CONTEXT_S = 11 # If audio is shorter than this, we'll pad it
+STALE_BUFFER_TIMEOUT_S = 20.0   # How long to wait before checking for staleness.
+MIN_MEANINGFUL_SAMPLES = 1.5 * samplerate  # Max samples to be considered "stale noise". 16000 samples = 1 second every STALE_BUFFER_TIMEOUT_S can be considered stale, any more and it must be processed.
+
+# The nonsensical phrase to pad with. Make it unique!
+PADDING_TEXT = " tony is quiet silent for too long I must not keep master waiting bad dooby must obey and transcribe dooby good servant will transcribe otherwise I will be severely punished"
+
+### VAD Stuff:
+### Load Silero VAD
+VAD_DEVICE = "cpu"  # keep VAD on CPU to leave GPU for ASR
+silero_vad, silero_utils = torch.hub.load('snakers4/silero-vad', 'silero_vad', trust_repo=True)
+(get_speech_timestamps, save_audio, read_audio, VADIterator, collect_chunks) = silero_utils
+silero_vad.to(VAD_DEVICE).eval()
+
+# VAR tuning for noisy / far-field:
+VAD_THRESHOLD = 0.5                 # higher => stricter speech acceptance (0.5–0.6 is typical in noise)
+VAD_MIN_SPEECH_MS = 250             # avoid ultra-short blips
+VAD_MIN_SILENCE_MS = 500            # hangover; end utterance after ~0.5s silence
+VAD_WINDOW_SIZE_SAMPLES = 1536      # 96 ms @ 16 kHz (Silero default/robust pick)
+MAX_BUFFER_S = 30                  # cap rolling buffer to 30s
+
+#####-------------#####
+
+
 def get_indices_of_substring(response, start_substring, end_substring):
     print("\nAttempting to trim response...\n")
     try:
@@ -51,21 +86,6 @@ def get_pipe():
         device=DEVICE,
     )
 
-# --- Real-time Audio Processing ---
-audio_queue = queue.Queue()
-is_recording = threading.Event()
-samplerate = 16000  # Whisper expects 16kHz
-
-# Config for Intelligent Padding:
-VOLUME_THRESHOLD = 0.04  # Adjust this threshold based on your environment
-SILENCE_DURATION_S = 1.5  # Duration of silence to consider as a pause
-MIN_CHUNK_DURATION_S = 0.25  # Minimum duration of a chunk to consider for padding
-MIN_CONTEXT_S = 11 # If audio is shorter than this, we'll pad it
-STALE_BUFFER_TIMEOUT_S = 20.0   # How long to wait before checking for staleness.
-MIN_MEANINGFUL_SAMPLES = 1.5 * samplerate  # Max samples to be considered "stale noise". 16000 samples = 1 second every STALE_BUFFER_TIMEOUT_S can be considered stale, any more and it must be processed.
-
-# The nonsensical phrase to pad with. Make it unique!
-PADDING_TEXT = " tony is quiet silent for too long I must not keep master waiting bad dooby must obey and transcribe dooby good servant will transcribe otherwise I will be severely punished"
 
 def generate_padding_audio(text:str, sr:int=16000) -> np.array:
     """Generates audio for padding text using pyttsx3 and returns it as a NumPy array."""
@@ -105,7 +125,7 @@ def audio_callback(indata, frames, time, status):
 
 def start_recording():
     is_recording.set()
-    with sd.InputStream(samplerate=samplerate, channels=1, callback=audio_callback, dtype='float32'):
+    with sd.InputStream(samplerate=samplerate, channels=1, callback=audio_callback, dtype='float32', blocksize=int(0.02 * samplerate),latency='low'):
         while is_recording.is_set():
             time.sleep(0.1)     # The callback is handling the audio data, so we just wait
 
@@ -113,6 +133,7 @@ def stop_recording():
     is_recording.clear()
 
 
+### NEW VAD VERSION
 if __name__ == "__main__":
     print("Starting... Generating padding audio first.")
     padding_audio = generate_padding_audio(PADDING_TEXT, sr=samplerate)
@@ -123,82 +144,99 @@ if __name__ == "__main__":
     recording_thread.start()
     
     audio_buffer = np.array([], dtype=np.float32)
+    audio_to_process = audio_buffer.copy()
     last_speech_time = time.time()
     last_buffer_clear_time = time.time()
 
     try:
         while True:
-            is_speech = False
+            # Accumulate incoming audio from the callback
             while not audio_queue.empty():
                 chunk = audio_queue.get()
-                volume_rms = np.sqrt(np.mean(chunk**2)) # Calculate the volume (Root Mean Square) of the chunk
-                # print(f"RMS: {volume_rms:.4f}") # Print the volume level for debugging  - see the RMS values of your speech versus your room's silence to find the perfect value!
-                
-                if volume_rms > VOLUME_THRESHOLD:   # Only accumulate if above the volume threshold
-                    # print("concatenated")
-                    audio_buffer = np.concatenate((audio_buffer, chunk.flatten()))
-                    is_speech = True
-            
-            if is_speech:
-                last_speech_time = time.time()
+                audio_buffer = np.concatenate((audio_buffer, chunk.flatten()))
 
-            current_time = time.time()
-            # The trigger condition: buffer has content AND it's been quiet for a while
-            if len(audio_buffer) > 0 and (current_time - last_speech_time) > SILENCE_DURATION_S:
+            # Run Silero VAD when we have at least a little audio
+            # if len(audio_buffer) >= MIN_MEANINGFUL_SAMPLES:
+            if len(audio_buffer) >= int(0.5 * samplerate):  # i.e. if audio_buffer has at least 0.5s of audio
+                with torch.no_grad():
+                    wav_t = torch.from_numpy(audio_buffer.copy()).to(VAD_DEVICE)
+                    segments = get_speech_timestamps(
+                        wav_t,
+                        silero_vad,
+                        sampling_rate=samplerate,
+                        threshold=VAD_THRESHOLD,
+                        min_speech_duration_ms=VAD_MIN_SPEECH_MS,
+                        min_silence_duration_ms=VAD_MIN_SILENCE_MS,
+                        window_size_samples=VAD_WINDOW_SIZE_SAMPLES,
+                        speech_pad_ms=0,
+                    )
 
-                if len(audio_buffer) >= MIN_CHUNK_DURATION_S * samplerate:
-                    print(f"Processing {len(audio_buffer)/samplerate:.2f}s of audio...")
+                if segments:
+                    last_speech_time = time.time()
 
-                    peak_volume = np.max(np.abs(audio_buffer))
+                last_end = 0
+                for segment in segments:    # we know segments contains speech only, so update the buffers!
+                    start, end = segment["start"], segment["end"]
+                    temp_buff = audio_buffer[start:end].copy()
+                    audio_to_process = temp_buff if len(audio_to_process) == 0 else np.concatenate((audio_to_process, temp_buff))
+                    if end > last_end:
+                        last_end = end
+
+                # cleanup - since audio_buffer has been VAD-processed upto the final segment['end'] in segments, delete everything before last_end
+                if len(audio_buffer) > MAX_BUFFER_S * samplerate:
+                    audio_buffer = np.array([], dtype=np.float32)
+                else:   # Trim processed part from rolling buffer, keep a small tail for continuity
+                    keep_from = max(0, last_end - int(0.2 * samplerate))  # keep ~200 ms tail
+                    audio_buffer = audio_buffer[keep_from:].copy()   # for long, continuos inputs, this will keep the buffer clean as audio_buffer[last_end:] ~= an empty buffer!
+
+                current_time = time.time()
+                if len(audio_to_process) >= MIN_CHUNK_DURATION_S * samplerate and (current_time - last_speech_time) > SILENCE_DURATION_S:
+                    print(f"Processing {len(audio_to_process)/samplerate:.2f}s of audio...")
+
+                    peak_volume = np.max(np.abs(audio_to_process)) if len(audio_to_process) > 0 else 0.0
                     if peak_volume > 0: # normalize the spoken audio so it's not lost to the padding audio!
-                        audio_buffer = audio_buffer / peak_volume
+                        audio_to_process = audio_to_process / peak_volume
 
-                    audio_to_process = audio_buffer.copy()
                     padding_applied = False
-                    
                     if len(audio_to_process) < MIN_CONTEXT_S * samplerate:
                         print(f"Audio is shorter than {MIN_CONTEXT_S}s. Applying padding.")
                         audio_to_process = np.concatenate((audio_to_process, padding_audio))
                         padding_applied = True
 
                     pipe = get_pipe()  # Get a fresh pipeline instance to avoid potential memory issues
-                    
+                
                     # Process the accumulated audio data
-                    result = pipe(audio_to_process, return_timestamps=True)
+                    result = pipe(audio_to_process, return_timestamps=True, generate_kwargs={
+                        "task": "transcribe",
+                        "language": "en",
+                        "temperature": 0.0,        # fewer hallucinations
+                        # Optional: "no_speech_threshold": 0.6, "compression_ratio_threshold": 2.4
+                    })
                     print(f"\nRAW Result: {result}\n")
                     transcription = result["text"].strip() if result else ""
 
-                    if padding_applied:
+                    if padding_applied and transcription:
                         try:
-                            #print(f"\ntranscription: {transcription}")
-                            padding_start_index, padding_end_index = get_indices_of_substring(transcription.lower().strip(), start_substring="tony is quiet", end_substring="will be severely punished")
-                            transcription = transcription[:padding_start_index] + transcription[padding_end_index:]
-                            transcription = transcription.replace(" .", "").strip()
-                            #print(f"\ntranscription after trimming: {transcription}")
+                            padding_start_index, padding_end_index = get_indices_of_substring(
+                                transcription.lower().strip(),
+                                start_substring="tony is quiet",
+                                end_substring="will be severely punished"
+                            )
+                            if padding_start_index is not None and padding_end_index is not None:
+                                transcription = transcription[:padding_start_index] + transcription[padding_end_index:]
+                                transcription = transcription.replace(" .", "").strip()
                         except Exception as e:
                             print(f"Failed to trim response, encountered error: {e}")
                     
-                    # Print the transcribed text if it's not empty
                     if transcription:
                         print(f"\n\nTranscription: {transcription}\n\n")
-                
-                    # After a SUCCESSFUL transcription, clear the buffer and reset the cleanup clock.
-                    audio_buffer = np.array([], dtype=np.float32)
+                    
+                    # After a SUCCESSFUL transcription, clear the buffer!
+                    audio_to_process = np.array([], dtype=np.float32)
                     last_buffer_clear_time = time.time()
 
-            # print(f"current_time - last_buffer_clear_time: {current_time - last_buffer_clear_time}")
-            if (current_time - last_buffer_clear_time) > STALE_BUFFER_TIMEOUT_S and 0 < len(audio_buffer) < MIN_MEANINGFUL_SAMPLES:
-                '''
-                Clear the buffer and reset the cleanup clock, if there isn't at least 1 second of audio every STALE_BUFFER_TIMEOUT_S (eg 20 secs), then discard the buffer.
-                `MIN_MEANINGFUL_SAMPLES` acts as a safety net: if a long sentence is being spoken, the buffer won't simply force-clear every STALE_BUFFER_TIMEOUT_S secs!
-                '''
-                print(f"\nDiscarding stale noise buffer of {len(audio_buffer)/samplerate:.2f}s (less than the {MIN_MEANINGFUL_SAMPLES/samplerate:.1f}s meaningful threshold).\n")
-                audio_buffer = np.array([], dtype=np.float32)
-                last_buffer_clear_time = time.time()
-            
             # A short sleep to prevent the loop from running too fast
             time.sleep(0.05)
-
 
     except KeyboardInterrupt:
         print("\nStopping transcription.")
