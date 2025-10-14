@@ -47,6 +47,13 @@ VAD_MIN_SPEECH_MS = 250             # avoid ultra-short blips
 VAD_MIN_SILENCE_MS = 500            # hangover; end utterance after ~0.5s silence
 VAD_WINDOW_SIZE_SAMPLES = 1536      # 96 ms @ 16 kHz (Silero default/robust pick)
 MAX_BUFFER_S = 30                  # cap rolling buffer to 30s
+VAD_SPEECH_PAD_MS = 30
+
+APPLY_NORMALIZATION = True
+APPLY_TTS_PADDING = True
+APPLY_ZERO_PADDING = False
+APPLY_RMS_DIMMING = True
+APPLY_CROSSFADE = True
 
 #####-------------#####
 
@@ -111,7 +118,7 @@ def audio_callback(indata, frames, time, status):
 
 def start_recording():
     is_recording.set()
-    with sd.InputStream(samplerate=samplerate, channels=1, callback=audio_callback, dtype='float32', blocksize=int(0.02 * samplerate),latency='low'):
+    with sd.InputStream(samplerate=samplerate, channels=1, callback=audio_callback, dtype='float32'):
         while is_recording.is_set():
             time.sleep(0.1)     # The callback is handling the audio data, so we just wait
 
@@ -158,6 +165,7 @@ def transcribe_with_canary(model, audio_f32: np.ndarray, sr: int = 16000, max_ne
 if __name__ == "__main__":
     print("Starting... Generating padding audio first.")
     padding_audio = generate_padding_audio(PADDING_TEXT, sr=samplerate)
+    pad_rms = np.sqrt(np.mean(padding_audio**2) + 1e-12)
 
     print("Starting real-time transcription. Press Ctrl+C to stop.")
     
@@ -168,6 +176,8 @@ if __name__ == "__main__":
     audio_to_process = audio_buffer.copy()
     last_speech_time = time.time()
     last_buffer_clear_time = time.time()
+    global_cursor = 0   # absolute sample index of audio_buffer[0]
+    last_append_end_abs = 0   # absolute sample index up to which we've appended into audio_to_process
 
     try:
         while True:
@@ -189,7 +199,7 @@ if __name__ == "__main__":
                         min_speech_duration_ms=VAD_MIN_SPEECH_MS,
                         min_silence_duration_ms=VAD_MIN_SILENCE_MS,
                         window_size_samples=VAD_WINDOW_SIZE_SAMPLES,
-                        speech_pad_ms=0,
+                        speech_pad_ms=VAD_SPEECH_PAD_MS,
                     )
 
                 if segments:
@@ -198,31 +208,75 @@ if __name__ == "__main__":
                 last_end = 0
                 for segment in segments:    # we know segments contains speech only, so update the buffers!
                     start, end = segment["start"], segment["end"]
-                    temp_buff = audio_buffer[start:end].copy()
-                    audio_to_process = temp_buff if len(audio_to_process) == 0 else np.concatenate((audio_to_process, temp_buff))
+                    abs_start = global_cursor + start
+                    abs_end = global_cursor + end
+
+                    # Clip overlap so we only append never-seen samples
+                    append_start_abs = max(abs_start, last_append_end_abs)
+                    if append_start_abs < abs_end:
+                        relative_start = int(append_start_abs - global_cursor)
+                        relative_end = int(abs_end - global_cursor)
+                        new_chunk = audio_buffer[relative_start:relative_end].copy()
+                        audio_to_process = new_chunk if len(audio_to_process) == 0 else np.concatenate((audio_to_process, new_chunk))
+                        last_append_end_abs = abs_end
+
                     if end > last_end:
                         last_end = end
 
-                # cleanup - since audio_buffer has been VAD-processed upto the final segment['end'] in segments, delete everything before last_end
-                if len(audio_buffer) > MAX_BUFFER_S * samplerate:
-                    audio_buffer = np.array([], dtype=np.float32)
-                else:   # Trim processed part from rolling buffer, keep a small tail for continuity
-                    keep_from = max(0, last_end - int(0.2 * samplerate))  # keep ~200 ms tail
-                    audio_buffer = audio_buffer[keep_from:].copy()   # for long, continuos inputs, this will keep the buffer clean as audio_buffer[last_end:] ~= an empty buffer!
+                # Rolling buffer trim - simplest: no overlap
+                keep_from = last_end    # remove the tail to avoid reprocessing
+                global_cursor += keep_from
+                audio_buffer = audio_buffer[keep_from:].copy()
 
                 current_time = time.time()
                 if len(audio_to_process) >= MIN_CHUNK_DURATION_S * samplerate and (current_time - last_speech_time) > SILENCE_DURATION_S:
                     print(f"Processing {len(audio_to_process)/samplerate:.2f}s of audio...")
 
-                    peak_volume = np.max(np.abs(audio_to_process)) if len(audio_to_process) > 0 else 0.0
-                    if peak_volume > 0: # normalize the spoken audio so it's not lost to the padding audio!
-                        audio_to_process = audio_to_process / peak_volume
+                    if APPLY_NORMALIZATION:
+                        print(f"Applying normalization to audio.")
+                        peak_volume = np.max(np.abs(audio_to_process)) if len(audio_to_process) > 0 else 0.0
+                        if peak_volume > 0: # normalize the spoken audio so it's not lost to the padding audio!
+                            audio_to_process = audio_to_process / peak_volume
 
-                    padding_applied = False
-                    if len(audio_to_process) < MIN_CONTEXT_S * samplerate:
-                        print(f"Audio is shorter than {MIN_CONTEXT_S}s. Applying padding.")
-                        audio_to_process = np.concatenate((audio_to_process, padding_audio))
-                        padding_applied = True
+                    if APPLY_TTS_PADDING:
+                        padding_applied = False
+                        if len(audio_to_process) < MIN_CONTEXT_S * samplerate:
+                            print(f"Audio is shorter than {MIN_CONTEXT_S}s. Applying padding.")
+                            
+                            if APPLY_RMS_DIMMING:
+                                print(f"Applying RMS dimming to padding audio.")
+                                # Set padding RMS ~20–30 dB below speech RMS and optionally low‑pass it to reduce lexical cues:
+                                speech = audio_to_process
+                                speech_rms = np.sqrt(np.mean(speech**2) + 1e-12)
+                                target_pad_rms = speech_rms * (10 ** (-24/20))  # -24 dB
+                                if pad_rms > 0:
+                                    padding_audio_dimmed_rms = padding_audio * (target_pad_rms / pad_rms)
+                                else:
+                                    padding_audio_dimmed_rms = padding_audio
+
+                                if APPLY_CROSSFADE:
+                                    print(f"Applying crossfade to padding audio.")
+                                    # short crossfade to avoid a hard boundary
+                                    xf = int(0.05 * samplerate)  # 50 ms
+                                    if len(speech) >= xf and len(padding_audio_dimmed_rms) >= xf:
+                                        fade = np.linspace(1.0, 0.0, xf, dtype=np.float32)
+                                        audio_to_process[-xf:] *= fade
+                                        padding_audio_dimmed_rms[:xf] *= (1.0 - fade)
+                                
+                                audio_to_process = np.concatenate((audio_to_process, padding_audio_dimmed_rms))
+                                padding_applied = True
+
+                            else:
+                                print(f"Applying padding audio without RMS dimming.")
+                                audio_to_process = np.concatenate((audio_to_process, padding_audio))
+                                padding_applied = True
+
+                    if APPLY_ZERO_PADDING:
+                        # Zero-padding as an alternative to TTS padding
+                        needed = max(0, int(MIN_CONTEXT_S * samplerate - len(audio_to_process)))
+                        if needed > 0:
+                            print(f"Audio is shorter than {MIN_CONTEXT_S}s. Applying zero-padding.")
+                            audio_to_process = np.concatenate((audio_to_process, np.zeros(needed, dtype=np.float32)))
 
                     transcription = transcribe_with_canary(
                         MODEL,
@@ -250,6 +304,7 @@ if __name__ == "__main__":
                     
                     # After a SUCCESSFUL transcription, clear the buffer!
                     audio_to_process = np.array([], dtype=np.float32)
+                    last_append_end_abs = global_cursor
                     last_buffer_clear_time = time.time()
 
             # A short sleep to prevent the loop from running too fast
