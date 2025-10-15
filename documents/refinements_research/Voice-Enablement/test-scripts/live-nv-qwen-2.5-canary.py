@@ -224,9 +224,11 @@ if __name__ == "__main__":
                         last_end = end
 
                 # Rolling buffer trim - simplest: no overlap
-                keep_from = last_end    # remove the tail to avoid reprocessing
-                global_cursor += keep_from
-                audio_buffer = audio_buffer[keep_from:].copy()
+                global_cursor += last_end   # remove the tail to avoid reprocessing
+                if len(audio_buffer) > MAX_BUFFER_S * samplerate:
+                    audio_buffer = np.array([], dtype=np.float32)
+                else:
+                    audio_buffer = audio_buffer[last_end:].copy()
 
                 current_time = time.time()
                 if len(audio_to_process) >= MIN_CHUNK_DURATION_S * samplerate and (current_time - last_speech_time) > SILENCE_DURATION_S:
