@@ -3,6 +3,8 @@ import llm_apis as llm_apis_module
 
 from wakeonlan import send_magic_packet
 import ha_device_modules.lg_webos_tv as lg_webos_tv_module
+
+from typing import Optional
 from pathlib import Path
 
 import asyncio
@@ -106,7 +108,7 @@ def get_all_services_with_descriptions_from_butler_tools_config() -> dict:
 
 
 ### TOOL DEFS:
-def wol_turn_on_tv(mac_address:str, broadcast_ip:str = '255.255.255.255', port:int = 9):
+def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port:int = 9):
     '''
     Uses Wake-On-LAN (WOL) to turn on a TV.
     Args:
@@ -122,7 +124,7 @@ def wol_turn_on_tv(mac_address:str, broadcast_ip:str = '255.255.255.255', port:i
         return {"success": False, "message": "MAC address is required."}
     
     try:
-        send_magic_packet(mac_address, ip_address=broadcast_ip, port=port)
+        send_magic_packet(mac_address, ip_address=target_ip, port=port)
         print("Magic packet sent.")
         return {"success": True, "message": "Device turn-on request successfully transmitted."}
     except Exception as e:
@@ -130,10 +132,16 @@ def wol_turn_on_tv(mac_address:str, broadcast_ip:str = '255.255.255.255', port:i
         return {"success": False, "message": f"Error sending magic packet: {str(e)}"}
 
 
-def lg_webos_tv_turn_off(ip_address:str):
+def lg_webos_tv_turn_off(ip_address: Optional[str] = None):
     '''
     Turns on an LG WebOS TV.
     '''
+    if not ip_address:
+        webos_ip = lg_webos_tv_module.discover_webos_ip()
+        if not webos_ip:
+            return {"success": False, "message": "No LG WebOS TVs found on the network."}
+        ip_address = webos_ip
+        print(f"Found LG WebOS TV at IP address: {ip_address}")
     return asyncio.run(lg_webos_tv_module.webos_pair_connect_and_power_off_async(ip_address))
 
 
@@ -149,7 +157,7 @@ def execute_butler_tool(service_name:str) -> dict:
         return wol_turn_on_tv('a4:36:c7:58:3f:18', '192.168.1.142', 9)
     elif service_name == 'lg_webos_tv_turn_off':
         print("Executing LG WebOS TV turn-off tool...")
-        return lg_webos_tv_turn_off('192.168.1.142')
+        return lg_webos_tv_turn_off()
     else:
         print(f"Service not found: {service_name}")
         return {'success': False, 'message': "Service not found."}
