@@ -865,6 +865,26 @@ async function getReferences(do_rag, params, responseContentID, masterWrapperID,
 }
 
 
+async function fetchTTSVoice(text) {
+    const response = await fetch('/tts_voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({'text': text})
+    });
+    if (!response.ok) {
+        const err = await response.json();
+        console.error(err.error);
+        return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = document.getElementById('ttsAudio');
+    audio.src = url;
+    try { await audio.play(); } catch (_) {}
+}
+
+
 async function requestFormattedPrompt(regeneration_request=false, regenerate_with_citations_force_enabled=false, regenerate_with_citations_force_disabled=false, regen_stream_session_id=null, regen_sequence_id=null) {
     initializePromptRequest();
 
@@ -925,6 +945,8 @@ async function requestFormattedPrompt(regeneration_request=false, regenerate_wit
 
         // Complete final step
         traceManager.completeCurrentStep();
+
+        if (document.getElementById('enable_tts').checked) { await fetchTTSVoice(totalContent); }   // Not using getTts() here so simple checkbox change is enough, rather than a config save!
 
     } catch (error) {
         // Stop timer on error
