@@ -2945,41 +2945,6 @@ def transcribe_audio_data_with_asr_model(audio_data: np.ndarray, asr_config: dic
         handle_local_error("Could not transcribe audio data with ASR model, encountered error: ", e)
 
 
-def read_asr_config() -> dict:
-    try:
-        return read_config(
-            [
-                'model_id',
-                'torch_device_map',
-                'asr_samplerate',
-                'asr_temperature',
-                'asr_max_new_tokens',
-                'asr_volume_threshold',
-                'asr_silence_duration_s',
-                'asr_min_chunk_duration_s',
-                'asr_min_context_s',
-                'asr_stale_buffer_timeout_s',
-                'asr_min_meaningful_samples_factor',
-                'asr_padding_text',
-                'asr_vad_model',
-                'asr_vad_device', 
-                'asr_vad_threshold', 
-                'asr_vad_min_speech_ms',
-                'asr_vad_min_silence_ms',
-                'asr_vad_window_size_samples',
-                'asr_vad_max_buffer_s',
-                'asr_vad_speech_pad_ms',
-                'asr_apply_normalization',
-                'asr_apply_tts_padding',
-                'asr_apply_zero_padding',
-                'asr_apply_rms_dimming',
-                'asr_apply_crossfade'
-            ]
-        )
-    except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting to read ASR config, encountered error: ", e)
-
-
 def prepare_audio_from_bytes(audio_bytes: bytes, target_sr: int = 16000) -> np.ndarray:
     # librosa can read from BytesIO via soundfile backend
     y, sr = librosa.load(io.BytesIO(audio_bytes), sr=target_sr, mono=True)
@@ -2987,10 +2952,9 @@ def prepare_audio_from_bytes(audio_bytes: bytes, target_sr: int = 16000) -> np.n
     return y
 
 
-def asr_transcribe(audio_bytes: bytes) -> str:
+def asr_transcribe(audio_bytes: bytes, asr_config: dict) -> str:
     # 0. Prepare Padding Audio:
     print("Starting ASR... Generating padding audio first.")
-    asr_config = read_asr_config()
     padding_audio = generate_padding_audio(asr_config['asr_padding_text'], sr=asr_config['asr_samplerate'])
     pad_rms = np.sqrt(np.mean(padding_audio**2) + 1e-12)
 
@@ -3057,6 +3021,68 @@ def asr_transcribe(audio_bytes: bytes) -> str:
     return transcription
 
 
+def read_asr_config() -> dict:
+    try:
+        return read_config(
+            [
+                'model_id',
+                'torch_device_map',
+                'asr_samplerate',
+                'asr_temperature',
+                'asr_max_new_tokens',
+                'asr_volume_threshold',
+                'asr_silence_duration_s',
+                'asr_min_chunk_duration_s',
+                'asr_min_context_s',
+                'asr_stale_buffer_timeout_s',
+                'asr_min_meaningful_samples_factor',
+                'asr_padding_text',
+                'asr_vad_model',
+                'asr_vad_device', 
+                'asr_vad_threshold', 
+                'asr_vad_min_speech_ms',
+                'asr_vad_min_silence_ms',
+                'asr_vad_window_size_samples',
+                'asr_vad_max_buffer_s',
+                'asr_vad_speech_pad_ms',
+                'asr_apply_normalization',
+                'asr_apply_tts_padding',
+                'asr_apply_zero_padding',
+                'asr_apply_rms_dimming',
+                'asr_apply_crossfade'
+            ]
+        )
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when attempting to read ASR config, encountered error: ", e)
+
+
+def get_final_asr_config(request) -> dict:
+    asr_config = read_asr_config()
+    asr_config.update({
+        'asr_temperature': float(request.headers.get('X-ASR-Temperature', str(asr_config['asr_temperature']))),
+        'asr_max_new_tokens': int(request.headers.get('X-ASR-Max-New-Tokens', str(asr_config['asr_max_new_tokens']))),
+        'asr_samplerate': int(request.headers.get('X-ASR-Samplerate', str(asr_config['asr_samplerate']))),
+        'asr_volume_threshold': float(request.headers.get('X-ASR-Volume-Threshold', str(asr_config['asr_volume_threshold']))),
+        'asr_silence_duration_s': float(request.headers.get('X-ASR-Silence-Duration-S', str(asr_config['asr_silence_duration_s']))),
+        'asr_min_chunk_duration_s': float(request.headers.get('X-ASR-Min-Chunk-Duration-S', str(asr_config['asr_min_chunk_duration_s']))),
+        'asr_min_context_s': float(request.headers.get('X-ASR-Min-Context-S', str(asr_config['asr_min_context_s']))),
+        'asr_stale_buffer_timeout_s': float(request.headers.get('X-ASR-Stale-Buffer-Timeout-S', str(asr_config['asr_stale_buffer_timeout_s']))),
+        'asr_min_meaningful_samples_factor': float(request.headers.get('X-ASR-Min-Meaningful-Samples-Factor', str(asr_config['asr_min_meaningful_samples_factor']))),
+        'asvad_threshold': float(request.headers.get('X-ASR-VAD-Threshold', str(asr_config['asr_vad_threshold']))),
+        'asr_vad_min_speech_ms': float(request.headers.get('X-ASR-VAD-Min-Speech-MS', str(asr_config['asr_vad_min_speech_ms']))),
+        'asr_vad_min_silence_ms': float(request.headers.get('X-ASR-VAD-Min-Silence-MS', str(asr_config['asr_vad_min_silence_ms']))),
+        'asr_vad_window_size_samples': float(request.headers.get('X-ASR-VAD-Window-Size-Samples', str(asr_config['asr_vad_window_size_samples']))),
+        'asr_vad_max_buffer_s': float(request.headers.get('X-ASR-VAD-Max-Buffer-S', str(asr_config['asr_vad_max_buffer_s']))),
+        'asr_vad_speech_pad_ms': float(request.headers.get('X-ASR-VAD-Speech-Pad-MS', str(asr_config['asr_vad_speech_pad_ms']))),
+        'asr_apply_normalization': request.headers.get('X-ASR-Apply-Normalization', str(asr_config['asr_apply_normalization'])).lower() == 'true',
+        'asr_apply_tts_padding': request.headers.get('X-ASR-Apply-TTS-Padding', str(asr_config['asr_apply_tts_padding'])).lower() == 'true',
+        'asr_apply_zero_padding': request.headers.get('X-ASR-Apply-Zero-Padding', str(asr_config['asr_apply_zero_padding'])).lower() == 'true',
+        'asr_apply_rms_dimming': request.headers.get('X-ASR-Apply-RMS-Dimming', str(asr_config['asr_apply_rms_dimming'])).lower() == 'true',
+        'asr_apply_crossfade': request.headers.get('X-ASR-Apply-Crossfade', str(asr_config['asr_apply_crossfade'])).lower() == 'true',
+    })
+    return asr_config
+
+
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
     """
@@ -3071,7 +3097,16 @@ def transcribe():
         if not data:
             return handle_api_error("Empty audio file in request, encountered error: ", e)
         
-        result = asr_transcribe(data)
+        try:
+            final_asr_config = get_final_asr_config(request)
+        except Exception as e:
+            return handle_api_error("Could not get final ASR config, encountered error: ", e)
+        
+        try:
+            result = asr_transcribe(data, final_asr_config)
+        except Exception as e:
+            return handle_api_error("Could not transcribe audio, encountered error: ", e)
+        
         return jsonify(success=True, transcription=result)
     except Exception as e:
         return handle_api_error("Server-side error, could not transcribe audio, encountered error: ", e)

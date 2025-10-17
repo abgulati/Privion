@@ -183,7 +183,32 @@ async function uploadWav(wavBlob) {
         const form = new FormData();
         form.append('audio', wavBlob, 'recording.wav');
 
-        const asrWaitress_URL = getHfwAsrUrl();
+        const asrWaitress_URL = getHfwAsrUrl()
+        
+        headers = {
+            'Content-Type': 'multipart/form-data',
+            'X-ASR-Temperature': document.getElementById('asr_temperature').value,
+            'X-ASR-Max-New-Tokens': document.getElementById('asr_max_new_tokens').value,
+            'X-ASR-Samplerate': document.getElementById('asr_samplerate').value,
+            'X-ASR-Volume-Threshold': document.getElementById('asr_volume_threshold').value,
+            'X-ASR-Silence-Duration-S': document.getElementById('asr_silence_duration_s').value,
+            'X-ASR-Min-Chunk-Duration-S': document.getElementById('asr_min_chunk_duration_s').value,
+            'X-ASR-Min-Context-S': document.getElementById('asr_min_context_s').value,
+            'X-ASR-Stale-Buffer-Timeout-S': document.getElementById('asr_stale_buffer_timeout_s').value,
+            'X-ASR-Min-Meaningful-Samples-Factor': document.getElementById('asr_min_meaningful_samples_factor').value,
+            'X-ASR-VAD-Threshold': document.getElementById('asr_vad_threshold').value,
+            'X-ASR-VAD-Min-Speech-MS': document.getElementById('asr_vad_min_speech_ms').value,
+            'X-ASR-VAD-Min-Silence-MS': document.getElementById('asr_vad_min_silence_ms').value,
+            'X-ASR-VAD-Window-Size-Samples': document.getElementById('asr_vad_window_size_samples').value,
+            'X-ASR-VAD-Max-Buffer-S': document.getElementById('asr_vad_max_buffer_s').value,
+            'X-ASR-VAD-Speech-Pad-MS': document.getElementById('asr_vad_speech_pad_ms').value,
+            'X-ASR-Apply-Normalization': document.getElementById('asr_apply_normalization').checked,
+            'X-ASR-Apply-TTS-Padding': document.getElementById('asr_apply_tts_padding').checked,
+            'X-ASR-Apply-Zero-Padding': document.getElementById('asr_apply_zero_padding').checked,
+            'X-ASR-Apply-RMS-Dimming': document.getElementById('asr_apply_rms_dimming').checked,
+            'X-ASR-Apply-Crossfade': document.getElementById('asr_apply_crossfade').checked,
+        };
+
         url = `${asrWaitress_URL}/transcribe`;
 
         const res = await fetch(url, {
