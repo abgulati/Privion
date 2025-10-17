@@ -300,6 +300,61 @@ function getButlerConfig() {
 }
 
 
+function getAsrConfig() {
+    config = {
+        'enable_asr': document.getElementById('enable_asr').checked,
+        'asr_model': document.getElementById('asr_model').value,
+        'asr_torch_device': document.getElementById('asr_torch_device').value,
+        'asr_waitress_access_url': document.getElementById('asr_waitress_access_url').value,
+        'asr_waitress_server_port': document.getElementById('asr_waitress_server_port').value,
+        'asr_temperature': document.getElementById('asr_temperature').value,
+        'asr_max_new_tokens': document.getElementById('asr_max_new_tokens').value,
+        'asr_samplerate': document.getElementById('asr_samplerate').value,
+        'asr_volume_threshold': document.getElementById('asr_volume_threshold').value,
+        'asr_silence_duration_s': document.getElementById('asr_silence_duration_s').value,
+        'asr_min_chunk_duration_s': document.getElementById('asr_min_chunk_duration_s').value,
+        'asr_min_context_s': document.getElementById('asr_min_context_s').value,
+        'asr_stale_buffer_timeout_s': document.getElementById('asr_stale_buffer_timeout_s').value,
+        'asr_min_meaningful_samples_factor': document.getElementById('asr_min_meaningful_samples_factor').value,
+        'asr_vad_model': document.getElementById('asr_vad_model').value,
+        'asr_vad_device': document.getElementById('asr_vad_device').value,
+        'asr_vad_threshold': document.getElementById('asr_vad_threshold').value,
+        'asr_vad_min_speech_ms': document.getElementById('asr_vad_min_speech_ms').value,
+        'asr_vad_min_silence_ms': document.getElementById('asr_vad_min_silence_ms').value,
+        'asr_vad_window_size_samples': document.getElementById('asr_vad_window_size_samples').value,
+        'asr_vad_max_buffer_s': document.getElementById('asr_vad_max_buffer_s').value,
+        'asr_vad_speech_pad_ms': document.getElementById('asr_vad_speech_pad_ms').value,
+        'asr_apply_normalization': document.getElementById('asr_apply_normalization').checked,
+        'asr_apply_tts_padding': document.getElementById('asr_apply_tts_padding').checked,
+        'asr_apply_zero_padding': document.getElementById('asr_apply_zero_padding').checked,
+        'asr_apply_rms_dimming': document.getElementById('asr_apply_rms_dimming').checked,
+        'asr_apply_crossfade': document.getElementById('asr_apply_crossfade').checked,
+    };
+    setAsr(config.enable_asr);
+    return config;
+}
+
+
+function getTtsConfig() {
+    config = {
+        'enable_tts': document.getElementById('enable_tts').checked,
+        'selected_tts': document.getElementById('selected_tts').value,
+        'selected_kokoro_voice': document.getElementById('selected_kokoro_voice').value,
+        'tts_sample_rate': document.getElementById('tts_sample_rate').value
+    };
+    setTts(config.enable_tts);
+    
+    if (config.selected_kokoro_voice.includes('af_') || config.selected_kokoro_voice.includes('am_')) {
+        config.kokoro_language_code = 'a';
+    } else if (config.selected_kokoro_voice.includes('bf_') || config.selected_kokoro_voice.includes('bm_')) {
+        config.kokoro_language_code = 'b';
+    } else {
+        config.kokoro_language_code = 'a';
+    }
+    return config;
+}
+
+
 function getHfWaitressConfig() {
     let hf_config = {
         'model_id': document.getElementById('hf-waitress-llm-custom-dropdown-selected-value').textContent,
@@ -567,7 +622,9 @@ function handleSaveChanges() {
         ...getGraphRAGConfig(),
         ...getOcrConfig(),
         ...getGoogleDriveConfig(),
-        ...getButlerConfig()
+        ...getButlerConfig(),
+        ...getAsrConfig(),
+        ...getTtsConfig()
     };
 
     let hfSavePromise;  // Declaring the variable that will hold the promise returned by handle-HfWaitressChanges(). Defaulting will result in a race condition, so we'll need to handle the Promise chain manually.
