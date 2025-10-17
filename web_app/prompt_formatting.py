@@ -530,6 +530,15 @@ def request_action_analysis_prompt(user_query:str, action_result:dict) -> str:
     </action_result>
 
     Please provide a status update on the service execution action. Was the action successful? If not, any reasons provided as to why not? Thank you!
+
+    Note: Your response will be piped to a text-to-speech (TTS) model, but only once you've finished responding. Accordingly, keep in mind the following: 
+    - Respond in a manner conducive to a verbal conversation
+    - Avoid technical jargon and verbose language.
+    - Do NOT use emojis or symbols, or markdown formatting, as it risks the TTS model reading out the raw markdown or emoji code instead of the intended text!
+    - Keep your response concise and to the point.
+    - Respond in the past tense (v. imp!) as if the action has already been performed, as it is likely to have been by the time the TTS model verbally synthesizes and replies!
+    - If the action was not successful, provide a reason for why not.
+    - If the action was successful, provide a brief summary of the action performed.
     """
 
 #############################----------------------------------------------#################################
