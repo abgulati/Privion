@@ -71,6 +71,16 @@ def write_config(config_updates:dict, filename=None) -> dict:
 
     config.update(config_updates)
 
+    triggers_for_tts_reload = [
+        'kokoro_language_code'
+    ]
+
+    reload_tts = False
+    for key in triggers_for_tts_reload:
+        if key in config_updates and config_updates[key] != config.get(key):
+            reload_tts = True
+            break
+
     # Write updated config.json:
     try:
         with open(filename, 'w') as file:
@@ -78,7 +88,7 @@ def write_config(config_updates:dict, filename=None) -> dict:
     except Exception as e:
         raise Exception(f"Could not update config.json, encountered error: {e}")
      
-    return {'success': True, 'restart_required':restart_required, 'skip_reload_trigger':skip_reload_trigger}
+    return {'success': True, 'restart_required':restart_required, 'skip_reload_trigger':skip_reload_trigger, 'reload_tts':reload_tts}
 
 
 def safe_write_config(config_updates:dict, filename=None) -> dict:
@@ -225,6 +235,42 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                 'llama_cpp_server_retry_attempts':200,
                 'hf_waitress_server_timeout_seconds':3,
                 'hf_waitress_server_retry_attempts':200,
+                'enable_asr':False,
+                'asr_model':'openai/whisper-large-v3',
+                'asr_torch_device':'cpu',
+                'asr_temperature':0.0,
+                'asr_max_new_tokens':1500,
+                'asr_samplerate':16000,
+                'asr_volume_threshold':0.04,
+                'asr_silence_duration_s':1.5,
+                'asr_min_chunk_duration_s':0.25,
+                'asr_min_context_s':11,
+                'asr_stale_buffer_timeout_s':20.0,
+                'asr_min_meaningful_samples_factor':1.5,
+                'asr_padding_text':' tony is quiet silent for too long I must not keep master waiting bad dooby must obey and transcribe dooby good servant will transcribe otherwise I will be severely punished',
+                'asr_vad_model':'snakers4/silero-vad',
+                'asr_vad_device':'cpu',
+                'asr_vad_threshold':0.5,
+                'asr_vad_min_speech_ms':250,
+                'asr_vad_min_silence_ms':500,
+                'asr_vad_window_size_samples':1536,
+                'asr_vad_max_buffer_s':30,
+                'asr_vad_speech_pad_ms':30,
+                'asr_apply_normalization':True,
+                'asr_apply_tts_padding':True,
+                'asr_apply_zero_padding':False,
+                'asr_apply_rms_dimming':True,
+                'asr_apply_crossfade':False,
+                'asr_waitress_serving_url':'0.0.0.0',
+                'asr_waitress_access_url':'localhost',
+                'asr_waitress_server_port':10087,
+                'voice_base_directory_name': 'voice-model-servers',
+                'asr_subdirectory_name': 'asr-model-server',
+                'enable_tts': False,
+                'selected_tts': 'kokoro_82m',
+                'selected_kokoro_voice': 'af_heart',
+                'kokoro_language_code': 'a',
+                'tts_sample_rate': 24000,
                 'whoosh_search_weighting':'BM25F',
                 'fetch_top_k_results_from_whoosh':50,
                 'fetch_top_k_results_from_vectordb':50,
