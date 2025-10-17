@@ -181,7 +181,39 @@ function loadCoreLarsConfig() {
         'hf_waitress_server_port',
         'llama_cpp_serving_url',
         'llama_cpp_access_url',
-        'llama_cpp_server_port'
+        'llama_cpp_server_port',
+        'enable_asr',
+        'asr_model',
+        'asr_torch_device',
+        'asr_temperature',
+        'asr_max_new_tokens',
+        'asr_samplerate',
+        'asr_volume_threshold',
+        'asr_silence_duration_s',
+        'asr_min_chunk_duration_s',
+        'asr_min_context_s',
+        'asr_stale_buffer_timeout_s',
+        'asr_min_meaningful_samples_factor',
+        'asr_vad_model',
+        'asr_vad_device',
+        'asr_vad_threshold',
+        'asr_vad_min_speech_ms',
+        'asr_vad_min_silence_ms',
+        'asr_vad_window_size_samples',
+        'asr_vad_max_buffer_s',
+        'asr_vad_speech_pad_ms',
+        'asr_apply_normalization',
+        'asr_apply_tts_padding',
+        'asr_apply_zero_padding',
+        'asr_apply_rms_dimming',
+        'asr_apply_crossfade',
+        'asr_waitress_serving_url',
+        'asr_waitress_access_url',
+        'asr_waitress_server_port',
+        'enable_tts',
+        'selected_tts',
+        'selected_kokoro_voice',
+        'tts_sample_rate'
     ]
     
     return fetch('/config_reader_api', {
@@ -1617,6 +1649,95 @@ function initializeButlerTabComponents(values) {
 }
 
 
+function initializeAsrTabCheckboxes(values) {
+    document.getElementById('enable_asr').checked = values.enable_asr;
+    setAsr(values.enable_asr);
+
+    document.getElementById('asr_apply_normalization').checked = values.asr_apply_normalization;
+    document.getElementById('asr_apply_tts_padding').checked = values.asr_apply_tts_padding;
+    document.getElementById('asr_apply_zero_padding').checked = values.asr_apply_zero_padding;
+    document.getElementById('asr_apply_rms_dimming').checked = values.asr_apply_rms_dimming;
+    document.getElementById('asr_apply_crossfade').checked = values.asr_apply_crossfade;
+}
+
+
+function initializeAsrTabDropdowns(values) {
+    const asrModel = document.getElementById('asr_model');
+
+    for (let option of asrModel.options) {
+        if (option.value == values.asr_model) {
+            option.selected = true;
+            break;
+        }    
+    }
+    
+    const asrVadModel = document.getElementById('asr_vad_model');
+    for (let option of asrVadModel.options) {
+        if (option.value == values.asr_vad_model) {
+            option.selected = true;
+            break;
+        }
+    }
+
+    const asrVadDevice = document.getElementById('asr_vad_device');
+    for (let option of asrVadDevice.options) {
+        if (option.value == values.asr_vad_device) {
+            option.selected = true;
+            break;
+        }
+    }
+}
+
+
+function initializeAsrTabFields(values) {
+    document.getElementById('asr_samplerate').value = values.asr_samplerate;
+    document.getElementById('asr_temperature').value = values.asr_temperature;
+    document.getElementById('asr_max_new_tokens').value = values.asr_max_new_tokens;
+    document.getElementById('asr_volume_threshold').value = values.asr_volume_threshold;
+    document.getElementById('asr_silence_duration_s').value = values.asr_silence_duration_s;
+    document.getElementById('asr_min_chunk_duration_s').value = values.asr_min_chunk_duration_s;
+    document.getElementById('asr_min_context_s').value = values.asr_min_context_s;
+    document.getElementById('asr_stale_buffer_timeout_s').value = values.asr_stale_buffer_timeout_s;
+    document.getElementById('asr_min_meaningful_samples_factor').value = values.asr_min_meaningful_samples_factor;
+    document.getElementById('asr_vad_threshold').value = values.asr_vad_threshold;
+    document.getElementById('asr_vad_min_speech_ms').value = values.asr_vad_min_speech_ms;
+    document.getElementById('asr_vad_min_silence_ms').value = values.asr_vad_min_silence_ms;
+    document.getElementById('asr_vad_window_size_samples').value = values.asr_vad_window_size_samples;
+    document.getElementById('asr_vad_max_buffer_s').value = values.asr_vad_max_buffer_s;
+    document.getElementById('asr_vad_speech_pad_ms').value = values.asr_vad_speech_pad_ms;
+    document.getElementById('asr_waitress_access_url').value = values.asr_waitress_access_url;
+    document.getElementById('asr_waitress_server_port').value = values.asr_waitress_server_port;
+    document.getElementById('asr_torch_device').value = values.asr_torch_device;
+    setHfwAsrUrl(values.asr_waitress_access_url, values.asr_waitress_server_port);
+}
+
+
+function initializeAsrTabComponents(values) {
+    initializeAsrTabCheckboxes(values);
+    initializeAsrTabDropdowns(values);
+    initializeAsrTabFields(values);
+}
+
+
+function initializeTtsTabCheckboxes(values) {
+    document.getElementById('enable_tts').checked = values.enable_tts;
+    setTts(values.enable_tts);
+}
+
+
+function initializeTtsTabDropdowns(values) {
+    document.getElementById('selected_tts').value = values.selected_tts;
+    document.getElementById('selected_kokoro_voice').value = values.selected_kokoro_voice;
+    document.getElementById('tts_sample_rate').value = values.tts_sample_rate;
+}
+
+
+function initializeTTSTabComponents(values) {
+    initializeTtsTabCheckboxes(values);
+    initializeTtsTabDropdowns(values);
+}
+
+
 function initializeSettingsModalTabCycleListener() {
     // Now that all on-load setup for Modal-Setting's Tabs based on config.json is completed, set listeners to cycle between tabs:
     let options = document.querySelectorAll('[data-content]');
@@ -1708,6 +1829,38 @@ function loadVectorDB(llm_model) {
 }
 
 
+function loadAsrPipeline() {
+    return fetch('/asr_server_starter')
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error)});
+        }
+        setAsr(true);
+        return response
+    })
+    .catch(error => {
+        setAsr(false);
+        console.error(error);
+    });
+}
+
+
+function loadTTSPipeline() {
+    return fetch('/load_tts_pipeline')
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error)});
+        }
+        setTts(true);
+        return response
+    })
+    .catch(error => {
+        setTts(false);
+        console.error(error);
+    });
+}
+
+
 function startLLMServer() {
     // Finally, trigger the LLM & vectorDB starter!
     appendStreamInfo("Starting LLM Server...", 'waiting');
@@ -1759,8 +1912,13 @@ document.addEventListener("DOMContentLoaded", function() {
             initializeOCRTabComponents(values);
             initializeGoogleDriveTabComponents(values);
             initializeButlerTabComponents(values);
+            initializeAsrTabComponents(values);
+            initializeTTSTabComponents(values);
             initializeSettingsModalTabCycleListener();
             local_llm_server = values.local_llm_server;
+            if (getTts() === "true") { loadTTSPipeline(); }
+            if (getAsr() === "true") { loadAsrPipeline(); }
+            //return Promise.all([startLLMServer(), loadAsrPipeline()]);
             return startLLMServer();
         })
         .then(() => {
