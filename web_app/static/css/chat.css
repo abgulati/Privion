@@ -762,6 +762,13 @@ body {
     width: 80px !important;
 }
 
+.record-audio-btn {
+    margin-right: 7px; /* adjust as needed */
+    background-color: tomato !important;
+    height: 41px !important;
+    width: 80px !important;
+}
+
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
