@@ -287,6 +287,14 @@ if __name__ == "__main__":
                                 start_substring="tony is quiet",
                                 end_substring="will be severely punished"
                             )
+                            
+                            if padding_start_index is None or padding_end_index is None:    # try once again with a small tweak!
+                                padding_start_index, padding_end_index = get_indices_of_substring(
+                                    transcription.lower().strip(),
+                                    start_substring="tony is quite",
+                                    end_substring="will be severely punished"
+                                )
+                            
                             if padding_start_index is not None and padding_end_index is not None:
                                 transcription = transcription[:padding_start_index] + transcription[padding_end_index:]
                                 transcription = transcription.replace(" .", "").strip()
