@@ -5,6 +5,7 @@ from flask import jsonify
 
 from sentence_transformers import SentenceTransformer, util
 import torch
+import numpy as np
 
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
@@ -118,6 +119,12 @@ def flash_attention_is_installed() -> bool:
     except ImportError:
         print("Flash Attention is not installed.")
         return False
+    
+try:
+    from kokoro import KPipeline
+    import soundfile as sf
+except Exception as e:
+    print(f"Could not import necessary modules for Kokoro 82M TTS pipeline, encountered error: {e}")
 
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Allow insecure traffic - Needed to bypass HTTPS requirement for Google Drive OAuth. FOR DEV USE ONLY! SWITCH TO SELF-SIGNED CERTIFICATES & HTTPS FOR PRODUCTION!
 
@@ -155,6 +162,7 @@ LLAMA_CPP_PROCESS = None   #  used in llama-cpp_server_starter and hf-waitress_s
 LLM_CHANGE_RELOAD_TRIGGER_SET = False   # set in config.json and used in llama-cpp_server_starter
 
 DOCLING_CONVERTER = None    # used in docling-ocr_page and bulk-text_extract_from_staging_area
+TTS_PIPELINE = None    # used in load_tts_pipeline
 
 # Dict for user queries:  queries[session_id] = user_input
 QUERIES = {}
@@ -332,6 +340,10 @@ def config_writer_api():
         if write_return['restart_required'] and not write_return['skip_reload_trigger']:
             global LLM_CHANGE_RELOAD_TRIGGER_SET
             LLM_CHANGE_RELOAD_TRIGGER_SET = True
+
+        if write_return['reload_tts']:
+            global TTS_PIPELINE
+            TTS_PIPELINE = None
     except Exception as e:
         return handle_api_error("Server-side error - could not write keys to config.json. Encountered error: ", e)
     
@@ -2774,7 +2786,7 @@ def bring_graph_db_online():    # launch FalkorDB Docker container
                 print(f"\nFalkorDB Docker container launched successfully!\n")
                 return True
             else:
-                print(f"FalkorDB Docker container not yet running, waiting {timeout} seconds before retrying...")
+                print(f"\n\nFalkorDB Docker container not yet running, waiting {timeout} seconds before retrying...\n\n")
                 time.sleep(timeout)
 
     except Exception as e:
@@ -4992,6 +5004,164 @@ def store_user_rating():
 #             return 'http://localhost:9069'
 #     else:
 #         raise Exception(f"Invalid server choice, expected 'llama-cpp' or 'hf-waitress', received: {server_to_check}")
+
+
+@app.route('/asr_server_starter')
+def asr_server_starter():  # Launch HF-Waitress instance for ASR
+    try:
+        config_data = read_config(['asr_model', 'asr_waitress_access_url', 'asr_waitress_server_port', 'voice_base_directory_name', 'asr_subdirectory_name', 'asr_torch_device'])
+        hf_waitress_asr_server_path = pathlib.Path.cwd() / str(config_data['voice_base_directory_name']) / str(config_data['asr_subdirectory_name'])
+        print(f"\nLaunching HF-Waitress instance for ASR at path: {hf_waitress_asr_server_path}\n")
+    except Exception as e:
+        handle_local_error("Could not read ASR model config, encountered error: ", e)
+
+    if utils.is_local_server_online(f"http://{config_data['asr_waitress_access_url']}:{config_data['asr_waitress_server_port']}")['server_online']:
+        print("\nASR server is already online, skipping launch...\n")
+        return jsonify(success=True)
+    
+    # Get free GPU memory and shutdown the main Waitress LLM chat server if necessary:
+    # try:
+    #     hf_waitress_base_url = get_url_for_server('hf-waitress')    # shutdown general-chat LLM server at this URL in case free VRAM is insufficient
+    #     graph_model_base_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
+    #     utils.ensure_minimum_free_vram(int(config_data['minimum_free_vram_for_graph_summarizer_model']), [graph_model_base_url, hf_waitress_base_url])
+    # except Exception as e:
+    #     handle_local_error(f"Could not reserve minimum GPU memory ({config_data['minimum_free_vram_for_graph_summarizer_model']}MB) required for Graph-Summarizer model, encountered error: ", e)
+
+    # Need to format this way because the f"""<>""" multiline way will maintain newlines in the command, which will cause the command to fail!
+    # Also cannot format this as we have in hf_waitress.py's exllama_bpw_quantize_model() because of the command seperators (&& and ;), which would be incorrectly treated as parameters to the cd command in that list format!
+    # We cd first because the command should execute from within that directory otherwise the main hf_config.json gets incorrectly modified! 
+    command = (
+        f"cd {hf_waitress_asr_server_path} "
+        f"{'&&' if platform.system() == 'Windows' else ';'} "
+        f"{'python' if platform.system() == 'Windows' else 'python3'} hf_waitress.py "
+        f"--port {str(config_data['asr_waitress_server_port'])} "
+        f"--model_id {str(config_data['asr_model'])} "
+        f"--torch_device_map {str(config_data['asr_torch_device'])} "
+        "--quantize n"
+    )
+    # if str(config_data['exl2_quantize_graph_summarizer_model']).lower() == 'true':
+    #     command += f" --exl2 --exl2_bpw {str(config_data['exl2_quantize_graph_summarizer_model_bpw'])} --exl2_max_seq_len {str(config_data['graph_summarizer_max_seq_len'])}"
+    # else:
+    #     command += f" --quantize {str(config_data['quantize_graph_summarizer_model'])} --quant_level {str(config_data['quantize_graph_summarizer_model_bits'])}"
+
+    try:
+        if platform.system() == 'Windows':
+            windows_command = f'start cmd /c "{command}"'   # /k tells cmd to keep the window open even after the command has finished, which is useful for debugging, versus /c which closes the window after the command has finished.
+            subprocess.Popen(windows_command, shell=True)   # Popen is used to launch the command in a new process in a new terminal, while subprocess.run() is used to simply run the command and wait for it to finish.
+            # Using `start` in this manner explicitly instructs Windows to start a new command window to run the command, while CREATE_NEW_CONSOLE combined with shell=True might not work correctly as the shell itself might capture the console!
+        else:
+            subprocess.Popen(command, shell=True)
+        # The shell=True lets the system's shell interpret the command string, including special operators like && (Windows) or ; (Unix) that chain commands together.
+        # This is exactly what you need when you want to change directory before running a script!
+
+        timeout = 5
+        attempts = 25
+        for _ in range(attempts):
+            if utils.is_local_server_online(f"http://{config_data['asr_waitress_access_url']}:{config_data['asr_waitress_server_port']}")['server_online']:
+                print(f"\nASR server launched successfully!\n")
+                return jsonify(success=True)
+            else:
+                print(f"ASR server not yet running, waiting {timeout} seconds before retrying...")
+                time.sleep(timeout)
+            
+    except Exception as e:
+        handle_local_error("Could not launch HF-Waitress instance for ASR, encountered error: ", e)
+    
+    return jsonify(success=False)
+
+
+def get_tts_pipeline(tts_name: str, **kwargs):
+    
+    if tts_name == 'kokoro_82m':
+        
+        try:
+            return KPipeline(lang_code=kwargs['kokoro_language_code'])
+        except Exception as e:
+            raise Exception(f"Could not load Kokoro 82M TTS pipeline, encountered error: {e}")
+    else:
+        raise Exception(f"Invalid TTS choice: {tts_name}")
+
+
+def tts_pipeline_core_loader():
+    print("\nLoading TTS pipeline...\n")
+    global TTS_PIPELINE
+
+    try:
+        read_return = read_config(['selected_tts', 'selected_kokoro_voice', 'tts_sample_rate', 'kokoro_language_code'])
+    except Exception as e:
+        handle_local_error("Server-side error, could not read tts configuration, encountered error: ", e)
+    
+    try:
+        kwargs = {'tts_sample_rate': read_return['tts_sample_rate'], 'kokoro_voice': read_return['selected_kokoro_voice'], 'kokoro_language_code': read_return['kokoro_language_code']}
+        TTS_PIPELINE = get_tts_pipeline(tts_name=read_return['selected_tts'], **kwargs)
+    except Exception as e:
+        handle_local_error("Server-side error, could not load tts pipeline, encountered error: ", e)
+
+    return True
+
+
+@app.route('/load_tts_pipeline')
+def load_tts_pipeline():
+    
+    try:
+        tts_pipeline_core_loader()
+        return jsonify(success=True)
+    except Exception as e:
+        return handle_api_error("Server-side error, could not load tts pipeline, encountered error: ", e) 
+    
+
+def synth_to_wav_bytes(text: str) -> bytes:
+    global TTS_PIPELINE
+
+    try:
+        read_return = read_config(['selected_tts', 'selected_kokoro_voice', 'tts_sample_rate'])
+    except Exception as e:
+        raise Exception(f"Could not read tts configuration, encountered error: {e}")
+    
+    try:
+        if read_return['selected_tts'] == 'kokoro_82m':
+            if TTS_PIPELINE is None:
+                tts_pipeline_core_loader()
+            
+            chunks = []
+            generator = TTS_PIPELINE(text, voice=read_return['selected_kokoro_voice'])
+            for i, (gs, ps, audio) in enumerate(generator):
+                # print(i, gs, ps)
+                if isinstance(audio, torch.Tensor):
+                    audio = audio.detach().cpu().numpy()
+                chunks.append(audio.astype(np.float32))
+            if not chunks:
+                return b''
+            waveform = np.concatenate(chunks)
+            buf = io.BytesIO()
+            sf.write(buf, waveform, int(read_return['tts_sample_rate']), format='WAV', subtype='PCM_16')
+            return buf.getvalue()
+        else:
+            raise Exception(f"Invalid TTS choice: {read_return['selected_tts']}")
+    except Exception as e:
+        raise Exception(f"Could not synthesize TTS audio, encountered error: {e}")
+
+
+@app.route('/tts_voice', methods=['POST'])
+def tts_voice():
+    try:
+        payload = request.get_json(silent=True) or {}
+        text = (payload.get('text') or '').strip()
+    except Exception as e:
+        return handle_api_error("Server-side error, could not read text or voice, encountered error: ", e)
+    
+    try:
+        wav_bytes = synth_to_wav_bytes(text)
+        return Response(
+            wav_bytes,
+            mimetype='audio/wav',
+            headers={
+                'Content-Disposition': 'inline; filename="tts.wav"',
+                'Cache-Control': 'no-store'
+            }
+        )
+    except Exception as e:
+        return handle_api_error("Server-side error, could not synthesize TTS audio, encountered error: ", e)
 
 
 def check_status_and_shutdown_llm_server(server_to_shutdown: str):

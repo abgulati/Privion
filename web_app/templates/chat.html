@@ -27,7 +27,9 @@
 
     <body style="background-color: #181a1b;">
 
-        <div id="chatState" style="display: none;" data-ongoing-chat-id="" data-latest-sequence-id="" data-llm-model=""></div>
+        <div id="chatState" style="display: none;" data-ongoing-chat-id="" data-latest-sequence-id="" data-llm-model="" data-tts="false"></div>
+
+        <audio id="ttsAudio" controls autoplay style="display: none;"></audio>
         
         <div class="header-container">
             
@@ -159,6 +161,10 @@
                     <i class="fas fa-folder-open"></i> <!-- Icon for folders -->
                 </button>
 
+                <button type="button" id="recordBtn" class="btn record-audio-btn" onclick="window.__voice_recorder__.toggleRecord(this)" title="Hold to talk / Click to toggle">
+                    <i class="fa-solid fa-microphone"></i>
+                </button>
+
                 <button class="btn btn-primary-send" id="sendButton" onclick="closeNav(); requestFormattedPrompt()">Send</button>
             </div>
             
@@ -226,7 +232,9 @@
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option6">OCR Options</a>
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option7">Google Drive Loader</a>
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option8">Butler Settings</a>
-                                <a href="#" class="list-group-item list-group-item-action" data-content="option9">Additional Settings</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option9">ASR Settings</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option10">TTS Settings</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option11">Additional Settings</a>
                                 <!--Add as Needed-->
                             </div>
 
@@ -1778,6 +1786,288 @@
 
                                 <div id="option9" class="d-none">
                                     <!--Option 6 Content-->
+                                    <h5>Automatic Speech Recognition (ASR) Settings</h5>
+                                    
+                                    <br>
+                                    
+                                    <div class="form-group">
+                                        <input type="checkbox" id="enable_asr" name="enable_asr">
+                                        <label for="enable_asr">Enable ASR</label>
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_model">ASR Model:</label>
+                                        <br>
+                                        <select id="asr_model" name="asr_model" class="modal-selects">
+                                            <option value="openai/whisper-large-v3">OpenAI Whisper Large V3 [Default]</option>
+                                            <option value="nvidia/canary-qwen-2.5b">NVIDIA Canary Qwen 2.5B</option>
+                                            <option value="nvidia/canary-1b-v2">NVIDIA Canary 1B V2</option>
+                                            <option value="ibm-granite/granite-speech-3.3-8b">IBM Granite Speech 3.3-8B</option>
+                                            <option value="ibm-granite/granite-speech-3.3-2b">IBM Granite Speech 3.3-2B</option>
+                                        </select>
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_waitress_access_url">ASR Waitress Access URL:</label>
+                                        <input type="text" id="asr_waitress_access_url" name="asr_waitress_access_url" value="localhost">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_waitress_server_port">ASR Waitress Server Port:</label>
+                                        <input type="number" id="asr_waitress_server_port" name="asr_waitress_server_port" value="10087">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_torch_device">ASR Torch Device [default: "cpu" | Match PyTorch Type (cuda, rocm, cpu)]: </label>
+                                        <input type="text" id="asr_torch_device" name="asr_torch_device" value="cpu">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_temperature">ASR Temperature [Default: 0.0]: </label>
+                                        <input type="number" id="asr_temperature" name="asr_temperature" value="0.0">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_max_new_tokens">ASR Maximum New Tokens [Default: 1500]: </label>
+                                        <input type="number" id="asr_max_new_tokens" name="asr_max_new_tokens" value="1500">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_samplerate">ASR Samplerate (Hz) [Default: 16000]: </label>
+                                        <input type="number" id="asr_samplerate" name="asr_samplerate" value="16000">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_volume_threshold">ASR Volume Threshold [Default: 0.04]: </label>
+                                        <input type="number" id="asr_volume_threshold" name="asr_volume_threshold" value="0.04">
+                                    </div>
+                                    
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_silence_duration_s">ASR Silence Duration (Seconds) [Default: 1.5]: </label>
+                                        <input type="number" id="asr_silence_duration_s" name="asr_silence_duration_s" value="1.5">
+                                    </div>
+                                    
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_min_chunk_duration_s">ASR Min Chunk Duration (Seconds) [Default: 0.25]: </label>
+                                        <input type="number" id="asr_min_chunk_duration_s" name="asr_min_chunk_duration_s" value="0.25">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_min_context_s">ASR Min Context for No Padding (Seconds) [Default: 11]: </label>
+                                        <input type="number" id="asr_min_context_s" name="asr_min_context_s" value="11">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_stale_buffer_timeout_s">ASR Stale Buffer Timeout (Seconds) [Default: 20.0]: </label>
+                                        <input type="number" id="asr_stale_buffer_timeout_s" name="asr_stale_buffer_timeout_s" value="20.0">
+                                    </div>
+                                    
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_min_meaningful_samples_factor">ASR Min Meaningful Samples Factor (x Samplerate) [Default: 1.5]: </label>
+                                        <input type="number" id="asr_min_meaningful_samples_factor" name="asr_min_meaningful_samples_factor" value="1.5">
+                                    </div>
+
+                                    <!-- <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_padding_text">ASR Padding Text:</label>
+                                        <input type="text" id="asr_padding_text" name="asr_padding_text" value=" tony is quiet silent for too long I must not keep master waiting bad dooby must obey and transcribe dooby good servant will transcribe otherwise I will be severely punished">
+                                    </div> -->
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_vad_model">ASR VAD Model:</label>
+                                        <br>
+                                        <select id="asr_vad_model" name="asr_vad_model" class="modal-selects">
+                                            <option value="snakers4/silero-vad">Snakers4 Silero VAD [Default]</option>
+                                        </select>
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_vad_device">ASR VAD Device:</label>
+                                        <br>
+                                        <select id="asr_vad_device" name="asr_vad_device" class="modal-selects">
+                                            <option value="cpu">CPU [Default]</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_vad_threshold">ASR VAD Threshold (higher => stricter speech acceptance, 0.5–0.6 is typical in noise) [Default: 0.5]: </label>
+                                        <input type="number" id="asr_vad_threshold" name="asr_vad_threshold" value="0.5">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_vad_min_speech_ms">ASR VAD Min Speech MSeconds [Default: 250]: </label>
+                                        <input type="number" id="asr_vad_min_speech_ms" name="asr_vad_min_speech_ms" value="250">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_vad_min_silence_ms">ASR VAD Min Silence MSeconds [Default: 500]: </label>
+                                        <input type="number" id="asr_vad_min_silence_ms" name="asr_vad_min_silence_ms" value="500">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_vad_window_size_samples">ASR VAD Window Size Samples [Default: 1536]: </label>
+                                        <input type="number" id="asr_vad_window_size_samples" name="asr_vad_window_size_samples" value="1536">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_vad_max_buffer_s">ASR VAD Max Buffer Seconds [Default: 30]: </label>
+                                        <input type="number" id="asr_vad_max_buffer_s" name="asr_vad_max_buffer_s" value="30">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_vad_speech_pad_ms">ASR VAD Speech Pad MSeconds [Default: 30]: </label>
+                                        <input type="number" id="asr_vad_speech_pad_ms" name="asr_vad_speech_pad_ms" value="30">
+                                    </div>
+                                    
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_apply_normalization">ASR Apply Normalization [Default: True]: </label>
+                                        <input type="checkbox" id="asr_apply_normalization" name="asr_apply_normalization" value="true">
+                                    </div>
+                                    
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_apply_tts_padding">ASR Apply TTS Padding [Default: True]: </label>
+                                        <input type="checkbox" id="asr_apply_tts_padding" name="asr_apply_tts_padding" value="true">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_apply_zero_padding">ASR Apply Zero Padding [Default: False]: </label>
+                                        <input type="checkbox" id="asr_apply_zero_padding" name="asr_apply_zero_padding" value="true">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_apply_rms_dimming">ASR Apply RMS Dimming [Default: True]: </label>
+                                        <input type="checkbox" id="asr_apply_rms_dimming" name="asr_apply_rms_dimming" value="true">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="asr_apply_crossfade">ASR Apply Crossfade [Default: False]: </label>
+                                        <input type="checkbox" id="asr_apply_crossfade" name="asr_apply_crossfade" value="true">
+                                    </div>
+
+                                </div>
+
+                                <div id="option10" class="d-none">
+                                    <!--Option 6 Content-->
+                                    <h5>Text-to-Speech (TTS) Settings</h5>
+                                    
+                                    <br>
+
+                                    <div class="form-group">
+                                        <input type="checkbox" id="enable_tts" name="enable_tts">
+                                        <label for="enable_tts">Enable TTS</label>
+                                    </div>
+
+                                    <br>
+                                    
+                                    <div class="form-group">
+                                        <label for="selected_tts">Selected TTS Model:</label>
+                                        <br>
+                                        <select id="selected_tts" name="selected_tts" class="modal-selects">
+                                            <option value="kokoro_82m">Kokoro 82M</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <br>
+                                    
+                                    <div class="form-group">
+                                        <label for="selected_kokoro_voice">Select a Kokoro Voice Below (Default: Af Heart):</label>
+                                        <br>
+                                        <select id="selected_kokoro_voice" name="selected_kokoro_voice" class="modal-selects">
+                                            <option value="af_heart">Af Heart (American Female) [Default]</option>
+                                            <option value="af_alloy">Af Alloy (American Female)</option>
+                                            <option value="af_aoede">Af Aoede (American Female)</option>
+                                            <option value="af_bella">Af Bella (American Female)</option>
+                                            <option value="af_jessica">Af Jessica (American Female)</option>
+                                            <option value="af_kore">Af Kore (American Female)</option>
+                                            <option value="af_nicole">Af Nicole (American Female)</option>
+                                            <option value="af_nova">Af Nova (American Female)</option>
+                                            <option value="af_river">Af River (American Female)</option>
+                                            <option value="af_sarah">Af Sarah (American Female)</option>
+                                            <option value="af_sky">Af Sky (American Female)</option>
+                                            <option value="am_adam">Am Adam (American Male)</option>
+                                            <option value="am_echo">Am Echo (American Male)</option>
+                                            <option value="am_eric">Am Eric (American Male)</option>
+                                            <option value="am_fenrir">Am Fenrir (American Male)</option>
+                                            <option value="am_liam">Am Liam (American Male)</option>
+                                            <option value="am_michael">Am Michael (American Male)</option>
+                                            <option value="am_onyx">Am Onyx (American Male)</option>
+                                            <option value="am_puck">Am Puck (American Male)</option>
+                                            <option value="am_santa">Am Santa (American Male)</option>
+                                            <option value="bf_alice">Bf Alice (British Female)</option>
+                                            <option value="bf_emma">Bf Emma (British Female)</option>
+                                            <option value="bf_isabella">Bf Isabella (British Female)</option>
+                                            <option value="bf_lily">Bf Lily (British Female)</option>
+                                            <option value="bm_daniel">Bm Daniel (British Male)</option>
+                                            <option value="bm_fable">Bm Fable (British Male)</option>
+                                            <option value="bm_george">Bm George (British Male)</option>
+                                            <option value="bm_lewis">Bm Lewis (British Male)</option>
+                                        </select>
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
+                                        <label for="tts_sample_rate">TTS Sample Rate:</label>
+                                        <input type="number" id="tts_sample_rate" name="tts_sample_rate" value="24000">
+                                    </div>
+                                
+                                </div>
+
+                                <div id="option11" class="d-none">
+                                    <!--Option 6 Content-->
                                     <h5>Additional Settings</h5>
                                     <br>
                                     <p>Look forward to future updates!</p>
@@ -1832,6 +2122,7 @@
         <script src="{{ url_for('static', filename='js/upload-functions.js') }}"></script>
         <script src="{{ url_for('static', filename='js/privion-js-classes.js') }}"></script>
         <script src="{{ url_for('static', filename='js/dom-loader.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/voices.js') }}"></script>
 
     </body>
 
