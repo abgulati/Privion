@@ -20,12 +20,32 @@ function setHfwUrl(host, port) {
     document.getElementById('chatState').setAttribute('data-hf-waitress-url', `http://${host}:${port}`);
 }
 
+function setHfwAsrUrl(host, port) {
+    document.getElementById('chatState').setAttribute('data-hf-asr-url', `http://${host}:${port}`);
+}
+
 function setExl2(exl2) {
     document.getElementById('chatState').setAttribute('data-exl2', exl2);
 }
 
 function setVision(vision) {
     document.getElementById('chatState').setAttribute('data-vision', vision);
+}
+
+function setAsr(asr) {
+    document.getElementById('chatState').setAttribute('data-asr', asr);
+}
+
+function setTts(tts) {
+    document.getElementById('chatState').setAttribute('data-tts', tts);
+}
+
+function getTts() {
+    return document.getElementById('chatState').getAttribute('data-tts');
+}
+
+function getAsr() {
+    return document.getElementById('chatState').getAttribute('data-asr');
 }
 
 function getVision() {
@@ -54,6 +74,10 @@ function getOldLlmModel() {
 
 function getHfwUrl() {
     return document.getElementById('chatState').getAttribute('data-hf-waitress-url');
+}
+
+function getHfwAsrUrl() {
+    return document.getElementById('chatState').getAttribute('data-hf-asr-url');
 }
 
 function getUniqueId() {
