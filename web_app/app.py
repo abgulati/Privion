@@ -5033,7 +5033,7 @@ def asr_server_starter():  # Launch HF-Waitress instance for ASR
     command = (
         f"cd {hf_waitress_asr_server_path} "
         f"{'&&' if platform.system() == 'Windows' else ';'} "
-        f"{'python' if platform.system() == 'Windows' else 'python3'} hf_waitress.py "
+        f"{'python' if platform.system() == 'Windows' else 'python3'} hf_waitress_asgi.py "
         f"--port {str(config_data['asr_waitress_server_port'])} "
         f"--model_id {str(config_data['asr_model'])} "
         f"--torch_device_map {str(config_data['asr_torch_device'])} "
