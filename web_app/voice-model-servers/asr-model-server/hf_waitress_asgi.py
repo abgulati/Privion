@@ -3191,7 +3191,7 @@ class ASRWebSocket(WebSocketEndpoint):
     async def on_connect(self, websocket):
         await websocket.accept()
 
-        # 1) Readt defaults from hf_config.json
+        # 1) Read defaults from hf_config.json
         self.asr_cfg = read_asr_config()
 
         # 2) Merge query-params while casting to the correct type, overriding defaults where provided
