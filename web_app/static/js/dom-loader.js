@@ -183,6 +183,7 @@ function loadCoreLarsConfig() {
         'llama_cpp_access_url',
         'llama_cpp_server_port',
         'enable_asr',
+        'asr_wake_word',
         'asr_model',
         'asr_torch_device',
         'asr_temperature',
@@ -1690,6 +1691,7 @@ function initializeAsrTabDropdowns(values) {
 
 
 function initializeAsrTabFields(values) {
+    document.getElementById('asr_wake_word').value = values.asr_wake_word;
     document.getElementById('asr_samplerate').value = values.asr_samplerate;
     document.getElementById('asr_temperature').value = values.asr_temperature;
     document.getElementById('asr_max_new_tokens').value = values.asr_max_new_tokens;

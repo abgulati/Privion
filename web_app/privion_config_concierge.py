@@ -236,6 +236,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                 'hf_waitress_server_timeout_seconds':3,
                 'hf_waitress_server_retry_attempts':200,
                 'enable_asr':False,
+                'asr_wake_word':'simon',
                 'asr_model':'openai/whisper-large-v3',
                 'asr_torch_device':'cpu',
                 'asr_temperature':0.0,

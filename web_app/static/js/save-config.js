@@ -303,6 +303,7 @@ function getButlerConfig() {
 function getAsrConfig() {
     config = {
         'enable_asr': document.getElementById('enable_asr').checked,
+        'asr_wake_word': document.getElementById('asr_wake_word').value,
         'asr_model': document.getElementById('asr_model').value,
         'asr_torch_device': document.getElementById('asr_torch_device').value,
         'asr_waitress_access_url': document.getElementById('asr_waitress_access_url').value,
