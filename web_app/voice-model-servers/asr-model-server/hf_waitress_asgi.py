@@ -4767,7 +4767,7 @@ if __name__ == '__main__':
     _ = parse_arguments()
     initialize_model()
     host, port = get_host_and_port()
-    uvicorn.run(build_asgi_app(), host=host, port=port, workers=1, ws_ping_interval=5, ws_ping_timeout=300) # browsers will auto-reply to pings with a pong so the connection will stay alive as long as the client is present!
+    uvicorn.run(build_asgi_app(), host=host, port=port, workers=1, ws_ping_interval=5, ws_ping_timeout=300000) # browsers will auto-reply to pings with a pong so the connection will stay alive as long as the client is present!
 
 '''
 # Technical note: “WSGI → ASGI wrapping” for streaming ASR
