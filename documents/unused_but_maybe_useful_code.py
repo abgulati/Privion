@@ -5742,3 +5742,297 @@ if __name__ == "__main__":
         print("\nStopping transcription.")
         stop_recording()
         recording_thread.join()
+
+
+
+########WebSocket Stuff:########
+
+class ASRWebSocket(WebSocketEndpoint):
+    encoding = "bytes"  # receive binary PCM16 frames
+
+    async def on_connect(self, websocket):
+        await websocket.accept()
+        self.source_sr = 48000
+        self.TARGET_SR = 16000
+        self.audio_buffer = np.array([], dtype=np.float32)
+        self.audio_to_process = np.array([], dtype=np.float32)
+        self.last_speech_time = time.time()
+        self.global_cursor = 0
+        self.last_append_end_abs = 0
+
+        # VAD params (reuse your tuned values)
+        self.VAD_THRESHOLD = 0.5
+        self.VAD_MIN_SPEECH_MS = 250
+        self.VAD_MIN_SILENCE_MS = 500
+        self.VAD_WINDOW_SIZE_SAMPLES = 1536
+        self.VAD_SPEECH_PAD_MS = 30
+        self.SILENCE_DURATION_S = 1.5
+        self.MIN_CHUNK_DURATION_S = 0.25
+        self.MAX_BUFFER_S = 30
+
+        # Lazy-init ASR (uses Whisper V3 like your live script)
+        self.DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.TORCH_DTYPE = torch.float16 if torch.cuda.is_available() else torch.float32
+        self.MODEL_ID = "openai/whisper-large-v3"
+
+        # Load once per connection (you can hoist to globals if preferred)
+        self.MODEL = AutoModelForSpeechSeq2Seq.from_pretrained(
+            self.MODEL_ID, torch_dtype=self.TORCH_DTYPE, low_cpu_mem_usage=True, use_safetensors=True
+        ).to(self.DEVICE)
+        self.PROCESSOR = AutoProcessor.from_pretrained(self.MODEL_ID)
+        self.PIPE = pipeline(
+            "automatic-speech-recognition",
+            model=self.MODEL,
+            tokenizer=self.PROCESSOR.tokenizer,
+            feature_extractor=self.PROCESSOR.feature_extractor,
+            torch_dtype=self.TORCH_DTYPE,
+            device=self.DEVICE,
+        )
+
+        # Silero VAD on CPU
+        self.silero_vad, silero_utils = torch.hub.load('snakers4/silero-vad', 'silero_vad', trust_repo=True)
+        (self.get_speech_timestamps, _, _, _, _) = silero_utils
+        self.silero_vad.to("cpu").eval()
+
+    async def on_receive(self, websocket, data):
+        # Optional JSON config message first: {"type":"config","sampleRate":48000}
+        if isinstance(data, str):
+            try:
+                cfg = json.loads(data)
+                if cfg.get("type") == "config" and "sampleRate" in cfg:
+                    self.source_sr = int(cfg["sampleRate"])
+            except Exception:
+                pass
+            return
+
+        # Binary PCM16 frame -> float32 [-1,1]
+        chunk = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+        chunk = np.clip(chunk / 32768.0, -1.0, 1.0)
+
+        # Resample to 16k if needed
+        if self.source_sr != self.TARGET_SR:
+            chunk = librosa.resample(chunk, orig_sr=self.source_sr, target_sr=self.TARGET_SR)
+
+        # Accumulate
+        self.audio_buffer = np.concatenate((self.audio_buffer, chunk))
+
+        # VAD when we have enough audio (~0.5s)
+        if len(self.audio_buffer) >= int(0.5 * self.TARGET_SR):
+            with torch.no_grad():
+                wav_t = torch.from_numpy(self.audio_buffer.copy())
+                segments = self.get_speech_timestamps(
+                    wav_t, self.silero_vad,
+                    sampling_rate=self.TARGET_SR,
+                    threshold=self.VAD_THRESHOLD,
+                    min_speech_duration_ms=self.VAD_MIN_SPEECH_MS,
+                    min_silence_duration_ms=self.VAD_MIN_SILENCE_MS,
+                    window_size_samples=self.VAD_WINDOW_SIZE_SAMPLES,
+                    speech_pad_ms=self.VAD_SPEECH_PAD_MS,
+                )
+
+            if segments:
+                self.last_speech_time = time.time()
+
+            last_end = 0
+            for seg in segments:
+                start, end = int(seg["start"]), int(seg["end"])
+                abs_start = self.global_cursor + start
+                abs_end = self.global_cursor + end
+                append_start_abs = max(abs_start, self.last_append_end_abs)
+                if append_start_abs < abs_end:
+                    rel_start = int(append_start_abs - self.global_cursor)
+                    rel_end = int(abs_end - self.global_cursor)
+                    new_chunk = self.audio_buffer[rel_start:rel_end].copy()
+                    self.audio_to_process = new_chunk if self.audio_to_process.size == 0 else np.concatenate((self.audio_to_process, new_chunk))
+                    self.last_append_end_abs = abs_end
+                if end > last_end:
+                    last_end = end
+
+            # Trim rolling buffer
+            self.global_cursor += last_end
+            if len(self.audio_buffer) > self.MAX_BUFFER_S * self.TARGET_SR:
+                self.audio_buffer = np.array([], dtype=np.float32)
+            else:
+                self.audio_buffer = self.audio_buffer[last_end:].copy()
+
+            # If silence gap and we have enough speech, run ASR
+            if self.audio_to_process.size >= self.MIN_CHUNK_DURATION_S * self.TARGET_SR and (time.time() - self.last_speech_time) > self.SILENCE_DURATION_S:
+                text = await self._transcribe_async(self.audio_to_process)
+                if text:
+                    await websocket.send_text(json.dumps({"type": "transcript", "text": text}))
+                self.audio_to_process = np.array([], dtype=np.float32)
+                self.last_append_end_abs = self.global_cursor
+
+    async def _transcribe_async(self, audio_f32: np.ndarray) -> str:
+        loop = asyncio.get_running_loop()
+        def do_asr():
+            out = self.PIPE(audio_f32, return_timestamps=True, generate_kwargs={
+                "task": "transcribe", "language": "en", "temperature": 0.0
+            })
+            return (out.get("text") or "").strip() if out else ""
+        return await loop.run_in_executor(None, do_asr)
+
+
+
+from starlette.routing import WebSocketRoute
+from starlette.applications import Starlette
+from asgiref.wsgi import WsgiToAsgi
+import json, asyncio, time, numpy as np, torch, librosa
+
+# keep: app = Flask(__name__), CORS(app), read_asr_config(), asr_transcribe(...) etc.
+
+async def ws_asr(websocket):
+    await websocket.accept()
+
+    # 1) Load defaults from hf_config.json
+    asr_cfg = read_asr_config()
+
+    # 2) Merge query-param overrides (browser-friendly)
+    qp = websocket.query_params
+    def set_if(name, cast=float):
+        if name in qp:
+            try: asr_cfg[name] = cast(qp[name])
+            except: pass
+
+    set_if('asr_temperature', float)
+    set_if('asr_max_new_tokens', int)
+    set_if('asr_samplerate', int)
+    set_if('asr_vad_threshold', float)
+    set_if('asr_vad_min_speech_ms', float)
+    set_if('asr_vad_min_silence_ms', float)
+    set_if('asr_vad_window_size_samples', float)
+    set_if('asr_vad_max_buffer_s', float)
+    set_if('asr_vad_speech_pad_ms', float)
+    # booleans as strings: 'true'/'false'
+    for bkey in ['asr_apply_normalization','asr_apply_tts_padding','asr_apply_zero_padding','asr_apply_rms_dimming','asr_apply_crossfade']:
+        if bkey in qp: asr_cfg[bkey] = qp[bkey].lower() == 'true'
+
+    # 3) Per-connection state
+    source_sr = 48000
+    TARGET_SR = 16000
+    audio_buffer = np.array([], dtype=np.float32)
+    audio_to_process = np.array([], dtype=np.float32)
+    last_speech_time = time.time()
+    global_cursor = 0
+    last_append_end_abs = 0
+
+    # 4) Init model + VAD (reuse your existing loaders if you prefer)
+    DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
+    TORCH_DTYPE = torch.float16 if torch.cuda.is_available() else torch.float32
+    from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+    MODEL_ID = asr_cfg['model_id'] if 'openai/whisper' in asr_cfg['model_id'] else "openai/whisper-large-v3"
+    MODEL = AutoModelForSpeechSeq2Seq.from_pretrained(MODEL_ID, torch_dtype=TORCH_DTYPE, low_cpu_mem_usage=True, use_safetensors=True).to(DEVICE)
+    PROCESSOR = AutoProcessor.from_pretrained(MODEL_ID)
+    PIPE = pipeline("automatic-speech-recognition", model=MODEL, tokenizer=PROCESSOR.tokenizer, feature_extractor=PROCESSOR.feature_extractor, torch_dtype=TORCH_DTYPE, device=DEVICE)
+
+    silero_vad, silero_utils = torch.hub.load('snakers4/silero-vad', 'silero_vad', trust_repo=True)
+    (get_speech_timestamps, _, _, _, _) = silero_utils
+    silero_vad.to("cpu").eval()
+
+    async def transcribe_async(x: np.ndarray) -> str:
+        loop = asyncio.get_running_loop()
+        def do_asr():
+            out = PIPE(x, return_timestamps=True, generate_kwargs={
+                "task": "transcribe",
+                "language": "en",
+                "temperature": float(asr_cfg['asr_temperature']),
+            })
+            return (out.get("text") or "").strip() if out else ""
+        return await loop.run_in_executor(None, do_asr)
+
+    try:
+        while True:
+            event = await websocket.receive()  # dict: {'type', 'text'|'bytes'|'close'...}
+
+            if 'text' in event and event['text'] is not None:
+                # Expect first config message: {"type":"config","sampleRate":48000, "...overrides"}
+                try:
+                    cfg = json.loads(event['text'])
+                    if cfg.get('type') == 'config':
+                        if 'sampleRate' in cfg: source_sr = int(cfg['sampleRate'])
+                        # Same keys as your HTTP headers API:
+                        for k in ['asr_temperature','asr_max_new_tokens','asr_samplerate','asr_vad_threshold',
+                                  'asr_vad_min_speech_ms','asr_vad_min_silence_ms','asr_vad_window_size_samples',
+                                  'asr_vad_max_buffer_s','asr_vad_speech_pad_ms',
+                                  'asr_apply_normalization','asr_apply_tts_padding','asr_apply_zero_padding',
+                                  'asr_apply_rms_dimming','asr_apply_crossfade']:
+                            if k in cfg: asr_cfg[k] = cfg[k]
+                except Exception:
+                    pass
+                continue
+
+            if 'bytes' in event and event['bytes'] is not None:
+                # Binary PCM16 frame
+                pcm = np.frombuffer(event['bytes'], dtype=np.int16).astype(np.float32)
+                pcm = np.clip(pcm / 32768.0, -1.0, 1.0)
+                if source_sr != TARGET_SR:
+                    pcm = librosa.resample(pcm, orig_sr=source_sr, target_sr=TARGET_SR)
+                audio_buffer = np.concatenate((audio_buffer, pcm))
+
+                # VAD when >= ~0.5s
+                if len(audio_buffer) >= int(0.5 * TARGET_SR):
+                    with torch.no_grad():
+                        wav_t = torch.from_numpy(audio_buffer.copy())
+                        segments = get_speech_timestamps(
+                            wav_t, silero_vad,
+                            sampling_rate=TARGET_SR,
+                            threshold=float(asr_cfg['asr_vad_threshold']),
+                            min_speech_duration_ms=float(asr_cfg['asr_vad_min_speech_ms']),
+                            min_silence_duration_ms=float(asr_cfg['asr_vad_min_silence_ms']),
+                            window_size_samples=int(float(asr_cfg['asr_vad_window_size_samples'])),
+                            speech_pad_ms=float(asr_cfg['asr_vad_speech_pad_ms']),
+                        )
+
+                    if segments:
+                        last_speech_time = time.time()
+
+                    last_end = 0
+                    for seg in segments:
+                        start, end = int(seg["start"]), int(seg["end"])
+                        abs_start = global_cursor + start
+                        abs_end = global_cursor + end
+                        append_start_abs = max(abs_start, last_append_end_abs)
+                        if append_start_abs < abs_end:
+                            rel_start = int(append_start_abs - global_cursor)
+                            rel_end = int(abs_end - global_cursor)
+                            new_chunk = audio_buffer[rel_start:rel_end].copy()
+                            audio_to_process = new_chunk if audio_to_process.size == 0 else np.concatenate((audio_to_process, new_chunk))
+                            last_append_end_abs = abs_end
+                        if end > last_end:
+                            last_end = end
+
+                    # Trim buffer per config
+                    global_cursor += last_end
+                    max_buf_s = float(asr_cfg['asr_vad_max_buffer_s'])
+                    if len(audio_buffer) > max_buf_s * TARGET_SR:
+                        audio_buffer = np.array([], dtype=np.float32)
+                    else:
+                        audio_buffer = audio_buffer[last_end:].copy()
+
+                    # Silence gap => transcribe
+                    if audio_to_process.size >= float(asr_cfg['asr_min_chunk_duration_s']) * TARGET_SR and (time.time() - last_speech_time) > float(asr_cfg['asr_silence_duration_s']):
+                        # Optional normalization / padding flags from config (mirroring your HTTP path)
+                        if asr_cfg['asr_apply_normalization']:
+                            peak = np.max(np.abs(audio_to_process)) if audio_to_process.size else 0.0
+                            if peak > 0: audio_to_process = audio_to_process / peak
+
+                        text = await transcribe_async(audio_to_process)
+                        if text:
+                            await websocket.send_text(json.dumps({"type": "transcript", "text": text}))
+                        audio_to_process = np.array([], dtype=np.float32)
+                        last_append_end_abs = global_cursor
+
+            if event.get('type') == 'websocket.disconnect':
+                break
+
+    finally:
+        try: await websocket.close()
+        except: pass
+
+# Build ASGI app: wrap Flask + add WS
+def build_asgi_app():
+    mounted = WsgiToAsgi(app)
+    return Starlette(routes=[
+        Mount("/", app=mounted),
+        WebSocketRoute("/ws/asr", endpoint=ws_asr),
+    ])
