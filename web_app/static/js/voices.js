@@ -8,6 +8,315 @@ let recording = false;
 let chunks = [];
 let inputSampleRate = 48000; // default; will update from AudioContext
 
+let ws = null;
+let streamBuffer = [];  // Float32 chunks awaiting framing
+let streamBytesPerFrame = 0;
+let streamSampleRate = 48000;
+let streaming = false;
+
+function float32ToPCM16(float32) {
+    const out = new Int16Array(float32.length);
+    for (let i = 0; i < float32.length; i++) {
+        let s = Math.max(-1, Math.min(1, float32[i]));
+        out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return out;
+}
+
+// Accumulate chunks to fixed 20ms frames at input SR (typically 48k)
+function frameAndSendIfReady() {
+    const needed = streamBytesPerFrame; // samples
+    let total = 0;
+    for (const b of streamBuffer) total += b.length;
+    if (total < needed) return;
+
+    // Collect exactly 'needed' samples
+    const frame = new Float32Array(needed);
+    let filled = 0;
+    while (filled < needed) {
+        const head = streamBuffer[0];
+        const remaining = needed - filled;
+        if (head.length <= remaining) {
+            frame.set(head, filled);
+            filled += head.length;
+            streamBuffer.shift();
+        } else {
+            frame.set(head.subarray(0, remaining), filled);
+            streamBuffer[0] = head.subarray(remaining);
+            filled = needed;
+        }
+    }
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        const pcm16 = float32ToPCM16(frame);
+        ws.send(pcm16.buffer);
+    }
+}
+
+
+let rollingBuffer = [];
+
+let wakeSession = {
+    armed: false,
+    assembled: '',
+    debounce: null
+};
+
+let llmBusy = false;
+const pendingQueries = [];
+
+async function drainQueue() {
+    if (llmBusy) return;
+    const next = pendingQueries.shift();
+    if (!next) return;
+
+    llmBusy = true;
+    try {
+        const inputEl = document.getElementById('user-input');
+        if (inputEl) inputEl.value = next;
+        // Uses the existing chat flow
+        await requestFormattedPrompt();
+    } catch (e) {
+        console.error('LLM dispatch failed:', e);
+    } finally {
+        llmBusy = false;
+        if (pendingQueries.length) await drainQueue();
+    }
+}
+
+async function enqueueQuery(q) {
+    pendingQueries.push(q);
+    if (!llmBusy) await drainQueue();
+}
+
+function finalizeUtterance() {
+    wakeSession.debounce = null;
+    const finalText = wakeSession.assembled.trim();
+    wakeSession.assembled = '';
+    wakeSession.armed = false;
+    if (finalText) enqueueQuery(finalText);
+}
+
+function clearWakeDebounce() {
+    if (wakeSession.debounce) {
+        clearTimeout(wakeSession.debounce);     // The clearTimeout() function is used to clear a timeout previously set with setTimeout().
+        wakeSession.debounce = null;
+    }
+}
+
+function resetWakeDebounce() {
+    clearWakeDebounce();
+    // Silence window that ends the utterance (tune 500-1200ms as needed)
+    wakeSession.debounce = setTimeout(finalizeUtterance, 700);
+}
+
+function cancelIfStop(text) {
+    const low = String(text || '').toLowerCase();
+    if (low.includes('cancel') || low.includes('never mind') || low.includes('stop')) {
+        clearWakeDebounce();
+        wakeSession.armed = false;
+        wakeSession.assembled = '';
+        return true;
+    }
+    return false;
+}
+
+function stripWakeWord(text) {
+    let wakeWord = document.getElementById('asr_wake_word').value;
+    console.log('stripWakeWord received text:', text);
+    const t = String(text || '');
+    const idx = t.toLowerCase().indexOf(wakeWord);
+    if (idx === -1) return t.trim();    // idx === -1 means the wake word is not found in the text
+    console.log('stripWakeWord found wakeWord at index:', idx);
+    // Remove the first occurrence of the wake word and trim punctuation/space around it
+    const before = t.slice(0, idx).trim();    // before is the text before the wake word
+    const after = t.slice(idx + wakeWord.length).trim();    // after is the text after the wake word
+    return (before ? before + ' ' : '') + after;    // return the text before the wake word and the text after the wake word
+}
+
+async function determineLlmUse(transcription) {
+    let wakeWord = document.getElementById('asr_wake_word').value;
+    const text = String(transcription || '').trim();
+    if (!text) return;
+
+    // Maintain last 100 raw fragments for debugging/context
+    rollingBuffer.push(text);
+    if (rollingBuffer.length > 100) rollingBuffer.shift();  // The shift() method removes the first element of the array and returns it.
+
+    // Optional stop/cancel handling (works both pre and post wake)
+    if (cancelIfStop(text)) return;
+
+    if (!wakeSession.armed) {
+        // Wait for wake word
+        if (text.toLowerCase().includes(wakeWord)) {
+            // Use raw text as is, no need to strip wake word for now
+            const cleaned = stripWakeWord(text);
+            console.log('cleaned:', cleaned);
+            wakeSession.armed = true;
+            wakeSession.assembled = cleaned;
+            resetWakeDebounce();
+        }
+        return;
+    }
+
+    // Already armed: accumulate and debounce to detect end of utterance
+    wakeSession.assembled = (wakeSession.assembled ? (wakeSession.assembled + ' ') : '') + text;
+    resetWakeDebounce();
+}
+
+
+async function startStreamingASR() {
+    if (streaming) return;
+    streaming = true;
+
+    // Start mic capture (reusing your existing startRecording graph)
+    await startRecording();
+
+    // Open WebSocket to the sidecar ASGI server
+    // Example: ws://localhost:9070/ws/asr (adjust host/port) 'ws://localhost:10087/ws/asr'
+    const asrWsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + getHfwAsrAsgiHost() + ':' + getHfwAsrAsgiPort() + '/ws/asr';
+    console.log('asrWsUrl:', asrWsUrl);
+
+    // Create a URLSearchParams object to build the query string
+    const queryParams = new URLSearchParams();
+    queryParams.append('source_samplerate', inputSampleRate || 48000);
+
+    // Define the element IDs for the parameters
+    const paramIds = [
+        'asr_temperature',
+        'asr_max_new_tokens',
+        'asr_samplerate',
+        'asr_volume_threshold',
+        'asr_silence_duration_s',
+        'asr_min_chunk_duration_s',
+        'asr_min_context_s',
+        'asr_stale_buffer_timeout_s',
+        'asr_min_meaningful_samples_factor',
+        'asr_vad_threshold',
+        'asr_vad_min_speech_ms',
+        'asr_vad_min_silence_ms',
+        'asr_vad_window_size_samples',
+        'asr_vad_max_buffer_s',
+        'asr_vad_speech_pad_ms'
+    ];
+
+    // Add checkbox element IDs
+    const checkboxIds = [
+        'asr_apply_normalization',
+        'asr_apply_tts_padding',
+        'asr_apply_zero_padding',
+        'asr_apply_rms_dimming',
+        'asr_apply_crossfade'
+    ];
+
+    // Append parameters from input fields
+    paramIds.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            queryParams.append(id, element.value);
+        }
+    });
+
+    // Append parameters from checkboxes
+    checkboxIds.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            queryParams.append(id, element.checked);
+        }
+    });
+
+    // Construct the final WebSocket URL with query parameters
+    const asrWsUrlWithQueryParams = asrWsUrl + '?' + queryParams.toString();
+    console.log('asrWsUrlWithQueryParams:', asrWsUrlWithQueryParams);
+
+    ws = new WebSocket(asrWsUrlWithQueryParams);
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+        // Prepare 20ms frames at source SR
+        streamSampleRate = inputSampleRate || 48000;
+        streamBytesPerFrame = Math.round(0.02 * streamSampleRate); // 20ms
+    };
+
+    ws.onmessage = (evt) => {
+        try {
+            const msg = JSON.parse(typeof evt.data === 'string' ? evt.data : '');
+            if (msg.type === 'transcript' && msg.text) {
+                determineLlmUse(msg.text);
+            }
+        } catch {
+            // ignore binary or unexpected messages
+        }
+    };
+
+    ws.onclose = () => { ws = null; };
+    ws.onerror = () => { /* optional logging */ };
+
+    // Hook worklet delivery into the streaming buffer
+    // We reuse your existing workletNode/processorNode paths:
+    const origWorkletHandler = workletNode?.port.onmessage;
+    if (workletNode) {
+        workletNode.port.onmessage = (e) => {
+            if (!streaming) return;
+            const data = e.data;
+            let chunk = null;
+            if (data instanceof ArrayBuffer) chunk = new Float32Array(data);
+            else if (data && data.buffer) chunk = new Float32Array(data.buffer);
+            if (chunk) {
+                streamBuffer.push(chunk);
+                frameAndSendIfReady();
+            }
+            if (origWorkletHandler && origWorkletHandler !== workletNode.port.onmessage) {
+                origWorkletHandler(e);
+            }
+        };
+    } else if (processorNode) {
+        const origProc = processorNode.onaudioprocess;
+        processorNode.onaudioprocess = (e2) => {
+            if (streaming) {
+                const input = e2.inputBuffer.getChannelData(0);
+                streamBuffer.push(new Float32Array(input));
+                frameAndSendIfReady();
+            }
+            if (origProc && origProc !== processorNode.onaudioprocess) {
+                origProc(e2);
+            }
+        };
+    }
+}
+
+
+function stopStreamingASR() {
+    if (!streaming) return;
+    streaming = false;
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.close(); } catch (_) {}
+    }
+    ws = null;
+    streamBuffer = [];
+
+    // Stop mic capture graph (reuses your stopRecording)
+    stopRecording();
+}
+
+
+// Optional UI wiring
+async function toggleStreaming(btnEl) {
+    if (!streaming) {
+        await startStreamingASR();
+        btnEl.querySelector('i').classList.remove('fa-microphone-slash');
+        btnEl.querySelector('i').classList.add('fa-microphone'); 
+    } else {
+        stopStreamingASR();
+        btnEl.querySelector('i').classList.remove('fa-microphone');
+        btnEl.querySelector('i').classList.add('fa-microphone-slash');
+    }
+}
+
+window.__voice_streaming__ = { startStreamingASR, stopStreamingASR, toggleStreaming };  // onclick() event for button with ID recordBtn in chat.html!
+
+
 async function startRecording() {
     if (recording) return;
     recording = true;
@@ -94,15 +403,15 @@ function stopRecording() {
         mediaStream = null;
     }
 
-    // Merge Float32 chunks
-    const merged = mergeFloat32(chunks);
-    // Resample to 16kHz
-    const resampled = resampleFloat32(merged, inputSampleRate, 16000);
-    // Encode WAV (PCM16, mono, 16kHz)
-    const wavBlob = encodeWavPCM16(resampled, 16000);
+    // // Merge Float32 chunks
+    // const merged = mergeFloat32(chunks);
+    // // Resample to 16kHz
+    // const resampled = resampleFloat32(merged, inputSampleRate, 16000);
+    // // Encode WAV (PCM16, mono, 16kHz)
+    // const wavBlob = encodeWavPCM16(resampled, 16000);
 
-    // Send to backend
-    uploadWav(wavBlob);
+    // // Send to backend
+    // uploadWav(wavBlob);
 }
 
 function mergeFloat32(buffers) {
@@ -250,4 +559,4 @@ function toggleRecord(btnEl) {
     }
 }
 
-window.__voice_recorder__ = { startRecording, stopRecording, toggleRecord };
+//window.__voice_recorder__ = { startRecording, stopRecording, toggleRecord };  // onclick() event for button with ID recordBtn in chat.html!
