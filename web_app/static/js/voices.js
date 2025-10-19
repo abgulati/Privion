@@ -129,9 +129,17 @@ function stripWakeWord(text) {
     if (idx === -1) return t.trim();    // idx === -1 means the wake word is not found in the text
     console.log('stripWakeWord found wakeWord at index:', idx);
     // Remove the first occurrence of the wake word and trim punctuation/space around it
-    const before = t.slice(0, idx).trim();    // before is the text before the wake word
-    const after = t.slice(idx + wakeWord.length).trim();    // after is the text after the wake word
-    return (before ? before + ' ' : '') + after;    // return the text before the wake word and the text after the wake word
+    let before = t.slice(0, idx).trim();    // before is the text before the wake word
+    let after = t.slice(idx + wakeWord.length).trim();    // after is the text after the wake word
+
+    // if there's a preceeding or trailing comma, remove it
+    if (before.endsWith(',')) before = before.slice(0, -1).trim();
+    if (after.startsWith(',')) after = after.slice(1).trim();
+
+    let final = (before ? before + ' ' : '') + after;
+    // if there's any double spacing from the above removals, remove it
+    final = final.replace(/  /g, ' ');
+    return final;
 }
 
 async function determineLlmUse(transcription) {
@@ -306,11 +314,13 @@ async function toggleStreaming(btnEl) {
     if (!streaming) {
         await startStreamingASR();
         btnEl.querySelector('i').classList.remove('fa-microphone-slash');
-        btnEl.querySelector('i').classList.add('fa-microphone'); 
+        btnEl.querySelector('i').classList.add('fa-microphone');
+        document.getElementById('recordBtn').classList.add('recording');
     } else {
         stopStreamingASR();
         btnEl.querySelector('i').classList.remove('fa-microphone');
         btnEl.querySelector('i').classList.add('fa-microphone-slash');
+        document.getElementById('recordBtn').classList.remove('recording');
     }
 }
 
