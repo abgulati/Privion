@@ -3213,7 +3213,7 @@ class ASRWebSocket(WebSocketEndpoint):
         set_if('asr_vad_threshold', float)
         set_if('asr_vad_min_speech_ms', float)
         set_if('asr_vad_min_silence_ms', float)
-        set_if('asr_vad_window_size_samples', float)
+        set_if('asr_vad_window_size_samples', int)
         set_if('asr_vad_max_buffer_s', float)
         set_if('asr_vad_speech_pad_ms', float)
 
@@ -3289,11 +3289,21 @@ class ASRWebSocket(WebSocketEndpoint):
                 if end > last_end:
                     last_end = end
 
-            # Trim rolling buffer
-            self.global_cursor += last_end   # remove the tail to avoid reprocessing
-            if len(self.audio_buffer) > self.asr_cfg['asr_vad_max_buffer_s'] * self.asr_cfg['asr_samplerate']:
-                self.audio_buffer = np.array([], dtype=np.float32)
+            # Trim rolling buffer with a bounded window
+            buf_len = len(self.audio_buffer)
+            self.global_cursor += last_end  #processed tail
+
+            keep = int(self.asr_cfg['asr_vad_max_buffer_s'] * self.asr_cfg['asr_samplerate'])
+            if buf_len > keep:
+                # Drop the oldest extra; keep only the last 'keep' samples
+                drop = buf_len - keep
+                self.global_cursor += drop
+                self.audio_buffer = self.audio_buffer[drop:].copy()
+                # Ensure append gate isn't ahead of the buffer start
+                if self.last_append_end_abs < self.global_cursor:
+                    self.last_append_end_abs = self.global_cursor
             else:
+                # Buffer is within bounds; no drop needed
                 self.audio_buffer = self.audio_buffer[last_end:].copy()
 
             # If silence gap and we have enough speech, run ASR
