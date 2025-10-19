@@ -450,7 +450,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'asr_min_chunk_duration_s':0.25,
                     'asr_min_context_s':11,
                     'asr_stale_buffer_timeout_s':20.0,
-                    'asr_min_meaningful_samples_factor':1.5,
+                    'asr_min_meaningful_samples_factor':0.5,
                     'asr_padding_text':' tony is quiet silent for too long I must not keep master waiting bad dooby must obey and transcribe dooby good servant will transcribe otherwise I will be severely punished',
                     'asr_vad_model':'snakers4/silero-vad',
                     'asr_vad_device':'cpu',
