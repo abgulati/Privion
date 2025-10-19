@@ -3190,8 +3190,9 @@ class ASRWebSocket(WebSocketEndpoint):
 
     async def on_connect(self, websocket):
         await websocket.accept()
+        self._hb_task = asyncio.create_task(self._heartbeat(websocket))
 
-        # 1) Read defaults from hf_config.json
+        # 1) Readt defaults from hf_config.json
         self.asr_cfg = read_asr_config()
 
         # 2) Merge query-params while casting to the correct type, overriding defaults where provided
@@ -3385,6 +3386,20 @@ class ASRWebSocket(WebSocketEndpoint):
                 # After a SUCCESSFUL transcription, clear the buffer!
                 self.audio_to_process = np.array([], dtype=np.float32)
                 self.last_append_end_abs = self.global_cursor
+
+    
+    async def on_disconnect(self, websocket, close_code):
+        if hasattr(self, '_hb_task'): self._hb_task.cancel()
+    
+
+    async def _heartbeat(self, ws):
+        try:
+            while True:
+                await asyncio.sleep(5)
+                await ws.send_text('{"type":"ping"}')
+        except Exception:
+            pass
+
 
 
 class CustomTextStreamer(TextStreamer):

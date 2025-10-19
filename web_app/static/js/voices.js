@@ -241,6 +241,14 @@ async function startStreamingASR() {
     ws.binaryType = 'arraybuffer';
 
     ws.onopen = () => {
+        // Start heartbeat every 5 seconds
+        hbTimer = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                // send a bytes ping to the server
+                ws.send(new Uint8Array([0x00, 0x00, 0x00, 0x00]));
+            }
+        }, 5000);
+
         // Prepare 20ms frames at source SR
         streamSampleRate = inputSampleRate || 48000;
         streamBytesPerFrame = Math.round(0.02 * streamSampleRate); // 20ms
@@ -257,8 +265,14 @@ async function startStreamingASR() {
         }
     };
 
-    ws.onclose = () => { ws = null; };
-    ws.onerror = () => { /* optional logging */ };
+    ws.onclose = () => { 
+        if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }    // The clearInterval() function is used to clear a timeout previously set with setInterval().
+        ws = null;
+    };
+
+    ws.onerror = () => { 
+        if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }    // The clearInterval() function is used to clear a timeout previously set with setInterval().
+    };
 
     // Hook worklet delivery into the streaming buffer
     // We reuse your existing workletNode/processorNode paths:
@@ -298,6 +312,7 @@ function stopStreamingASR() {
     if (!streaming) return;
     streaming = false;
 
+    if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
     if (ws && ws.readyState === WebSocket.OPEN) {
         try { ws.close(); } catch (_) {}
     }
