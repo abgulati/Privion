@@ -3295,20 +3295,66 @@ class ASRWebSocket(WebSocketEndpoint):
             self.global_cursor += last_end  #processed tail
 
             keep = int(self.asr_cfg['asr_vad_max_buffer_s'] * self.asr_cfg['asr_samplerate'])
-            if buf_len > keep:
-                # Drop the oldest extra; keep only the last 'keep' samples
-                drop = buf_len - keep
-                self.global_cursor += drop
-                self.audio_buffer = self.audio_buffer[drop:].copy()
-                # Ensure append gate isn't ahead of the buffer start
-                if self.last_append_end_abs < self.global_cursor:
-                    self.last_append_end_abs = self.global_cursor
+
+            ### Clearing logic Option 1 - keep a bounded sliding window:
+            # buf_len = len(self.audio_buffer)
+
+            # # Drop what we've already processed
+            # drop_total = last_end
+
+            # # After dropping processed tail, keep at most 'keep' samples
+            # remaining = buf_len - drop_total
+            # if remaining > keep:
+            #     drop_total += (remaining - keep)
+
+            # if drop_total > 0:
+            #     self.audio_buffer = self.audio_buffer[drop_total:].copy()
+            #     self.global_cursor += drop_total
+            #     if self.last_append_end_abs < self.global_cursor:
+            #         self.last_append_end_abs = self.global_cursor
+
+
+            ### Clearing logic Option 2 - Simple Trimming:
+            self.global_cursor += last_end
+            if len(self.audio_buffer) > keep:
+                self.audio_buffer = np.array([], dtype=np.float32)
+                self.last_append_end_abs = self.global_cursor
             else:
-                # Buffer is within bounds; no drop needed
                 self.audio_buffer = self.audio_buffer[last_end:].copy()
+            
+            '''
+            The `self.last_append_end_abs = self.global_cursor` is optional and there to explicitly keep the invariant clean after a hard reset: last_append_end_abs >= global_cursor.
+            That guarantees the “append gate” is not behind the start of the buffer and avoids any chance of re-appending old audio.
+            
+            Is it required?
+                No. Given the math, after global_cursor += last_end, we already have last_append_end_abs <= global_cursor, so the gating logic will still work without updating it.
+                Keeping the line is harmless and makes the state explicit; omitting it retains the PoC minimalism.
+            '''
+
+            ### Clearing logic Option 3 - keep a bounded sliding window (potentially buggy! See note below):
+            '''
+            Key finding:
+            - The server code advances global_cursor by last_end and (conditionally) by drop, but in the buf_len > keep branch it slices the buffer only by drop (not by last_end).
+            - That makes global_cursor ahead of the new buffer start by last_end, which can desynchronize indices. The PoC avoids this.
+            
+            Do you need the more comprehensive approach?
+            - Not strictly. If your goal is just to avoid unbounded growth and you're fine with occasionally resetting the buffer when it gets too big, the PoC logic is simpler and safe.
+            - If you want a bounded sliding window (retain up to asr_vad_max_buffer_s of recent audio), keep the server's idea but fix the trim so global_cursor and audio_buffer stay aligned.
+            ''' 
+            # if buf_len > keep:
+            #     # Drop the oldest extra; keep only the last 'keep' samples
+            #     drop = buf_len - keep
+            #     self.global_cursor += drop
+            #     self.audio_buffer = self.audio_buffer[drop:].copy()
+            #     # Ensure append gate isn't ahead of the buffer start
+            #     if self.last_append_end_abs < self.global_cursor:
+            #         self.last_append_end_abs = self.global_cursor
+            # else:
+            #     # Buffer is within bounds; no drop needed
+            #     self.audio_buffer = self.audio_buffer[last_end:].copy()
 
             # If silence gap and we have enough speech, run ASR
-            if self.audio_to_process.size >= self.asr_cfg['asr_min_chunk_duration_s'] * self.asr_cfg['asr_samplerate'] and (time.time() - self.last_speech_time) > self.asr_cfg['asr_silence_duration_s']:
+            if len(self.audio_to_process) >= self.asr_cfg['asr_min_chunk_duration_s'] * self.asr_cfg['asr_samplerate'] and (time.time() - self.last_speech_time) > self.asr_cfg['asr_silence_duration_s']:
 
                 if self.asr_cfg['asr_apply_normalization']:
                     print(f"Applying normalization to audio.")
