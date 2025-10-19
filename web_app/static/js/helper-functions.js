@@ -20,8 +20,18 @@ function setHfwUrl(host, port) {
     document.getElementById('chatState').setAttribute('data-hf-waitress-url', `http://${host}:${port}`);
 }
 
+function setHfwAsrAsgiHost(host) {
+    document.getElementById('chatState').setAttribute('data-hf-asr-asgi-host', host);
+}
+
+function setHfwAsrAsgiPort(port) {
+    document.getElementById('chatState').setAttribute('data-hf-asr-asgi-port', port);
+}
+
 function setHfwAsrUrl(host, port) {
     document.getElementById('chatState').setAttribute('data-hf-asr-url', `http://${host}:${port}`);
+    setHfwAsrAsgiHost(host);
+    setHfwAsrAsgiPort(port);
 }
 
 function setExl2(exl2) {
@@ -78,6 +88,14 @@ function getHfwUrl() {
 
 function getHfwAsrUrl() {
     return document.getElementById('chatState').getAttribute('data-hf-asr-url');
+}
+
+function getHfwAsrAsgiHost() {
+    return document.getElementById('chatState').getAttribute('data-hf-asr-asgi-host');
+}
+
+function getHfwAsrAsgiPort() {
+    return document.getElementById('chatState').getAttribute('data-hf-asr-asgi-port');
 }
 
 function getUniqueId() {
