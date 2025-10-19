@@ -161,8 +161,8 @@
                     <i class="fas fa-folder-open"></i> <!-- Icon for folders -->
                 </button>
 
-                <button type="button" id="recordBtn" class="btn record-audio-btn" onclick="window.__voice_recorder__.toggleRecord(this)" title="Hold to talk / Click to toggle">
-                    <i class="fa-solid fa-microphone"></i>
+                <button type="button" id="recordBtn" class="btn record-audio-btn" onclick="window.__voice_streaming__.toggleStreaming(this)" title="Hold to talk / Click to toggle">
+                    <i class="fa-solid fa-microphone-slash"></i>
                 </button>
 
                 <button class="btn btn-primary-send" id="sendButton" onclick="closeNav(); requestFormattedPrompt()">Send</button>
@@ -1798,14 +1798,21 @@
                                     <br>
 
                                     <div class="form-group">
+                                        <label for="asr_wake_word">ASR Wake Word:</label>
+                                        <input type="text" id="asr_wake_word" name="asr_wake_word" value="simon">
+                                    </div>
+
+                                    <br>
+
+                                    <div class="form-group">
                                         <label for="asr_model">ASR Model:</label>
                                         <br>
                                         <select id="asr_model" name="asr_model" class="modal-selects">
-                                            <option value="openai/whisper-large-v3">OpenAI Whisper Large V3 [Default]</option>
-                                            <option value="nvidia/canary-qwen-2.5b">NVIDIA Canary Qwen 2.5B</option>
-                                            <option value="nvidia/canary-1b-v2">NVIDIA Canary 1B V2</option>
-                                            <option value="ibm-granite/granite-speech-3.3-8b">IBM Granite Speech 3.3-8B</option>
-                                            <option value="ibm-granite/granite-speech-3.3-2b">IBM Granite Speech 3.3-2B</option>
+                                            <option value="openai/whisper-large-v3">OpenAI Whisper Large V3 [Default | ~8GB VRAM]</option>
+                                            <option value="nvidia/canary-qwen-2.5b">NVIDIA Canary Qwen 2.5B [~10GB VRAM]</option>
+                                            <option value="nvidia/canary-1b-v2">NVIDIA Canary 1B V2 [~8GB VRAM]</option>
+                                            <option value="ibm-granite/granite-speech-3.3-8b">IBM Granite Speech 3.3-8B [~20GB VRAM]</option>
+                                            <option value="ibm-granite/granite-speech-3.3-2b">IBM Granite Speech 3.3-2B [~10GB VRAM]</option>
                                         </select>
                                     </div>
 
