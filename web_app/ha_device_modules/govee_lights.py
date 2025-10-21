@@ -1,19 +1,9 @@
 import sys
 import asyncio
-import logging
 import socket
-import argparse
 from contextlib import suppress
 
 from govee_local_api import GoveeController
-
-# # Windows: reuse_port is not supported; make asyncio ignore it.
-# if sys.platform == "win32":
-#     try:
-#         import asyncio.base_events as _base_events
-#         _base_events._set_reuseport = lambda sock: None  # no-op on Windows
-#     except Exception:
-#         pass
 
 # Windows fixes
 if sys.platform == "win32":
@@ -39,14 +29,13 @@ def _patch_govee_on_windows():
             return orig(self, transport)
         except OSError as e:
             if getattr(e, "winerror", None) == 10022:
-                logging.getLogger("govee_control").warning(
-                    "Ignoring WinError 10022 during multicast setup; continuing without multicast join."
-                )
+                print("Ignoring WinError 10022 during multicast setup; continuing without multicast join.")
                 # Discovery uses unicast replies to listening socket; missing the multicast join only affects passive announcements, not active discovery.
                 return
             raise
 
     GoveeController.connection_made = patched
+
 
 _patch_govee_on_windows()
 
@@ -55,9 +44,6 @@ BROADCAST_ADDR = "239.255.255.250"
 TARGET_PORT = 4001
 LISTENING_PORT = 4002
 DISCOVERY_TIMEOUT = 5
-
-log = logging.getLogger("govee_control")
-logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 def get_local_ip() -> str:
@@ -75,7 +61,6 @@ async def discover_controller(local_ip: str) -> GoveeController:
     loop = asyncio.get_running_loop()
     ctrl = GoveeController(
         loop=loop,
-        logger=log,
         listening_address=local_ip,
         broadcast_address=BROADCAST_ADDR,
         broadcast_port=TARGET_PORT,
@@ -120,58 +105,111 @@ async def _cleanup_controller(ctrl: GoveeController) -> None:
             await asyncio.gather(*waiters)
 
 
-async def main():
-    parser = argparse.ArgumentParser(description="Control a Govee light locally")
-    parser.add_argument("--action", choices=["on", "off"])
-    parser.add_argument("--id", help="Fingerprint or SKU (or substring) of device", default=None)
-    parser.add_argument("--bind", help="Local IPv4 to bind for discovery (NIC selection)", default=None)
-    parser.add_argument("--list", action="store_true", help="List discovered devices and exit")
-    args = parser.parse_args()
+async def get_first_govee_device():
 
-    local_ip = args.bind or get_local_ip()
-    log.info(f"Using IP: {local_ip}")
+    local_ip = get_local_ip()
+    print(f"Using IP: {local_ip}")
 
     ctrl = None
     try:
         ctrl = await discover_controller(local_ip)
     except OSError as ex:
-        log.error(f"Failed to start controller (errno={getattr(ex, 'errno', ex)})")
+        print(f"Failed to start controller (errno={getattr(ex, 'errno', ex)})")
         return
-
+    
     if not ctrl.devices:
-        log.error("No Govee devices discovered.")
-        return
-
-    if args.list:
-        for d in ctrl.devices:
-            sku = getattr(d, "sku", "?")
-            fp = getattr(d, "fingerprint", "?")
-            host = getattr(d, "host", getattr(d, "ip", "?"))
-            log.info(f"- sku={sku} fp={fp} ip={host}")
+        print("No Govee devices discovered.")
         return
     
-    if not args.action:
-        log.error("No --action provided. Use --list to see devices.")
-        return
-
-    dev = pick_device(ctrl, args.id)
+    dev = pick_device(ctrl, None)
     if not dev:
-        log.error("Requested device not found.")
+        print("Requested device not found.")
         return
     
-    log.info(f"Controlling device: sku={getattr(dev, 'sku', '?')} fp={getattr(dev, 'fingerprint', '?')}")
-    if args.action == "on":
-        await dev.turn_on()
-        log.info("Turned ON")
-    else:
-        await dev.turn_off()
-        log.info("Turned OFF")
-
     _cleanup_controller(ctrl)
+    
+    return dev
 
-
-if __name__ == "__main__":
+async def light_turn_on_handler():
     try:
-        asyncio.run(main())
-    finally:
-        pass  # asyncio.run handles event loop shutdown
+        dev = await get_first_govee_device()
+        if not dev:
+            print("No Govee device found.")
+            return
+        
+        await dev.turn_on()
+        print("Turned ON")
+        return {"success": True, "message": "Light turn-on command sent."}
+    except Exception as e:
+        return {"success": False, "message": f"Error turning on light: {e}"}
+
+
+async def light_turn_off_handler():
+    try:
+        dev = await get_first_govee_device()
+        if not dev:
+            print("No Govee device found.")
+            return
+        
+        await dev.turn_off()
+        print("Turned OFF")
+        return {"success": True, "message": "Light turn-off command sent."}
+    except Exception as e:
+        return {"success": False, "message": f"Error turning off light: {e}"}
+
+
+# async def main():
+#     parser = argparse.ArgumentParser(description="Control a Govee light locally")
+#     parser.add_argument("--action", choices=["on", "off"])
+#     parser.add_argument("--id", help="Fingerprint or SKU (or substring) of device", default=None)
+#     parser.add_argument("--bind", help="Local IPv4 to bind for discovery (NIC selection)", default=None)
+#     parser.add_argument("--list", action="store_true", help="List discovered devices and exit")
+#     args = parser.parse_args()
+
+#     local_ip = args.bind or get_local_ip()
+#     print(f"Using IP: {local_ip}")
+
+#     ctrl = None
+#     try:
+#         ctrl = await discover_controller(local_ip)
+#     except OSError as ex:
+#         print(f"Failed to start controller (errno={getattr(ex, 'errno', ex)})")
+#         return
+
+#     if not ctrl.devices:
+#         print("No Govee devices discovered.")
+#         return
+
+#     if args.list:
+#         for d in ctrl.devices:
+#             sku = getattr(d, "sku", "?")
+#             fp = getattr(d, "fingerprint", "?")
+#             host = getattr(d, "host", getattr(d, "ip", "?"))
+#             print(f"- sku={sku} fp={fp} ip={host}")
+#         return
+    
+#     if not args.action:
+#         print("No --action provided. Use --list to see devices.")
+#         return
+
+#     dev = pick_device(ctrl, args.id)
+#     if not dev:
+#         print("Requested device not found.")
+#         return
+    
+#     print(f"Controlling device: sku={getattr(dev, 'sku', '?')} fp={getattr(dev, 'fingerprint', '?')}")
+#     if args.action == "on":
+#         await dev.turn_on()
+#         print("Turned ON")
+#     else:
+#         await dev.turn_off()
+#         print("Turned OFF")
+
+#     _cleanup_controller(ctrl)
+
+
+# if __name__ == "__main__":
+#     try:
+#         asyncio.run(main())
+#     finally:
+#         pass  # asyncio.run handles event loop shutdown
