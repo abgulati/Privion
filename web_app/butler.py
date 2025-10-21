@@ -3,6 +3,7 @@ import llm_apis as llm_apis_module
 
 from wakeonlan import send_magic_packet
 import ha_device_modules.lg_webos_tv as lg_webos_tv_module
+import ha_device_modules.govee_lights as govee_lights_module
 
 from typing import Optional
 from pathlib import Path
@@ -113,7 +114,7 @@ def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port:int = 
     Uses Wake-On-LAN (WOL) to turn on a TV.
     Args:
         mac_address: The MAC address of the TV to turn on.
-        broadcast_ip: The IP address to broadcast the WOL packet to.
+        target_ip: The IP address to broadcast the WOL packet to.
         port: The port to send the WOL packet to.
     Returns:
         A dictionary with a success flag and a message.
@@ -145,22 +146,45 @@ def lg_webos_tv_turn_off(ip_address: Optional[str] = None):
     return asyncio.run(lg_webos_tv_module.webos_pair_connect_and_power_off_async(ip_address))
 
 
+def turn_on_lamp():
+    '''
+    Turns on a lamp.
+    '''
+    return asyncio.run(govee_lights_module.light_turn_on_handler())
+
+
+def turn_off_lamp():
+    '''
+    Turns off a lamp.
+    '''
+    return asyncio.run(govee_lights_module.light_turn_off_handler())
+
+
 def execute_butler_tool(service_name:str) -> dict:
     '''
     Executes a butler tool.
     '''
     # butler_tool_details = get_service_details_from_butler_tools_config(service_name)
     # butler_tool_execution_result = butler_tool_details['function'](**butler_tool_details['fields'])
-
-    if service_name == 'wol_turn_on_tv':
-        print("Executing WOL turn-on TV tool...")
-        return wol_turn_on_tv('a4:36:c7:58:3f:18', '192.168.1.142', 9)
-    elif service_name == 'lg_webos_tv_turn_off':
-        print("Executing LG WebOS TV turn-off tool...")
-        return lg_webos_tv_turn_off()
-    else:
-        print(f"Service not found: {service_name}")
-        return {'success': False, 'message': "Service not found."}
+    try:
+        if service_name == 'wol_turn_on_tv' or service_name == 'lg_webos_tv_turn_on':
+            print("Executing WOL turn-on TV tool...")
+            return wol_turn_on_tv('a4:36:c7:58:3f:18', '192.168.1.142', 9)
+        elif service_name == 'lg_webos_tv_turn_off':
+            print("Executing LG WebOS TV turn-off tool...")
+            return lg_webos_tv_turn_off()
+        elif service_name == 'lamp_turn_on':
+            print("Executing lamp turn-on tool...")
+            return turn_on_lamp()
+        elif service_name == 'lamp_turn_off':
+            print("Executing lamp turn-off tool...")
+            return turn_off_lamp()
+        else:
+            print(f"Service not found: {service_name}")
+            return {'success': False, 'message': "Service not found."}
+    except Exception as e:
+        print(f"Error executing butler tool: {str(e)}")
+        return {'success': False, 'message': f"Error executing butler tool: {str(e)}"}
 
 
 ### LLM RESPONSE PARSER:
@@ -245,4 +269,11 @@ def execute_butler_tasks(user_query:str) -> dict:
 
     except Exception as e:
         print(f"Error executing butler tasks: {str(e)}")
-        return {'success': False, 'message': f"Error executing butler tasks: {str(e)}"}
+        action_result = {'success': False, 'message': f"Error executing butler tasks: {str(e)}"}
+        try:
+            action_analysis_prompt = prompt_formatting_module.request_action_analysis_prompt(user_query, action_result)
+            print(f"Action analysis prompt: {action_analysis_prompt}")
+            return {'action_result': action_result, 'action_analysis_prompt': action_analysis_prompt}
+        except Exception as e:
+            print(f"Both Butler Tool Execution and Action Analysis Prompt Creation Failed: {str(e)}")
+            return {'success': False, 'message': f"Both Butler Tool Execution and Action Analysis Prompt Creation Failed: {str(e)}", 'action_analysis_prompt': None}
