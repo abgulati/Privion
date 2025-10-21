@@ -9,10 +9,27 @@
                     "required": true,
                     "example": "aa:bb:cc:dd:ee:ff"
                 },
-                "broadcast_address": {
+                "target_ip": {
                     "default": "255.255.255.255"
                 },
-                "broadcast_port": {
+                "port": {
+                    "default": 9
+                }
+            }
+        },
+
+        "lg_webos_tv_turn_on": {
+            "name": "LG WebOS TV Turn On",
+            "description": "Turns on an LG WebOS TV.",
+            "fields": {
+                "mac_address": {
+                    "required": true,
+                    "example": "aa:bb:cc:dd:ee:ff"
+                },
+                "target_ip": {
+                    "default": "255.255.255.255"
+                },
+                "port": {
                     "default": 9
                 }
             }
@@ -23,11 +40,23 @@
             "description": "Turns off an LG WebOS TV.",
             "fields": {
                 "ip_address": {
-                    "required": true,
-                    "example": "192.168.1.142"
+                    "default": "None"
                 }
             }
-        }
+        },
 
+        "lamp_turn_on": {
+            "name": "Lamp Turn On",
+            "description": "Turns on a Govee lamp.",
+            "fields": {
+            }
+        },
+        
+        "lamp_turn_off": {
+            "name": "Lamp Turn Off",
+            "description": "Turns off a Govee lamp.",
+            "fields": {
+            }
+        }
     }
 }
