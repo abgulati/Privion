@@ -169,7 +169,7 @@ def _early_resolve_base_and_config():
         os.makedirs(base, exist_ok=True)
     except Exception as e:
         print(f"Could not create base directory: {base}. Encountered error: {e}")
-    
+
     return base, cfg_path, bootstrap_path
 
 BASE_DIRECTORY, CONFIG_PATH, BOOTSTRAP_PATH = _early_resolve_base_and_config()
@@ -234,7 +234,7 @@ except Exception as e:
 def central_error_logging(message:str, exception:Exception=None):
     with error_logging_semaphore:
         error_message = f"\n\n{message} {str(exception) if exception else '; No exception info.'}\n\n"
-        
+
         # traceback.format_exc() is most reliable when called directly from within an except block. If passing an exception object, it's best to handle it more explicitly!
         if exception:
             # To get the traceback of the passed 'exception' object
@@ -242,7 +242,7 @@ def central_error_logging(message:str, exception:Exception=None):
         else:
             # If no specific exception, format_exc() might give current stack if in an except block, or minimal info
             traceback_details = traceback.format_exc() if sys.exc_info()[0] else "No active exception."
-        
+
         full_message = f"\n\n{error_message}\n\nTraceback: {traceback_details}\n\n"
 
         if LOGGER:
@@ -250,7 +250,7 @@ def central_error_logging(message:str, exception:Exception=None):
             print(error_message)
         else:
             print(error_message)
-    
+
     return error_message
 
 
@@ -275,12 +275,12 @@ def set_load_safe_defaults():
         handle_error_no_return("Could not set load_safe_defaults to true in hf_config.json, encountered error: ", e)
 
 def handle_model_loading_error(message:str, exception:Exception=None, target:str="local"):
-    
+
     try:
         set_load_safe_defaults()
     except Exception as e:
         handle_error_no_return("Could not set load_safe_defaults to true in hf_config.json, encountered error: ", e)
-    
+
     if target == "local":
         handle_local_error(message, exception)
     elif target == "api":
@@ -353,7 +353,7 @@ def write_config(config_updates:dict, filename:str=None) -> dict:
             'exl2_max_seq_len',
             'exl2_cache_type'
         ]
-        
+
         for key in config_updates:
             if key in triggers_for_hf_restart and config_updates[key] != hf_config.get(key):
                 restart_required = True
@@ -385,9 +385,9 @@ def write_config(config_updates:dict, filename:str=None) -> dict:
                 json.dump(hf_config, file, indent=4)
         except Exception as e:
             handle_local_error("Could not update hf_config.json, encountered error: ", e)
-        
+
         return {'success': True, 'restart_required':restart_required, 'hard_reboot_required':hard_reboot_required}
-            
+
 
 def read_config(keys:list, default_value=None, filename=None) -> dict:
     '''
@@ -409,7 +409,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
     filename = filename or CONFIG_PATH
 
     with reader_semaphore:
-    
+
         # Open hf_config file to read-in all current params:
         try:
             with open(filename, 'r') as file:
@@ -417,7 +417,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
         except Exception as e:
             handle_error_no_return("Could not read hf_config.json, encountered error: ", e)
             return {key: default_value for key in keys}     #because a read scenario wherein hf_config.json does not exist shouldn't occur!
-        
+
         return_dict = {}
         update_config_dict = {}
         base_directory = hf_config.get('base_directory', BASE_DIRECTORY)   # specifying default if not found
@@ -561,10 +561,10 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
 
                 if default_value == 'undefined':
                     raise KeyError(f"Key \'{key}\' not found in hf_config.json and no default value has been defined either.\n")
-                
+
                 return_dict[key] = default_value
                 update_config_dict[key] = default_value
-        
+
         if update_config_dict:
             # Write defaults
             try:
@@ -581,7 +581,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
 @app.route('/hf_config_reader_api', methods=['POST'])
 def hf_config_reader_api():
     # keys = request.args.getlist('keys') # Assuming keys are passed as query parameters
-    
+
     try:
         keys = request.json.get('keys', []) # Could also do keys = request.json['keys'] but this way we can provide a default list should 'keys' be missing!
     except Exception as e:
@@ -591,7 +591,7 @@ def hf_config_reader_api():
         values = read_config(keys)  # send list of keys, get dict of key:values
     except Exception as e:
         handle_api_error("Server-side error - could not read keys from hf_config.json. Encountered error: ", e)
-    
+
     return jsonify(success=True, values=values)
 
 
@@ -604,12 +604,12 @@ def hf_config_writer_api():
         print(f"\n\nconfig_updates for hf_config_writer_api:\n{config_updates}\n\n")
     except Exception as e:
         handle_api_error("Server-side error - could not read values for hf_config_writer_api request. Encountered error: ", e)
-    
+
     try:
         write_return = write_config(config_updates)
     except Exception as e:
         handle_api_error("Server-side error - could not write keys to hf_config.json. Encountered error: ", e)
-    
+
     return jsonify({"success": write_return['success'], "restart_required": write_return['restart_required'], "hard_reboot_required": write_return['hard_reboot_required']})
 
 ############################----------------------------------------------###############################
@@ -716,7 +716,7 @@ This is for security purposes and as per standard best practices:
 @app.route('/shutdown_hf_waitress', methods=['POST'])
 def shutdown_hf_waitress():
     try:
-    
+
         try:
             client_ip = get_client_ip(request)
         except Exception as e:
@@ -724,7 +724,7 @@ def shutdown_hf_waitress():
 
         if not is_shutdown_allowed(client_ip):
             return jsonify(success=False, error="Shutdown not allowed for this IP.")
-        
+
         shutdown_message = f"\n\n🔓 SHUTDOWN AUTHORIZED from IP {client_ip}\n🕐 Shutdown time: {datetime.datetime.now()}\n\n"
         print(shutdown_message)
         if LOGGER:
@@ -766,7 +766,7 @@ def shutdown_hf_waitress():
 
                     threading.Thread(target=delayed_shutdown, daemon=True).start()  # Daemon ensures that the thread will terminate when the main process terminates, as a daemon is a child process of the main process.
                     return response
-    
+
     except Exception as e:
         return handle_api_error("Shutdown error: ", e)
 
@@ -844,7 +844,7 @@ def update_and_save_json_file(data: dict, file_path: str) -> bool:
                 current_cache = json.load(file)
         except Exception as e:
             handle_local_error("Could not save JSON file, encountered error: ", e)
-    
+
     try:
         current_cache.update(data)
         with open(file_path, 'w') as file:
@@ -893,7 +893,7 @@ def remove_folder_from_filepath(folderpath):
         print(f"Successfully deleted folder: {folderpath}")
     except Exception as e:
         handle_local_error(f"Could not remove folder from filepath: {folderpath}, encountered error: ", e)
-    
+
 
 def safe_remove_folder_from_filepath(folderpath):
     try:
@@ -1009,7 +1009,7 @@ def shutdown_all():
     # --- Vision Model ---
     print("\n\nShutting down vision-model\n\n")
     global VISION_MODEL
-    
+
     if VISION_MODEL:
         try:
             print("Attempting graceful offload of model")
@@ -1023,7 +1023,7 @@ def shutdown_all():
 
     global PIPE
     print("\n\nShutting down pipeline\n\n")
-    
+
     if PIPE:
         try:
             print("Attempting graceful offload of pipeline")
@@ -1038,7 +1038,7 @@ def shutdown_all():
     # --- ASR Model ---
     print("\n\nShutting down ASR model\n\n")
     global MODEL, TOKENIZER, PROCESSOR, SILERO_VAD, SILERO_UTILS
-    
+
     if MODEL:
         try:
             print("Attempting to free ASR model")
@@ -1048,7 +1048,7 @@ def shutdown_all():
             handle_error_no_return("Could not free ASR model, encountered error: ", e)
         finally:
             MODEL = None
-    
+
     if TOKENIZER:
         try:
             print("Attempting to free ASR tokenizer")
@@ -1058,7 +1058,7 @@ def shutdown_all():
             handle_error_no_return("Could not free ASR tokenizer, encountered error: ", e)
         finally:
             TOKENIZER = None
-    
+
     if PROCESSOR:
         try:
             print("Attempting to free ASR processor")
@@ -1105,7 +1105,7 @@ def shutdown_all():
             handle_error_no_return("Could not free ExLlamaV2 model, encountered error: ", e)
         finally:
             EXL2_MODEL = None
-    
+
     if EXL2_CACHE:
         try:
             print("Attempting to free ExLlamaV2 cache")
@@ -1115,7 +1115,7 @@ def shutdown_all():
             handle_error_no_return("Could not free ExLlamaV2 cache, encountered error: ", e)
         finally:
             EXL2_CACHE = None
-    
+
     if EXL2_TOKENIZER:
         try:
             print("Attempting to free ExLlamaV2 tokenizer")
@@ -1135,7 +1135,7 @@ def shutdown_all():
             handle_error_no_return("Could not free AutoTokenizer, encountered error: ", e)
         finally:
             AUTO_TOKENIZER = None
-        
+
     print("\n\nExLlamaV2 cleanup complete\n\n")
     return True
 
@@ -1188,10 +1188,10 @@ def get_repo_info_for_model(model_id):
         print("\nCache Scan Complete.\n")
     except Exception as e:
         handle_local_error(f"Could not get cache_info for model {model_id}, encountered error: ", e)
-    
+
     repo_info = next((repo for repo in cache_info.repos if repo.repo_id == model_id), None)
     if repo_info is None: return None
-    
+
     return repo_info
 
 
@@ -1202,7 +1202,7 @@ def get_latest_revision_for_model(model_id):
         repo_info = get_repo_info_for_model(model_id)
     except Exception as e:
         handle_error_no_return(f"Could not get repo_info for model {model_id}, encountered error: ", e)
-    
+
     if repo_info is None:
         print(f"No cache info found for {model_id}, attempting to download model from HF-Hub")
         try:
@@ -1210,7 +1210,7 @@ def get_latest_revision_for_model(model_id):
             repo_info = get_repo_info_for_model(model_id)
         except Exception as e:
             handle_local_error(f"Could not download model {model_id} from HF-Hub, encountered error: ", e)
-    
+
     try:
         revisions = list(repo_info.revisions)
         latest_revision = max(revisions, key=lambda rev: rev.last_modified)
@@ -1339,7 +1339,7 @@ def parse_arguments():
         parser.add_argument("--exl2_cache_type", type=str, default=read_return['exl2_cache_type'], help="Specify the cache type to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to full ExLlamaV2Cache as the default.")
         parser.add_argument("--exl2_max_seq_len", type=int, default=read_return['exl2_max_seq_len'], help="Specify the max sequence length (context size) to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to 2048 as the default.")
         parser.add_argument("--exl2_no_flash_attn", action="store_true", default=False, help="Use this flag to disable Flash Attention 2 for ExLlamaV2 models. Defaults to False.")
-        
+
         args = parser.parse_args()
         print(f"\n\nparser.parse_args():\n\n{args}\n\n")
 
@@ -1351,7 +1351,7 @@ def parse_arguments():
                 with open(CONFIG_PATH, 'w') as file:
                     json.dump({}, file, indent=4)
                 config_writer_semaphore.release()
-                
+
                 # Set defaults by triggering read on an empty file
                 read_config([
                     'access_gated',
@@ -1407,7 +1407,7 @@ def parse_arguments():
                     args.exl2 = False
                 else:
                     args.flux_diffusers = False
-                
+
                 if "llama-3.2" in args.model_id.lower() and "vision" in args.model_id.lower():
                     print("Llama-3.2-Vision model auto-detected, setting vision=True")
                     args.vision = True
@@ -1421,24 +1421,24 @@ def parse_arguments():
                 if ("openai/whisper" in args.model_id.lower()) and ("v3" in args.model_id.lower()):
                     print("OpenAI Whisper V3 model auto-detected, setting asr=True")
                     args.asr = True
-                
+
                 elif ("nvidia/canary-qwen-2.5b" in args.model_id.lower()):
                     print("NVIDIA Canary Qwen 2.5B model auto-detected, setting asr=True")
                     args.asr = True
-                
+
                 elif ("nvidia/canary-1b-v2" in args.model_id.lower()):
                     print("NVIDIA Canary 1B V2 model auto-detected, setting asr=True")
                     args.asr = True
-                
+
                 elif ("ibm-granite/granite-speech-3.3" in args.model_id.lower()):
                     print("IBM Granite Speech 3.3 model auto-detected, setting asr=True")
                     args.asr = True
-                
+
                 else:
                     args.asr = False
 
                 print(f"asr: {args.asr}")
-                
+
                 write_config({
                     'access_gated':args.access_gated,
                     'access_token':args.access_token,
@@ -1702,7 +1702,7 @@ def load_flux_pipeline(pipeline):
             quantized_checkpoint = "https://huggingface.co/Kijai/flux-fp8/blob/main/flux1-schnell-fp8-e4m3fn.safetensors"
         elif "dev" in model_id.lower():
             quantized_checkpoint = "https://huggingface.co/Kijai/flux-fp8/blob/main/flux1-dev-fp8.safetensors"
-        
+
         print(f"\n\nLoading FLUX FP8 Quantized Checkpoint from: {quantized_checkpoint}\n\n")
 
         try:
@@ -1737,7 +1737,7 @@ def load_flux_pipeline(pipeline):
         except Exception as e:
             handle_model_loading_error("Could not load Flux Pipeline, encountered error: ", e)
             return False
-    
+
     print(f"\n{model_id} loaded successfully!\n")
     return pipeline
 
@@ -1758,7 +1758,7 @@ def load_vision_pipeline(pipeline, model_params):
     try:
         print(f"\nInitializing vision model: {model_id} with device_map: {torch_device_map}\n")
         VISION_MODEL = MllamaForConditionalGeneration.from_pretrained(model_id, **model_params)
-       
+
         try:
             print(f"Your vision-model's memory footprint is: {VISION_MODEL.get_memory_footprint()}")
         except Exception as e:
@@ -1766,7 +1766,7 @@ def load_vision_pipeline(pipeline, model_params):
 
         print(f"\nInitializing processor for vision model: {model_id}\n")
         pipeline = AutoProcessor.from_pretrained(model_id)  # Using 'pipeline' instead of 'processor' to maintain consistency with the server code. AutoProcessor is used to process images and text inputs for the vision model.
-        
+
         print(f"\nVision Model & Processor Loaded Successfully!\n")
         return pipeline
     except Exception as e:
@@ -1777,7 +1777,7 @@ def load_vision_pipeline(pipeline, model_params):
 def load_openai_whisper_v3_asr_pipeline(model_id: str, torch_device: str):
     print("\n\nOpenAI Whisper V3 ASR Model Selected - Loading...\n\n")
     global PIPE, MODEL, PROCESSOR
-    
+
     try:
         torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
         MODEL = AutoModelForSpeechSeq2Seq.from_pretrained(
@@ -1787,13 +1787,13 @@ def load_openai_whisper_v3_asr_pipeline(model_id: str, torch_device: str):
     except Exception as e:
         handle_model_loading_error("Could not load OpenAI Whisper V3 ASR Model, encountered error: ", e)
         return False
-    
+
     try:
         PROCESSOR = AutoProcessor.from_pretrained(model_id)
     except Exception as e:
         handle_model_loading_error("Could not load AutoProcessor for OpenAI Whisper V3 ASR Model, encountered error: ", e)
         return False
-    
+
     try:
         PIPE = pipeline(
             "automatic-speech-recognition",
@@ -1806,7 +1806,7 @@ def load_openai_whisper_v3_asr_pipeline(model_id: str, torch_device: str):
     except Exception as e:
         handle_model_loading_error("Could not load pipeline for OpenAI Whisper V3 ASR Model, encountered error: ", e)
         return False
-    
+
     print(f"\nOpenAI Whisper V3 ASR Model Loaded Successfully!\n")
     return True
 
@@ -1821,7 +1821,7 @@ def load_nv_canary_qwen_2_5b_asr_pipeline(model_id: str, torch_device: str):
     except Exception as e:
         handle_model_loading_error("Could not load NVIDIA Canary Qwen 2.5B ASR Model, encountered error: ", e)
         return False
-    
+
     print(f"\nNVIDIA Canary Qwen 2.5B ASR Model Loaded Successfully!\n")
     return True
 
@@ -1836,7 +1836,7 @@ def load_nv_canary_1b_v2_asr_pipeline(model_id: str, torch_device: str):
     except Exception as e:
         handle_model_loading_error("Could not load NVIDIA Canary 1B V2 ASR Model, encountered error: ", e)
         return False
-    
+
     print(f"\nNVIDIA Canary 1B V2 ASR Model Loaded Successfully!\n")
     return True
 
@@ -1850,13 +1850,13 @@ def load_ibm_granite_speech_3_3_asr_pipeline(model_id: str, torch_device: str):
     except Exception as e:
         handle_model_loading_error("Could not load AutoProcessor for IBM Granite Speech 3.3 ASR Model, encountered error: ", e)
         return False
-    
+
     try:
         TOKENIZER = PROCESSOR.tokenizer
     except Exception as e:
         handle_model_loading_error("Could not load tokenizer for IBM Granite Speech 3.3 ASR Model, encountered error: ", e)
         return False
-    
+
     try:
         MODEL = AutoModelForSpeechSeq2Seq.from_pretrained(
             model_id, device_map=torch_device, torch_dtype=torch.bfloat16
@@ -1865,7 +1865,7 @@ def load_ibm_granite_speech_3_3_asr_pipeline(model_id: str, torch_device: str):
     except Exception as e:
         handle_model_loading_error("Could not load model for IBM Granite Speech 3.3 ASR Model, encountered error: ", e)
         return False
-    
+
     print(f"\nIBM Granite Speech 3.3 ASR Model Loaded Successfully!\n")
     return True
 
@@ -1899,19 +1899,19 @@ def load_asr_pipeline():
     try:
         if ("openai/whisper" in read_return['model_id']) and ("v3" in read_return['model_id']):
             load_openai_whisper_v3_asr_pipeline(read_return['model_id'], read_return['torch_device_map'])
-        
+
         elif ("nvidia/canary-qwen-2.5b" in read_return['model_id']):
             load_nv_canary_qwen_2_5b_asr_pipeline(read_return['model_id'], read_return['torch_device_map'])
-        
+
         elif ("nvidia/canary-1b-v2" in read_return['model_id']):
             load_nv_canary_1b_v2_asr_pipeline(read_return['model_id'], read_return['torch_device_map'])
-        
+
         elif ("ibm-granite/granite-speech-3.3" in read_return['model_id']):
             load_ibm_granite_speech_3_3_asr_pipeline(read_return['model_id'], read_return['torch_device_map'])
-        
+
         else:
             raise ValueError(f"Invalid ASR model ID: {read_return['model_id']}")
-    
+
     except Exception as e:
         handle_local_error("Could not load ASR pipeline, encountered error: ", e)
 
@@ -1941,11 +1941,11 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
         os.makedirs(os.path.dirname(measurement_file_path), exist_ok=True)
     except Exception as e:
         handle_local_error("Could not create measurement file directory when attempting to generate-exllama_measurement_file_for_model(), encountered error: ", e)
-    
+
     if os.path.exists(measurement_file_path) and not exl2_force_regenerate_measurement:
         print(f"\nMeasurement file for {model_id} already exists. Skipping measurement file generation.\n")
         return measurement_file_path
-    
+
     convert_script_path = os.path.normpath(os.path.join(os.getcwd(), "exllamav2", "convert.py"))
     command = [
         'python' if platform.system() == 'Windows' else 'python3',
@@ -1969,7 +1969,7 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
 
 def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike, model_snapshot_path: os.PathLike, exl2_bpw: float) -> os.PathLike:
     print(f"\n\nAttempting to quantize model {model_id} to {exl2_bpw}bpw...\n\n")
-    
+
     try:
         read_return = read_config(['transformer_models_folder'])
         transformer_models_folder = str(read_return['transformer_models_folder'])
@@ -1988,7 +1988,7 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
     if os.path.exists(quantized_model_path):
         print(f"\nQuantized model for {model_id} already exists. Skipping quantization.\n")
         return quantized_model_path
-    
+
     convert_script_path = os.path.normpath(os.path.join(os.getcwd(), "exllamav2", "convert.py"))
     command = [
         'python' if platform.system() == 'Windows' else 'python3',
@@ -2043,20 +2043,20 @@ def define_exllama_generator_components(quantized_model_path: os.PathLike, exl2_
         print("\nConfig defined successfully\n")
     except Exception as e:
         handle_local_error("Could not define ExLlamaV2 config, encountered error: ", e)
-    
+
     try:
         global EXL2_MODEL
         EXL2_MODEL = ExLlamaV2(config)
         print("\nModel defined successfully\n")
     except Exception as e:
         handle_local_error("Could not define ExLlamaV2 model, encountered error: ", e)
-    
+
     try:
         exl2_cache_type = str(read_config(['exl2_cache_type'])['exl2_cache_type'])
         exl2_max_seq_len = int(read_config(['exl2_max_seq_len'])['exl2_max_seq_len'])
     except Exception as e:
         handle_local_error("Could not read cache type from hf_config.json, encountered error: ", e)
-    
+
     try:
         cache_type = get_exl2_cache_type(exl2_cache_type)
         print(f"\nCache type determined successfully: {cache_type}\n")
@@ -2089,7 +2089,7 @@ def define_exllama_generator_components(quantized_model_path: os.PathLike, exl2_
 
 def load_exllama_pipeline():
     print("\n\nLoading ExLlamaV2 Pipeline\n\n")
-    
+
     try:
         read_return = read_config(['model_id', 'exl2_bpw', 'exl2_no_flash_attn'])
         model_id = str(read_return['model_id'])
@@ -2108,10 +2108,10 @@ def load_exllama_pipeline():
             latest_snapshot_path = os_sanitize_path(latest_revision.snapshot_path)
         except Exception as e:
             handle_local_error(f"Error attempting to work with local snapshot for {model_id}. Encountered error: ", e)
-    
+
     if latest_snapshot_path is None:
         handle_local_error(f"Could not find a local snapshot for {model_id}. Please check your connection and access token if you're using a private model.")
-    
+
     try:
         measurement_file_path = generate_exllama_measurement_file_for_model(model_id, latest_snapshot_path)
     except Exception as e:
@@ -2138,7 +2138,7 @@ def load_exllama_pipeline():
         print(f"Model's context-length (max_seq_len) is: {EXL2_MODEL.config.max_seq_len}")
     except Exception as e:
         handle_error_no_return("Could not determine the model's context-length (max_seq_len), encountered error: ", e)
-    
+
     try:
         print(f"Model's context-length (max_input_len per forward-pass) is: {EXL2_MODEL.config.max_input_len}")
     except Exception as e:
@@ -2196,11 +2196,11 @@ def restart_server_stream():
     if not read_return['flux_diffusers']:
         model_params = get_model_params()   # We need to do so before redirecting output-streams!
         print(f"Setting model-parameters: {model_params}")
-    
+
     stop_thread = threading.Event()
 
     output_queue = queue.Queue()
-    
+
     custom_stdout = ThreadSafeStream(output_queue)
     custom_stderr = ThreadSafeStream(output_queue)
 
@@ -2215,14 +2215,14 @@ def restart_server_stream():
             sys.stdout = custom_stdout
             sys.stderr = custom_stderr
             logging.basicConfig(stream=custom_stdout, level=logging.INFO)   # logging level is set to INFO to ensure all logs are captured by the stream
-            
+
             if read_return['flux_diffusers']:
                 print("\nFlux Diffusers Selected - Loading...\n")
                 PIPE = load_flux_pipeline(PIPE)
             else:
                 if 'PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION' in os.environ:
                     del os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION']    # Better to delete as the default behavior is to try the C++ implementation first and fall back to Python if needed, which is more robust than simply setting it to 'cpp'.
-                
+
                 if read_return['exl2']:
                     print("\n\nExLlamaV2 Selected - Loading...\n\n")
                     load_exllama_pipeline()
@@ -2246,7 +2246,7 @@ def restart_server_stream():
                         print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
                     except Exception as e:
                         handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
-            
+
             print(f"\n{read_return['model_id']} loaded successfully!\n")
         except Exception as e:
             return handle_model_loading_error("Model loading failed, encountered error: ", e, "api")
@@ -2267,7 +2267,7 @@ def restart_server_stream():
                 print("\nNone read, breaking and stopping thread\n")
                 break
             yield f"data: {json.dumps(line)}\n\n"
-        
+
         yield f"event: END\ndata: \"null\"\n\n"
         print("\nrestart-server-stream done\n")
 
@@ -2286,7 +2286,7 @@ def initialize_model():
         read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'exl2'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
-    
+
     print(f"\n\nInitializing HF-Waitress LLM Server for {read_return['model_id']}\n\n")
 
     if read_return['flux_diffusers']:
@@ -2301,11 +2301,11 @@ def initialize_model():
         if read_return['exl2']:
             print("\n\nExLlamaV2 Selected - Loading...\n\n")
             load_exllama_pipeline()
-        
+
         else:
             model_params = get_model_params()
             print(f"Setting model-parameters: {model_params}")
-            
+
             if read_return['vision']:
                 print("\n\nVision Model Selected - Loading...\n\n")
                 PIPE = load_vision_pipeline(PIPE, model_params)
@@ -2321,12 +2321,12 @@ def initialize_model():
                     model=model,
                     tokenizer=tokenizer,
                 )
-        
+
             try:
                 print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
             except Exception as e:
                 handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
-    
+
     print(f"\n{read_return['model_id']} loaded successfully!\n")
 
     if read_return['push_to_hub']:
@@ -2488,7 +2488,7 @@ def get_input_params_for_vision_model(request):
             input_file.save(filepath)
         except Exception as e:
             return handle_api_error("Failed to save document to app folder, encountered error: ", e)
-        
+
         try:
             pil_image_object_list = get_pil_image_objects_for_file(filename, filepath, dpi)
         except Exception as e:
@@ -2514,7 +2514,7 @@ def get_font(size=16):
         return ImageFont.truetype("DejaVuSans.ttf", size)    # Try to load a common sans-serif font available on most systems
     except IOError:
         pass
-    
+
     print("\n\nCould not load a truetype font. Using default font\n\n")
     return ImageFont.load_default()     # If all else fails, use the default font
 
@@ -2535,7 +2535,7 @@ def get_blank_pil_image_object():
 
 def inference_with_vision_model(request):
     print("\n\nvision-completions route triggered") # No need to acquire LLM semaphore here, as the invoking method already has it!
-    
+
     try:
         input_text, pil_image_object_list, generation_config, filename, vision_file_present = get_input_params_for_vision_model(request)
     except Exception as e:
@@ -2549,7 +2549,7 @@ def inference_with_vision_model(request):
 
         if vision_file_present: 
             print(f"\n\nProcessing Page: {page_number} from file: {filename}\n\n")
-        
+
         try:
             print("\n\nLoading Input to Model\n\n")
             inputs = PIPE(image, input_text, return_tensors="pt").to(VISION_MODEL.device)
@@ -2570,7 +2570,7 @@ def inference_with_vision_model(request):
             # 6. The model's `generate` method returns a tensor that includes both, the input tokens and the newly generated tokens.
             # 7. By slicing from `input_length` onwards, we're effectively saying "give me all the tokens after the input sequence", which are the newly generated tokens.
             input_length = inputs.input_ids.shape[1] 
-            
+
             # Slice the tensor and decode only the output!
             decoded_output = PIPE.decode(output[0][input_length:], skip_special_tokens=True)    # Setting skip_special_tokens=True to remove: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
 
@@ -2579,7 +2579,7 @@ def inference_with_vision_model(request):
         except Exception as e:
             handle_local_error("Could not generate output, encountered error: ", e)
             return False
-    
+
     return inference_output
 
 
@@ -2662,7 +2662,7 @@ def completions():
             print("\n\nGenerating Output\n\n")
             output = PIPE.model.generate(**inputs, generation_config=generation_config)
             input_length = inputs.input_ids.shape[1]   # Check inference_with_vision_model(request) for detailed explanation!
-            
+
             # Slice the tensor and decode only the output!
             decoded_output = PIPE.tokenizer.decode(output[0][input_length:], skip_special_tokens=True)    # Setting skip_special_tokens=True to remove: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
 
@@ -2707,7 +2707,7 @@ def vision_stream():
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not get input params in vision_stream, encountered error: ", e)
-    
+
     if not vision_file_present:
         pil_image_object_list.append(get_blank_pil_image_object())
 
@@ -2720,12 +2720,12 @@ def vision_stream():
 
         try:
             for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
-                
+
                 if vision_file_present: 
                     status_string = f"Processing Page: {page_number} from file: {filename}\n\n"
                     data_queue.put(status_string)
                     print(status_string)
-                
+
                 print("\n\nLoading Input to Model\n\n")
                 inputs = PIPE(image, input_text, return_tensors="pt").to(VISION_MODEL.device)
 
@@ -2734,7 +2734,7 @@ def vision_stream():
 
                 # Get length of the input sequence - look for detailed comment in inference_with_vision_model() !
                 input_length = inputs.input_ids.shape[1] 
-                
+
                 # Slice the tensor and decode only the output!
                 decoded_output = PIPE.decode(output[0][input_length:], skip_special_tokens=True)    # Setting skip_special_tokens=True to remove: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
 
@@ -2746,7 +2746,7 @@ def vision_stream():
             data_queue.put(None)
             print("\n\nLLM stream done, releasing semaphore\n\n")
             llm_semaphore.release()
-    
+
     def generate():
 
         global STOP_GENERATION
@@ -2767,11 +2767,11 @@ def vision_stream():
                 thread.join()
                 break
             yield f"data: {json.dumps(output)}\n\n"
-        
+
         yield f"event: END\ndata: \"null\"\n\n"
 
         STOP_GENERATION = False
-            
+
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
 
@@ -2803,7 +2803,7 @@ def get_indices_of_substring(response, start_substring, end_substring):
             end_index = response.rindex(end_substring) # rindex() returns the index of the last occurrence of the substring
             print("\nSubstring successfully found, returning indices...\n")
             return start_index, (end_index + len(end_substring))
-            
+
         else:
             print(f"\nResponse does not contain either the start_substring: {start_substring} or the end_substring: {end_substring}, returning unchanged response...\n")
             return None, None
@@ -2819,18 +2819,18 @@ def remove_padding_from_transcription(transcription: str) -> str:
             start_substring="tony is quiet",
             end_substring="will be severely punished"
         )
-        
+
         if padding_start_index is None or padding_end_index is None:    # try once again with a small tweak!
             padding_start_index, padding_end_index = get_indices_of_substring(
                 transcription.lower().strip(),
                 start_substring="tony is quite",
                 end_substring="will be severely punished"
             )
-        
+
         if padding_start_index is not None and padding_end_index is not None:
             transcription = transcription[:padding_start_index] + transcription[padding_end_index:]
             transcription = transcription.replace(" .", "").strip()
-        
+
         return transcription
     except Exception as e:
         print(f"Failed to trim response, encountered error: {e}")
@@ -2864,7 +2864,7 @@ def generate_padding_audio(text:str, sr:int=16000) -> np.array:
     peak_volume = np.max(np.abs(audio_data))
     if peak_volume > 0:
         audio_data = audio_data / peak_volume
-    
+
     # Clean up the temp file
     # os.remove('temp_padding.wav')
     return audio_data
@@ -2923,7 +2923,7 @@ def transcribe_with_nv_canary_qwen_2_5b(audio_data: np.ndarray, asr_config: dict
         answer_ids = MODEL.generate(prompts=prompts, max_new_tokens=asr_config['asr_max_new_tokens'])
         text = MODEL.tokenizer.ids_to_text(answer_ids[0].cpu()).strip()
         return text
-    
+
     finally:
         try:
             os.remove(wav_path)
@@ -2950,7 +2950,7 @@ def transcribe_with_nv_canary_1b_v2(audio_data: np.ndarray, asr_config: dict) ->
         output = MODEL.transcribe([wav_path], source_lang='en', target_lang='en')
         text = output[0].text.strip()
         return text
-        
+
     finally:
         try:
             os.remove(wav_path)
@@ -3001,16 +3001,16 @@ def transcribe_audio_data_with_asr_model(audio_data: np.ndarray, asr_config: dic
     try:
         if ("openai/whisper" in asr_config['model_id']) and ("v3" in asr_config['model_id']):
             return transcribe_with_openai_whisper_v3(audio_data, asr_config)
-        
+
         elif ("nvidia/canary-qwen-2.5b" in asr_config['model_id']):
             return transcribe_with_nv_canary_qwen_2_5b(audio_data, asr_config)
-        
+
         elif ("nvidia/canary-1b-v2" in asr_config['model_id']):
             return transcribe_with_nv_canary_1b_v2(audio_data, asr_config)
-        
+
         elif ("ibm-granite/granite-speech-3.3" in asr_config['model_id']):
             return transcribe_with_ibm_granite_speech_3_3(audio_data, asr_config)
-        
+
         else:
             raise ValueError(f"Invalid ASR model ID: {asr_config['model_id']}")
     except Exception as e:
@@ -3041,13 +3041,13 @@ def asr_transcribe(audio_bytes: bytes, asr_config: dict) -> str:
         peak_volume = np.max(np.abs(audio_data)) if len(audio_data) > 0 else 0.0
         if peak_volume > 0: # normalize the spoken audio so it's not lost to the padding audio!
             audio_data = audio_data / peak_volume
-    
+
     padding_applied = False
     if asr_config['asr_apply_tts_padding']:
         print(f"Applying TTS padding to audio.")
         if len(audio_data) < asr_config['asr_min_context_s'] * asr_config['asr_samplerate']:
             print(f"Audio is shorter than {asr_config['asr_min_context_s']}s. Applying padding.")
-            
+
             if asr_config['asr_apply_rms_dimming']:
                 print(f"Applying RMS dimming to padding audio.")
                 speech = audio_data
@@ -3057,7 +3057,7 @@ def asr_transcribe(audio_bytes: bytes, asr_config: dict) -> str:
                     padding_audio_dimmed_rms = padding_audio * (target_pad_rms / pad_rms)
                 else:
                     padding_audio_dimmed_rms = padding_audio
-                
+
                 if asr_config['asr_apply_crossfade']:
                     print(f"Applying crossfade to padding audio.")
                     # short crossfade to avoid a hard boundary
@@ -3073,14 +3073,14 @@ def asr_transcribe(audio_bytes: bytes, asr_config: dict) -> str:
                 print(f"Applying padding audio without RMS dimming.")
                 audio_data = np.concatenate((audio_data, padding_audio))
                 padding_applied = True
-    
+
     if asr_config['asr_apply_zero_padding']:
         print(f"Applying zero-padding to audio.")
         needed = max(0, int(asr_config['asr_min_context_s'] * asr_config['asr_samplerate'] - len(audio_data)))
         if needed > 0:
             print(f"Audio is shorter than {asr_config['asr_min_context_s']}s. Applying zero-padding.")
             audio_data = np.concatenate((audio_data, np.zeros(needed, dtype=np.float32)))
-    
+
     # 3. Process Audio Data:
     print(f"Processing {len(audio_data)/asr_config['asr_samplerate']:.2f}s of audio...")
 
@@ -3088,7 +3088,7 @@ def asr_transcribe(audio_bytes: bytes, asr_config: dict) -> str:
 
     if padding_applied and transcription:
         transcription = remove_padding_from_transcription(transcription)
-    
+
     print(f"Transcription: {transcription}")
     return transcription
 
@@ -3168,17 +3168,17 @@ def transcribe():
         data = f.read()
         if not data:
             return handle_api_error("Empty audio file in request, encountered error: ", e)
-        
+
         try:
             final_asr_config = get_final_asr_config(request)
         except Exception as e:
             return handle_api_error("Could not get final ASR config, encountered error: ", e)
-        
+
         try:
             result = asr_transcribe(data, final_asr_config)
         except Exception as e:
             return handle_api_error("Could not transcribe audio, encountered error: ", e)
-        
+
         return jsonify(success=True, transcription=result)
     except Exception as e:
         return handle_api_error("Server-side error, could not transcribe audio, encountered error: ", e)
@@ -3190,10 +3190,10 @@ class ASRWebSocket(WebSocketEndpoint):
 
     async def on_connect(self, websocket):
         await websocket.accept()
-        self._hb_task = asyncio.create_task(self._heartbeat(websocket))
 
         # 1) Readt defaults from hf_config.json
         self.asr_cfg = read_asr_config()
+        self._asr_task = None
 
         # 2) Merge query-params while casting to the correct type, overriding defaults where provided
         qp = websocket.query_params
@@ -3208,21 +3208,24 @@ class ASRWebSocket(WebSocketEndpoint):
         set_if('asr_volume_threshold', float)
         set_if('asr_silence_duration_s', float)
         set_if('asr_min_chunk_duration_s', float)
-        set_if('asr_min_context_s', float)
+        set_if('asr_min_context_s', int)
         set_if('asr_stale_buffer_timeout_s', float)
         set_if('asr_min_meaningful_samples_factor', float)
         set_if('asr_vad_threshold', float)
-        set_if('asr_vad_min_speech_ms', float)
-        set_if('asr_vad_min_silence_ms', float)
+        set_if('asr_vad_min_speech_ms', int)
+        set_if('asr_vad_min_silence_ms', int)
         set_if('asr_vad_window_size_samples', int)
-        set_if('asr_vad_max_buffer_s', float)
-        set_if('asr_vad_speech_pad_ms', float)
+        set_if('asr_vad_max_buffer_s', int)
+        set_if('asr_vad_speech_pad_ms', int)
 
         # boolenas as strings: 'true'/'false'
         for bkey in ['asr_apply_normalization','asr_apply_tts_padding','asr_apply_zero_padding','asr_apply_rms_dimming','asr_apply_crossfade']:
             if bkey in qp: self.asr_cfg[bkey] = qp[bkey].lower() == 'true'
 
-        self.asr_cfg['source_samplerate'] = int(qp.get('source_samplerate', 44100))
+        self.asr_cfg['source_samplerate'] = int(qp.get('source_samplerate', 48000))
+
+        # print all final config values
+        print(f"Final ASR config: {self.asr_cfg}")
 
         # 3) With config loaded, init core data structures and utils:
         (self.get_speech_timestamps, _, _, _, _) = SILERO_UTILS     # Classes, just like methods, can access global/module scoped variables
@@ -3258,7 +3261,7 @@ class ASRWebSocket(WebSocketEndpoint):
         self.audio_buffer = np.concatenate((self.audio_buffer, chunk))
 
         # VAD when we have enough audio (~0.5s)
-        if len(self.audio_buffer) >= int(self.asr_cfg['asr_min_meaningful_samples_factor'] * self.asr_cfg['asr_samplerate']):
+        if len(self.audio_buffer) >= self.asr_cfg['asr_min_meaningful_samples_factor'] * self.asr_cfg['asr_samplerate']:
             with torch.no_grad():
                 wav_t = torch.from_numpy(self.audio_buffer.copy()).to(self.asr_cfg['asr_vad_device'])
                 segments = self.get_speech_timestamps(
@@ -3271,13 +3274,14 @@ class ASRWebSocket(WebSocketEndpoint):
                     window_size_samples=self.asr_cfg['asr_vad_window_size_samples'],
                     speech_pad_ms=self.asr_cfg['asr_vad_speech_pad_ms'],
                 )
-
+            
             if segments:
                 self.last_speech_time = time.time()
 
             last_end = 0
             for segment in segments:
                 start, end = segment["start"], segment["end"]
+                print(f"Segment: start={start}, end={end}, abs_start={self.global_cursor + start}, abs_end={self.global_cursor + end}, last_append_end_abs={self.last_append_end_abs}")
                 abs_start = self.global_cursor + start
                 abs_end = self.global_cursor + end
                 append_start_abs = max(abs_start, self.last_append_end_abs)
@@ -3291,70 +3295,31 @@ class ASRWebSocket(WebSocketEndpoint):
                     last_end = end
 
             # Trim rolling buffer with a bounded window
-            buf_len = len(self.audio_buffer)
             self.global_cursor += last_end  #processed tail
 
-            keep = int(self.asr_cfg['asr_vad_max_buffer_s'] * self.asr_cfg['asr_samplerate'])
+            # Determine how much of the buffer has been processed by the VAD.
+            processed_samples = 0
+            if last_end > 0:
+                # If speech was detected, we've processed up to the end of the last segment.
+                processed_samples = last_end
+            elif len(self.audio_buffer) > self.asr_cfg['asr_vad_window_size_samples']:
+                # If no speech was detected, we still processed the buffer.
+                # We can safely discard all but a small trailing overlap to prevent infinite growth.
+                overlap = self.asr_cfg['asr_vad_window_size_samples']
+                processed_samples = len(self.audio_buffer) - overlap
 
-            ### Clearing logic Option 1 - keep a bounded sliding window:
-            # buf_len = len(self.audio_buffer)
+            if processed_samples > 0:
+                # Update the global cursor and trim the audio buffer
+                self.global_cursor += processed_samples
+                self.audio_buffer = self.audio_buffer[processed_samples:] # No .copy() needed here, slicing creates a new view/copy
 
-            # # Drop what we've already processed
-            # drop_total = last_end
-
-            # # After dropping processed tail, keep at most 'keep' samples
-            # remaining = buf_len - drop_total
-            # if remaining > keep:
-            #     drop_total += (remaining - keep)
-
-            # if drop_total > 0:
-            #     self.audio_buffer = self.audio_buffer[drop_total:].copy()
-            #     self.global_cursor += drop_total
-            #     if self.last_append_end_abs < self.global_cursor:
-            #         self.last_append_end_abs = self.global_cursor
-
-
-            ### Clearing logic Option 2 - Simple Trimming:
-            self.global_cursor += last_end
-            if len(self.audio_buffer) > keep:
-                self.audio_buffer = np.array([], dtype=np.float32)
-                self.last_append_end_abs = self.global_cursor
-            else:
-                self.audio_buffer = self.audio_buffer[last_end:].copy()
-            
-            '''
-            The `self.last_append_end_abs = self.global_cursor` is optional and there to explicitly keep the invariant clean after a hard reset: last_append_end_abs >= global_cursor.
-            That guarantees the “append gate” is not behind the start of the buffer and avoids any chance of re-appending old audio.
-            
-            Is it required?
-                No. Given the math, after global_cursor += last_end, we already have last_append_end_abs <= global_cursor, so the gating logic will still work without updating it.
-                Keeping the line is harmless and makes the state explicit; omitting it retains the PoC minimalism.
-            '''
-
-            ### Clearing logic Option 3 - keep a bounded sliding window (potentially buggy! See note below):
-            '''
-            Key finding:
-            - The server code advances global_cursor by last_end and (conditionally) by drop, but in the buf_len > keep branch it slices the buffer only by drop (not by last_end).
-            - That makes global_cursor ahead of the new buffer start by last_end, which can desynchronize indices. The PoC avoids this.
-            
-            Do you need the more comprehensive approach?
-            - Not strictly. If your goal is just to avoid unbounded growth and you're fine with occasionally resetting the buffer when it gets too big, the PoC logic is simpler and safe.
-            - If you want a bounded sliding window (retain up to asr_vad_max_buffer_s of recent audio), keep the server's idea but fix the trim so global_cursor and audio_buffer stay aligned.
-            ''' 
-            # if buf_len > keep:
-            #     # Drop the oldest extra; keep only the last 'keep' samples
-            #     drop = buf_len - keep
-            #     self.global_cursor += drop
-            #     self.audio_buffer = self.audio_buffer[drop:].copy()
-            #     # Ensure append gate isn't ahead of the buffer start
-            #     if self.last_append_end_abs < self.global_cursor:
-            #         self.last_append_end_abs = self.global_cursor
-            # else:
-            #     # Buffer is within bounds; no drop needed
-            #     self.audio_buffer = self.audio_buffer[last_end:].copy()
+                # Ensure the append marker for the processing buffer doesn't fall behind
+                # the new start of the rolling buffer.
+                if self.last_append_end_abs < self.global_cursor:
+                    self.last_append_end_abs = self.global_cursor
 
             # If silence gap and we have enough speech, run ASR
-            if len(self.audio_to_process) >= self.asr_cfg['asr_min_chunk_duration_s'] * self.asr_cfg['asr_samplerate'] and (time.time() - self.last_speech_time) > self.asr_cfg['asr_silence_duration_s']:
+            if self.audio_to_process.size >= self.asr_cfg['asr_min_chunk_duration_s'] * self.asr_cfg['asr_samplerate'] and (time.time() - self.last_speech_time) > self.asr_cfg['asr_silence_duration_s']:
 
                 if self.asr_cfg['asr_apply_normalization']:
                     print(f"Applying normalization to audio.")
@@ -3366,7 +3331,7 @@ class ASRWebSocket(WebSocketEndpoint):
                 if self.asr_cfg['asr_apply_tts_padding'] and not self.asr_cfg['asr_apply_zero_padding']:
                     if len(self.audio_to_process) < self.asr_cfg['asr_min_context_s'] * self.asr_cfg['asr_samplerate']:
                         print(f"Audio is shorter than {self.asr_cfg['asr_min_context_s']}s. Applying padding.")
-                        
+
                         if self.asr_cfg['asr_apply_rms_dimming']:
                             print(f"Applying RMS dimming to padding audio.")
                             speech = self.audio_to_process
@@ -3376,7 +3341,7 @@ class ASRWebSocket(WebSocketEndpoint):
                                 padding_audio_dimmed_rms = self.padding_audio * (target_pad_rms / self.pad_rms)
                             else:
                                 padding_audio_dimmed_rms = self.padding_audio
-                            
+
                             if self.asr_cfg['asr_apply_crossfade']:
                                 print(f"Applying crossfade to padding audio.")
                                 # short crossfade to avoid a hard boundary
@@ -3385,7 +3350,7 @@ class ASRWebSocket(WebSocketEndpoint):
                                     fade = np.linspace(1.0, 0.0, xf, dtype=np.float32)
                                     self.audio_to_process[-xf:] *= fade
                                     padding_audio_dimmed_rms[:xf] *= (1.0 - fade)
-                                
+
                             self.audio_to_process = np.concatenate((self.audio_to_process, padding_audio_dimmed_rms))
                             padding_applied = True
 
@@ -3411,41 +3376,27 @@ class ASRWebSocket(WebSocketEndpoint):
                             start_substring="tony is quiet",
                             end_substring="will be severely punished"
                         )
-                        
+
                         if padding_start_index is None or padding_end_index is None:    # try once again with a small tweak!
                             padding_start_index, padding_end_index = get_indices_of_substring(
                                 transcription.lower().strip(),
                                 start_substring="tony is quite",
                                 end_substring="will be severely punished"
                             )
-                        
+
                         if padding_start_index is not None and padding_end_index is not None:
                             transcription = transcription[:padding_start_index] + transcription[padding_end_index:]
                             transcription = transcription.replace(" .", "").strip()
                     except Exception as e:
                         print(f"Failed to trim response, encountered error: {e}")
-                
+
                 if transcription:
                     print(f"\n\nSending transcription: {transcription}\n\n")
                     await websocket.send_text(json.dumps({"type": "transcript", "text": transcription}))
 
-                # After a SUCCESSFUL transcription, clear the buffer!
+                # After a SUCCESSFUL transcription, clear the chunk queue and reset append gate
                 self.audio_to_process = np.array([], dtype=np.float32)
                 self.last_append_end_abs = self.global_cursor
-
-    
-    async def on_disconnect(self, websocket, close_code):
-        if hasattr(self, '_hb_task'): self._hb_task.cancel()
-    
-
-    async def _heartbeat(self, ws):
-        try:
-            while True:
-                await asyncio.sleep(5)
-                await ws.send_text('{"type":"ping"}')
-        except Exception:
-            pass
-
 
 
 class CustomTextStreamer(TextStreamer):
@@ -3458,7 +3409,7 @@ class CustomTextStreamer(TextStreamer):
         if self.callback:
             self.callback(text)
         return self.buffer.write(text)
-    
+
     def flush(self):
         self.buffer.flush()
 
@@ -3550,7 +3501,7 @@ def completions_stream():
             llm_semaphore.release()
 
     def generate():        
-        
+
         global STOP_GENERATION
         STOP_GENERATION = False
 
@@ -3569,11 +3520,11 @@ def completions_stream():
                 thread.join()
                 break
             yield f"data: {json.dumps(line)}\n\n"
-        
+
         yield f"event: END\ndata: \"null\"\n\n"
 
         STOP_GENERATION = False
-            
+
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
 
@@ -3601,7 +3552,7 @@ def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
         # print(f"\n\nPrompt tokens shape: {prompt_tokens.shape}\n\n") # Outputs the tensor's shape (dimensions): torch.Size([<batch_size>, <num_tokens_in_prompt>]), example: torch.Size([1, 602])
         # shape[-1] "gives the shape of the last dimension", prompt_tokens.shape is multi-dimentional of shape [<batch_size>, <num_tokens_in_prompt>]
         # so -1, the last dimention = num_tokens_in_prompt
-        
+
         if prompt_tokens.shape[-1] <= EXL2_MODEL.config.max_seq_len:   # max_seq_len is the max context length of the model
             print(f"\n\nPrompt fits within context-window\n\n")
             return True
@@ -3640,7 +3591,7 @@ def set_global_exl2_dynamic_generator(batch_mode: bool = False):
         else:
             print("\nDefining ExLlamaV2DynamicGenerator in single-sequence mode\n")
             exl2_dynamic_generator = ExLlamaV2DynamicGenerator(model = EXL2_MODEL, cache = EXL2_CACHE, tokenizer = EXL2_TOKENIZER)
-        
+
         print("\nGenerator defined successfully\n")
         return exl2_dynamic_generator
     except Exception as e:
@@ -3742,13 +3693,13 @@ def exl2_stream():
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for exl2-stream, encountered error: ", e)
-    
+
     try:
         exl2_dynamic_generator = set_global_exl2_dynamic_generator()
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
-    
+
     try:
         tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
         # print(f"\nTokenized messages: {tokenized_messages}\n")
@@ -3756,7 +3707,7 @@ def exl2_stream():
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
-    
+
     if not exl2_prompt_fits_within_max_context_length(tokenized_messages):
         return handle_api_error("Prompt does not fit within max context length, enabling auto-truncation as a fallback. Encountered error: ", e)
 
@@ -3815,14 +3766,14 @@ def exl2_stream():
                 output_queue.put(None)
                 STOP_GENERATION = False
                 thread.join()
-            
+
             line = output_queue.get()
             if line is None:
                 print("\nNone read, breaking and stopping thread\n")
                 thread.join()
                 break
             yield f"data: {json.dumps(line)}\n\n"
-        
+
         yield f"event: END\ndata: \"null\"\n\n"
 
         print("\nexl2-stream done\n")
@@ -3840,12 +3791,12 @@ def trim_response(response, start_substring, end_substring, include_start_substr
         if start_substring in response and end_substring in response:
             start_index = response.rindex(start_substring)  # Sometimes the model re-gurgitates multiple copies of the same dict in it's response
             end_index = response.rindex(end_substring) # rindex() returns the index of the last occurrence of the substring
-            
+
             if not include_start_substring:
                 start_index += len(start_substring)
             if include_end_substring:
                 end_index += len(end_substring)
-            
+
             return response[start_index:end_index]
         else:
             print(f"\nResponse does not contain start_substring: {start_substring} or end_substring: {end_substring}, returning unchanged response...\n")
@@ -3909,10 +3860,10 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
         full_response = ""
         while exl2_dynamic_generator.num_remaining_jobs():
             current_token = exl2_dynamic_generator.iterate()
-            
+
             if len(current_token) == 1 and 'text' in current_token[0]:
                 full_response += current_token[0]['text']
-            
+
             elif len(current_token) > 1:
                 for job in current_token:
                     if 'stage' in job and job['stage'] == 'streaming':
@@ -3953,7 +3904,7 @@ def remove_blank_nodes_and_relationships(entities_and_relationships: dict):
             """Check if node has non-empty required fields"""
             return (str(node.get('name') or '').strip() and
                     str(node.get('type') or '').strip())
-        
+
             '''
             NOTE - Works because:
             1. A blank string evaluates to False in a boolean context
@@ -3987,11 +3938,11 @@ def core_dict_validation_logic_for_cache_reuse(extracted_dict: dict):
         # Check for required keys
         if 'nodes' not in extracted_dict or 'relationships' not in extracted_dict:
             raise ValueError("Missing required keys in extraction response: 'nodes' and/or 'relationships'")
-        
+
         # Check if keys are of the correct type
         if not isinstance(extracted_dict['nodes'], list) or not isinstance(extracted_dict['relationships'], list):
             raise ValueError(f"Expected 'nodes' and 'relationships' to be lists, got {type(extracted_dict['nodes']).__name__} and {type(extracted_dict['relationships']).__name__}")
-        
+
         # Check if nodes and relationships are lists of dicts - Consider using a JSON schema validation library (like jsonschema) if the expected structure becomes more complex.
         if not all(isinstance(node, dict) for node in extracted_dict['nodes']):
             raise ValueError("Expected all elements in 'nodes' list to be dicts.")
@@ -4020,7 +3971,7 @@ def validate_entity_extraction_response(extraction_response: str):
             # Check if it's a dict - ast.literal_eval can return other Python objects such as lists, strings, etc., so we need to check for that!
             if not isinstance(response_dict, dict):
                 raise ValueError(f"Expected a dict, got {type(response_dict).__name__}")
-            
+
             validated_response = core_dict_validation_logic_for_cache_reuse(response_dict)
             if validated_response is not None:
                 return {'validated_response': validated_response, 'is_valid': True}
@@ -4028,19 +3979,19 @@ def validate_entity_extraction_response(extraction_response: str):
         except Exception as e:
             handle_error_no_return(f"Could not validate entity extraction response, encountered error: ", e)
             return None
-    
+
     # Try direct response
     result = try_validation(extraction_response)
     if result is not None:
         return result
-    
+
     # Try with trimming
     trimmed_response = trim_response(extraction_response, '{"nodes":', '"}]}', include_start_substring=True, include_end_substring=True)
     result = try_validation(trimmed_response)
     if result is not None:
         print("\n\nTrimmed response validated successfully\n\n")
         return result
-    
+
     print(f"\nResponse validation failed even after trimming.\n")
     return {'validated_response': extraction_response, 'is_valid': False}
 
@@ -4061,19 +4012,19 @@ def process_nodes_and_relationships(
     try:
         comprehensive_summary_request_prompt = get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
         formatted_prompt = AUTO_TOKENIZER.apply_chat_template([{"role": "user", "content": comprehensive_summary_request_prompt}], add_generation_prompt=True, tokenize=False)
-        
+
         if exl2_prompt_fits_within_max_context_length(formatted_prompt):
             full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
         else:   # No errors are raised if the prompt is larger than the max context length because it'll be auto-truncated which we don't want so best to handle manually!
             minimal_summary_request_prompt = get_minimal_query_for_summary(chunk_text)
             formatted_prompt = AUTO_TOKENIZER.apply_chat_template([{"role": "user", "content": minimal_summary_request_prompt}], add_generation_prompt=True, tokenize=False)
-            
+
             if exl2_prompt_fits_within_max_context_length(formatted_prompt):
                 full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
             else:
                 handle_error_no_return(f"Could not generate comprehensive summary for chunk of document {source_doc_name} - too long even with minimal data! Encountered error: ", e)
                 return [""]
-        
+
         print("Summary generated, post-processing...\n")
         full_response = trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n{Page Number(s): " + str(page_number_list) + "}\n\n"
         print("\nSummary generation completed for present document chunk, proceeding...\n")
@@ -4082,7 +4033,7 @@ def process_nodes_and_relationships(
         handle_error_no_return(f"Could not prepare comprehensive-summary query for document {source_doc_name}, encountered error: ", e)
         return [""]
 
-    
+
 ### End of Helper Functions ###
 
 
@@ -4137,9 +4088,9 @@ def exl2_graph_extractor():
             for chunk_number, chunk_data in chunk_entities.items():
                 try:
                     source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
-                    
+
                     print(f"\nChecking for existing cache of previously extracted nodes and relationships for chunk {chunk_number} of document {source_doc_name}...\n")
-                    
+
                     if source_doc_name not in cache_data_map:
                         extraction_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_extraction_cache.json")
                         cached_data = None
@@ -4147,18 +4098,18 @@ def exl2_graph_extractor():
                             cached_data = load_json_file(extraction_cache_file_path)
                         except Exception as e:
                             handle_error_no_return(f"Could not load extraction-cache file at path {extraction_cache_file_path} for document {source_doc_name}, proceeding to extract afresh. Encountered error: ", e)
-                        
+
                         cache_data_map[source_doc_name] = {
                             'data': cached_data if isinstance(cached_data, dict) else {},
                             'file_path': extraction_cache_file_path
                         }   # Because the next step expects `source_doc_name` to be a key in the `cache_data_map` dict!
-                    
-                    
+
+
                     cached_chunk_data = cache_data_map.get(source_doc_name, {}).get('data', {}).get(chunk_number, {})
-                    
+
                     if cached_chunk_data and cached_chunk_data.get('entities_and_relationships'):
                         validation_result = core_dict_validation_logic_for_cache_reuse(cached_chunk_data['entities_and_relationships'])
-                        
+
                         if validation_result is not None:
                             # Path 1: Valid cache found. Use it and DO NOT add to the list.
                             chunk_entities[chunk_number]['entities_and_relationships'] = remove_blank_nodes_and_relationships(cached_chunk_data['entities_and_relationships'])    # NOTE: Only the 'entities_and_relationships' key is updated in the chunk_entities dict received in the POST request!
@@ -4171,18 +4122,18 @@ def exl2_graph_extractor():
                     else:
                         # Path 3: No cache entry exists for this chunk. Add to list.
                         new_chunks_for_llm.append(chunk_number)
-                
+
                 except Exception as e:
                     # Path 4: A generic error occurred. Default to reprocessing for safety.
                     handle_error_no_return(f"Error processing cache for chunk {chunk_number} of document {source_doc_name}, will be processed afresh for safety. Encountered error: ", e)
                     new_chunks_for_llm.append(chunk_number)
 
             return new_chunks_for_llm
-                
+
         try:
             # --- PHASE 1: DETERMINE FULL WORKLOAD ---
             entries_to_process = list(chunk_entities.keys())    # Default to all chunks entries
-            
+
             if reuse_graph_extraction_cache and not rag_response_mode:   # When responding to a query, we don't want to use the cache which is meant only for the file-processing step!
                 try:
                     entries_to_process = load_and_fire_off_cache()  # If any entries were previously cached, those are returned and only new entries are processed by the LLM
@@ -4269,12 +4220,12 @@ def exl2_graph_extractor():
 
                         print(f"\nAttempting to extract entities and relationships from chunk {chunk_number} of document {source_doc_name}...processing item {processed_entries + 1} of total {total_entry_count} items...\n")
                         full_payload = get_request_payload_for_graph_entity_extraction(chunk_data['chunk_text'])
-                        
+
                         response_validation_result = None
                         if exl2_prompt_fits_within_max_context_length(full_payload):
                             extraction_response_first_attempt = create_and_execute_exl2_job(payload=full_payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
                             response_validation_result = validate_entity_extraction_response(extraction_response_first_attempt)
-                        
+
                         if response_validation_result is not None and response_validation_result['is_valid']:
                             full_response = remove_blank_nodes_and_relationships(response_validation_result['validated_response'])  # remove-blank_nodes_and_relationships() will either return a cleaned-up dict, or the unchanged dict on error or if no changes were made!
                         else:
@@ -4291,17 +4242,17 @@ def exl2_graph_extractor():
                                         b) Now if the next chunk also fails, and you remove the leading and trailing overlap, you have outright lost those 300 chars and never even processed them!
                                 The best way to mitigate this is via clever recursion!
                                 '''
-                                
+
                                 # Prevent infinite recursion
                                 if current_depth >= max_depth:
                                     print(f"Max depth reached - could not extract all entities and relationships for chunk {chunk_number} of document {source_doc_name}. Returning empty response...")
                                     return {'nodes': [], 'relationships': []}
-                                
+
                                 # Prevent splitting text that's too small to be meaningful
                                 if len(chunk_text.strip()) < 100:
                                     print(f"Chunk text too small - could not extract all entities and relationships for chunk {chunk_number} of document {source_doc_name}. Returning empty response...")
                                     return {'nodes': [], 'relationships': []}
-                                
+
                                 try:
                                     payload = get_request_payload_for_graph_entity_extraction(chunk_text)
                                     response = create_and_execute_exl2_job(payload=payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
@@ -4309,7 +4260,7 @@ def exl2_graph_extractor():
                                 except Exception as e:
                                     handle_error_no_return(f"Could not extract entities and relationships for sub-chunk of chunk {chunk_number} from document {source_doc_name}. Current recursive depth: {current_depth} of {max_depth}. Encountered error: ", e)
                                     return {'nodes': [], 'relationships': []}
-                                
+
                                 if response_validation_result['is_valid']:
                                     print(f"Recursive Entity Extraction Successful: Sub-chunk of chunk {chunk_number} from document {source_doc_name} successfully validated!")
                                     return remove_blank_nodes_and_relationships(response_validation_result['validated_response'])
@@ -4332,7 +4283,7 @@ def exl2_graph_extractor():
                             mid_point = len(large_chunk_text)//2
                             response_1 = retry_entity_extraction(large_chunk_text[:mid_point])   # Floor division will round down to the nearest integer, thus handling odd-length chunks
                             response_2 = retry_entity_extraction(large_chunk_text[mid_point:])
-                            
+
                             full_response = {
                                 'nodes': response_1.get('nodes', []) + response_2.get('nodes', []),
                                 'relationships': response_1.get('relationships', []) + response_2.get('relationships', [])
@@ -4344,7 +4295,7 @@ def exl2_graph_extractor():
                             cache_queue.put({chunk_number: chunk_entities[chunk_number]})
 
                         processed_entries += 1
-                
+
                     except Exception as e:
                         handle_error_no_return(f"Could not extract entities and relationships from chunk {chunk_number} of document {source_doc_name}, skipping. Encountered error: ", e)
                         chunk_entities[chunk_number]['entities_and_relationships'] = {'nodes': [], 'relationships': []}     # Set empty or default value in case of complete failure
@@ -4362,7 +4313,7 @@ def exl2_graph_extractor():
             # ONLY signal the caching thread to stop IF it was started.
             if not rag_response_mode:
                 cache_queue.put(None)
-            
+
             print("\n\nLLM stream done, releasing semaphore\n\n")
             llm_semaphore.release()
             stop_thread.set()
@@ -4378,7 +4329,7 @@ def exl2_graph_extractor():
         except Exception as e:
             handle_error_no_return(f"Could not cache identified nodes and relationships from document {source_doc_name} to cache file at path {extraction_cache_file_path}, skipping. Encountered error: ", e)
 
-    
+
     def caching_thread():
         while True:
             line =  cache_queue.get()
@@ -4397,7 +4348,7 @@ def exl2_graph_extractor():
                 print("\nNone read, breaking and stopping task-thread\n")
                 break
             yield f"data: {json.dumps(line)}\n\n"
-        
+
         yield f"event: END\ndata: \"null\"\n\n"
 
         print("\n/exl2-graph-extractor done\n")
@@ -4457,7 +4408,7 @@ def exl2_graph_summarizer():
             If so, the cached data is streamed back right-away, leaving only the tasks to be processed by the LLM.
             This ensures maximum GPU utilization as each iteration purely executes the LLM task, without checking for / saving to cache which can be very I/O expensive for large files! 
             '''
-            
+
             cache_data_map = {}     # declaring here in-case multiple source-doc_names are present in the chunk_entities dict!
             new_chunks_for_llm = [] # we add to this instead of deleting from the chunck_entities dict as "Filter & Return" is a superior design pattern to "Iterate & Mutate"
             # In the latter, a shared structure (chunk_entities) outside the scope of the function is mutated, which is not thread-safe!
@@ -4475,16 +4426,16 @@ def exl2_graph_summarizer():
                             cached_data = load_json_file(summary_cache_file_path)
                         except Exception as e:
                             handle_error_no_return(f"Could not load summary-cache file at path {summary_cache_file_path} for document {source_doc_name}, proceeding to generate afresh. Encountered error: ", e)
-                        
+
                         cache_data_map[source_doc_name] = {
                             'data': cached_data if isinstance(cached_data, dict) else {},
                             'file_path': summary_cache_file_path
                         }   # Because the next step expects `source_doc_name` to be a key in the `cache_data_map` dict!
-                        
+
                     cached_chunk_data = cache_data_map.get(source_doc_name, {}).get('data', {}).get(chunk_number, {})
 
                     if cached_chunk_data and 'summary' in cached_chunk_data:
-                        
+
                         if cached_chunk_data['summary'] is not None and isinstance(cached_chunk_data['summary'], list) and len(cached_chunk_data['summary']) > 0:
                             # Path 1: Valid cache found. Use it and DO NOT add to the list.
                             chunk_entities[chunk_number]['summary'] = cached_chunk_data['summary']
@@ -4497,12 +4448,12 @@ def exl2_graph_summarizer():
                     else:
                         # Path 3: No cache entry exists for this chunk. Add to list.
                         new_chunks_for_llm.append(chunk_number)
-                
+
                 except Exception as e:
                     # Path 4: A generic error occurred. Default to reprocessing for safety.
                     handle_error_no_return(f"Error processing cache for chunk {chunk_number} of document {source_doc_name}, will be processed afresh for safety. Encountered error: ", e)
                     new_chunks_for_llm.append(chunk_number)
-                
+
             return new_chunks_for_llm
 
         try:
@@ -4515,7 +4466,7 @@ def exl2_graph_summarizer():
                 except Exception as e:
                     handle_error_no_return(f"Error processing cache, proceeding to process all chunks afresh. Encountered error: ", e)
                     entries_to_process = list(chunk_entities.keys())
-            
+
             # --- PHASE 2 & 3: BATCH AND EXECUTE ---
             total_entry_count = len(entries_to_process)
             processed_entries = 0
@@ -4549,13 +4500,13 @@ def exl2_graph_summarizer():
                             requested_max_new_tokens=requested_max_new_tokens,
                             gen_settings=gen_settings
                         )
-                        
+
                         chunk_entities[chunk_number]['summary'] = chunk_summary
                         output_queue.put(chunk_entities[chunk_number])
                         cache_queue.put({chunk_number: chunk_entities[chunk_number]})
-                        
+
                         processed_entries += 1
-                    
+
                     except Exception as e:
                         handle_error_no_return(f"Could not generate summary for nodes and relationships for chunk {chunk_number} from document {source_doc_name}, skipping. Encountered error: ", e)
                         chunk_entities[chunk_number]['summary'] = []
@@ -4591,7 +4542,7 @@ def exl2_graph_summarizer():
                 print("\nNone read, breaking and stopping cache-thread\n")
                 break
             save_to_local_cache(line)
-        
+
         print("\n\nCaching complete\n\n")
 
 
@@ -4602,7 +4553,7 @@ def exl2_graph_summarizer():
                 print("\nNone read, breaking and stopping task-thread\n")
                 break
             yield f"data: {json.dumps(line)}\n\n"
-        
+
         yield f"event: END\ndata: \"null\"\n\n"
 
         print("\n/exl2-graph-summarizer done\n")
@@ -4628,19 +4579,19 @@ def health():
         return True
 
     print("\n\nHF-Waitress LLM health-check in-progress...\n\n")
-    
+
     with reader_semaphore:
-    
+
         try:
             if PIPE is None and (EXL2_MODEL is None or EXL2_CACHE is None or EXL2_TOKENIZER is None or AUTO_TOKENIZER is None):
                 return jsonify(status="error", message="Model not loaded"), 503 # Service Unavailable
-            
+
             model_info = {}
 
             # print(f"\n\nmodel details: {PIPE.model}\n\n")
             # print(f"\n\nmodel.config details: {PIPE.model.config}\n\n")
             # print(f"\n\ntokenizer details: {PIPE.tokenizer}\n\n")
-            
+
             try:
                 model_info["model_id"] = str(PIPE.model.config._name_or_path)
             except Exception as e:
@@ -4694,17 +4645,17 @@ def health():
                     model_info["tokenizer_vocab_length"] = len(PIPE.tokenizer)
                 except Exception as e:
                     throw_health_check_error("tokenizer_vocab_length", e)
-            
+
             try:
                 model_info["tokenizer_vocab_size"] = str(PIPE.tokenizer.vocab_size)
             except Exception as e:
                 throw_health_check_error("tokenizer_vocab_size", e)
-            
+
             try:
                 model_info["number_of_hidden_layers"] = str(PIPE.model.config.num_hidden_layers)
             except Exception as e:
                 throw_health_check_error("number_of_hidden_layers", e)
-            
+
             try:
                 model_info["number_of_attention_heads"] = str(PIPE.model.config.num_attention_heads)
             except Exception as e:
@@ -4719,12 +4670,12 @@ def health():
                 model_info["number_of_key_value_heads"] = str(PIPE.model.config.num_key_value_heads)
             except Exception as e:
                 throw_health_check_error("number_of_key_value_heads", e)
-            
+
             try:
                 model_info["hidden_activation"] = str(PIPE.model.config.hidden_act)
             except Exception as e:
                 throw_health_check_error("hidden_activation", e)
-            
+
             try:
                 model_info["hidden_size"] = str(PIPE.model.config.hidden_size)
             except Exception as e:
@@ -4759,7 +4710,7 @@ def health():
 
 @app.route('/restart_server')
 def restart_server():
-    
+
     with llm_semaphore:
         print("\n\nrestart-server acquired llm_semaphore, proceeding...\n\n")
         with config_writer_semaphore:
@@ -4774,7 +4725,7 @@ def restart_server():
                     initialize_model()
                 except Exception as e:
                     handle_api_error("Could not restart server, encountered error: ", e)
-                
+
                 return jsonify(success=True)
 
 
@@ -4828,7 +4779,7 @@ if __name__ == '__main__':
     _ = parse_arguments()
     initialize_model()
     host, port = get_host_and_port()
-    uvicorn.run(build_asgi_app(), host=host, port=port, workers=1, ws_ping_interval=5, ws_ping_timeout=300000) # browsers will auto-reply to pings with a pong so the connection will stay alive as long as the client is present!
+    uvicorn.run(build_asgi_app(), host=host, port=port, workers=1, ws_ping_interval=30, ws_ping_timeout=300000) # browsers will auto-reply to pings with a pong so the connection will stay alive as long as the client is present!
 
 '''
 # Technical note: “WSGI → ASGI wrapping” for streaming ASR
@@ -4901,5 +4852,4 @@ Many teams use it as a pragmatic bridge.
     - Keeps your entire Flask surface and behavior unchanged (GET/POST, SSE generators, logging, config/shutdown).
     - Lets you add a native WebSocket endpoint in the same process.
     - Minimal change risk; single binary/port; no code split.
-
 '''
