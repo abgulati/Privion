@@ -299,7 +299,6 @@ function stopStreamingASR() {
     if (!streaming) return;
     streaming = false;
 
-    if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
     if (ws && ws.readyState === WebSocket.OPEN) {
         try { ws.close(); } catch (_) {}
     }
