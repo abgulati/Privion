@@ -3191,9 +3191,8 @@ class ASRWebSocket(WebSocketEndpoint):
     async def on_connect(self, websocket):
         await websocket.accept()
 
-        # 1) Readt defaults from hf_config.json
+        # 1) Read defaults from hf_config.json
         self.asr_cfg = read_asr_config()
-        self._asr_task = None
 
         # 2) Merge query-params while casting to the correct type, overriding defaults where provided
         qp = websocket.query_params
@@ -3281,7 +3280,6 @@ class ASRWebSocket(WebSocketEndpoint):
             last_end = 0
             for segment in segments:
                 start, end = segment["start"], segment["end"]
-                print(f"Segment: start={start}, end={end}, abs_start={self.global_cursor + start}, abs_end={self.global_cursor + end}, last_append_end_abs={self.last_append_end_abs}")
                 abs_start = self.global_cursor + start
                 abs_end = self.global_cursor + end
                 append_start_abs = max(abs_start, self.last_append_end_abs)
