@@ -14,6 +14,8 @@ let streamBuffer = [];  // Array of Float32Array objects that represent the audi
 let streamBytesPerFrame = 0; // Number of bytes per frame - Updated in startStreaming-ASR() on WS-Open event to reflect 20ms once the final SR (below) is known
 let streamSampleRate = 48000; // Sample rate of the audio stream
 let streaming = false; // Boolean value that indicates whether the streaming is active or not
+let reconnectAttempts = 0; // Number of times to attempt to reconnect to the ASGI server
+const MAX_RECONNECT_ATTEMPTS = 9; // Maximum number of times to attempt to reconnect to the ASGI server
 
 
 function float32ToPCM16(float32) {
@@ -229,13 +231,7 @@ async function determineLlmUse(transcription) {
 }
 
 
-async function startStreamingASR() {
-    if (streaming) return;
-    streaming = true;
-
-    // Start mic capture (reusing your existing start-Recording graph)
-    await startRecording();
-
+function connectAsrWebSocket() {
     // Open WebSocket to the sidecar ASGI server
     // Example: ws://localhost:9070/ws/asr (adjust host/port) 'ws://localhost:10087/ws/asr'
     const asrWsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + getHfwAsrAsgiHost() + ':' + getHfwAsrAsgiPort() + '/ws/asr';
@@ -308,14 +304,41 @@ async function startStreamingASR() {
             if (msg.type === 'transcript' && msg.text) {
                 determineLlmUse(msg.text);
             }
-        } catch {
-            // ignore binary or unexpected messages
-        }
+        } catch {}
     };
 
-    ws.onclose = () => { ws = null; };
-    ws.onerror = () => { /* optional logging */ };
-    
+    ws.onerror = (err) => { 
+        console.error('WebSocket error:', err);
+     };
+
+    ws.onclose = (event) => { 
+        console.log(`Websocket closed. Code: ${event.code}, Reason: ${event.reason}`);
+        ws = null;
+        if (streaming && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttempts++;
+            // Exponential backoff: 1s, 2s, 4s, 8s...
+            const delay = Math.pow(2, reconnectAttempts) * 500; // 500ms, 1s, 2s, 4s, 8s...
+            console.log(`Will attempt to reconnect in ${delay}ms...`);
+            setTimeout(connectAsrWebSocket, delay);
+        } else if (streaming) {
+            console.error('Max reconnect attempts reached. Stopping streaming.');
+            stopStreamingASR();
+            const btnEl = document.getElementById('recordBtn');
+            if (btnEl) {
+                btnEl.querySelector('i').classList.remove('fa-microphone');
+                btnEl.querySelector('i').classList.add('fa-microphone-slash');
+                btnEl.classList.remove('recording');
+            }
+        }
+     };
+}
+
+
+async function startStreamingASR() {
+    if (streaming) return;
+    streaming = true;
+    await startRecording(); // Start mic capture (reusing your existing start-Recording graph)
+    connectAsrWebSocket(); // Connect to the ASGI server
 
     // Hook worklet delivery into the streaming buffer
     // Store the original handler to preserve any existing audio processing functionality
@@ -435,12 +458,12 @@ async function toggleStreaming(btnEl) {
         await startStreamingASR();
         btnEl.querySelector('i').classList.remove('fa-microphone-slash');
         btnEl.querySelector('i').classList.add('fa-microphone');
-        document.getElementById('recordBtn').classList.add('recording');
+        btnEl.classList.add('recording');
     } else {
         stopStreamingASR();
         btnEl.querySelector('i').classList.remove('fa-microphone');
         btnEl.querySelector('i').classList.add('fa-microphone-slash');
-        document.getElementById('recordBtn').classList.remove('recording');
+        btnEl.classList.remove('recording');
     }
 }
 
