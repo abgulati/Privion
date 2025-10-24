@@ -145,7 +145,7 @@ async function drainQueue() {
 
 async function enqueueQuery(q) {
     pendingQueries.push(q); // push to pending Q and trigger LLM execution to drain!
-    if (!llmBusy) await drainQueue();   // else if LLM is indeed busy, drainQ will handle it automatically in the finally block!
+    if (!llmBusy) await drainQueue();   // else if LLM is already busy, do nothing here as drainQ will handle it automatically in the finally block!
 }
 
 
@@ -176,7 +176,7 @@ function clearWakeDebounce() {
 function resetWakeDebounce() {
     /*
     Set timeout to finalize utterance, invoked when transcription with the wake word is detected.
-    Will clear the timeout on each onvocation but once the timeout expires, the utterance will 
+    Will clear the timeout on each invocation but once the timeout expires, the utterance will 
     be finalized and the LLM will be triggered to execute the query!
     */
     clearWakeDebounce();
@@ -810,6 +810,6 @@ function toggleRecord(btnEl) {
 
     Also if this file becomes a proper ES module, the functions won't be automatically exported to the global namespace, so this pattern is necessary to ensure they're accessible!
     
-    Lastly, do note that `{ startStreamingASR, stopStreamingASR, toggleStreaming }` syntax is ES6 object literal shorthand:
-    it's equivalent to `{ startStreamingASR: startStreamingASR, stopStreamingASR: stopStreamingASR, toggleStreaming: toggleStreaming }`
+    Lastly, do note that `{ startStreamingASR, stopStreamingASR, toggleStreaming }` syntax is ES6 object literal shorthand and is
+    equivalent to `{ startStreamingASR: startStreamingASR, stopStreamingASR: stopStreamingASR, toggleStreaming: toggleStreaming }`.
 */
