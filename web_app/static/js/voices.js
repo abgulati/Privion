@@ -198,6 +198,7 @@ function cancelIfStop(text) {
 let rollingBuffer = []; // Used to maintain the last 100 raw fragments for debugging/context.
 
 async function determineLlmUse(transcription) {
+    console.log('Received transcription from ASR Server:', transcription);
     let wakeWord = document.getElementById('asr_wake_word').value;
     const text = String(transcription || '').trim();
     if (!text) return;
@@ -213,7 +214,7 @@ async function determineLlmUse(transcription) {
         // Wait for wake word
         if (text.toLowerCase().includes(wakeWord)) {
             const cleaned = stripWakeWord(text);
-            console.log('cleaned:', cleaned);
+            console.log('Transcription after stripping wake word:', cleaned);
             wakeSession.armed = true;
             wakeSession.assembled = cleaned;
             resetWakeDebounce();
@@ -238,7 +239,7 @@ async function startStreamingASR() {
     // Open WebSocket to the sidecar ASGI server
     // Example: ws://localhost:9070/ws/asr (adjust host/port) 'ws://localhost:10087/ws/asr'
     const asrWsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + getHfwAsrAsgiHost() + ':' + getHfwAsrAsgiPort() + '/ws/asr';
-    console.log('asrWsUrl:', asrWsUrl);
+    // console.log('asrWsUrl:', asrWsUrl);
 
     // Create a URLSearchParams object to build the query string
     const queryParams = new URLSearchParams();
@@ -511,7 +512,6 @@ async function uploadWav(wavBlob) {
 
         // Paste into user-input
         const userInput = document.getElementById('user-input');
-        console.log('userInput.value:', userInput.value);
         userInput.value == '' ? userInput.value = data.transcription : userInput.value += ' ' + data.transcription;
         userInput.focus();
     } catch (e) {
