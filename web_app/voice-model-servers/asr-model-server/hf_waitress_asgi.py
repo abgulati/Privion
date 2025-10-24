@@ -3397,6 +3397,18 @@ class ASRWebSocket(WebSocketEndpoint):
                 self.last_append_end_abs = self.global_cursor
 
 
+    async def on_disconnect(self, websocket, close_code):
+        """
+        Handles cleanup when a client disconnects.
+        """
+        print(f"\n\nClient disconnected with code: {close_code}\n\n")
+        # If you had any resources tied to this specific connection,
+        # you would clean them up here. For example:
+        # self.cleanup_user_session()
+        # For now, logging is sufficient and good practice.
+
+
+
 class CustomTextStreamer(TextStreamer):
     def __init__(self, tokenizer, skip_special_tokens=True, skip_prompt=True, **kwargs):
         super().__init__(tokenizer, skip_special_tokens=skip_special_tokens, skip_prompt=skip_prompt, **kwargs)
