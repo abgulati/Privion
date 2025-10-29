@@ -116,8 +116,15 @@ def get_url_for_server(server_to_check):
         except Exception as e:
             print("Could not read hf_waitress_access_url and hf_waitress_server_port from config.json, using default localhost:9069 instead. Encountered error: ", e)
             return 'http://localhost:9069'
+    elif server_to_check == 'asr-waitress':
+        try:
+            read_return = read_config(['asr_waitress_access_url', 'asr_waitress_server_port'])
+            return f'http://{read_return["asr_waitress_access_url"]}:{read_return["asr_waitress_server_port"]}'
+        except Exception as e:
+            print("Could not read asr_waitress_access_url and asr_waitress_server_port from config.json, using default localhost:10087 instead. Encountered error: ", e)
+            return 'http://localhost:10087'
     else:
-        raise Exception(f"Invalid server choice, expected 'llama-cpp' or 'hf-waitress', received: {server_to_check}")
+        raise Exception(f"Invalid server choice, expected 'llama-cpp', 'hf-waitress', or 'asr-waitress', received: {server_to_check}")
 
 
 def is_local_server_online(server_base_url:str) -> dict:
