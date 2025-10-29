@@ -90,6 +90,11 @@ def write_config(config_updates:dict, filename=None) -> dict:
             reload_asr = True
             break
 
+    # Handle any special cases here:
+    if not reload_asr:  # 1. If the relaod_asr trigger hasn't already been set...
+        if config_updates.get('enable_asr') and not config.get('enable_asr'):   #... and only if ASR is being switched on from an off state...
+            reload_asr = True   # ...then set the reload trigger as asr-server_starter_endpoint will handle the rest!
+
     config.update(config_updates)
 
     # Write updated config.json:
