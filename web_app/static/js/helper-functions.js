@@ -1709,3 +1709,31 @@ function collapseAdvancedSettings(advancedSettingsId) {
         bsCollapse.hide();
     }
 }
+
+
+function handleAsrShutdown() {
+    console.log("ASR shutdown requested");
+    showStreamSpinner();
+    appendStreamInfo("Shutting down ASR server...", 'waiting');
+    fetch('/shutdown_local_llm_server', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({'server_to_shutdown': 'asr-waitress'})
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error)});
+        }
+        return response.json()
+    }).then(data => {
+        console.log(data);
+        if (!data.success) {
+            throw new Error('Failed to Hard-Reboot Speech Transcription Server. Check server-log and server command-line for more details.');
+        }
+        appendStreamInfo("Speech Transcription Server Shutting Down Successfully.", 'success');
+    }).catch(error => {
+        appendStreamInfo(error.message);
+    }).finally(() => {
+        hideStreamSpinner();
+    });
+}
