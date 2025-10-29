@@ -1215,12 +1215,12 @@ function googleDriveLogout() {
 }
 
 
-function checkLocalLLMServerStatus() {
-    setServerStatusIndicator('Status Check In-Progress...');
-    const server_to_check = document.getElementById('local_llm_server_select_dropdown').value;
+function checkLocalLLMServerStatus(asr_check = false) {
+    if (!asr_check) { setServerStatusIndicator('Status Check In-Progress...'); }
+    const server_to_check = asr_check ? 'asr-waitress' : document.getElementById('local_llm_server_select_dropdown').value;
     let formData = new FormData();
     formData.append('server_to_check', server_to_check);
-    fetch('/check_local_llm_server_status', {
+    return fetch('/check_local_llm_server_status', {    // returning will make the function return the promise chain so Promise.all (and any .then) will wait!
         method: 'POST',
         body: formData
     })
@@ -1231,20 +1231,14 @@ function checkLocalLLMServerStatus() {
         return response.json()
     })
     .then(data => {
-        if (data.success) {
-            console.log(data);
-            if (data.server_online) {
-                setServerStatusIndicator('Online');
-            } else {
-                setServerStatusIndicator('Offline');
-            }
-        } else {
-            throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
-        }
+        if (!data.success) throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+        if (!asr_check) { setServerStatusIndicator(data.server_online ? 'Online' : 'Offline'); }
+        return data.server_online;
     })
     .catch(error => {
         //errorHandler("checking local LLM server status", "check-LocalLLMServerStatus()", String(error.message));
         appendStreamInfo('Error: Could not check local LLM server status (server likely offline)', 'failure');
+        throw error;    // rethrow so promise.all rejects!
     });
 }
 
