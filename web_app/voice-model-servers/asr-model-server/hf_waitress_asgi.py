@@ -4593,7 +4593,9 @@ def health():
     with reader_semaphore:
 
         try:
-            if PIPE is None and (EXL2_MODEL is None or EXL2_CACHE is None or EXL2_TOKENIZER is None or AUTO_TOKENIZER is None):
+            if PIPE is None and \
+            (EXL2_MODEL is None or EXL2_CACHE is None or EXL2_TOKENIZER is None or AUTO_TOKENIZER is None) and \
+            (MODEL is None or PROCESSOR is None or TOKENIZER is None or SILERO_VAD is None or SILERO_UTILS is None):
                 return jsonify(status="error", message="Model not loaded"), 503 # Service Unavailable
 
             model_info = {}
