@@ -4451,7 +4451,7 @@ def insert_into_staging_db(doc_info: dict, skip_check: bool = False):
 
 
 def perform_post_bulk_upload_cleanup(data_queue: queue.Queue = None):
-    # 1. Shutdown the graph summarizer model - while the summarizer model is being shutdown after use, we don't terminate the graph-extraction model as it's used for GraphRAG responses!
+    # 1. Shutdown the graph summarizer model
     try:
         config_data = read_config(['graph_summarizer_access_url', 'graph_summarizer_server_port', 'graph_model_access_url', 'graph_model_server_port'])
         summarizer_url = f"http://{config_data['graph_summarizer_access_url']}:{config_data['graph_summarizer_server_port']}"
@@ -4466,7 +4466,21 @@ def perform_post_bulk_upload_cleanup(data_queue: queue.Queue = None):
     except Exception as e:
         handle_error_no_return("Could not shutdown graph summarizer model, encountered error: ", e)
 
-    # 2. Ensure chat-LLM server is online
+    # 2. Shutdown the graph extraction model
+    try:
+        graph_extraction_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
+        if data_queue is not None: data_queue.put(f"Shutting down graph extraction model at URL {graph_extraction_url}... | waiting")
+        response = utils.shutdown_waitress_server(graph_extraction_url)
+        if isinstance(response, dict) and response.get('success'):
+            print(f"\nSuccessfully shut down graph extraction model at URL {graph_extraction_url}\n")
+            if data_queue is not None: data_queue.put(f"Successfully shut down graph extraction model at URL {graph_extraction_url} | success")
+        else:
+            handle_error_no_return(f"\nCould not shut down graph extraction model at URL {graph_extraction_url}, proceeding regardless...\n")
+            if data_queue is not None: data_queue.put(f"Error shutting down graph extraction model at URL {graph_extraction_url} | failure")
+    except Exception as e:
+        handle_error_no_return("Could not shutdown graph extraction model, encountered error: ", e)
+
+    # 3. Ensure chat-LLM server is online
     try:
         read_return = read_config(['local_llm_server', 'exclusive_server_mode'])
         server_to_start = read_return['local_llm_server']
@@ -4478,16 +4492,7 @@ def perform_post_bulk_upload_cleanup(data_queue: queue.Queue = None):
     try:
         if server_to_start == 'hf-waitress':
             hf_waitress_base_url = get_url_for_server('hf-waitress')
-            if not utils.is_local_server_online(hf_waitress_base_url)['server_online']: # This means the main chat server was likely shut due to insufficient VRAM, so we should also shut down the graph-extraction model
-
-                print("\nMain LLM server offline, shutting down graph-extraction model and attempting restart of chat server...\n")
-                if data_queue is not None: data_queue.put(f"LLM server offline, attempting restart... | waiting")
-                graph_model_base_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
-                response = utils.shutdown_waitress_server(graph_model_base_url)
-                if isinstance(response, dict) and response.get('success'):
-                    print(f"\nSuccessfully shut down graph model at URL {graph_model_base_url}\n")
-                else:
-                    handle_error_no_return(f"\nCould not shut down graph model at URL {graph_model_base_url}, proceeding regardless...\n")
+            if not utils.is_local_server_online(hf_waitress_base_url)['server_online']: # This means the main chat server was likely shut due to insufficient VRAM
 
                 server_starter_response = hf_waitress_server_starter(exclusive_server_mode = exclusive_server_mode)
                 if server_starter_response is not None and server_starter_response.get('success'):
@@ -4512,6 +4517,7 @@ def perform_post_bulk_upload_cleanup(data_queue: queue.Queue = None):
             else:
                 handle_error_no_return(f"\nCould not start llama-cpp server, proceeding regardless...\n")
                 if data_queue is not None: data_queue.put(f"Error starting llama-cpp Chat server | failure")
+        
         else:
             handle_error_no_return(f"Invalid local LLM server choice: {server_to_start}")
             if data_queue is not None: data_queue.put(f"Invalid local LLM server choice: {server_to_start} | failure")
@@ -5025,7 +5031,7 @@ def run_prechecks_for_asr_server_starter(hard_reboot_required: bool):
     if hard_reboot_required:    # will be set and specified by ASR-Waitress itself
         print("\nHard-Reboot of ASR-Waitress server requested.\n")
         try:
-            if utils.shutdown_waitress_server(asr_base_url)['success']:
+            if utils.shutdown_waitress_server(asr_base_url)['success']: # will handle online check and immediately return if the server is already offline
                 print(f"\nSuccessfully shut down HF-Waitress ASR-ASGI server at URL {asr_base_url}, proceeding to restart...\n")
                 asr_server_running = False
             else:
@@ -5035,7 +5041,7 @@ def run_prechecks_for_asr_server_starter(hard_reboot_required: bool):
             asr_server_running = True
             err_msg = f"Could not terminate running HF-Waitress process before hard-reboot. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator for help."
             handle_error_no_return(f"{err_msg} Additional technical details follow: ", e)            
-            return {'success': True, 'asr_model': asr_model, 'asr_server_running': asr_server_running, 'skip_fresh_start': True, 'reboot_failed': True}    # success True as the server is online thus the starter has technically succeeded
+            return {'success': True, 'asr_model': asr_model, 'asr_server_running': asr_server_running, 'skip_fresh_start': True, 'reboot_failed': True}    # success True as the prechecks method has successfully determined the server's status
     else:
         try:
             asr_server_running = utils.is_local_server_online(asr_base_url)['server_available']
@@ -5104,6 +5110,24 @@ def asr_server_starter(hard_reboot_required: bool = False):
         handle_local_error("Could not check status of ASR-Waitress server after launch attempt, printing error and returning: ", e)
 
     return {'success': False, 'asr_model': config_data['asr_model'], 'asr_server_running': False, 'skip_fresh_start': False, 'reboot_failed': precheck_result.get('reboot_failed', False)}
+
+
+@app.route('/asr_server_starter_endpoint', methods=['POST'])
+def asr_server_starter_endpoint():
+    print("\n\nASR server starter endpoint called\n\n")
+    global ASR_CHANGE_RELOAD_TRIGGER_SET
+    try:
+        data = request.get_json()
+        hard_reboot_required = data.get('hard_reboot_required', 'false')
+    except Exception as e:
+        return handle_api_error("Could not read request, encountered error: ", e)
+    
+    try:
+        result = asr_server_starter(hard_reboot_required = (hard_reboot_required or ASR_CHANGE_RELOAD_TRIGGER_SET)) # If either is True, the ASR server will be restarted.
+        ASR_CHANGE_RELOAD_TRIGGER_SET = False
+        return jsonify(result)
+    except Exception as e:
+        return handle_api_error("Could not start ASR server, encountered error: ", e)
 
 
 def get_tts_pipeline(tts_name: str, **kwargs):
@@ -5211,7 +5235,7 @@ def check_status_and_shutdown_llm_server(server_to_shutdown: str):
         return {'success': False, 'message': f"{err_msg} {e}"}
     
     try:
-        if server_to_shutdown == 'hf-waitress':
+        if server_to_shutdown == 'hf-waitress' or server_to_shutdown == 'asr-waitress':
             result = utils.shutdown_waitress_server(target_server_url)
         elif server_to_shutdown == 'llama-cpp':
             result = utils.shutdown_local_llm_server_process(LLAMA_CPP_PROCESS)
@@ -5235,12 +5259,13 @@ def shutdown_local_llm_server():
     API interface to check-status_and_shutdown_llm_server, leaving that method free to be invoked directly in other methods here.
     '''
     try:
-        server_to_shutdown = request.form['server_to_shutdown']
+        data = request.get_json()
+        server_to_shutdown = data.get('server_to_shutdown')
     except Exception as e:
         return handle_api_error("Server-side error, could not read server_to_shutdown from the POST request, encountered error: ", e)
 
     try:
-        return jsonify(check_status_and_shutdown_llm_server(server_to_shutdown))
+        return jsonify(check_status_and_shutdown_llm_server(server_to_shutdown = server_to_shutdown))
     except Exception as e:
         return handle_api_error("Server-side error, could not shutdown local LLM server, encountered error: ", e)
 
@@ -5315,7 +5340,7 @@ def run_prechecks_for_llama_cpp_server_starter(exclusive_server_mode: bool):
             except Exception as e:
                 LLM_CHANGE_RELOAD_TRIGGER_SET = False
                 handle_error_no_return("Failed to terminate running llama.cpp process, server was likely launched by a previous session. To change, shutdown the previously launched server manually and reload this page. Technical error-details follow: ", e)
-                return {'success': True, 'llm_model': model_choice, 'hf_waitress_server_running': hf_waitress_server_running, 'llama_cpp_server_running': True, 'skip_fresh_start': True, 'reboot_failed': True}    # success True as the server is online thus the starter has technically succeeded
+                return {'success': True, 'llm_model': model_choice, 'hf_waitress_server_running': hf_waitress_server_running, 'llama_cpp_server_running': True, 'skip_fresh_start': True, 'reboot_failed': True}    # success True as the prechecks method has successfully determined the server's status
 
         else:
             print(f'\n\nThe llama.cpp server is already loaded and the reload trigger is not set. Presently selected model: {model_choice}. Returning...\n\n')
@@ -5528,7 +5553,7 @@ def run_prechecks_for_hf_waitress_server_starter(exclusive_server_mode: bool, ha
             hf_waitress_server_running = True
             err_msg = f"Could not terminate running HF-Waitress process before hard-reboot. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator for help."
             handle_error_no_return(f"{err_msg} Additional technical details follow: ", e)
-            return {'success': True, 'llm_model': model_choice, 'hf_waitress_server_running': hf_waitress_server_running, 'llama_cpp_server_running': llama_cpp_server_running, 'skip_fresh_start': True, 'reboot_failed': True}    # success True as the server is online thus the starter has technically succeeded
+            return {'success': True, 'llm_model': model_choice, 'hf_waitress_server_running': hf_waitress_server_running, 'llama_cpp_server_running': llama_cpp_server_running, 'skip_fresh_start': True, 'reboot_failed': True}    # success True as the prechecks method has successfully determined the server's status
     else:   # Just make sure the server is running!
         try:
             hf_waitress_server_running = utils.is_local_server_online(hf_waitress_base_url)['server_available']
@@ -5636,25 +5661,6 @@ def hf_waitress_server_starter_endpoint():
         return jsonify(result)
     except Exception as e:
         return handle_api_error("Could not start HF-Waitress server, encountered error: ", e)
-    
-
-@app.route('/asr_server_starter_endpoint', methods=['POST'])
-def asr_server_starter_endpoint():
-    print("\n\nASR server starter endpoint called\n\n")
-    global ASR_CHANGE_RELOAD_TRIGGER_SET
-    try:
-        data = request.get_json()
-        hard_reboot_required = data.get('hard_reboot_required', 'false')
-        print(f"\n\nhard_reboot_required: {hard_reboot_required}\n\n")
-    except Exception as e:
-        return handle_api_error("Could not read request, encountered error: ", e)
-    
-    try:
-        result = asr_server_starter(hard_reboot_required = (hard_reboot_required or ASR_CHANGE_RELOAD_TRIGGER_SET)) # If either is True, the ASR server will be restarted.
-        ASR_CHANGE_RELOAD_TRIGGER_SET = False
-        return jsonify(result)
-    except Exception as e:
-        return handle_api_error("Could not start ASR server, encountered error: ", e)
 
 
 @app.route('/check_local_llm_server_status', methods=['POST'])
