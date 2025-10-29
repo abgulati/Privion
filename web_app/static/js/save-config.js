@@ -331,6 +331,9 @@ function getAsrConfig() {
         'asr_apply_rms_dimming': document.getElementById('asr_apply_rms_dimming').checked,
         'asr_apply_crossfade': document.getElementById('asr_apply_crossfade').checked,
     };
+    if (getAsr() == 'true' && config.enable_asr == false) { //ASR is enabled but must be shutdown as per latest config changes
+        handleAsrShutdown();
+    }
     setAsr(config.enable_asr);
     return config;
 }
