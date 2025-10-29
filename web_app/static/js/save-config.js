@@ -407,6 +407,37 @@ function getHfWaitressConfig() {
 }
 
 
+function requestASRWaitressHardReboot() {
+    console.log("Hard-Reboot of ASR-Waitress server requested. Restarting server...");
+    showStreamSpinner();
+    appendStreamInfo("Hard-Rebooting Speech Transcription Server...", 'waiting');
+    document.getElementById('ModelAndDBLoading').style.display = 'block';
+    return fetch('/asr_server_starter_endpoint', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({'hard_reboot_required': true})
+    }).then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error) });
+        }
+        return response.json();
+    }).then(data => {
+        console.log("HF-Waitress server starter endpoint response: ", data);
+        if (!data.success) {
+            throw new Error('Failed to Hard-Reboot Speech Transcription Server. Check server-log and server command-line for more details.');
+        }
+        appendStreamInfo("Speech Transcription Server Hard-Rebooted Successfully.", 'success');
+        return true; // asr_check = true to check ASR-Waitress server status
+    }).catch(error => {
+        appendStreamInfo(error.message);
+        throw error;    // rethrow so promise.all rejects!
+    }).finally(() => {
+        document.getElementById('ModelAndDBLoading').style.display = 'none';
+        hideStreamSpinner();
+    });
+}
+
+
 function saveConfigToServer(config) {
     return fetch('/config_writer_api', {
         method: 'POST',
@@ -425,9 +456,12 @@ function saveConfigToServer(config) {
     })
     .then(data => {
         console.log(data);
-        if (data.restart_required) {    // Refresh the page
+        if (data.restart_required) {    // Refresh the page - will auto-handle ASR restart if required
             console.log("LARS config changes saved successfully, restart required.");
             return true;    // Return true to indicate that a restart is required
+        } else if (data.reload_asr) {
+            console.log("LARS config changes saved successfully, ASR reload required.");
+            requestASRWaitressHardReboot();
         }
         console.log("LARS config changes saved successfully, restart unnecessary.");
         return false;   // Return false to indicate that a restart is not required
@@ -435,6 +469,7 @@ function saveConfigToServer(config) {
     .catch(error => {
         errorHandler("writing to config.json", "/config-writer_api", String(error.message));
         return false;   // Return false to indicate that a restart is not required
+        throw error;    // rethrow so promise.all rejects!
     });
 }
 

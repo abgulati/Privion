@@ -160,6 +160,7 @@ def pdf_viewer(filename):
 #########################------------------GLOBALS!----------------------###############################
 LLAMA_CPP_PROCESS = None   #  used in llama-cpp_server_starter and hf-waitress_server_starter, primary purpose is to manage the termination of the llama.cpp server process
 LLM_CHANGE_RELOAD_TRIGGER_SET = False   # set in config.json and used in llama-cpp_server_starter
+ASR_CHANGE_RELOAD_TRIGGER_SET = False   # set in config.json and used in asr-server_starter
 
 DOCLING_CONVERTER = None    # used in docling-ocr_page and bulk-text_extract_from_staging_area
 TTS_PIPELINE = None    # used in load_tts_pipeline
@@ -344,10 +345,16 @@ def config_writer_api():
         if write_return['reload_tts']:
             global TTS_PIPELINE
             TTS_PIPELINE = None
+
+        if write_return['reload_asr']:
+            
+            global ASR_CHANGE_RELOAD_TRIGGER_SET
+            ASR_CHANGE_RELOAD_TRIGGER_SET = True
+
     except Exception as e:
         return handle_api_error("Server-side error - could not write keys to config.json. Encountered error: ", e)
     
-    return jsonify({"success": write_return['success'], "restart_required": write_return['restart_required']})
+    return jsonify({"success": write_return['success'], "restart_required": write_return['restart_required'], "reload_asr": write_return['reload_asr']})
 
 ############################----------------------------------------------###############################
 
@@ -4987,46 +4994,81 @@ def store_user_rating():
     return jsonify(success=True)
 
 
-# def get_url_for_server(server_to_check):
-#     if server_to_check == 'llama-cpp':
-#         try:
-#             read_return = read_config(['llama_cpp_access_url', 'llama_cpp_server_port'])
-#             return f'http://{read_return["llama_cpp_access_url"]}:{read_return["llama_cpp_server_port"]}'
-#         except Exception as e:
-#             handle_error_no_return("Could not read llama_cpp_access_url and llama_cpp_server_port from config.json, using default localhost:8080 instead. Encountered error: ", e)
-#             return 'http://localhost:8080'
-#     elif server_to_check == 'hf-waitress':
-#         try:
-#             read_return = read_config(['hf_waitress_access_url', 'hf_waitress_server_port'])
-#             return f'http://{read_return["hf_waitress_access_url"]}:{read_return["hf_waitress_server_port"]}'
-#         except Exception as e:
-#             handle_error_no_return("Could not read hf_waitress_access_url and hf_waitress_server_port from config.json, using default localhost:9069 instead. Encountered error: ", e)
-#             return 'http://localhost:9069'
-#     else:
-#         raise Exception(f"Invalid server choice, expected 'llama-cpp' or 'hf-waitress', received: {server_to_check}")
+def run_prechecks_for_asr_server_starter(hard_reboot_required: bool):
+    '''
+    This method checks if:
+        - The HF-Waitress ASR-ASGI server is already running, and if so, checks if a hard-reboot is required (hard_reboot_required set).
+            - If set, the running server process is terminated and a new instance can be launched.
+            - If not, the server starter method may simply return.
 
+    Args:
+        hard_reboot_required (bool): Whether to check if a hard-reboot is required - will be set and specified by HF-Waitress itself basis changes to Core Settings.
 
-@app.route('/asr_server_starter')
-def asr_server_starter():  # Launch HF-Waitress instance for ASR
+    Returns:
+        - dict: A dictionary containing the following keys:
+            - 'success': True if the prechecks were successful, False otherwise.
+            - 'asr_model': The model choice, or 'undefined' if not set.
+            - 'hf_waitress_server_running': True if the HF-Waitress server is running, False otherwise.
+            - 'skip_fresh_start': True if the prechecks determined that the HF-Waitress server should not be launched, False otherwise.
+            - 'reboot_failed': True if the hard-reboot failed, False otherwise.
+    '''
+    
+    global ASR_CHANGE_RELOAD_TRIGGER_SET
+    asr_server_running = False
+    asr_base_url = get_url_for_server('asr-waitress')
     try:
-        config_data = read_config(['asr_model', 'asr_waitress_access_url', 'asr_waitress_server_port', 'voice_base_directory_name', 'asr_subdirectory_name', 'asr_torch_device'])
+        asr_model = read_config(['asr_model'])['asr_model']
+    except Exception as e:
+        handle_local_error("Could not read asr_model from config.json - prechecks failed. Encountered error: ", e)
+        asr_model = 'undefined'
+
+    if hard_reboot_required:    # will be set and specified by ASR-Waitress itself
+        print("\nHard-Reboot of ASR-Waitress server requested.\n")
+        try:
+            if utils.shutdown_waitress_server(asr_base_url)['success']:
+                print(f"\nSuccessfully shut down HF-Waitress ASR-ASGI server at URL {asr_base_url}, proceeding to restart...\n")
+                asr_server_running = False
+            else:
+                raise Exception(f"\nCould not shut down HF-Waitress ASR-ASGI server at URL {asr_base_url}...\n")
+        
+        except Exception as e:
+            asr_server_running = True
+            err_msg = f"Could not terminate running HF-Waitress process before hard-reboot. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator for help."
+            handle_error_no_return(f"{err_msg} Additional technical details follow: ", e)            
+            return {'success': True, 'asr_model': asr_model, 'asr_server_running': asr_server_running, 'skip_fresh_start': True, 'reboot_failed': True}    # success True as the server is online thus the starter has technically succeeded
+    else:
+        try:
+            asr_server_running = utils.is_local_server_online(asr_base_url)['server_available']
+        except Exception as e:
+            asr_server_running = False
+            handle_error_no_return("Warning: Could not check if ASR-Waitress server is running. Proceeding to launch ASR-Waitress server. Encountered error: ", e)
+
+    return {'success': True, 'asr_model': asr_model, 'asr_server_running': asr_server_running, 'skip_fresh_start': asr_server_running, 'reboot_failed': False}     # skip fresh start if ASR-Waitress server is already running
+
+
+
+def asr_server_starter(hard_reboot_required: bool = False):
+    print("\n\nStarting HF-Waitress Server\n\n")
+
+    try:
+        precheck_result = run_prechecks_for_asr_server_starter(hard_reboot_required)
+    except Exception as e:
+        handle_error_no_return("Could not run prechecks for HF-Waitress server starter, proceeding with safe defaults for first launch. Encountered error: ", e)
+        precheck_result = {}
+    
+    if precheck_result.get('skip_fresh_start', False):
+        return precheck_result
+        
+    try:
+        config_data = read_config(['asr_model', 'asr_waitress_server_port', 'voice_base_directory_name', 'asr_subdirectory_name', 'asr_torch_device', 'hf_waitress_server_retry_attempts', 'hf_waitress_server_timeout_seconds'])
+        asr_base_url = get_url_for_server('asr-waitress')
         hf_waitress_asr_server_path = pathlib.Path.cwd() / str(config_data['voice_base_directory_name']) / str(config_data['asr_subdirectory_name'])
         print(f"\nLaunching HF-Waitress instance for ASR at path: {hf_waitress_asr_server_path}\n")
     except Exception as e:
         handle_local_error("Could not read ASR model config, encountered error: ", e)
-
-    if utils.is_local_server_online(f"http://{config_data['asr_waitress_access_url']}:{config_data['asr_waitress_server_port']}")['server_online']:
-        print("\nASR server is already online, skipping launch...\n")
-        return jsonify(success=True)
     
-    # Get free GPU memory and shutdown the main Waitress LLM chat server if necessary:
-    # try:
-    #     hf_waitress_base_url = get_url_for_server('hf-waitress')    # shutdown general-chat LLM server at this URL in case free VRAM is insufficient
-    #     graph_model_base_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
-    #     utils.ensure_minimum_free_vram(int(config_data['minimum_free_vram_for_graph_summarizer_model']), [graph_model_base_url, hf_waitress_base_url])
-    # except Exception as e:
-    #     handle_local_error(f"Could not reserve minimum GPU memory ({config_data['minimum_free_vram_for_graph_summarizer_model']}MB) required for Graph-Summarizer model, encountered error: ", e)
-
+    print("\n\nProceeding to launch HF-Waitress ASR-ASGI server\n\n")
+    
     # Need to format this way because the f"""<>""" multiline way will maintain newlines in the command, which will cause the command to fail!
     # Also cannot format this as we have in hf_waitress.py's exllama_bpw_quantize_model() because of the command seperators (&& and ;), which would be incorrectly treated as parameters to the cd command in that list format!
     # We cd first because the command should execute from within that directory otherwise the main hf_config.json gets incorrectly modified! 
@@ -5039,10 +5081,6 @@ def asr_server_starter():  # Launch HF-Waitress instance for ASR
         f"--torch_device_map {str(config_data['asr_torch_device'])} "
         "--quantize n"
     )
-    # if str(config_data['exl2_quantize_graph_summarizer_model']).lower() == 'true':
-    #     command += f" --exl2 --exl2_bpw {str(config_data['exl2_quantize_graph_summarizer_model_bpw'])} --exl2_max_seq_len {str(config_data['graph_summarizer_max_seq_len'])}"
-    # else:
-    #     command += f" --quantize {str(config_data['quantize_graph_summarizer_model'])} --quant_level {str(config_data['quantize_graph_summarizer_model_bits'])}"
 
     try:
         if platform.system() == 'Windows':
@@ -5053,21 +5091,19 @@ def asr_server_starter():  # Launch HF-Waitress instance for ASR
             subprocess.Popen(command, shell=True)
         # The shell=True lets the system's shell interpret the command string, including special operators like && (Windows) or ; (Unix) that chain commands together.
         # This is exactly what you need when you want to change directory before running a script!
-
-        timeout = 5
-        attempts = 25
-        for _ in range(attempts):
-            if utils.is_local_server_online(f"http://{config_data['asr_waitress_access_url']}:{config_data['asr_waitress_server_port']}")['server_online']:
-                print(f"\nASR server launched successfully!\n")
-                return jsonify(success=True)
-            else:
-                print(f"ASR server not yet running, waiting {timeout} seconds before retrying...")
-                time.sleep(timeout)
-            
     except Exception as e:
-        handle_local_error("Could not launch HF-Waitress instance for ASR, encountered error: ", e)
-    
-    return jsonify(success=False)
+        handle_local_error("Could not launch ASR-Waitress instance, encountered error: ", e)
+
+    try:
+        for _ in range(config_data['hf_waitress_server_retry_attempts']):
+            if utils.is_local_server_online(asr_base_url)['server_online']:
+                print(f"\nASR server launched successfully!\n")
+                return {'success': True, 'asr_model': config_data['asr_model'], 'asr_server_running': True, 'skip_fresh_start': False, 'reboot_failed': False}
+            time.sleep(config_data['hf_waitress_server_timeout_seconds'])
+    except Exception as e:
+        handle_local_error("Could not check status of ASR-Waitress server after launch attempt, printing error and returning: ", e)
+
+    return {'success': False, 'asr_model': config_data['asr_model'], 'asr_server_running': False, 'skip_fresh_start': False, 'reboot_failed': precheck_result.get('reboot_failed', False)}
 
 
 def get_tts_pipeline(tts_name: str, **kwargs):
@@ -5242,6 +5278,7 @@ def run_prechecks_for_llama_cpp_server_starter(exclusive_server_mode: bool):
         handle_error_no_return("Missing model_choice in config.json in method llama-cpp-server-starter. Printing error and proceeding with model_choice: 'undefined' ", e)
         model_choice = 'undefined'
 
+    # First, determine status of HF-Waitress server
     if exclusive_server_mode:
         waitress_shutdown_result = utils.shutdown_waitress_server(hf_waitress_base_url)
         if waitress_shutdown_result['success']:
@@ -5251,11 +5288,11 @@ def run_prechecks_for_llama_cpp_server_starter(exclusive_server_mode: bool):
             hf_waitress_server_running = True # Set to True as we've determined the other server is running and we failed to terminate it
             err_msg = "Could not terminate running HF-Waitress process before launching llama.cpp, proceeding regardless. Your IP may not be whitelisted for this action, contact the administrator for help."
             handle_error_no_return(f"{err_msg} Provide the following technical details: ", waitress_shutdown_result['message'])
-    # else:
-    #     try:    # to set an accurate value for the boolean regardless of exclusive_server_mode
-    #         hf_waitress_server_running = utils.is_local_server_online(hf_waitress_base_url)['server_available']
-    #     except Exception as e:
-    #         handle_error_no_return("Warning: Could not check if HF-Waitress server is running. Proceeding to launch llama.cpp server. Encountered error: ", e)
+    else:
+        try:    # to set an accurate value for the boolean regardless of exclusive_server_mode
+            hf_waitress_server_running = utils.is_local_server_online(hf_waitress_base_url)['server_available']
+        except Exception as e:
+            handle_error_no_return("Warning: Could not check if HF-Waitress server is running. Proceeding to launch llama.cpp server. Encountered error: ", e)
 
     try:
         llama_cpp_server_running = utils.is_local_server_online(llama_cpp_base_url)['server_available']
@@ -5411,12 +5448,12 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
         for _ in range(read_return['llama_cpp_server_retry_attempts']):
             if utils.is_local_server_online(llama_cpp_base_url)['server_available']:
                 print("\n\nllama.cpp server launched succesfully! Returning.\n\n")
-                return {'success': True, 'llm_model': read_return['model_choice'], 'hf_waitress_server_running': precheck_result['hf_waitress_server_running'], 'llama_cpp_server_running': True, 'skip_fresh_start': False, 'reboot_failed': False}
+                return {'success': True, 'llm_model': read_return['model_choice'], 'hf_waitress_server_running': precheck_result.get('hf_waitress_server_running', False), 'llama_cpp_server_running': True, 'skip_fresh_start': False, 'reboot_failed': False}
             time.sleep(read_return['llama_cpp_server_timeout_seconds'])
     except Exception as e:
-        handle_error_no_return("Could not check server status after launch attempt, printing error and retrying: ", e)
+        handle_error_no_return("Could not check server status after launch attempt, printing error and returning: ", e)
 
-    return {'success': False, 'llm_model': None, 'hf_waitress_server_running': precheck_result['hf_waitress_server_running'], 'llama_cpp_server_running': False, 'skip_fresh_start': False, 'reboot_failed': precheck_result['reboot_failed']}
+    return {'success': False, 'llm_model': None, 'hf_waitress_server_running': precheck_result.get('hf_waitress_server_running', False), 'llama_cpp_server_running': False, 'skip_fresh_start': False, 'reboot_failed': precheck_result.get('reboot_failed', False)}
 
 
 def get_hf_waitress_serving_host_and_port():
@@ -5460,6 +5497,7 @@ def run_prechecks_for_hf_waitress_server_starter(exclusive_server_mode: bool, ha
     except Exception as e:
         handle_local_error("Could not read model_id from hf_config.json - prechecks failed. Encountered error: ", e)
 
+    # First, determine status of llama.cpp server
     if exclusive_server_mode and LLAMA_CPP_PROCESS is not None:
         llama_cpp_shutdown_result = utils.shutdown_local_llm_server_process(LLAMA_CPP_PROCESS)
         if llama_cpp_shutdown_result['success']:
@@ -5468,15 +5506,16 @@ def run_prechecks_for_hf_waitress_server_starter(exclusive_server_mode: bool, ha
             LLAMA_CPP_PROCESS = None
         else:
             llama_cpp_server_running = True    # We know the llama.cpp server is running, which means `llama-server` is available, so we set LLM-LOADED_UP to True
-            err_msg = "Could not terminate running llama.cpp process before launching HF-Waitress, proceeding regardless. Your IP may not be whitelisted for this action, contact the administrator for help."
+            err_msg = "Could not terminate running llama.cpp process before launching HF-Waitress, proceeding regardless. Privion cannot control the llama.cpp server as it was likely launched by another user or process, contact the administrator for help."
             handle_error_no_return(f"{err_msg} Provide the following technical details: ", llama_cpp_shutdown_result['message'])
-    # else:
-    #     try:    # to set an accurate value for the boolean regardless of exclusive_server_mode - LLAMA-CPP_PROCESS might be None but server may be online from elsewhere
-    #         llama_cpp_server_running = utils.is_local_server_online(llama_cpp_base_url)['server_available']
-    #     except Exception as e:
-    #         handle_error_no_return("Warning: Could not check if llama.cpp server is running. Proceeding to launch HF-Waitress server. Encountered error: ", e)
+    else:
+        try:    # to set an accurate value for the boolean regardless of exclusive_server_mode - LLAMA-CPP_PROCESS might be None but server may be online from elsewhere!
+            llama_cpp_server_running = utils.is_local_server_online(llama_cpp_base_url)['server_available']
+        except Exception as e:
+            llama_cpp_server_running = False
+            handle_error_no_return("Warning: Could not check if llama.cpp server is running. Proceeding to launch HF-Waitress server. Encountered error: ", e)
 
-    if hard_reboot_required:    # will be set and specified by HF-Waitress itself
+    if hard_reboot_required:    # will be specified by HF-Waitress itself and passed to this method
         print("\nHard-Reboot of HF-Waitress server requested.\n")
         try:
             if utils.shutdown_waitress_server(hf_waitress_base_url)['success']:
@@ -5489,18 +5528,13 @@ def run_prechecks_for_hf_waitress_server_starter(exclusive_server_mode: bool, ha
             hf_waitress_server_running = True
             err_msg = f"Could not terminate running HF-Waitress process before hard-reboot. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator for help."
             handle_error_no_return(f"{err_msg} Additional technical details follow: ", e)
-            
-            try:    # to set an accurate value for the boolean
-                llama_cpp_server_running = utils.is_local_server_online(llama_cpp_base_url)['server_available']
-            except Exception as e:
-                handle_error_no_return("Warning: Could not check if llama.cpp server is running. Proceeding to launch HF-Waitress server. Encountered error: ", e)
-            
             return {'success': True, 'llm_model': model_choice, 'hf_waitress_server_running': hf_waitress_server_running, 'llama_cpp_server_running': llama_cpp_server_running, 'skip_fresh_start': True, 'reboot_failed': True}    # success True as the server is online thus the starter has technically succeeded
-    else:
+    else:   # Just make sure the server is running!
         try:
             hf_waitress_server_running = utils.is_local_server_online(hf_waitress_base_url)['server_available']
         except Exception as e:
-            handle_error_no_return("Warning: Could not check if HF-Waitress server is running. Proceeding to launch HF-Waitress server. Encountered error: ", e)
+            hf_waitress_server_running = False
+            handle_error_no_return("Warning: Could not determine if the HF-Waitress server is running, proceeding to launch afresh. Encountered error: ", e)
 
     return {'success': True, 'llm_model': model_choice, 'hf_waitress_server_running': hf_waitress_server_running, 'llama_cpp_server_running': llama_cpp_server_running, 'skip_fresh_start': hf_waitress_server_running, 'reboot_failed': False}     # skip fresh start if HF-Waitress server is already running
 
@@ -5510,6 +5544,7 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
 
     try:
         precheck_result = run_prechecks_for_hf_waitress_server_starter(exclusive_server_mode, hard_reboot_required)
+
     except Exception as e:
         handle_error_no_return("Could not run prechecks for HF-Waitress server starter, proceeding with safe defaults for first launch. Encountered error: ", e)
         precheck_result = {}
@@ -5580,7 +5615,7 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
                 return {'success': True, 'llm_model': model_id, 'hf_waitress_server_running': True, 'llama_cpp_server_running': precheck_result.get('llama_cpp_server_running', False), 'skip_fresh_start': False, 'reboot_failed': False}
             time.sleep(lars_read_return['hf_waitress_server_timeout_seconds'])
     except Exception as e:
-        handle_error_no_return("Could not check server status after launch attempt, printing error and retrying: ", e)
+        handle_error_no_return("Could not check server status after launch attempt, printing error and returning: ", e)
 
     return {'success': False, 'llm_model': None, 'hf_waitress_server_running': False, 'llama_cpp_server_running': precheck_result.get('llama_cpp_server_running', False), 'skip_fresh_start': False, 'reboot_failed': precheck_result.get('reboot_failed', False)}
 
@@ -5601,6 +5636,25 @@ def hf_waitress_server_starter_endpoint():
         return jsonify(result)
     except Exception as e:
         return handle_api_error("Could not start HF-Waitress server, encountered error: ", e)
+    
+
+@app.route('/asr_server_starter_endpoint', methods=['POST'])
+def asr_server_starter_endpoint():
+    print("\n\nASR server starter endpoint called\n\n")
+    global ASR_CHANGE_RELOAD_TRIGGER_SET
+    try:
+        data = request.get_json()
+        hard_reboot_required = data.get('hard_reboot_required', 'false')
+        print(f"\n\nhard_reboot_required: {hard_reboot_required}\n\n")
+    except Exception as e:
+        return handle_api_error("Could not read request, encountered error: ", e)
+    
+    try:
+        result = asr_server_starter(hard_reboot_required = (hard_reboot_required or ASR_CHANGE_RELOAD_TRIGGER_SET)) # If either is True, the ASR server will be restarted.
+        ASR_CHANGE_RELOAD_TRIGGER_SET = False
+        return jsonify(result)
+    except Exception as e:
+        return handle_api_error("Could not start ASR server, encountered error: ", e)
 
 
 @app.route('/check_local_llm_server_status', methods=['POST'])

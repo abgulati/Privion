@@ -914,7 +914,30 @@ function toggleHfwQuantizationLevel() {
 
 function initializeEventListenersForLLMTab() {
     // Event listener for Local LLM Server selection:
-    document.getElementById('local_llm_server_select_dropdown').addEventListener('change', checkLocalLLMServerStatus);
+    document.getElementById('local_llm_server_select_dropdown').addEventListener('change', () => checkLocalLLMServerStatus()); // Event handlers will pass 'this' as the first arg causing the default arg `asr_check = false` to be ignored! More below:
+    /*
+    When an event handler is called in JavaScript, the event object is automatically passed as the first argument. 
+    This means asr_check is receiving the event object instead of undefined, so the default parameter `asr_check = false` is never used.
+    In this case, the event object is truthy (it's a valid object), so asr_check evaluates to true when the dropdown changes, which is actually the opposite of what's required.
+    The fix is to wrap the function call in an arrow function or use .bind() to prevent the event object from being passed!
+
+    The former (above) wraps the function call in an arrow function that prevents the event object from being passed as the first parameter, 
+    allowing the default parameter `asr_check = false` to work as intended.
+
+    The .bind() method creates a new function with false hardcoded as the first argument, ensuring that asr_check will always be false regardless of what the event handler tries to pass. 
+    The null is the this context (which doesn't matter here since the function doesn't use this):
+    ```
+    document.getElementById('local_llm_server_select_dropdown').addEventListener('change', checkLocalLLMServerStatus.bind(null, false));
+    ```
+    The .bind() method is a more explicit way to ensure the default parameter is always used, but the arrow function approach is simpler and more readable in this case.
+
+    NOTE: Simply attempting `document.getElementById('local_llm_server_select_dropdown').addEventListener('change', (checkLocalLLMServerStatus(false)));` will NOT work!
+    The issue with this is that `checkLocalLLMServerStatus(false)` executes immediately when this line runs, rather than waiting for the change event:
+    The parentheses () cause the function to be called right away, and whatever it returns (likely undefined or a Promise) gets assigned as the event handler.
+    This is different from the arrow function approach where the function is wrapped but not executed until the event fires.
+
+    The key difference is that () => checkLocalLLMServerStatus(false) creates a function that will be called later, while (checkLocalLLMServerStatus(false)) calls the function immediately!
+    */
     document.getElementById('local_llm_server_select_dropdown').addEventListener('change', toggleLocalLLMSettingsForms);
 
     // Event listener for LLM/API radio buttons:
@@ -1774,7 +1797,7 @@ function updateUIWithChatInfo(chat_id, llm_model) {
     setModelHeaderInfoBox(curr_chat_id, llm_model);
     document.getElementById('model_header').style.display = 'block';
     
-    document.getElementById('ModelAndDBLoading').style.display = 'none';
+    // document.getElementById('ModelAndDBLoading').style.display = 'none';
     // document.getElementById('ReadyToChat').style.display = 'block';
     
     // var timeoutDelayInMilliseconds = 1500; //1.5 seconds
@@ -1832,17 +1855,28 @@ function loadVectorDB(llm_model) {
 
 
 function loadAsrPipeline() {
-    return fetch('/asr_server_starter')
+    return fetch('/asr_server_starter_endpoint', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({'hard_reboot_required': false})
+    })
     .then(response => {
         if (!response.ok) {
             return response.json().then(err => { throw new Error(err.error)});
         }
-        setAsr(true);
         return response
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) throw new Error('ASR Start Failed - Internal Server Error: Check server-log and server command-line for more details.');
+        setAsr(true);
+        if (data.reboot_failed) { alert("The ASR server is online but the updated settings were not applied. Check application and browser logs for more details."); }
+        return true;
     })
     .catch(error => {
         setAsr(false);
         console.error(error);
+        throw error;    // rethrow so promise.all rejects!
     });
 }
 
@@ -1892,6 +1926,7 @@ function startLLMServer() {
     .catch(error => {
         setServerStatusIndicator("Offline");
         errorHandler("loading the LLM", "/local-llm_server_starter", String(error.message))
+        throw error;    // rethrow so promise.all rejects!
     })
 }
 
@@ -1919,11 +1954,11 @@ document.addEventListener("DOMContentLoaded", function() {
             initializeSettingsModalTabCycleListener();
             local_llm_server = values.local_llm_server;
             if (getTts() === "true") { loadTTSPipeline(); }
-            if (getAsr() === "true") { loadAsrPipeline(); }
-            //return Promise.all([startLLMServer(), loadAsrPipeline()]);
-            return startLLMServer();
+            if (getAsr() === "true") { return Promise.all([startLLMServer(), loadAsrPipeline()]); }
+            else { return startLLMServer(); }
         })
         .then(() => {
+            document.getElementById('ModelAndDBLoading').style.display = 'none';
             if (local_llm_server === "hf-waitress") {
                 initializeHfwServerConfig();
                 showStopGenerationButton();
@@ -1937,6 +1972,6 @@ document.addEventListener("DOMContentLoaded", function() {
             errorHandler("initializing the application", "DOMContentLoaded", String(error.message));
         })
         .finally(() => {
-
+            document.getElementById('ModelAndDBLoading').style.display = 'none';
         });
 });//########### End DOMContentLoaded Block!
