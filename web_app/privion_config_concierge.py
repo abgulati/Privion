@@ -68,18 +68,29 @@ def write_config(config_updates:dict, filename=None) -> dict:
                 restart_required = True
                 skip_reload_trigger = False
                 break
-
-    config.update(config_updates)
-
+    
+    reload_tts = False
     triggers_for_tts_reload = [
         'kokoro_language_code'
     ]
 
-    reload_tts = False
     for key in triggers_for_tts_reload:
         if key in config_updates and config_updates[key] != config.get(key):
             reload_tts = True
             break
+
+    reload_asr = False
+    triggers_for_asr_reload = [
+        'asr_model',
+        'asr_torch_device'
+    ]
+
+    for key in triggers_for_asr_reload:
+        if key in config_updates and config_updates[key] != config.get(key):
+            reload_asr = True
+            break
+
+    config.update(config_updates)
 
     # Write updated config.json:
     try:
@@ -88,7 +99,7 @@ def write_config(config_updates:dict, filename=None) -> dict:
     except Exception as e:
         raise Exception(f"Could not update config.json, encountered error: {e}")
      
-    return {'success': True, 'restart_required':restart_required, 'skip_reload_trigger':skip_reload_trigger, 'reload_tts':reload_tts}
+    return {'success': True, 'restart_required':restart_required, 'skip_reload_trigger':skip_reload_trigger, 'reload_tts':reload_tts, 'reload_asr':reload_asr}
 
 
 def safe_write_config(config_updates:dict, filename=None) -> dict:
