@@ -1711,14 +1711,17 @@ function collapseAdvancedSettings(advancedSettingsId) {
 }
 
 
-function handleAsrShutdown() {
+function handleHfWaitressShutdown(server_to_shutdown) {
+    if (!server_to_shutdown || server_to_shutdown == '') {
+        throw new Error('Invalid server choice: ' + server_to_shutdown);
+    }
     console.log("ASR shutdown requested");
     showStreamSpinner();
     appendStreamInfo("Shutting down ASR server...", 'waiting');
     fetch('/shutdown_local_llm_server', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({'server_to_shutdown': 'asr-waitress'})
+        body: JSON.stringify({'server_to_shutdown': server_to_shutdown})
     })
     .then(response => {
         if (!response.ok) {
