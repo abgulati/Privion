@@ -5635,8 +5635,8 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
     try:
         for _ in range(lars_read_return['hf_waitress_server_retry_attempts']):
             if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
-                print(f"\n\nHF-Waitress server launched succesfully with model: {model_id}! Returning.\n\n")
-                return {'success': True, 'llm_model': model_id, 'hf_waitress_server_running': True, 'llama_cpp_server_running': precheck_result.get('llama_cpp_server_running', False), 'skip_fresh_start': False, 'reboot_failed': False}
+                print(f"\n\nHF-Waitress server launched succesfully with model: {hf_read_return.get('model_id')}! Returning.\n\n")
+                return {'success': True, 'llm_model': hf_read_return.get('model_id'), 'hf_waitress_server_running': True, 'llama_cpp_server_running': precheck_result.get('llama_cpp_server_running', False), 'skip_fresh_start': False, 'reboot_failed': False}
             time.sleep(lars_read_return['hf_waitress_server_timeout_seconds'])
     except Exception as e:
         handle_error_no_return("Could not check server status after launch attempt, printing error and returning: ", e)
