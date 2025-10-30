@@ -10,6 +10,26 @@ try:
 except ImportError:
     print("exllamav2 is not installed. Skipping import.")
 
+try:
+    from transformers import AutoModelForSpeechSeq2Seq
+    import sounddevice as sd
+    import numpy as np
+    import librosa
+    import torch
+    import queue
+except ImportError:
+    print("Core dependecies for ASR pipeline are not installed, skipping import. WARNING: ASR will not work!")
+
+try:
+    from nemo.collections.speechlm2.models import SALM
+    from nemo.collections.asr.models import ASRModel
+    from scipy.io.wavfile import write as wav_write
+    from scipy.io.wavfile import read   # To read the in-memory audio wav file
+    import tempfile
+    import pyttsx3
+except ImportError:
+    print("Optional dependecies for ASR pipeline are not installed, skipping import. WARNING: Some ASR models/features will not work!")
+
 from diffusers import FluxPipeline, FluxTransformer2DModel
 
 try:
@@ -21,11 +41,6 @@ try:
     from transformers import MllamaForConditionalGeneration
 except ImportError:
     print("transformers version is below 4.45.0 required from Llama3.2-Vision. Skipping MllamaForConditionalGeneration import.")
-
-try:
-    import prompt_formatting as prompt_formatting_module
-except ImportError:
-    print("Prompt Formatter module `prompt_formatting.py` is not present. Skipping import. Must be present for exl2 bulk-summary generation.")
 
 from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
@@ -85,6 +100,9 @@ def serve_uploaded_file(filename:str):
 
 #########################------------------GLOBALS!----------------------###############################
 PIPE = None
+MODEL = None
+TOKENIZER = None
+PROCESSOR = None
 VISION_MODEL = None
 EXL2_MODEL = None
 EXL2_TOKENIZER = None
@@ -423,6 +441,30 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'flux_low_vram_optimizations':True,
                     'load_quantized_flux':False,
                     'vision':False,
+                    'asr':False,
+                    'asr_temperature':0.0,
+                    'asr_max_new_tokens':1500,
+                    'asr_samplerate':16000,
+                    'asr_volume_threshold':0.04,
+                    'asr_silence_duration_s':1.5,
+                    'asr_min_chunk_duration_s':0.25,
+                    'asr_min_context_s':11,
+                    'asr_stale_buffer_timeout_s':20.0,
+                    'asr_min_meaningful_samples_factor':0.5,
+                    'asr_padding_text':' tony is quiet silent for too long I must not keep master waiting bad dooby must obey and transcribe dooby good servant will transcribe otherwise I will be severely punished',
+                    'asr_vad_model':'snakers4/silero-vad',
+                    'asr_vad_device':'cpu',
+                    'asr_vad_threshold':0.5,
+                    'asr_vad_min_speech_ms':250,
+                    'asr_vad_min_silence_ms':500,
+                    'asr_vad_window_size_samples':1536,
+                    'asr_vad_max_buffer_s':30,
+                    'asr_vad_speech_pad_ms':30,
+                    'asr_apply_normalization':True,
+                    'asr_apply_tts_padding':True,
+                    'asr_apply_zero_padding':False,
+                    'asr_apply_rms_dimming':True,
+                    'asr_apply_crossfade':False,
                     'gguf_model_id':None,
                     'gguf_filename':None,
                     'quantize':"quanto",
@@ -446,17 +488,38 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'host':'0.0.0.0',
                     'load_safe_defaults':False,
                     'model_list': [
-                                    'meta-llama/Llama-3.2-11B-Vision-Instruct',
-                                    'meta-llama/Llama-3.2-1B-Instruct',
-                                    'meta-llama/Llama-3.2-3B-Instruct',
+                                    'microsoft/phi-4',
+                                    'zai-org/GLM-4.5-Air',
+                                    'zai-org/GLM-4.5',
+                                    'moonshotai/Kimi-K2-Instruct',
+                                    'deepseek-ai/DeepSeek-R1-0528',
+                                    'deepseek-ai/DeepSeek-V3-0324',
+                                    'google/gemma-3-27b-it',
+                                    'google/gemma-3-12b-it',
+                                    'google/gemma-2-2b-it',
+                                    'Qwen/Qwen3-235B-A22B-Thinking-2507-FP8',
+                                    'Qwen/Qwen3-235B-A22B-Instruct-2507',
+                                    'Qwen/Qwen3-30B-A3B-Instruct-2507-FP8',
+                                    'Qwen/Qwen3-Coder-30B-A3B-Instruct',
+                                    'Qwen/Qwen3-14B',
+                                    'Qwen/Qwen3-0.6B',
+                                    'mistralai/Mistral-Nemo-Instruct-2407',
+                                    'mistralai/Mistral-Small-24B-Instruct-2501',
                                     'black-forest-labs/FLUX.1-schnell',
                                     'black-forest-labs/FLUX.1-dev',
-                                    'mistralai/Mistral-Nemo-Instruct-2407', 
-                                    'meta-llama/Meta-Llama-3.1-8B-Instruct', 
-                                    'meta-llama/Meta-Llama-3.1-70B-Instruct', 
-                                    'meta-llama/Meta-Llama-3.1-405B-Instruct-FP8',
-                                    'hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4',
-                                    'hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4',
+                                    'black-forest-labs/FLUX.1-Krea-dev',
+                                    'black-forest-labs/FLUX.1-Kontext-dev',
+                                    'Qwen/Qwen-Image',
+                                    'nvidia/Llama-3_3-Nemotron-Super-49B-v1-FP8',
+                                    'meta-llama/Llama-3.3-70B-Instruct',
+                                    'meta-llama/Llama-3.2-11B-Vision-Instruct',
+                                    'meta-llama/Llama-4-Maverick-17B-128E-Instruct',
+                                    'open-thoughts/OpenThinker-32B',
+                                    'openai/gpt-oss-20b',
+                                    'CohereLabs/c4ai-command-r-plus-08-2024',
+                                    'CohereForAI/c4ai-command-r-plus',
+                                    'nvidia/Llama-3_3-Nemotron-Super-49B-v1',
+                                    'microsoft/Phi-4-mini-instruct',
                                     'microsoft/Phi-3.5-mini-instruct',
                                     'microsoft/Phi-3.5-MoE-instruct',
                                     'microsoft/Phi-3-mini-4k-instruct',
@@ -465,16 +528,27 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                                     'microsoft/Phi-3-small-128k-instruct',
                                     'microsoft/Phi-3-medium-4k-instruct',
                                     'microsoft/Phi-3-medium-128k-instruct',
-                                    'CohereForAI/c4ai-command-r-plus',
-                                    'CohereForAI/c4ai-command-r-v01',
-                                    'google/gemma-2-2b-it',
+                                    'google/gemma-3-4b-it',
+                                    'google/gemma-3-1b-it',
                                     'google/gemma-2-9b-it',
                                     'google/gemma-2-27b-it',
-                                    'Qwen/Qwen2.5-1.5B-Instruct',
+                                    'Qwen/Qwen3-32B',
+                                    'Qwen/QwQ-32B',
                                     'Qwen/Qwen2-7B-Instruct',
                                     'Qwen/Qwen2-72B-Instruct',
-                                    'alpindale/goliath-120b',
-                                    'TheBloke/goliath-120b-AWQ'
+                                    'Qwen/Qwen2.5-Coder-32B-Instruct',
+                                    'Qwen/Qwen2.5-1.5B-Instruct',
+                                    'Qwen/Qwen2.5-0.5B-Instruct',
+                                    'Qwen/Qwen2.5-3B-Instruct',
+                                    'Qwen/Qwen2.5-14B-Instruct',
+                                    'meta-llama/Llama-3.1-8B-Instruct',
+                                    'meta-llama/Llama-3.2-1B-Instruct',
+                                    'meta-llama/Llama-3.2-3B-Instruct',
+                                    'meta-llama/Meta-Llama-3.1-8B-Instruct',
+                                    'meta-llama/Meta-Llama-3.1-70B-Instruct',
+                                    'meta-llama/Meta-Llama-3.1-405B-Instruct-FP8',
+                                    'hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4',
+                                    'hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4'
                                    ]
                 }.get(key, 'undefined')
 
@@ -659,10 +733,7 @@ def shutdown_hf_waitress():
 
                     def cleanup():
                         try:
-                            shutdown_vision_model()
-                            shutdown_pipe()
-                            shutdown_exl2()
-
+                            shutdown_all()
                             print("✅ All models, pipes, and exl2 caches shut down...")
                             print("✅ Cleanup completed successfully")
                         except Exception as e:
@@ -925,9 +996,10 @@ def safe_empty_cuda_cache(timeout=10):
         print("\nReturning without emptying CUDA cache\n")
 
 
-def shutdown_vision_model():
+def shutdown_all():
     print("\n\nShutting down vision-model\n\n")
     global VISION_MODEL
+    
     if VISION_MODEL:
         try:
             print("Attempting graceful offload of model")
@@ -938,12 +1010,10 @@ def shutdown_vision_model():
         finally:
             VISION_MODEL = None
     print("\n\nModel offloading complete\n\n")
-    return True
 
-
-def shutdown_pipe():
     global PIPE
     print("\n\nShutting down pipeline\n\n")
+    
     if PIPE:
         try:
             print("Attempting graceful offload of pipeline")
@@ -954,10 +1024,40 @@ def shutdown_pipe():
         finally:
             PIPE = None
     print("\n\nPipeline offloading complete\n\n")
-    return True
 
+    global MODEL, TOKENIZER, PROCESSOR
+    
+    if MODEL:
+        try:
+            print("Attempting to free ASR model")
+            del MODEL
+            print("ASR model freed successfully")
+        except Exception as e:
+            handle_error_no_return("Could not free ASR model, encountered error: ", e)
+        finally:
+            MODEL = None
+    
+    if TOKENIZER:
+        try:
+            print("Attempting to free ASR tokenizer")
+            del TOKENIZER
+            print("ASR tokenizer freed successfully")
+        except Exception as e:
+            handle_error_no_return("Could not free ASR tokenizer, encountered error: ", e)
+        finally:
+            TOKENIZER = None
+    
+    if PROCESSOR:
+        try:
+            print("Attempting to free ASR processor")
+            del PROCESSOR
+            print("ASR processor freed successfully")
+        except Exception as e:
+            handle_error_no_return("Could not free ASR processor, encountered error: ", e)
+        finally:
+            PROCESSOR = None
+    print("\n\nASR model cleanup complete\n\n")
 
-def shutdown_exl2():
     print("\n\nShutting down ExLlamaV2 model\n\n")
     global EXL2_CACHE, EXL2_TOKENIZER, EXL2_MODEL, AUTO_TOKENIZER
 
@@ -1002,6 +1102,7 @@ def shutdown_exl2():
             AUTO_TOKENIZER = None
         
     print("\n\nExLlamaV2 cleanup complete\n\n")
+    return True
 
 ############################-----------------------------------------------###############################
 
@@ -1135,6 +1236,7 @@ def parse_arguments():
                 'flux_low_vram_optimizations',
                 'load_quantized_flux',
                 'vision',
+                'asr',
                 'gguf_model_id',
                 'gguf_filename',
                 'quantize',
@@ -1233,6 +1335,7 @@ def parse_arguments():
                     'flux_low_vram_optimizations',
                     'load_quantized_flux',
                     'vision',
+                    'asr',
                     'gguf_model_id',
                     'gguf_filename',
                     'quantize',
@@ -1280,6 +1383,27 @@ def parse_arguments():
                     args.exl2 = False
                 else:
                     args.vision = False
+
+                if ("openai/whisper" in args.model_id.lower()) and ("v3" in args.model_id.lower()):
+                    print("OpenAI Whisper V3 model auto-detected, setting asr=True")
+                    args.asr = True
+                
+                elif ("nvidia/canary-qwen-2.5b" in args.model_id.lower()):
+                    print("NVIDIA Canary Qwen 2.5B model auto-detected, setting asr=True")
+                    args.asr = True
+                
+                elif ("nvidia/canary-1b-v2" in args.model_id.lower()):
+                    print("NVIDIA Canary 1B V2 model auto-detected, setting asr=True")
+                    args.asr = True
+                
+                elif ("ibm-granite/granite-speech-3.3" in args.model_id.lower()):
+                    print("IBM Granite Speech 3.3 model auto-detected, setting asr=True")
+                    args.asr = True
+                
+                else:
+                    args.asr = False
+
+                print(f"asr: {args.asr}")
                 
                 write_config({
                     'access_gated':args.access_gated,
@@ -1291,6 +1415,7 @@ def parse_arguments():
                     'exl2_cache_type':args.exl2_cache_type,
                     'exl2_max_seq_len':args.exl2_max_seq_len,
                     'exl2_no_flash_attn':args.exl2_no_flash_attn,
+                    'asr':args.asr,
                     'gguf':args.gguf,
                     'awq':args.awq,
                     'gguf_model_id':args.gguf_model_id,
@@ -1615,6 +1740,130 @@ def load_vision_pipeline(pipeline, model_params):
         return False
 
 
+def load_openai_whisper_v3_asr_pipeline(model_id: str, torch_device: str):
+    print("\n\nOpenAI Whisper V3 ASR Model Selected - Loading...\n\n")
+    global PIPE, MODEL, PROCESSOR
+    
+    try:
+        torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+        MODEL = AutoModelForSpeechSeq2Seq.from_pretrained(
+            model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
+        )
+        MODEL.to(torch_device)
+    except Exception as e:
+        handle_model_loading_error("Could not load OpenAI Whisper V3 ASR Model, encountered error: ", e)
+        return False
+    
+    try:
+        PROCESSOR = AutoProcessor.from_pretrained(model_id)
+    except Exception as e:
+        handle_model_loading_error("Could not load AutoProcessor for OpenAI Whisper V3 ASR Model, encountered error: ", e)
+        return False
+    
+    try:
+        PIPE = pipeline(
+            "automatic-speech-recognition",
+            model=MODEL,
+            tokenizer=PROCESSOR.tokenizer,
+            feature_extractor=PROCESSOR.feature_extractor,
+            torch_dtype=torch_dtype,
+            device=torch_device,
+        )
+    except Exception as e:
+        handle_model_loading_error("Could not load pipeline for OpenAI Whisper V3 ASR Model, encountered error: ", e)
+        return False
+    
+    print(f"\nOpenAI Whisper V3 ASR Model Loaded Successfully!\n")
+    return True
+
+
+def load_nv_canary_qwen_2_5b_asr_pipeline(model_id: str, torch_device: str):
+    print("\n\nNVIDIA Canary Qwen 2.5B ASR Model Selected - Loading...\n\n")
+    global MODEL
+
+    try:
+        MODEL = SALM.from_pretrained(model_id)
+        MODEL.to(torch_device)
+    except Exception as e:
+        handle_model_loading_error("Could not load NVIDIA Canary Qwen 2.5B ASR Model, encountered error: ", e)
+        return False
+    
+    print(f"\nNVIDIA Canary Qwen 2.5B ASR Model Loaded Successfully!\n")
+    return True
+
+
+def load_nv_canary_1b_v2_asr_pipeline(model_id: str, torch_device: str):
+    print("\n\nNVIDIA Canary 1B V2 ASR Model Selected - Loading...\n\n")
+    global MODEL
+
+    try:
+        MODEL = ASRModel.from_pretrained(model_name=model_id)
+        MODEL.to(torch_device)
+    except Exception as e:
+        handle_model_loading_error("Could not load NVIDIA Canary 1B V2 ASR Model, encountered error: ", e)
+        return False
+    
+    print(f"\nNVIDIA Canary 1B V2 ASR Model Loaded Successfully!\n")
+    return True
+
+
+def load_ibm_granite_speech_3_3_asr_pipeline(model_id: str, torch_device: str):
+    print("\n\nIBM Granite Speech 3.3 ASR Model Selected - Loading...\n\n")
+    global MODEL, PROCESSOR, TOKENIZER
+
+    try:
+        PROCESSOR = AutoProcessor.from_pretrained(model_id)
+    except Exception as e:
+        handle_model_loading_error("Could not load AutoProcessor for IBM Granite Speech 3.3 ASR Model, encountered error: ", e)
+        return False
+    
+    try:
+        TOKENIZER = PROCESSOR.tokenizer
+    except Exception as e:
+        handle_model_loading_error("Could not load tokenizer for IBM Granite Speech 3.3 ASR Model, encountered error: ", e)
+        return False
+    
+    try:
+        MODEL = AutoModelForSpeechSeq2Seq.from_pretrained(
+            model_id, device_map=torch_device, torch_dtype=torch.bfloat16
+        )
+        MODEL.to(torch_device)
+    except Exception as e:
+        handle_model_loading_error("Could not load model for IBM Granite Speech 3.3 ASR Model, encountered error: ", e)
+        return False
+    
+    print(f"\nIBM Granite Speech 3.3 ASR Model Loaded Successfully!\n")
+    return True
+
+
+def load_asr_pipeline():
+    print("\n\nASR Model Selected - Loading...\n\n")
+
+    try:
+        read_return = read_config(['model_id', 'torch_device_map'])
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when attempting to load asr-pipeline, encountered error: ", e)
+
+    try:
+        if ("openai/whisper" in read_return['model_id']) and ("v3" in read_return['model_id']):
+            load_openai_whisper_v3_asr_pipeline(read_return['model_id'], read_return['torch_device_map'])
+        
+        elif ("nvidia/canary-qwen-2.5b" in read_return['model_id']):
+            load_nv_canary_qwen_2_5b_asr_pipeline(read_return['model_id'], read_return['torch_device_map'])
+        
+        elif ("nvidia/canary-1b-v2" in read_return['model_id']):
+            load_nv_canary_1b_v2_asr_pipeline(read_return['model_id'], read_return['torch_device_map'])
+        
+        elif ("ibm-granite/granite-speech-3.3" in read_return['model_id']):
+            load_ibm_granite_speech_3_3_asr_pipeline(read_return['model_id'], read_return['torch_device_map'])
+        
+        else:
+            raise ValueError(f"Invalid ASR model ID: {read_return['model_id']}")
+    
+    except Exception as e:
+        handle_local_error("Could not load ASR pipeline, encountered error: ", e)
+
+
 def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_path: os.PathLike) -> os.PathLike:
     print(f"\n\nAttempting to generate measurement file for model {model_id}...\n\n")
 
@@ -1874,25 +2123,18 @@ def restart_server_stream():
 
     print("\n\nrestarting server with stream\n\n")
 
-    shutdown_vision_model()
-    shutdown_pipe()
-    shutdown_exl2()
+    shutdown_all()
     safe_empty_cuda_cache()
 
     try:
-        read_return = read_config(['model_id', 'pipeline_task', 'flux_diffusers', 'vision', 'exl2'])
-        model_id = str(read_return['model_id'])
-        pipeline_task = str(read_return['pipeline_task'])
-        flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
-        vision = str(read_return['vision']).lower() == 'true'
-        exl2 = str(read_return['exl2']).lower() == 'true'
+        read_return = read_config(['model_id', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'exl2'])
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not read values from hf_config.json when attempting restart-server-stream, encountered error: ", e)
 
     model_params = {}
 
-    if not flux_diffusers:
+    if not read_return['flux_diffusers']:
         model_params = get_model_params()   # We need to do so before redirecting output-streams!
         print(f"Setting model-parameters: {model_params}")
     
@@ -1915,25 +2157,28 @@ def restart_server_stream():
             sys.stderr = custom_stderr
             logging.basicConfig(stream=custom_stdout, level=logging.INFO)   # logging level is set to INFO to ensure all logs are captured by the stream
             
-            if flux_diffusers:
+            if read_return['flux_diffusers']:
                 print("\nFlux Diffusers Selected - Loading...\n")
                 PIPE = load_flux_pipeline(PIPE)
             else:
                 if 'PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION' in os.environ:
                     del os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION']    # Better to delete as the default behavior is to try the C++ implementation first and fall back to Python if needed, which is more robust than simply setting it to 'cpp'.
                 
-                if exl2:
+                if read_return['exl2']:
                     print("\n\nExLlamaV2 Selected - Loading...\n\n")
                     load_exllama_pipeline()
-                elif vision:
+                elif read_return['vision']:
                     print("\nVision Model Selected - Loading...\n")
                     PIPE = load_vision_pipeline(PIPE, model_params)
+                elif read_return['asr']:
+                    print("\nASR Model Selected - Loading...\n")
+                    load_asr_pipeline() # Not all ASR models define a pipeline, those that do will set the global PIPE via appropriate helper functions!
                 else:
-                    model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
-                    tokenizer = AutoTokenizer.from_pretrained(model_id)
+                    model = AutoModelForCausalLM.from_pretrained(read_return['model_id'], **model_params)
+                    tokenizer = AutoTokenizer.from_pretrained(read_return['model_id'])
                     print("\nInitializing inference pipeline...")
                     PIPE = pipeline(
-                        pipeline_task,
+                        read_return['pipeline_task'],
                         model=model,
                         tokenizer=tokenizer,
                     )
@@ -1943,7 +2188,7 @@ def restart_server_stream():
                     except Exception as e:
                         handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
             
-            print(f"\n{model_id} loaded successfully!\n")
+            print(f"\n{read_return['model_id']} loaded successfully!\n")
         except Exception as e:
             return handle_model_loading_error("Model loading failed, encountered error: ", e, "api")
         finally:
@@ -1970,7 +2215,7 @@ def restart_server_stream():
     thread = threading.Thread(target=model_initialization_task)
     thread.start()
 
-    print(f"\nModel Initialization Begins - Loading {model_id}\n")
+    print(f"\nModel Initialization Begins - Loading {read_return['model_id']}\n")
     return Response(output_reader(), content_type='text/event-stream')
 
 
@@ -1979,20 +2224,13 @@ def initialize_model():
     global PIPE
 
     try:
-        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision', 'exl2'])
-        model_id = str(read_return['model_id'])
-        push_to_hub = str(read_return['push_to_hub']).lower() == 'true'
-        quant_level = str(read_return['quant_level'])
-        pipeline_task = str(read_return['pipeline_task'])
-        flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
-        vision = str(read_return['vision']).lower() == 'true'
-        exl2 = str(read_return['exl2']).lower() == 'true'
+        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'exl2'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
     
-    print(f"\n\nInitializing HF-Waitress LLM Server for {model_id}\n\n")
+    print(f"\n\nInitializing HF-Waitress LLM Server for {read_return['model_id']}\n\n")
 
-    if flux_diffusers:
+    if read_return['flux_diffusers']:
         print("\n\nFlux Diffusers Selected - Loading...\n\n")
         PIPE = load_flux_pipeline(PIPE)
 
@@ -2001,7 +2239,7 @@ def initialize_model():
         if 'PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION' in os.environ:
             del os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION']    # Better to delete as the default behavior is to try the C++ implementation first and fall back to Python if needed, which is more robust than simply setting it to 'cpp'.
 
-        if exl2:
+        if read_return['exl2']:
             print("\n\nExLlamaV2 Selected - Loading...\n\n")
             load_exllama_pipeline()
         
@@ -2009,15 +2247,18 @@ def initialize_model():
             model_params = get_model_params()
             print(f"Setting model-parameters: {model_params}")
             
-            if vision:
+            if read_return['vision']:
                 print("\n\nVision Model Selected - Loading...\n\n")
                 PIPE = load_vision_pipeline(PIPE, model_params)
+            elif read_return['asr']:
+                print("\n\nASR Model Selected - Loading...\n\n")
+                load_asr_pipeline() # Not all ASR models define a pipeline, those that do will set the global PIPE via appropriate helper functions!
             else:
-                model = AutoModelForCausalLM.from_pretrained(model_id, **model_params)
-                tokenizer = AutoTokenizer.from_pretrained(model_id)
+                model = AutoModelForCausalLM.from_pretrained(read_return['model_id'], **model_params)
+                tokenizer = AutoTokenizer.from_pretrained(read_return['model_id'])
                 print("\nInitializing inference pipeline...")
                 PIPE = pipeline(
-                    pipeline_task,
+                    read_return['pipeline_task'],
                     model=model,
                     tokenizer=tokenizer,
                 )
@@ -2027,11 +2268,11 @@ def initialize_model():
             except Exception as e:
                 handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
     
-    print(f"\n{model_id} loaded successfully!\n")
+    print(f"\n{read_return['model_id']} loaded successfully!\n")
 
-    if push_to_hub:
+    if read_return['push_to_hub']:
         try:
-            model.push_to_hub(f"{model_id}-{quant_level}")
+            model.push_to_hub(f"{read_return['model_id']}-{read_return['quant_level']}")
         except Exception as e:
             handle_error_no_return("Could not push the model to your hub, encountered error: ", e)
 
@@ -2477,6 +2718,401 @@ def vision_stream():
 
 
 
+#####################################----------------ASR Stuff!----------------#####################################
+audio_queue = queue.Queue()
+is_recording = threading.Event()
+
+def audio_callback(indata, frames, time, status):
+    audio_queue.put(indata.copy())
+
+def start_recording():
+    samplerate = int(read_config(['asr_samplerate']))
+    is_recording.set()
+    with sd.InputStream(samplerate=samplerate, channels=1, callback=audio_callback, dtype='float32'):
+        while is_recording.is_set():
+            time.sleep(0.1)     # The callback is handling the audio data, so we just wait
+
+def stop_recording():
+    is_recording.clear()
+
+
+def get_indices_of_substring(response, start_substring, end_substring):
+    print("\nAttempting to trim response...\n")
+    try:
+        if start_substring in response and end_substring in response:
+            start_index = response.rindex(start_substring)  # Sometimes the model re-gurgitates multiple copies of the same dict in it's response
+            end_index = response.rindex(end_substring) # rindex() returns the index of the last occurrence of the substring
+            print("\nSubstring successfully found, returning indices...\n")
+            return start_index, (end_index + len(end_substring))
+            
+        else:
+            print(f"\nResponse does not contain either the start_substring: {start_substring} or the end_substring: {end_substring}, returning unchanged response...\n")
+            return None, None
+    except Exception as e:
+        print(f"Failed to trim response, encountered error: {e}")
+        return None, None
+
+
+def remove_padding_from_transcription(transcription: str) -> str:
+    try:
+        padding_start_index, padding_end_index = get_indices_of_substring(
+            transcription.lower().strip(),
+            start_substring="tony is quiet",
+            end_substring="will be severely punished"
+        )
+        
+        if padding_start_index is None or padding_end_index is None:    # try once again with a small tweak!
+            padding_start_index, padding_end_index = get_indices_of_substring(
+                transcription.lower().strip(),
+                start_substring="tony is quite",
+                end_substring="will be severely punished"
+            )
+        
+        if padding_start_index is not None and padding_end_index is not None:
+            transcription = transcription[:padding_start_index] + transcription[padding_end_index:]
+            transcription = transcription.replace(" .", "").strip()
+        
+        return transcription
+    except Exception as e:
+        print(f"Failed to trim response, encountered error: {e}")
+        return transcription
+
+
+def generate_padding_audio(text:str, sr:int=16000) -> np.array:
+    """Generates audio for padding text using pyttsx3 and returns it as a NumPy array."""
+
+    if not os.path.exists('temp_padding.wav') or os.path.getsize('temp_padding.wav') == 0:
+        engine = pyttsx3.init()
+        engine.setProperty('rate', 150)  # Speed of the speech - Adjust as needed
+        engine.save_to_file(text, 'temp_padding.wav')   # pyttsx3 can be tricky with in-memory, so a temp file is robust
+        engine.runAndWait()
+
+    # Read the wav file from disk and convert to the correct format
+    # The sample rate for pyttsx3 might not be 16000, so we'll need to resample later if needed
+    read_sr, audio_data = read('temp_padding.wav') # read_sr is the sample rate of the audio data, audio_data is the audio data as a NumPy array
+
+    # Convert to mono float32, which is what Whisper expects
+    if audio_data.dtype != np.float32:
+        audio_data = audio_data.astype(np.float32) / np.iinfo(audio_data.dtype).max
+
+    if len(audio_data.shape) > 1:
+        audio_data = audio_data.mean(axis=1)    # Convert to mono
+
+    if read_sr != sr:   # resample to 16000:
+        audio_data = librosa.resample(audio_data, orig_sr=read_sr, target_sr=sr)
+
+    # This ensures the audio uses the full dynamic range from -1.0 to 1.0
+    peak_volume = np.max(np.abs(audio_data))
+    if peak_volume > 0:
+        audio_data = audio_data / peak_volume
+    
+    # Clean up the temp file
+    # os.remove('temp_padding.wav')
+    return audio_data
+
+
+def transcribe_with_openai_whisper_v3(audio_data: np.ndarray, asr_config: dict) -> dict:
+    try:
+        result = PIPE(audio_data, return_timestamps=True, generate_kwargs={
+            "task": "transcribe",
+            "language": "en",
+            "temperature": float(asr_config['asr_temperature']),
+            # Optional: "no_speech_threshold": 0.6, "compression_ratio_threshold": 2.4
+        })
+        return result['text'].strip() if result else ""
+    except Exception as e:
+        handle_local_error("Could not transcribe audio data with OpenAI Whisper V3 ASR Model, encountered error: ", e)
+
+
+def transcribe_with_nv_canary_qwen_2_5b(audio_data: np.ndarray, asr_config: dict) -> dict:
+    # ensure mono float32 in [-1, 1]
+    if audio_data.ndim > 1:
+        audio_data = audio_data.mean(axis=1)
+    if asr_config['asr_samplerate'] != 16000:
+        audio_data = librosa.resample(audio_data, orig_sr=asr_config['asr_samplerate'], target_sr=16000)
+        asr_config['asr_samplerate'] = 16000
+    audio_data = np.clip(audio_data.astype(np.float32), -1.0, 1.0)
+
+    # write a temp wav (int16) that the model can reference
+    tmp_dir = tempfile.mkdtemp(prefix="canary_asr_")
+    wav_path = os.path.join(tmp_dir, "utterance.wav")
+    wav_write(wav_path, asr_config['asr_samplerate'], (audio_data * 32767.0).astype(np.int16))
+
+    try:
+        prompts = [
+            [
+                {
+                    "role": "user",
+                    "content": f"Transcribe the following: {MODEL.audio_locator_tag}",
+                    "audio": [wav_path],
+                }
+            ]
+        ]
+        answer_ids = MODEL.generate(prompts=prompts, max_new_tokens=asr_config['asr_max_new_tokens'])
+        text = MODEL.tokenizer.ids_to_text(answer_ids[0].cpu()).strip()
+        return text
+    
+    finally:
+        try:
+            os.remove(wav_path)
+            os.rmdir(tmp_dir)
+        except Exception:
+            pass
+
+
+def transcribe_with_nv_canary_1b_v2(audio_data: np.ndarray, asr_config: dict) -> dict:
+    # ensure mono float32 in [-1, 1]
+    if audio_data.ndim > 1:
+        audio_data = audio_data.mean(axis=1)
+    if asr_config['asr_samplerate'] != 16000:
+        audio_data = librosa.resample(audio_data, orig_sr=asr_config['asr_samplerate'], target_sr=16000)
+        asr_config['asr_samplerate'] = 16000
+    audio_data = np.clip(audio_data.astype(np.float32), -1.0, 1.0)
+
+    # write a temp wav (int16) that the model can reference
+    tmp_dir = tempfile.mkdtemp(prefix="canary_1b_v2_asr_")
+    wav_path = os.path.join(tmp_dir, "utterance.wav")
+    wav_write(wav_path, asr_config['asr_samplerate'], (audio_data * 32767.0).astype(np.int16))
+
+    try:
+        output = MODEL.transcribe([wav_path], source_lang='en', target_lang='en')
+        text = output[0].text.strip()
+        return text
+        
+    finally:
+        try:
+            os.remove(wav_path)
+            os.rmdir(tmp_dir)
+        except Exception:
+            pass
+
+
+def transcribe_with_ibm_granite_speech_3_3(audio_data: np.ndarray, asr_config: dict) -> dict:
+    # ensure mono float32 in [-1, 1]
+    if audio_data.ndim > 1:
+        audio_data = audio_data.mean(axis=1)
+    if asr_config['asr_samplerate'] != 16000:
+        audio_data = librosa.resample(audio_data, orig_sr=asr_config['asr_samplerate'], target_sr=16000)
+        asr_config['asr_samplerate'] = 16000
+    audio_data = np.clip(audio_data.astype(np.float32), -1.0, 1.0)
+
+    # Convert numpy array directly to PyTorch tensor
+    # Add batch dimension: (samples,) -> (1, samples)
+    wav = torch.from_numpy(audio_data).unsqueeze(0).float()
+
+    try:
+        system_prompt = "Knowledge Cutoff Date: April 2024.\nToday's Date: April 9, 2025.\nYou are Granite, developed by IBM. You are a helpful AI assistant"
+        user_prompt = "<|audio|>can you transcribe the speech into a written format?"
+        chat = [
+            dict(role="system", content=system_prompt),
+            dict(role="user", content=user_prompt),
+        ]
+        prompt = TOKENIZER.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
+        model_inputs = PROCESSOR(prompt, wav, device=asr_config['torch_device_map'], return_tensors="pt").to(asr_config['torch_device_map'])
+        model_outputs = MODEL.generate(**model_inputs, max_new_tokens=asr_config['asr_max_new_tokens'], do_sample=False, num_beams=1)
+
+        # Transformers includes the input IDs in the response.
+        num_input_tokens = model_inputs["input_ids"].shape[-1]
+        new_tokens = torch.unsqueeze(model_outputs[0, num_input_tokens:], dim=0)
+        output_text = TOKENIZER.batch_decode(
+            new_tokens, add_special_tokens=False, skip_special_tokens=True
+        )
+        text = output_text[0].upper()
+        return text
+    except Exception as e:
+        # Handle any processing errors
+        print(f"Error during transcription: {e}")
+        return ""
+
+
+def transcribe_audio_data_with_asr_model(audio_data: np.ndarray, asr_config: dict) -> dict:
+    try:
+        if ("openai/whisper" in asr_config['model_id']) and ("v3" in asr_config['model_id']):
+            return transcribe_with_openai_whisper_v3(audio_data, asr_config)
+        
+        elif ("nvidia/canary-qwen-2.5b" in asr_config['model_id']):
+            return transcribe_with_nv_canary_qwen_2_5b(audio_data, asr_config)
+        
+        elif ("nvidia/canary-1b-v2" in asr_config['model_id']):
+            return transcribe_with_nv_canary_1b_v2(audio_data, asr_config)
+        
+        elif ("ibm-granite/granite-speech-3.3" in asr_config['model_id']):
+            return transcribe_with_ibm_granite_speech_3_3(audio_data, asr_config)
+        
+        else:
+            raise ValueError(f"Invalid ASR model ID: {asr_config['model_id']}")
+    except Exception as e:
+        handle_local_error("Could not transcribe audio data with ASR model, encountered error: ", e)
+
+
+def prepare_audio_from_bytes(audio_bytes: bytes, target_sr: int = 16000) -> np.ndarray:
+    # librosa can read from BytesIO via soundfile backend
+    y, sr = librosa.load(io.BytesIO(audio_bytes), sr=target_sr, mono=True)
+    y = y.astype(np.float32, copy=False)
+    return y
+
+
+def asr_transcribe(audio_bytes: bytes, asr_config: dict) -> str:
+    # 0. Prepare Padding Audio:
+    print("Starting ASR... Generating padding audio first.")
+    padding_audio = generate_padding_audio(asr_config['asr_padding_text'], sr=asr_config['asr_samplerate'])
+    pad_rms = np.sqrt(np.mean(padding_audio**2) + 1e-12)
+
+    print("Starting real-time transcription. Press Ctrl+C to stop.")
+
+    # 1. Decode Received Audio Bytes to 16k mono float32 audio data:
+    audio_data = prepare_audio_from_bytes(audio_bytes, target_sr=asr_config['asr_samplerate'])
+
+    # 2. Pre-process Received Audio Data:
+    if asr_config['asr_apply_normalization']:
+        print(f"Applying normalization to audio.")
+        peak_volume = np.max(np.abs(audio_data)) if len(audio_data) > 0 else 0.0
+        if peak_volume > 0: # normalize the spoken audio so it's not lost to the padding audio!
+            audio_data = audio_data / peak_volume
+    
+    padding_applied = False
+    if asr_config['asr_apply_tts_padding']:
+        print(f"Applying TTS padding to audio.")
+        if len(audio_data) < asr_config['asr_min_context_s'] * asr_config['asr_samplerate']:
+            print(f"Audio is shorter than {asr_config['asr_min_context_s']}s. Applying padding.")
+            
+            if asr_config['asr_apply_rms_dimming']:
+                print(f"Applying RMS dimming to padding audio.")
+                speech = audio_data
+                speech_rms = np.sqrt(np.mean(speech**2) + 1e-12)
+                target_pad_rms = speech_rms * (10 ** (-24/20))  # -24 dB
+                if pad_rms > 0:
+                    padding_audio_dimmed_rms = padding_audio * (target_pad_rms / pad_rms)
+                else:
+                    padding_audio_dimmed_rms = padding_audio
+                
+                if asr_config['asr_apply_crossfade']:
+                    print(f"Applying crossfade to padding audio.")
+                    # short crossfade to avoid a hard boundary
+                    xf = int(0.05 * asr_config['asr_samplerate'])  # 50 ms
+                    if len(speech) >= xf and len(padding_audio_dimmed_rms) >= xf:
+                        fade = np.linspace(1.0, 0.0, xf, dtype=np.float32)
+                        audio_data[-xf:] *= fade
+                        padding_audio_dimmed_rms[:xf] *= (1.0 - fade)
+
+                audio_data = np.concatenate((audio_data, padding_audio_dimmed_rms))
+                padding_applied = True
+            else:
+                print(f"Applying padding audio without RMS dimming.")
+                audio_data = np.concatenate((audio_data, padding_audio))
+                padding_applied = True
+    
+    if asr_config['asr_apply_zero_padding']:
+        print(f"Applying zero-padding to audio.")
+        needed = max(0, int(asr_config['asr_min_context_s'] * asr_config['asr_samplerate'] - len(audio_data)))
+        if needed > 0:
+            print(f"Audio is shorter than {asr_config['asr_min_context_s']}s. Applying zero-padding.")
+            audio_data = np.concatenate((audio_data, np.zeros(needed, dtype=np.float32)))
+    
+    # 3. Process Audio Data:
+    print(f"Processing {len(audio_data)/asr_config['asr_samplerate']:.2f}s of audio...")
+
+    transcription = transcribe_audio_data_with_asr_model(audio_data, asr_config)
+
+    if padding_applied and transcription:
+        transcription = remove_padding_from_transcription(transcription)
+    
+    print(f"Transcription: {transcription}")
+    return transcription
+
+
+def read_asr_config() -> dict:
+    try:
+        return read_config(
+            [
+                'model_id',
+                'torch_device_map',
+                'asr_samplerate',
+                'asr_temperature',
+                'asr_max_new_tokens',
+                'asr_volume_threshold',
+                'asr_silence_duration_s',
+                'asr_min_chunk_duration_s',
+                'asr_min_context_s',
+                'asr_stale_buffer_timeout_s',
+                'asr_min_meaningful_samples_factor',
+                'asr_padding_text',
+                'asr_vad_model',
+                'asr_vad_device', 
+                'asr_vad_threshold', 
+                'asr_vad_min_speech_ms',
+                'asr_vad_min_silence_ms',
+                'asr_vad_window_size_samples',
+                'asr_vad_max_buffer_s',
+                'asr_vad_speech_pad_ms',
+                'asr_apply_normalization',
+                'asr_apply_tts_padding',
+                'asr_apply_zero_padding',
+                'asr_apply_rms_dimming',
+                'asr_apply_crossfade'
+            ]
+        )
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when attempting to read ASR config, encountered error: ", e)
+
+
+def get_final_asr_config(request) -> dict:
+    asr_config = read_asr_config()
+    asr_config.update({
+        'asr_temperature': float(request.headers.get('X-ASR-Temperature', str(asr_config['asr_temperature']))),
+        'asr_max_new_tokens': int(request.headers.get('X-ASR-Max-New-Tokens', str(asr_config['asr_max_new_tokens']))),
+        'asr_samplerate': int(request.headers.get('X-ASR-Samplerate', str(asr_config['asr_samplerate']))),
+        'asr_volume_threshold': float(request.headers.get('X-ASR-Volume-Threshold', str(asr_config['asr_volume_threshold']))),
+        'asr_silence_duration_s': float(request.headers.get('X-ASR-Silence-Duration-S', str(asr_config['asr_silence_duration_s']))),
+        'asr_min_chunk_duration_s': float(request.headers.get('X-ASR-Min-Chunk-Duration-S', str(asr_config['asr_min_chunk_duration_s']))),
+        'asr_min_context_s': float(request.headers.get('X-ASR-Min-Context-S', str(asr_config['asr_min_context_s']))),
+        'asr_stale_buffer_timeout_s': float(request.headers.get('X-ASR-Stale-Buffer-Timeout-S', str(asr_config['asr_stale_buffer_timeout_s']))),
+        'asr_min_meaningful_samples_factor': float(request.headers.get('X-ASR-Min-Meaningful-Samples-Factor', str(asr_config['asr_min_meaningful_samples_factor']))),
+        'asvad_threshold': float(request.headers.get('X-ASR-VAD-Threshold', str(asr_config['asr_vad_threshold']))),
+        'asr_vad_min_speech_ms': float(request.headers.get('X-ASR-VAD-Min-Speech-MS', str(asr_config['asr_vad_min_speech_ms']))),
+        'asr_vad_min_silence_ms': float(request.headers.get('X-ASR-VAD-Min-Silence-MS', str(asr_config['asr_vad_min_silence_ms']))),
+        'asr_vad_window_size_samples': float(request.headers.get('X-ASR-VAD-Window-Size-Samples', str(asr_config['asr_vad_window_size_samples']))),
+        'asr_vad_max_buffer_s': float(request.headers.get('X-ASR-VAD-Max-Buffer-S', str(asr_config['asr_vad_max_buffer_s']))),
+        'asr_vad_speech_pad_ms': float(request.headers.get('X-ASR-VAD-Speech-Pad-MS', str(asr_config['asr_vad_speech_pad_ms']))),
+        'asr_apply_normalization': request.headers.get('X-ASR-Apply-Normalization', str(asr_config['asr_apply_normalization'])).lower() == 'true',
+        'asr_apply_tts_padding': request.headers.get('X-ASR-Apply-TTS-Padding', str(asr_config['asr_apply_tts_padding'])).lower() == 'true',
+        'asr_apply_zero_padding': request.headers.get('X-ASR-Apply-Zero-Padding', str(asr_config['asr_apply_zero_padding'])).lower() == 'true',
+        'asr_apply_rms_dimming': request.headers.get('X-ASR-Apply-RMS-Dimming', str(asr_config['asr_apply_rms_dimming'])).lower() == 'true',
+        'asr_apply_crossfade': request.headers.get('X-ASR-Apply-Crossfade', str(asr_config['asr_apply_crossfade'])).lower() == 'true',
+    })
+    return asr_config
+
+
+@app.route('/transcribe', methods=['POST'])
+def transcribe():
+    """
+    Accepts a posted WAV audio file under form field 'audio' and returns Whisper transcription.
+    Content-Type should be multipart/form-data.
+    """
+    try:
+        if 'audio' not in request.files:
+            return handle_api_error("Missing audio file in request, encountered error: ", e)
+        f = request.files['audio']
+        data = f.read()
+        if not data:
+            return handle_api_error("Empty audio file in request, encountered error: ", e)
+        
+        try:
+            final_asr_config = get_final_asr_config(request)
+        except Exception as e:
+            return handle_api_error("Could not get final ASR config, encountered error: ", e)
+        
+        try:
+            result = asr_transcribe(data, final_asr_config)
+        except Exception as e:
+            return handle_api_error("Could not transcribe audio, encountered error: ", e)
+        
+        return jsonify(success=True, transcription=result)
+    except Exception as e:
+        return handle_api_error("Server-side error, could not transcribe audio, encountered error: ", e)
+
+
+
 class CustomTextStreamer(TextStreamer):
     def __init__(self, tokenizer, skip_special_tokens=True, skip_prompt=True, **kwargs):
         super().__init__(tokenizer, skip_special_tokens=skip_special_tokens, skip_prompt=skip_prompt, **kwargs)
@@ -2863,6 +3499,61 @@ def exl2_stream():
 
 ### Exl2 Graph Helper Functions ###
 
+def trim_response(response, start_substring, end_substring, include_start_substring=False, include_end_substring=False):
+    print("\nAttempting to trim response...\n")
+    try:
+        if start_substring in response and end_substring in response:
+            start_index = response.rindex(start_substring)  # Sometimes the model re-gurgitates multiple copies of the same dict in it's response
+            end_index = response.rindex(end_substring) # rindex() returns the index of the last occurrence of the substring
+            
+            if not include_start_substring:
+                start_index += len(start_substring)
+            if include_end_substring:
+                end_index += len(end_substring)
+            
+            return response[start_index:end_index]
+        else:
+            print(f"\nResponse does not contain start_substring: {start_substring} or end_substring: {end_substring}, returning unchanged response...\n")
+            return response
+    except Exception as e:
+        print(f"Failed to trim response, encountered error: {e}")
+        return response
+
+
+def get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk):
+    return f"""For the purpose of creating a Graph Database, nodes and relations were extracted from a chunk of text. Both are provided below, can you provide a concise (under 3000 words) summary, in the style of a report detailing crucial information and insights, for the text_chunk expounding on the nodes and relationships? Thank you!
+
+    <text_chunk>
+    {chunk}
+    </text_chunk>
+
+    <nodes_and_relationships>
+    {json.dumps(nodes_and_relationships)}
+    </nodes_and_relationships>
+
+
+    Output format:
+    {{
+        "summary": "Your concise summary report (under 3000 words) here"
+    }}
+    """
+
+
+def get_minimal_query_for_summary(chunk):
+    return f"""For the purpose of creating a Graph Database, nodes and relations were extracted from the below chunk of text. Keeping this in mind, can you provide a concise (under 3000 words) summary, in the style of a report detailing crucial information and insights, for the text_chunk expounding on any nodes and relationships that may be present? Thank you!
+    
+    <text_chunk>
+    {chunk}
+    </text_chunk>
+
+
+    Output format:
+    {{
+        "summary": "Your concise summary report (under 3000 words) here"
+    }}
+    """
+
+
 def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
     try:    # Step 1: Create Exl2 Generator & Job
         exl2_dynamic_generator = set_global_exl2_dynamic_generator()
@@ -3009,7 +3700,7 @@ def validate_entity_extraction_response(extraction_response: str):
         return result
     
     # Try with trimming
-    trimmed_response = prompt_formatting_module.trim_response(extraction_response, '{"nodes":', '"}]}', include_start_substring=True, include_end_substring=True)
+    trimmed_response = trim_response(extraction_response, '{"nodes":', '"}]}', include_start_substring=True, include_end_substring=True)
     result = try_validation(trimmed_response)
     if result is not None:
         print("\n\nTrimmed response validated successfully\n\n")
@@ -3033,13 +3724,13 @@ def process_nodes_and_relationships(
     It returns an updated dictionary comprising all nodes and relationships with their comprehensive summaries.
     '''
     try:
-        comprehensive_summary_request_prompt = prompt_formatting_module.get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
+        comprehensive_summary_request_prompt = get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
         formatted_prompt = AUTO_TOKENIZER.apply_chat_template([{"role": "user", "content": comprehensive_summary_request_prompt}], add_generation_prompt=True, tokenize=False)
         
         if exl2_prompt_fits_within_max_context_length(formatted_prompt):
             full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
         else:   # No errors are raised if the prompt is larger than the max context length because it'll be auto-truncated which we don't want so best to handle manually!
-            minimal_summary_request_prompt = prompt_formatting_module.get_minimal_query_for_summary(chunk_text)
+            minimal_summary_request_prompt = get_minimal_query_for_summary(chunk_text)
             formatted_prompt = AUTO_TOKENIZER.apply_chat_template([{"role": "user", "content": minimal_summary_request_prompt}], add_generation_prompt=True, tokenize=False)
             
             if exl2_prompt_fits_within_max_context_length(formatted_prompt):
@@ -3049,7 +3740,7 @@ def process_nodes_and_relationships(
                 return [""]
         
         print("Summary generated, post-processing...\n")
-        full_response = prompt_formatting_module.trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n{Page Number(s): " + str(page_number_list) + "}\n\n"
+        full_response = trim_response(full_response, '"summary":', '}').replace("'", "") + "\n{Source Document Name: " + source_doc_name + "}\n{Page Number(s): " + str(page_number_list) + "}\n\n"
         print("\nSummary generation completed for present document chunk, proceeding...\n")
         return [str(full_response)]
     except Exception as e:
@@ -3742,9 +4433,7 @@ def restart_server():
                 print("\n\nrestart-server acquired error_logging_semaphore, proceeding...\n\n")
 
                 try:
-                    shutdown_vision_model()
-                    shutdown_pipe()
-                    shutdown_exl2()
+                    shutdown_all()
                     safe_empty_cuda_cache()
 
                     initialize_model()
