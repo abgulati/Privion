@@ -5586,8 +5586,6 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
     try:
         lars_read_return = read_config(['hf_waitress_server_timeout_seconds', 'hf_waitress_server_retry_attempts'])
         hf_waitress_base_url = get_url_for_server('hf-waitress')
-        safe_default_model_id = 'Qwen/Qwen2.5-1.5B-Instruct'
-        model_id = hf_read_return.get('model_id', safe_default_model_id)
     except Exception as e:
         return handle_api_error("Could not read hf_config.json, encountered error: ", e)
     
@@ -5595,20 +5593,21 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
     
     hf_waitress_host, hf_waitress_port = get_hf_waitress_serving_host_and_port()
     launch_args = f'--host={hf_waitress_host} --port={hf_waitress_port} '
-    launch_args += f'--model={model_id} '
-    if hf_read_return.get('awq', False):
+    if hf_read_return.get('model_id'):
+        launch_args += f'--model={hf_read_return.get("model_id")} '
+    if hf_read_return.get('awq'):
         launch_args += '--awq '
-    if hf_read_return.get('use_flash_attention_2', False):
+    if hf_read_return.get('use_flash_attention_2'):
         launch_args += '--use_flash_attention_2 '
-    if hf_read_return.get('flux_diffusers', False):
+    if hf_read_return.get('flux_diffusers'):
         launch_args += '--flux_diffusers '
-    if hf_read_return.get('flux_low_vram_optimizations', True):
+    if hf_read_return.get('flux_low_vram_optimizations'):
         launch_args += '--flux_low_vram_optimizations '
-    if hf_read_return.get('load_quantized_flux', False):
+    if hf_read_return.get('load_quantized_flux'):
         launch_args += '--load_quantized_flux '
-    if hf_read_return.get('vision', False):
+    if hf_read_return.get('vision'):
         launch_args += '--vision '
-    if hf_read_return.get('exl2', False):
+    if hf_read_return.get('exl2'):
         launch_args += '--exl2 '
     launch_args = launch_args.strip()
     base_command = 'python' if platform.system() == 'Windows' else 'python3'
