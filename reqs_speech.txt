@@ -7,3 +7,4 @@ nemo_toolkit>=2.5.0
 nemo_toolkit[asr]
 sacrebleu>=2.5.1
 pyttsx3>=2.99
+numpy==2.2.6
