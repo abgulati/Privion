@@ -4285,141 +4285,157 @@ def exl2_graph_summarizer():
 ######################################################----End Exl2-Graph Logic----########################################################
 
 
+################################################-----HF-Waitress Health-Check Methods-----#################################################
+def throw_health_check_error(attrib, e):
+    print(f"\nHF-Waitress Server online but could not determine LLM's '{attrib}' attribute. Continuing...\n")
+    return True
+
+
+def get_transformers_model_info():
+
+    model_info = {}
+
+    try:
+        model_info["model_id"] = str(PIPE.model.config._name_or_path)
+    except Exception as e:
+        throw_health_check_error("model_id", e)
+
+    try:
+        model_info["transformers_version"] = str(PIPE.model.config.transformers_version)
+    except Exception as e:
+        throw_health_check_error("transformers_version", e)
+
+    try:
+        model_info["architecture"] = str(PIPE.model.config.architectures)
+    except Exception as e:
+        throw_health_check_error("model architecture", e)
+
+    try:
+        model_info["model_type"] = str(PIPE.model.config.model_type)
+    except Exception as e:
+        throw_health_check_error("model_type", e)
+
+    try:
+        model_info["torch_dtype"] = str(PIPE.model.config.torch_dtype)
+    except Exception as e:
+        throw_health_check_error("torch_dtype", e)
+
+    try:
+        model_info["device"] = str(PIPE.device)
+    except Exception as e:
+        throw_health_check_error("inference device", e)
+
+    try:
+        if hasattr(PIPE.model.config, "quantization_config"):
+            model_info["is_quantized"] = True
+            model_info["quant_method"] = str(PIPE.model.config.quantization_config.quant_method)
+            model_info["quantization_config"] = str(PIPE.model.config.quantization_config)
+        else:
+            model_info["is_quantized"] = False
+    except Exception as e:
+        throw_health_check_error("quantization status", e)
+
+    try:
+        model_info["memory_footprint"] = str(PIPE.model.get_memory_footprint())
+    except Exception as e:
+        throw_health_check_error("memory_footprint", e)
+
+    try:
+        model_info["model_vocab_size"] = str(PIPE.model.config.vocab_size)
+    except Exception as e:
+        throw_health_check_error("model_vocab_size", e)
+        try:
+            model_info["tokenizer_vocab_length"] = len(PIPE.tokenizer)
+        except Exception as e:
+            throw_health_check_error("tokenizer_vocab_length", e)
+
+    try:
+        model_info["tokenizer_vocab_size"] = str(PIPE.tokenizer.vocab_size)
+    except Exception as e:
+        throw_health_check_error("tokenizer_vocab_size", e)
+
+    try:
+        model_info["number_of_hidden_layers"] = str(PIPE.model.config.num_hidden_layers)
+    except Exception as e:
+        throw_health_check_error("number_of_hidden_layers", e)
+
+    try:
+        model_info["number_of_attention_heads"] = str(PIPE.model.config.num_attention_heads)
+    except Exception as e:
+        throw_health_check_error("number_of_attention_heads", e)
+
+    try:
+        model_info["hidden_dimensions"] = str(PIPE.model.config.head_dim)
+    except Exception as e:
+        throw_health_check_error("hidden_dimensions", e)
+
+    try:
+        model_info["number_of_key_value_heads"] = str(PIPE.model.config.num_key_value_heads)
+    except Exception as e:
+        throw_health_check_error("number_of_key_value_heads", e)
+
+    try:
+        model_info["hidden_activation"] = str(PIPE.model.config.hidden_act)
+    except Exception as e:
+        throw_health_check_error("hidden_activation", e)
+
+    try:
+        model_info["hidden_size"] = str(PIPE.model.config.hidden_size)
+    except Exception as e:
+        throw_health_check_error("hidden_size", e)
+
+    try:
+        model_info["intermediate_size"] = str(PIPE.model.config.intermediate_size)
+    except Exception as e:
+        throw_health_check_error("intermediate_size", e)
+
+    try:
+        model_info["max_position_embeddings"] = str(PIPE.model.config.max_position_embeddings)
+    except Exception as e:
+        throw_health_check_error("max_position_embeddings", e)
+
+    try:
+        model_info["tokenizer"] = str(PIPE.tokenizer.name_or_path)
+    except Exception as e:
+        throw_health_check_error("tokenizer", e)
+
+    try:
+        model_info["max_seq_length"] = str(PIPE.tokenizer.model_max_length)
+    except Exception as e:
+        throw_health_check_error("max_seq_length", e)
+
+
 @app.route('/health')
 def health():
 
-    def throw_health_check_error(attrib, e):
-        print(f"\nHF-Waitress Server online but could not determine LLM's '{attrib}' attribute. Continuing...\n")
-        return True
-
     print("\n\nHF-Waitress LLM health-check in-progress...\n\n")
-    
+
     with reader_semaphore:
-    
+
         try:
-            if PIPE is None and (EXL2_MODEL is None or EXL2_CACHE is None or EXL2_TOKENIZER is None or AUTO_TOKENIZER is None):
-                return jsonify(status="error", message="Model not loaded"), 503 # Service Unavailable
+
+            # Treat any backend being ready as healthy:
+            pipe_ready = PIPE is not None
+            exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, AUTO_TOKENIZER])
+            asr_ready = MODEL is not None
             
+            print(f"\n\nhealth readiness → pipe={pipe_ready}, exl2={exl2_ready}, asr={asr_ready}\n\n")
+
+            if not (pipe_ready or exl2_ready or asr_ready):
+                return jsonify(status="error", message="None of the core backends (transformers, exl2, asr) are loaded"), 503 # Service Unavailable
+
             model_info = {}
 
-            # print(f"\n\nmodel details: {PIPE.model}\n\n")
-            # print(f"\n\nmodel.config details: {PIPE.model.config}\n\n")
-            # print(f"\n\ntokenizer details: {PIPE.tokenizer}\n\n")
+            if pipe_ready and not exl2_ready and not asr_ready: # Implies only Transformers backend is loaded!
+                model_info = get_transformers_model_info()
             
-            try:
-                model_info["model_id"] = str(PIPE.model.config._name_or_path)
-            except Exception as e:
-                throw_health_check_error("model_id", e)
-
-            try:
-                model_info["transformers_version"] = str(PIPE.model.config.transformers_version)
-            except Exception as e:
-                throw_health_check_error("transformers_version", e)
-
-            try:
-                model_info["architecture"] = str(PIPE.model.config.architectures)
-            except Exception as e:
-                throw_health_check_error("model architecture", e)
-
-            try:
-                model_info["model_type"] = str(PIPE.model.config.model_type)
-            except Exception as e:
-                throw_health_check_error("model_type", e)
-
-            try:
-                model_info["torch_dtype"] = str(PIPE.model.config.torch_dtype)
-            except Exception as e:
-                throw_health_check_error("torch_dtype", e)
-
-            try:
-                model_info["device"] = str(PIPE.device)
-            except Exception as e:
-                throw_health_check_error("inference device", e)
-
-            try:
-                if hasattr(PIPE.model.config, "quantization_config"):
-                    model_info["is_quantized"] = True
-                    model_info["quant_method"] = str(PIPE.model.config.quantization_config.quant_method)
-                    model_info["quantization_config"] = str(PIPE.model.config.quantization_config)
-                else:
-                    model_info["is_quantized"] = False
-            except Exception as e:
-                throw_health_check_error("quantization status", e)
-
-            try:
-                model_info["memory_footprint"] = str(PIPE.model.get_memory_footprint())
-            except Exception as e:
-                throw_health_check_error("memory_footprint", e)
-
-            try:
-                model_info["model_vocab_size"] = str(PIPE.model.config.vocab_size)
-            except Exception as e:
-                throw_health_check_error("model_vocab_size", e)
-                try:
-                    model_info["tokenizer_vocab_length"] = len(PIPE.tokenizer)
-                except Exception as e:
-                    throw_health_check_error("tokenizer_vocab_length", e)
-            
-            try:
-                model_info["tokenizer_vocab_size"] = str(PIPE.tokenizer.vocab_size)
-            except Exception as e:
-                throw_health_check_error("tokenizer_vocab_size", e)
-            
-            try:
-                model_info["number_of_hidden_layers"] = str(PIPE.model.config.num_hidden_layers)
-            except Exception as e:
-                throw_health_check_error("number_of_hidden_layers", e)
-            
-            try:
-                model_info["number_of_attention_heads"] = str(PIPE.model.config.num_attention_heads)
-            except Exception as e:
-                throw_health_check_error("number_of_attention_heads", e)
-
-            try:
-                model_info["hidden_dimensions"] = str(PIPE.model.config.head_dim)
-            except Exception as e:
-                throw_health_check_error("hidden_dimensions", e)
-
-            try:
-                model_info["number_of_key_value_heads"] = str(PIPE.model.config.num_key_value_heads)
-            except Exception as e:
-                throw_health_check_error("number_of_key_value_heads", e)
-            
-            try:
-                model_info["hidden_activation"] = str(PIPE.model.config.hidden_act)
-            except Exception as e:
-                throw_health_check_error("hidden_activation", e)
-            
-            try:
-                model_info["hidden_size"] = str(PIPE.model.config.hidden_size)
-            except Exception as e:
-                throw_health_check_error("hidden_size", e)
-
-            try:
-                model_info["intermediate_size"] = str(PIPE.model.config.intermediate_size)
-            except Exception as e:
-                throw_health_check_error("intermediate_size", e)
-
-            try:
-                model_info["max_position_embeddings"] = str(PIPE.model.config.max_position_embeddings)
-            except Exception as e:
-                throw_health_check_error("max_position_embeddings", e)
-
-            try:
-                model_info["tokenizer"] = str(PIPE.tokenizer.name_or_path)
-            except Exception as e:
-                throw_health_check_error("tokenizer", e)
-
-            try:
-                model_info["max_seq_length"] = str(PIPE.tokenizer.model_max_length)
-            except Exception as e:
-                throw_health_check_error("max_seq_length", e)
-
             print(f"HF-Waitress LLM-server health-check completed successfully, returning.\n")
             return jsonify(status="ok", model_info=model_info), 200
 
         except Exception as e:
             handle_api_error("Error checking hf-server health, encountered error: ", e)
+
+#############################################################-----End HF-Waitress Health-Check Methods-----#################################################
 
 
 @app.route('/restart_server')
