@@ -1,1 +1,0 @@
-Copy the entire `exllamav2` dir, which is required by `hf_waitress.py` to Exl2 Quantize the Model on First Load
