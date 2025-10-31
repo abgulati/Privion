@@ -23,6 +23,7 @@ except ImportError:
 try:
     from nemo.collections.speechlm2.models import SALM
     from nemo.collections.asr.models import ASRModel
+    import nemo.collections.asr as nemo_asr
     from scipy.io.wavfile import write as wav_write
     from scipy.io.wavfile import read   # To read the in-memory audio wav file
     import tempfile
@@ -1422,6 +1423,14 @@ def parse_arguments():
                     print("OpenAI Whisper V3 model auto-detected, setting asr=True")
                     args.asr = True
 
+                elif ("nvidia/parakeet-tdt-0.6b-v3" in args.model_id.lower()):
+                    print("NVIDIA Parakeet TDT 0.6B V3 model auto-detected, setting asr=True")
+                    args.asr = True
+
+                elif ("nvidia/parakeet-tdt-0.6b-v2" in args.model_id.lower()):
+                    print("NVIDIA Parakeet TDT 0.6B V2 model auto-detected, setting asr=True")
+                    args.asr = True
+
                 elif ("nvidia/canary-qwen-2.5b" in args.model_id.lower()):
                     print("NVIDIA Canary Qwen 2.5B model auto-detected, setting asr=True")
                     args.asr = True
@@ -1826,6 +1835,36 @@ def load_nv_canary_qwen_2_5b_asr_pipeline(model_id: str, torch_device: str):
     return True
 
 
+def load_nv_parakeet_tdt_0_6b_v3_asr_pipeline(model_id: str, torch_device: str):
+    print("\n\nNVIDIA Parakeet TDT 0.6B V3 ASR Model Selected - Loading...\n\n")
+    global MODEL
+
+    try:
+        MODEL = nemo_asr.models.ASRModel.from_pretrained(model_name=model_id)
+        MODEL.to(torch_device)
+    except Exception as e:
+        handle_model_loading_error("Could not load NVIDIA Parakeet TDT 0.6B V3 ASR Model from Nemo ASR, encountered error: ", e)
+        return False
+
+    print(f"\nNVIDIA Parakeet TDT 0.6B V3 ASR Model Loaded Successfully!\n")
+    return True
+
+
+def load_nv_parakeet_tdt_0_6b_v2_asr_pipeline(model_id: str, torch_device: str):
+    print("\n\nNVIDIA Parakeet TDT 0.6B V2 ASR Model Selected - Loading...\n\n")
+    global MODEL
+
+    try:
+        MODEL = nemo_asr.models.ASRModel.from_pretrained(model_name=model_id)
+        MODEL.to(torch_device)
+    except Exception as e:
+        handle_model_loading_error("Could not load NVIDIA Parakeet TDT 0.6B V2 ASR Model from Nemo ASR, encountered error: ", e)
+        return False
+
+    print(f"\nNVIDIA Parakeet TDT 0.6B V2 ASR Model Loaded Successfully!\n")
+    return True
+
+
 def load_nv_canary_1b_v2_asr_pipeline(model_id: str, torch_device: str):
     print("\n\nNVIDIA Canary 1B V2 ASR Model Selected - Loading...\n\n")
     global MODEL
@@ -1899,6 +1938,12 @@ def load_asr_pipeline():
     try:
         if ("openai/whisper" in read_return['model_id']) and ("v3" in read_return['model_id']):
             load_openai_whisper_v3_asr_pipeline(read_return['model_id'], read_return['torch_device_map'])
+
+        elif ("nvidia/parakeet-tdt-0.6b-v3" in read_return['model_id']):
+            load_nv_parakeet_tdt_0_6b_v3_asr_pipeline(read_return['model_id'], read_return['torch_device_map'])
+
+        elif ("nvidia/parakeet-tdt-0.6b-v2" in read_return['model_id']):
+            load_nv_parakeet_tdt_0_6b_v2_asr_pipeline(read_return['model_id'], read_return['torch_device_map'])
 
         elif ("nvidia/canary-qwen-2.5b" in read_return['model_id']):
             load_nv_canary_qwen_2_5b_asr_pipeline(read_return['model_id'], read_return['torch_device_map'])
@@ -2879,7 +2924,7 @@ def get_pipe(torch_device: str):
         feature_extractor=PROCESSOR.feature_extractor,
         torch_dtype=torch_dtype,
         device=torch_device,
-    ) 
+    )
 
 
 def transcribe_with_openai_whisper_v3(audio_data: np.ndarray, asr_config: dict) -> str:
@@ -2922,6 +2967,60 @@ def transcribe_with_nv_canary_qwen_2_5b(audio_data: np.ndarray, asr_config: dict
         ]
         answer_ids = MODEL.generate(prompts=prompts, max_new_tokens=asr_config['asr_max_new_tokens'])
         text = MODEL.tokenizer.ids_to_text(answer_ids[0].cpu()).strip()
+        return text
+
+    finally:
+        try:
+            os.remove(wav_path)
+            os.rmdir(tmp_dir)
+        except Exception:
+            pass
+
+
+def transcribe_with_nv_parakeet_tdt_0_6b_v3(audio_data: np.ndarray, asr_config: dict) -> str:
+    # ensure mono float32 in [-1, 1]
+    if audio_data.ndim > 1:
+        audio_data = audio_data.mean(axis=1)
+    if asr_config['asr_samplerate'] != 16000:
+        audio_data = librosa.resample(audio_data, orig_sr=asr_config['asr_samplerate'], target_sr=16000)
+        asr_config['asr_samplerate'] = 16000
+    audio_data = np.clip(audio_data.astype(np.float32), -1.0, 1.0)
+
+    # write a temp wav (int16) that the model can reference
+    tmp_dir = tempfile.mkdtemp(prefix="parakeet_tdt_0_6b_v3_asr_")
+    wav_path = os.path.join(tmp_dir, "utterance.wav")
+    wav_write(wav_path, asr_config['asr_samplerate'], (audio_data * 32767.0).astype(np.int16))
+
+    try:
+        output = MODEL.transcribe([wav_path])
+        text = output[0].text.strip()
+        return text
+
+    finally:
+        try:
+            os.remove(wav_path)
+            os.rmdir(tmp_dir)
+        except Exception:
+            pass
+
+
+def transcribe_with_nv_parakeet_tdt_0_6b_v2(audio_data: np.ndarray, asr_config: dict) -> str:
+    # ensure mono float32 in [-1, 1]
+    if audio_data.ndim > 1:
+        audio_data = audio_data.mean(axis=1)
+    if asr_config['asr_samplerate'] != 16000:
+        audio_data = librosa.resample(audio_data, orig_sr=asr_config['asr_samplerate'], target_sr=16000)
+        asr_config['asr_samplerate'] = 16000
+    audio_data = np.clip(audio_data.astype(np.float32), -1.0, 1.0)
+
+    # write a temp wav (int16) that the model can reference
+    tmp_dir = tempfile.mkdtemp(prefix="parakeet_tdt_0_6b_v2_asr_")
+    wav_path = os.path.join(tmp_dir, "utterance.wav")
+    wav_write(wav_path, asr_config['asr_samplerate'], (audio_data * 32767.0).astype(np.int16))
+
+    try:
+        output = MODEL.transcribe([wav_path])
+        text = output[0].text.strip()
         return text
 
     finally:
@@ -3001,6 +3100,12 @@ def transcribe_audio_data_with_asr_model(audio_data: np.ndarray, asr_config: dic
     try:
         if ("openai/whisper" in asr_config['model_id']) and ("v3" in asr_config['model_id']):
             return transcribe_with_openai_whisper_v3(audio_data, asr_config)
+
+        elif ("nvidia/parakeet-tdt-0.6b-v3" in asr_config['model_id']):
+            return transcribe_with_nv_parakeet_tdt_0_6b_v3(audio_data, asr_config)
+
+        elif ("nvidia/parakeet-tdt-0.6b-v2" in asr_config['model_id']):
+            return transcribe_with_nv_parakeet_tdt_0_6b_v2(audio_data, asr_config)
 
         elif ("nvidia/canary-qwen-2.5b" in asr_config['model_id']):
             return transcribe_with_nv_canary_qwen_2_5b(audio_data, asr_config)
