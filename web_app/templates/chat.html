@@ -161,7 +161,10 @@
                     <i class="fas fa-folder-open"></i> <!-- Icon for folders -->
                 </button>
 
-                <button type="button" id="recordBtn" class="btn record-audio-btn" onclick="window.__voice_streaming__.toggleStreaming(this)" title="Hold to talk / Click to toggle">
+                <button type="button" id="recordBtn" class="btn record-audio-btn" onclick="window.__voice_streaming__.toggleStreaming(this)"
+                        title="Click to toggle"
+                        data-bs-toggle="tooltip"
+                        data-bs-placement="top">
                     <i class="fa-solid fa-microphone-slash"></i>
                 </button>
 

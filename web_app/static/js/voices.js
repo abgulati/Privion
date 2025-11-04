@@ -231,6 +231,41 @@ async function determineLlmUse(transcription) {
 }
 
 
+function updateRecordButtonTooltip(state) {
+    const btnEl = document.getElementById('recordBtn');
+    if (btnEl) {
+        const tooltipText = {
+            'idle': 'Click to toggle',
+            'connecting': 'Connecting to speech transcription server...',
+            'recording': 'Recording - click to stop'
+        };
+        btnEl.setAttribute('title', tooltipText[state] || tooltipText['idle']);
+
+        // If using Bootstrap Tooltip, update them
+        if (window.bootstrap && window.bootstrap.Tooltip) {
+            const tooltip = window.bootstrap.Tooltip.getInstance(btnEl);
+            if (tooltip) {
+                tooltip.setContent({
+                    '.tooltip-inner': tooltipText[state] || tooltipText['idle']
+                });
+            }
+        }
+    }
+}
+
+
+function stopStreamCleanup() {
+    stopStreamingASR();
+    const btnEl = document.getElementById('recordBtn');
+    if (btnEl) {
+        btnEl.querySelector('i').classList.remove('fa-microphone');
+        btnEl.querySelector('i').classList.add('fa-microphone-slash');
+        btnEl.classList.remove('recording', 'connecting');
+        updateRecordButtonTooltip('idle');
+    }
+}
+
+
 function connectAsrWebSocket() {
     // Open WebSocket to the sidecar ASGI server
     // Example: ws://localhost:9070/ws/asr (adjust host/port) 'ws://localhost:10087/ws/asr'
@@ -293,9 +328,17 @@ function connectAsrWebSocket() {
     ws.binaryType = 'arraybuffer';  // binaryType is used to specify the type of data that will be sent and received from the WebSocket.
 
     ws.onopen = () => {
+        console.log('WebSocket opened successfully!');
         // Prepare 20ms frames at source SR
         streamSampleRate = inputSampleRate || 48000;
         streamBytesPerFrame = Math.round(0.02 * streamSampleRate); // 20ms
+
+        const btnEl = document.getElementById('recordBtn');
+        if (btnEl) {
+            btnEl.classList.remove('connecting');
+            btnEl.classList.add('recording');
+            updateRecordButtonTooltip('recording');
+        }
     };
 
     ws.onmessage = (evt) => {
@@ -322,13 +365,9 @@ function connectAsrWebSocket() {
             setTimeout(connectAsrWebSocket, delay);
         } else if (streaming) {
             console.error('Max reconnect attempts reached. Stopping streaming.');
-            stopStreamingASR();
-            const btnEl = document.getElementById('recordBtn');
-            if (btnEl) {
-                btnEl.querySelector('i').classList.remove('fa-microphone');
-                btnEl.querySelector('i').classList.add('fa-microphone-slash');
-                btnEl.classList.remove('recording');
-            }
+            stopStreamCleanup();
+        } else {
+            stopStreamCleanup();
         }
      };
 }
@@ -454,16 +493,23 @@ function stopStreamingASR() {
 
 // Optional UI wiring
 async function toggleStreaming(btnEl) {
+    if (getAsr() !== 'true') {
+        alert('Speech Transcription is unavailable as ASR is not enabled. Please enable ASR in the settings!');
+        return;
+    }
+    
     if (!streaming) {
-        await startStreamingASR();
+        btnEl.classList.add('connecting');
         btnEl.querySelector('i').classList.remove('fa-microphone-slash');
         btnEl.querySelector('i').classList.add('fa-microphone');
-        btnEl.classList.add('recording');
+        updateRecordButtonTooltip('connecting');
+        await startStreamingASR();
     } else {
         stopStreamingASR();
         btnEl.querySelector('i').classList.remove('fa-microphone');
         btnEl.querySelector('i').classList.add('fa-microphone-slash');
-        btnEl.classList.remove('recording');
+        btnEl.classList.remove('recording', 'connecting');
+        updateRecordButtonTooltip('idle');
     }
 }
 
