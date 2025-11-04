@@ -50,9 +50,6 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 [RAG Features-Demonstration](https://www.youtube.com/watch?v=2CpgqA_YjWU&list=PLGhCeHSq43a4H7N-t_49SDfwP9LpZXED-)
 
-<a href="https://www.youtube.com/watch?v=2CpgqA_YjWU&list=PLGhCeHSq43a4H7N-t_49SDfwP9LpZXED-" target="_blank" ><img src="https://github.com/abgulati/LARS/blob/main/web_app/static/images/L-Flow-Logo.jpeg" alt="RAG Features-Demonstration" style="max-width:50%;"></a>
-
-
 ## Table of Contents
 
 1. [Privion](https://github.com/abgulati/LAR-Enterprise?tab=readme-ov-file#privion)
