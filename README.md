@@ -100,7 +100,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - Download and install the [Visual Studio IDE](https://visualstudio.microsoft.com/thank-you-downloading-visual-studio/?sku=Community&channel=Release&version=VS2022&source=VSLandingPage&cid=2030&passive=false)
 
-- NOTE: Make sure to select "Desktop Development with C++"!
+- *NOTE: Make sure to select "Desktop Development with C++"!*
 
 - Required by Nvidia-CUDA on Windows specifically for MSVC (Microsoft Visual C++) Compiler
 
@@ -112,9 +112,9 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - Download and install [Microsoft Visual Studio Build Tools 2022](https://visualstudio.microsoft.com/downloads/)
 
-- NOTE: Scroll down to "Tools for Visual Studio"
+- *NOTE: Scroll down to "Tools for Visual Studio"*
 
-- NOTE: When installing the above, make sure to select the following components:
+- *NOTE: When installing the above, make sure to select the following components:*
     ```
     Desktop development with C++
     # Then from the "Optional" category on the right, make sure to select the following:
@@ -135,9 +135,9 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - Download and install Nvidia's [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archive)
 
-- NOTE: LARS built and tested with v12.2 and v12.4.1 on Ampere & Ada GPUs, and v12.8.1 on Ada & Blackwell GPUs
+- *NOTE: LARS built and tested with v12.2 and v12.4.1 on Ampere & Ada GPUs, and v12.8.1 on Ada & Blackwell GPUs*
 
-- NOTE: Make sure to "Visual-Studio integration" is selected at the time of installation! 
+- *NOTE: Make sure to "Visual-Studio integration" is selected at the time of installation!*
 
 - To verify the installation:
 
@@ -253,7 +253,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - Install [Pytorch](https://pytorch.org/get-started/locally/)
 
-- NOTE: LARS built and tested with Pytorch v2.5.0 with CUDA 12.4.1 for Ampere & Ada GPUs, and Pytorch v2.7.1 with CUDA 12.8.1 for Blackwell GPUs
+- *NOTE: LARS built and tested with Pytorch v2.5.0 with CUDA 12.4.1 for Ampere & Ada GPUs, and Pytorch v2.9 with CUDA 12.8.1 for Ada & Blackwell GPUs*
 
 - IMP: Make sure to add `torchaudio` to the install list (if planning to use Privion's speech features, which is recommended) as the website might not include it by default! For example:
     ```
@@ -266,7 +266,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - It has very specific hardware and software pre-requisites, make sure to check the [official repo](https://github.com/Dao-AILab/flash-attention) for the most up-to-date list of requirements.
 
-- NOTE (V. Imp): Make sure that ninja is installed and that it works correctly (e.g. `ninja --version` then `echo $?` should return exit code `0`). If not (sometimes `ninja --version` then `echo $?` returns a nonzero exit code), uninstall then reinstall ninja (`pip uninstall -y ninja && pip install ninja`). Without ninja, compiling can take a very long time (2h) since it does not use multiple CPU cores. With ninja compiling takes 3-5 minutes on a 64-core machine using CUDA toolkit.
+- *NOTE (V. Imp): Make sure that ninja is installed and that it works correctly (e.g. `ninja --version` then `echo $?` should return exit code `0`). If not (sometimes `ninja --version` then `echo $?` returns a nonzero exit code), uninstall then reinstall ninja (`pip uninstall -y ninja && pip install ninja`). Without ninja, compiling can take a very long time (2h) since it does not use multiple CPU cores. With ninja compiling takes 3-5 minutes on a 64-core machine using CUDA toolkit.*
 
 - To install:
 
@@ -336,9 +336,9 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 ### 9. ExLlamaV2
 
-- NOTE: Do NOT set this up in a location that's synced by a cloud-backup service, such as OneDrive! This is because a lot of files are created by ExLlamaV2 during quantizing and deleted thereafter, and OneDrive especially likes to hold permissions hostage. If unavoidable, make sure to disable the cloud-backup service temporarily at the least.
+- *NOTE: Do NOT set this up in a location that's synced by a cloud-backup service, such as OneDrive! This is because a lot of files are created by ExLlamaV2 during quantizing and deleted thereafter, and OneDrive especially likes to hold permissions hostage. If unavoidable, make sure to disable the cloud-backup service temporarily at the least.*
 
-- ANOTHER NOTE: Disabling cloud-sync such as OneDrive can cause errors during quantization IF using a previously synced repo after reinstalling Windows, as OneDrive might display the entire ExLlamaV2 dir the files haven't been locally synced though they may appear to be present in Explorer! In such cases, simply delete and re-run HF-Waitress, as it'll re-clone the ExLlamaV2 repo afresh.  
+- *ANOTHER NOTE: Disabling cloud-sync such as OneDrive can cause errors during quantization IF using a previously synced repo after reinstalling Windows, as OneDrive might display the entire ExLlamaV2 dir the files haven't been locally synced though they may appear to be present in Explorer! In such cases, simply delete and re-run HF-Waitress, as it'll re-clone the ExLlamaV2 repo afresh.*
 
 - ExLlama is a highly optimized LLM inference library specifically for consumer GPUs.
 
@@ -390,7 +390,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
             winget install --id=eSpeak-NG.eSpeak-NG -e
             ```
 
-        - Tested with v1.52 as of Nov-2025
+        - *Tested with v1.52 as of Nov-2025*
 
     2. Install FFMpeg:
 
@@ -529,7 +529,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - Build llama.cpp with CMAKE:
 
-    - Note: For faster compilation, add the -j argument to run multiple jobs in parallel. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.
+    - *Note: For faster compilation, add the -j argument to run multiple jobs in parallel. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.*
 
     - Open a command window in llama.cpp dir
 
