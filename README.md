@@ -423,7 +423,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
     3. Install Python Libs:
 
-        - Determine the correct version of TorchCodec by cross-referencing the [Offical Support-Matrix](https://github.com/meta-pytorch/torchcodec?tab=readme-ov-file#installing-cpu-only-torchcodec) with the version of [PyTorch installed previously in Installation - Step 7](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#installation)
+        - Determine the correct version of TorchCodec by cross-referencing the [Offical Support-Matrix](https://github.com/meta-pytorch/torchcodec?tab=readme-ov-file#installing-cpu-only-torchcodec) with the version of [PyTorch installed previously in Installation - Step 7](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#7-pytorch)
 
         - Edit *line 2* in the `reqs_speech.txt` file accordingly, and then install:
             ```
@@ -512,13 +512,13 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - Two Approaches: Either download a pre-built release or clone the repo and build manually
 
-- While the former is easier, often CUDA does not work right, and high CPU usage might be observed even with full offloading, so building from scratch is often the best practice
+- While the former is easier, often CUDA does not work right, and high CPU usage might be observed even with full GPU offloading, so building from scratch is often the best practice
 
-- If setting up a pre-built version, skip to the last two steps in this section (add to PATH and test)
+- If setting up a pre-built version, skip to the last two steps in this section (i.e. add to PATH and Test)
 
 - To self-build, start by downloading the `Source code (zip)` of the latest release from the [Official Repo's Releases Page](https://github.com/ggml-org/llama.cpp/releases)
 
-- Ensure VSBuildTools is installed if on Windows
+- Ensure VSBuildTools is installed if on Windows as per [Installation - Step 4](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#4-visual-studio-build-tools)
 
 - Install CMAKE on Windows from the [Official Site](https://cmake.org/download/)
 
