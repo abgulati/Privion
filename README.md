@@ -27,11 +27,11 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 3. Advanced LLM Platform:
     - Two Inferencing Backends: HF-Waitress and llama.cpp
-    - Advanced llama.cpp UI: Deploy any GGUF with full UI control over advanced settings:
-        - GPU offloading: Layer count & devices to use
-        - KV-Cache Control: Unification, Offloading, Data-Type
-        - Parallel Decoding & CPU-Only MoE
-        - Memory Management: Mlock and Mmap control
+    - Advanced llama.cpp UI - Deploy any GGUF with full UI control over advanced settings:
+        - GPU-Offloading: Layer count & devices to use
+        - KV-Cache Control: Unification, Offloading & Data-Type Control
+        - Parallel Decoding & CPU-Only MoE Settings
+        - Memory Management: Mlock and Mmap Control
     - Custom HuggingFace-Waitress (HF-Waitress) Server with two backends: Transformers & ExLlamaV2
         - Support Any LLM from HuggingFace: Simply specify the Model ID from the HF Repo! 
         - Deploy native Transformer-SafeTensors for 0-day LLM support
