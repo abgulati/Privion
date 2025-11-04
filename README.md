@@ -41,6 +41,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
         - Exl2 Measurement Reuse: The measurement.json generation occurs only once per model, and the results are saved to dramatically speed up further quantization runs to other BPW targets
         - Speech Transcription (ASR): Supports Nvidia Parakeet v2 & v3, Canary-Flash, Canary-Qwen-2.5B, IBM-Granite-Speech-3.3 2B & 8B, and OpenAI Whisper-Large-v3 for Transcription of audio files
         - Live Speech Transcription (Live ASR): Live WebSocket connection maps a client-side microphone to the selected ASR model for always-on speech transcription
+        - Dedeciated /shutdown API with IP-whitelisting for secure invocation
     - Fully-Managed Prompt Templating Across All Backends: No manual selection of LLM Prompt Template formats required for either HF-Waitress Transformers, ExLlamaV2 or llama.cpp backends
     - Generation-Control Args: Control Temperature, Top-P, Top-k, Min-P etc easily on a per-request basis regardless of inferencing backend
     - Text-To-Speech (TTS): Leverages Kokoro-82M for vocal interactions, supporting easy-switching between all American & British Male and Female voices available in the Kokoro package
