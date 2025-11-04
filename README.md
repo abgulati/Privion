@@ -1,60 +1,78 @@
-# LARS - The LLM & Advanced Referencing Solution
+# Privion
+### Previously 'LARS - The LLM & Advanced Referencing Solution'
 
 <p align="center">
-<img src="https://github.com/abgulati/LARS/blob/main/web_app/static/images/LARS_Logo_3.png"  align="center">
+<img src="https://github.com/abgulati/LARS/blob/main/web_app/static/images/Privion-UI.png"  align="center">
 </p>
 
-LARS is an application that enables you to run LLM's (Large Language Models) locally on your device, upload your own documents and engage in conversations wherein the LLM grounds its responses with your uploaded content. This grounding helps increase accuracy and reduce the common issue of AI-generated inaccuracies or "hallucinations." This technique is commonly known as "Retrieval Augmented Generation", or RAG.
+Privion is a versatile AI application focused on privacy and offline inferencing, capable of leveraging a multitude of open-source LLMs to perform a range of diverse tasks. Privion's current feature set includes:
 
-There are many desktop applications for running LLMs locally, and LARS aims to be the ultimate open-source RAG-centric LLM application. Towards this end, LARS takes the concept of RAG much further by adding detailed citations to every response, supplying you with specific document names, page numbers, text-highlighting, and images relevant to your question, and even presenting a document reader right within the response window. While all the citations are not always present for every response, the idea is to have at least some combination of citations brought up for every RAG response and that’s generally found to be the case. 
+### Here's a list detailing Privion's feature-set as it stands today:
 
-### Here's a list detailing LARS's feature-set as it stands today:
+1. Advanced RAG Capabilities:
+    - Detailed Citiations: LLM responses seamlessly incorporate citations & links to specific document pages complete with a document browser comprising all relevant documents for instant cross-referencing  
+    - Semantic + Lexical Searching: Combining the strengths of intent and keywood-based search techniques
+    - GraphRAG: Fully local, entirely offline custom GraphRAG system heavily leveraging Gemma2-2B to derive deep insights from data pools and provide thorough data analysis capabilities
+    - Dynamic RAG: Autonomous selection of best RAG technique to respond to a given user query
+    - Re-ranking: Heavily leverages re-ranking to filter out the best search results for RAG responses
+    - Cutting-Edge Embedding & Re-ranker Models: Easily swap to the latest and greatest open-source Embedding and Re-ranking models by simply specifying the HuggingFace model IDs
+    - Advanced, Offline OCR: Full support for Kosmos-2.5 and Docling Standard & VLM OCR pipelines for high-accuracy offline & fully-local data-extraction from documents
+    - Knowledge Domains: Easily create and switch between knowledge-domains to seperate data with any level of granularityd esired
+    - Any Document Format: Upload files in any virtually any format
+    - Bulk Uploads: Upload multiple files and entire folders in one go
+    - Google Drive Integration: Easily connect and sync your GDrive files
 
-1. Advanced Citations: The main showcase feature of LARS - LLM-generated responses are appended with detailed citations comprising document names, page numbers, text highlighting and image extraction for any RAG centric responses, with a document reader presented for the user to scroll through the document right within the response window and download highlighted PDFs
-2. Vast number of supported file-formats:
-    - PDFs
-    - Word files: doc, docx, odt, rtf, txt
-    - Excel files: xls, xlsx, ods, csv
-    - PowerPoint presentations: ppt, pptx, odp
-    - Image files: bmp, gif, jpg, png, svg, tiff
-    - Rich Text Format (RTF)
-    - HTML files
-3. Conversion memory: Users can ask follow-up questions, including for prior conversations
-4. Full chat-history: Users can go back and resume prior conversations
-5. Users can force enable or disable RAG at any time via Settings
-6. Users can change the system prompt at any time via Settings
-7. Drag-and-drop in new LLMs - change LLM's via Settings at any time
-8. Built-in prompt-templates for the most popular LLMs and then some: Llama3, Llama2, ChatML, Phi3, Command-R, Deepseek Coder, Vicuna and OpenChat-3.5
-9. Pure llama.cpp backend - No frameworks, no Python-bindings, no abstractions - just pure llama.cpp! Upgrade to newer versions of llama.cpp independent of LARS
-10. GPU-accelerated inferencing: Nvidia CUDA-accelerated inferencing supported
-11. Tweak advanced LLM settings - Change LLM temperature, top-k, top-p, min-p, n-keep, set the number of model layers to be offloaded to the GPU, and enable or disable the use of GPUs, all via Settings at any time 
-12. Four embedding models - sentence-transformers/all-mpnet-base-v2, BGE-Base, BGE-Large, OpenAI Text-Ada
-13. Sources UI - A table is displayed for the selected embedding model detailing the documents that have been uploaded to LARS, including vectorization details such as chunk_size and chunk_overlap 
-14. A reset button is provided to empty and reset the vectorDB
-15. Three text extraction methods: a purely local text-extraction option and two OCR options via Azure for better accuracy and scanned document support - Azure ComputerVision OCR has an always free-tier 
-16. A custom parser for the Azure AI Document-Intelligence OCR service for enhanced table-data extraction while preventing double-text by accounting for the spatial coordinates of the extracted text
+2. Butler Mode:
+    - Control Smart-Home Appliances: Simply ask Privion to turn on/off lights, TVs etc (early development stage)!
 
-### A demonstration video showcasing these features can be viewed at the link below:
+3. Advanced LLM Platform:
+    - Two Inferencing Backends: HF-Waitress and llama.cpp
+    - Advanced llama.cpp UI: Deploy any GGUF with full UI control over advanced settings:
+        - GPU offloading: Layer count & devices to use
+        - KV-Cache Control: Unification, Offloading, Data-Type
+        - Parallel Decoding & CPU-Only MoE
+        - Memory Management: Mlock and Mmap control
+    - Custom HuggingFace-Waitress (HF-Waitress) Server with two backends: Transformers & ExLlamaV2
+        - Support Any LLM from HuggingFace: Simply specify the Model ID from the HF Repo! 
+        - Deploy native Transformer-SafeTensors for 0-day LLM support
+        - On-The-Fly Quantization: BitsAndBytes, Optimum-Quanto and HQQ for dynamically quantizing SafeTensors at memory loadtime
+        - FLUX Image Generation: Generate images with FLUX.1-Schnell, Dev, Kontext, etc.
+        - Fully-Managed ExLlamaV2 Pipeline: Specify HuggingFace Model ID and Target Bits-Per-Word (BPW), and the model will be downloaded, quantized and saved on-disk
+        - Exl2 Measurement Reuse: The measurement.json generation occurs only once per model, and the results are saved to dramatically speed-up further quantization to other BPW targets
+        - Speech Transcription (ASR): Supports Nvidia Parakeet v2 & v3, Canary-Flash, Canary-Qwen-2.5B, IBM-Granite-Speech-3.3 2B & 8B, and OpenAI Whisper-Large-v3 for Transcription of audio files
+        - Live Speech Transcription (Live ASR): Live WebSocket conenction maps a client-side microphone to the selected ASR model for always-on speech transcription
+    - Fully-Managed Prompt Templating Across All Backends: No manual selection of LLM Prompt Template formats required for either HF-Waitress Transformers, ExLlamaV2 or llama.cpp backends
+    - Generation-Control Args: Control Temperature, Top-P, Top-k, Min-P etc easily on a per-request basis regardless of inferencing backend
+    - Text-To-Speech (TTS): Leverages Kokoro-82M for vocal interactions, supporting easy-switching between all American & British Male and Female voices available in the Kokoro package
 
-[LARS Feature-Demonstration Video](https://www.youtube.com/watch?v=Mam1i86n8sU&ab_channel=AbheekGulati)
 
-<a href="https://www.youtube.com/watch?v=Mam1i86n8sU&ab_channel=AbheekGulati" target="_blank" ><img src="https://github.com/abgulati/LARS/blob/main/web_app/static/images/LARS_Logo_3.png" alt="LARS Feature-Demonstration Video" style="max-width:50%;"></a>
+### A Video Playlist Showcasing Some of These Features Is At The Link Below:
+
+[RAG Features-Demonstration](https://www.youtube.com/watch?v=2CpgqA_YjWU&list=PLGhCeHSq43a4H7N-t_49SDfwP9LpZXED-)
+
+<a href="https://www.youtube.com/watch?v=2CpgqA_YjWU&list=PLGhCeHSq43a4H7N-t_49SDfwP9LpZXED-" target="_blank" ><img src="https://github.com/abgulati/LARS/blob/main/web_app/static/images/L-Flow-Logo.jpeg" alt="RAG Features-Demonstration" style="max-width:50%;"></a>
 
 
 ## Table of Contents
 
-1. [LARS - The LLM & Advanced Referencing Solution](https://github.com/abgulati/LAR-Enterprise?tab=readme-ov-file#lars---the-llm--advanced-referencing-solution)
-    - [Detailed list of LARS's feature-set](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#heres-a-list-detailing-larss-feature-set-as-it-stands-today)
-    - [A demonstration video showcasing these features](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#a-demonstration-video-showcasing-these-features-can-be-viewed-at-the-link-below)
+1. [Privion](https://github.com/abgulati/LAR-Enterprise?tab=readme-ov-file#privion)
+    - [Comprehensive Feature List](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#heres-a-list-detailing-privions-feature-set-as-it-stands-today)
+    - [A demonstration video showcasing these features](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#a-video-playlist-showcasing-some-of-these-features-is-at-the-link-below)
 2. [Installation](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#installation)
+    - [GPU Drivers](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#1-gpu-drivers)
+    - [Python](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#2-python)
+    - [Visual Studio](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#3-visual-studio)
+    - [Visual Studio Build Tools](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#4-visual-studio-build-tools)
+    - [Nvidia CUDA](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#5-nvidia-cuda)
+    - [Core Python Libs](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#6-core-python-libs)
+    - [PyTorch](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#7-pytorch)
+    - [Flash-Attention 2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#8-flash-attention-2)
+    - [ExLlamaV2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#9-exllamav2)
+    - [Speech Features - ASR & TTS ](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#10-speech-features-asr-&-tts)
+    - [Docker Desktop](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#11-docker)
 3. [Usage - First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#usage---first-run)
 4. [Optional Dependencies](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#optional-dependencies)
-    - [llama.cpp - Installation Instructions](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#llamacpp---installation-instructions)
-        - [1. Build Tools](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#1-build-tools)
-        - [2. llama.cpp](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#2-llamacpp)
-    - [Nvidia CUDA (if supported Nvidia GPU present)](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#nvidia-cuda-if-supported-nvidia-gpu-present)
-    - [Flash-Attention 2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#flash-attention-2)
-    - [ExLlamaV2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#exllamav2)
+    - [llama.cpp](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#llamacpp)
     - [LibreOffice](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#libreoffice)
     - [Poppler](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#poppler)
     - [PyTesseract (optional)](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#pytesseract-optional)
@@ -70,382 +88,69 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
     - [Building & Running the Nvidia-CUDA GPU-Enabled Container](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#building--running-the-nvidia-cuda-gpu-enabled-container)
     - [Special Note for Containers - Troubleshooting Networking Issues and Errors on First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#special-note-for-containers---troubleshooting-networking-issues-and-errors-on-first-run)
     - [Special Note for Containers - Updating the Container Image Post-First-Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#special-note-for-containers---updating-the-container-image-post-first-run)
-10. [Current Development Roadmap](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#current-development-roadmap)
-11. [Support and Donations](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#support-and-donations)
-
 
 ## Installation
 
-1. Install Nvidia [GPU Drivers](https://www.nvidia.com/Download/index.aspx?lang=en-us)
-
-2. Download and install [Python 3.11.5](https://www.python.org/downloads/release/python-3115/) (should also work with any `3.10.x` or `3.11.x` versions)
-
-3. Download and install the [Visual Studio IDE](https://visualstudio.microsoft.com/thank-you-downloading-visual-studio/?sku=Community&channel=Release&version=VS2022&source=VSLandingPage&cid=2030&passive=false)
-
-    - NOTE: Make sure to select "Desktop Development with C++"!
-
-    - Required by Nvidia-CUDA on Windows specifically for MSVC (Microsoft Visual C++) Compiler
-
-    - CUDA integrates into MS Visual Studio in various ways, facilitating development, debugging and profiling, which may not be available with other IDEs.
-
-    - [For more information see](https://stackoverflow.com/questions/57450317/confusion-about-cuda-installation-instructions-what-exactly-is-microsoft-visual)
-
-[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
-
-4. Download and install [Microsoft Visual Studio Build Tools 2022](https://visualstudio.microsoft.com/downloads/)
-
-    - NOTE: Scroll down to "Tools for Visual Studio"
-
-    - NOTE: When installing the above, make sure to select the following components:
-    ```
-    Desktop development with C++
-    # Then from the "Optional" category on the right, make sure to select the following:
-    MSVC C++ x64/x86 build tools
-    C++ CMake tools for Windows
-    ```
-
-    - Refer to the screenshot below:
-    <p align="center">
-    <img src="https://github.com/abgulati/LARS/blob/main/documents/images_and_screenshots/build_tools_ms_visual_studio_installation.png"  align="center">
-    </p>
-
-    - If you skipped selecting the above workloads when first installing the Visual Studio Build Tools, simply run the vs_buildTools.exe installer again, click "Modify" and ensure the ```Desktop development with C++``` workload and the ```MSVC and C++ CMake``` Optionals are selected as outlined above
-
-[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
-
-5. Download and install Nvidia's [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archive)
-
-    - NOTE: LARS built and tested with v12.2 and v12.4.1 on Ampere & Ada GPUs, and v12.8.1 on Blackwell GPUs
-
-    - NOTE: Make sure to "Visual-Studio integration" is selected at the time of installation! 
-
-    - To verify the installation:
-
-        - Basic Check via Terminal:
-            ```
-            nvcc -V
-            nvidia-smi
-            ```
-
-        - Or, write & compile a `Hello World` Test Program:
-
-            - Save the following as `hello.cu`:
-                ```
-                #include <stdio.h>
-                #include <cuda_runtime.h>
-
-                __global__ void helloCUDA()
-                {
-                    printf("Hello from the GPU!\n");
-                }
-
-                int main()
-                {
-                    printf("Starting CUDA program...\n");
-                    
-                    int deviceCount;
-                    cudaGetDeviceCount(&deviceCount);
-                    printf("Number of CUDA devices: %d\n", deviceCount);
-                    
-                    if (deviceCount > 0) {
-                        helloCUDA<<<1, 1>>>();
-                        cudaDeviceSynchronize();
-                        
-                        cudaError_t error = cudaGetLastError();
-                        if (error != cudaSuccess) {
-                            printf("CUDA error: %s\n", cudaGetErrorString(error));
-                        }
-                    }
-                    
-                    printf("CUDA program finished.\n");
-                    return 0;
-                }
-                ```
-
-            - Add cl.exe to PATH (exact path may differ slightly on your setup, use the following as a guideline): `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.43.34808\bin\Hostx64\x64`
-
-            - Open a terminal in the same directory and compile the program: `nvcc hello.cu -o hello`
-
-            - As it finishes compilation, you should see an output akin to the below:
-                ```
-                hello.cu
-                tmpxft_0000579c_00000000-10_hello.cudafe1.cpp
-                Creating library hello.lib and object hello.exp
-                ```
-
-            - Run: `./hello`
-
-            - The output should be the following:
-                ```
-                Starting CUDA program...
-                Number of CUDA devices: 1
-                Hello from the GPU!
-                CUDA program finished.
-            ```
-
-            - Done & done!
-
-    - Verify (and implement if missing) CUDA-Visual Studio Integration:
-
-        Copy all the four files from the following directory (path changes basis CUDA version):   
-        ```C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.2\extras\visual_studio_integration\MSBuildExtensions```
-        
-        and Paste them to the following directory:   
-        ```C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Microsoft\VC\v170\BuildCustomizations```
-
-[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
-
-6. Install LARS Requirements:
-
-    - Clone the repository:
-        ```
-        git clone https://github.com/abgulati/LARS
-        cd LARS
-        ```
-
-        - If prompted for GitHub authentication, use a [Personal Access Token](https://github.com/settings/tokens) as passwords are deprecated. Also accessible via:      
-            ```GitHub Settings -> Developer settings (located on the bottom left!) -> Personal access tokens```
-
-    - Install Python dependencies:
-        - Windows via PIP:
-            ```
-            pip install -r .\requirements.txt
-            ```
-        
-        - Linux via PIP:
-            ```
-            pip3 install -r ./requirements.txt
-            ```
-
-        - Note on Azure: Some required Azure libraries are NOT available on the MacOS platform! A separate requirements file is therefore included for MacOS excluding these libraries:
-
-        - MacOS:
-            ```
-            pip3 install -r ./requirements_mac.txt
-            ```
-
-7. Install [Pytorch](https://pytorch.org/get-started/locally/)
-
-    - NOTE: LARS built and tested with Pytorch v2.5.0 with CUDA 12.4.1 for Ampere & Ada GPUs, and Pytorch v2.7.1 with CUDA 12.8.1 for Blackwell GPUs
-
-[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
-
-8. Install Flash-Attention 2:
-
-    - Flash-Attention 2 is used to reduce the memory footprint of a model's KV-Cache context space, and speed up inferencing.
-
-    - It has very specific hardware and software pre-requisites, make sure to check the [official repo](https://github.com/Dao-AILab/flash-attention) for the most up-to-date list of requirements.
-
-    - NOTE (V. Imp): Make sure that ninja is installed and that it works correctly (e.g. `ninja --version` then `echo $?` should return exit code `0`). If not (sometimes `ninja --version` then `echo $?` returns a nonzero exit code), uninstall then reinstall ninja (`pip uninstall -y ninja && pip install ninja`). Without ninja, compiling can take a very long time (2h) since it does not use multiple CPU cores. With ninja compiling takes 3-5 minutes on a 64-core machine using CUDA toolkit.
-
-    - To install:
-
-        1. Disable filename length limit - Git has a limit of 4096 chars for a filename which can lead to "Filename too long" errors when compiling FA2. To mitigate this, open an Admin command-prompt and run:
-            ```
-            git config --system core.longpaths true
-            ```
-
-        2. Clone the latest stable release (v2.7.4.post1 as of this writing, update as necessary) from the official repository:
-            ```
-            git clone -b v2.7.4.post1 https://github.com/Dao-AILab/flash-attention.git
-            cd flash-attention
-            ```
-
-        3. Open the `setup.py` file and uncomment (or add) the following lines to the `extra_compile_args` on line 287 or thereabouts:
-            ```                        
-            "-DFLASHATTENTION_DISABLE_BACKWARD",
-            "-DFLASHATTENTION_DISABLE_DROPOUT",
-            "-DFLASHATTENTION_DISABLE_ALIBI",
-            "-DFLASHATTENTION_DISABLE_UNEVEN_K",
-            "-DFLASHATTENTION_DISABLE_LOCAL",
-            ```
-            This is as per an [official comment on how to reduce compilation times](https://github.com/Dao-AILab/flash-attention/pull/1025#issuecomment-2207077088)
-        
-        4. Set MAX_JOBS (as per CPU thread-count) and run `pip install` to build (make sure Ninja is correctly installed as noted above):
-            - On Windows:
-                ```
-                set MAX_JOBS=20
-                pip install . --no-build-isolation
-                ```
-
-            - On Linux:
-                ```
-                MAX_JOBS=20 pip install . --no-build-isolation
-                ```
-
-    - Verify Installation with Test:
-        ```
-        # python3 CMD
-        import flash_attn
-        print(flash_attn.__version__)
-        ```
-
-    - Backup Wheels:
-
-        - Once built, wheels can and should be backed up for reuse on the same system in the future, unless Python, Torch, CUDA and FA2 versions need to be updated.
-
-        - To Backup, look for built wheels in the following location:
-
-            1. On Windows:
-                ```
-                C:\Users\<username>\AppData\Local\pip\cache\wheels # PIP Wheels Location
-
-                # Example locations:
-
-                C:\Users\<username>\AppData\Local\pip\cache\wheels\3d\88\d8\284b89f56af7d5bf366b10d6b8e251ac8a7c7bf3f04203fb4f
-
-                C:\Users\<username>\AppData\Local\pip\cache\wheels\45\31\56\0ad23c683f47a2cd1854109d5f61d2b9798aadb382e5c1a656
-                ```
-
-            2. On Linux:
-                ```
-                /home/<username>/.cache/pip/wheels/f6/b4/f5/30df6540ed09f56a99a1138f669e1dbee729478850845504f0/flash_attn-2.5.9.post1-cp310-cp310-linux_x86_64.whl
-                ```
-
-[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
-
-9. Install ExLlamaV2:
-
-    - ExLlama is a highly optimized LLM inference library spcifically for consumer GPUs.
-
-    - It attempts to utilize Flash-Attention (v2.5.7+) by default so do install that before ExLlama (see above). MAKE SURE TO INSTALL IT AFTER INSTALLING FLASH ATTENTION 2!
-
-    - Since HF-Waitress includes full management of ExLlama, including the downloading and quantization of models and saving of measurements for each model processed, it's required to clone the ExLlamav2 repo into the LARS `web_app` dir:
-        ```
-        cd LARS-Enterprise/web_app
-        git clone -b 0.3.1 https://github.com/turboderp-org/exllamav2.git
-        cd exllamav2
-        pip install .
-        ```
-
-    - There's no need to `pip install` the dependencies in the requirements.txt within the ExLlamaV2 dir as these are included in LARS's requirements.txt already.
-
-    - In case you encounter `Permission` Errors when quantizing models with ExLlamaV2, try the following:
-
-        1. OneDrive is the most likely culprit if on a synced folder so make sure to disable or at least temporarily shut it.
-
-        2. If that doesn't work/apply, try running `python hf_waitress.py --exl2` via an Admin shell from within the `LARS-Enterprise/web_app` dir.
-
-        3. If all else fails, try uninstalling and re-installing via an `Admin` shell: run `pip uninstall exllamav2 -y` from within the `exllamav2` dir, delete the entire directory, re-clone and re-install, and retry quantization via `python hf_waitress.py --exl2` from within the `LARS-Enterprise/web_app` dir.
-
-[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)    
-
-
-## Usage - First Run
-
-- After installing, run LARS using:
-    ```
-    cd web_app
-    python app.py   # Use 'python3' on Linux/macOS
-    ```
-
-- Navigate to ```http://localhost:5000/``` in your browser
-
-- All application directories required by LARS will now be created on disk
-
-- The HF-Waitress server will automatically start and will download an LLM (Microsoft Phi-3-Mini-Instruct-44) on the first-run, which may take a while depending on your internet connection speed
-
-- On first-query, an embedding model (all-mpnet-base-v2) will be downloaded from HuggingFace Hub, which should take a brief time
-
-[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
-
-
-## Optional Dependencies
-
-
-### llama.cpp - Installation Instructions:
-
-### 1. Build Tools:
-
-- On Windows:
-
-    - Download Microsoft Visual Studio Build Tools 2022 from the [Official Site - Scroll down to "Tools for Visual Studio"](https://visualstudio.microsoft.com/downloads/)
-
-    - NOTE: When installing the above, make sure to select the following components:
-    ```
-    Desktop development with C++
-    # Then from the "Optional" category on the right, make sure to select the following:
-    MSVC C++ x64/x86 build tools
-    C++ CMake tools for Windows
-    ```
-
-    - Refer to the screenshot below:
-    <p align="center">
-    <img src="https://github.com/abgulati/LARS/blob/main/documents/images_and_screenshots/build_tools_ms_visual_studio_installation.png"  align="center">
-    </p>
-
-    - If you skipped selecting the above workloads when first installing the Visual Studio Build Tools, simply run the vs_buildTools.exe installer again, click "Modify" and ensure the ```Desktop development with C++``` workload and the ```MSVC and C++ CMake``` Optionals are selected as outlined above
-
-- On Linux (Ubuntu and Debian-based), install the following packages:
-
-    - build-essential includes GCC, G++, and make
-    - libffi-dev for Foreign Function Interface (FFI)
-    - libssl-dev for SSL support   
-
-    ```
-    sudo apt-get update
-    sudo apt-get install -y software-properties-common build-essential libffi-dev libssl-dev cmake
-    ```
-
-### 2. llama.cpp:
-
-- Download from the [Official Repo](https://github.com/ggerganov/llama.cpp):
-
-    ```
-    git clone https://github.com/ggerganov/llama.cpp
-    cd llama.cpp
-    ```
-
-- Install CMAKE on Windows from the [Official Site](https://cmake.org/download/)
-
-    - add to PATH:   
-    ```C:\Program Files\CMake\bin```
-
-- Build llama.cpp with CMAKE:
-
-    - Note: For faster compilation, add the -j argument to run multiple jobs in parallel. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.
-
-    - Build with CUDA:   
-    
-    ```
-    cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="52;61;70;75;80;86"
-    cmake --build build  --config Release
-    ```
-
-    - Build without CUDA:   
-    
-    ```
-    cmake -B build
-    cmake --build build  --config Release
-    ```
-
-- If you face issues when attempting to run ```CMake -B build```, check the extensive [CMake Installation Troubleshooting steps below](https://github.com/abgulati/LARS/tree/main?tab=readme-ov-file#troubleshooting-installation-issues)
-
-- Add to PATH:   
-    ```path_to_cloned_repo\llama.cpp\build\bin\Release```
-
-- Verify Installation via the terminal:
-
-    ```
-    llama-server
-    ```
-
-
-### Nvidia CUDA (if supported Nvidia GPU present):
+### 1. GPU Drivers
 
 - Install Nvidia [GPU Drivers](https://www.nvidia.com/Download/index.aspx?lang=en-us)
 
-- Install Nvidia [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archive) - LARS built and tested with v12.2 and v12.4
+### 2. Python
 
-- Verify Installation via the terminal:
+- Download and install [Python 3.11.5](https://www.python.org/downloads/release/python-3115/) (should also work with any `3.10.x` or `3.11.x` versions)
 
-    - Basic Check:
+### 3. Visual Studio
+
+- Download and install the [Visual Studio IDE](https://visualstudio.microsoft.com/thank-you-downloading-visual-studio/?sku=Community&channel=Release&version=VS2022&source=VSLandingPage&cid=2030&passive=false)
+
+- NOTE: Make sure to select "Desktop Development with C++"!
+
+- Required by Nvidia-CUDA on Windows specifically for MSVC (Microsoft Visual C++) Compiler
+
+- CUDA integrates into MS Visual Studio in various ways, facilitating development, debugging and profiling, which may not be available with other IDEs.
+
+- [For more information see](https://stackoverflow.com/questions/57450317/confusion-about-cuda-installation-instructions-what-exactly-is-microsoft-visual)
+
+### 4. Visual Studio Build Tools
+
+- Download and install [Microsoft Visual Studio Build Tools 2022](https://visualstudio.microsoft.com/downloads/)
+
+- NOTE: Scroll down to "Tools for Visual Studio"
+
+- NOTE: When installing the above, make sure to select the following components:
+    ```
+    Desktop development with C++
+    # Then from the "Optional" category on the right, make sure to select the following:
+    MSVC C++ x64/x86 build tools
+    C++ CMake tools for Windows
+    ```
+
+- Refer to the screenshot below:
+<p align="center">
+<img src="https://github.com/abgulati/LARS/blob/main/documents/images_and_screenshots/build_tools_ms_visual_studio_installation.png"  align="center">
+</p>
+
+- If you skipped selecting the above workloads when first installing the Visual Studio Build Tools, simply run the vs_buildTools.exe installer again, click "Modify" and ensure the `Desktop development with C++` workload and the `MSVC and C++ CMake` Optionals are selected as outlined above
+
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
+
+### 5. Nvidia CUDA
+
+- Download and install Nvidia's [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archive)
+
+- NOTE: LARS built and tested with v12.2 and v12.4.1 on Ampere & Ada GPUs, and v12.8.1 on Ada & Blackwell GPUs
+
+- NOTE: Make sure to "Visual-Studio integration" is selected at the time of installation! 
+
+- To verify the installation:
+
+    - Basic Check via Terminal:
         ```
         nvcc -V
         nvidia-smi
         ```
 
-    - Compile a test program to say Hello World:
+    - Or, write & compile a `Hello World` Test Program:
 
         - Save the following as `hello.cu`:
             ```
@@ -503,43 +208,83 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
 
         - Done & done!
 
-- For CMake CUDA compilation, implement the below CMAKE-CUDA Fix too (Very Important!):
+- Verify (and implement if missing) CUDA-Visual Studio Integration:
 
-    Copy all the four files from the following directory:   
+    Copy all the four files from the following directory (path changes basis CUDA version):   
     ```C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.2\extras\visual_studio_integration\MSBuildExtensions```
     
     and Paste them to the following directory:   
     ```C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Microsoft\VC\v170\BuildCustomizations```
 
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
-### Flash-Attention 2:
+### 6. Core Python Libs
+
+- Clone the repository:
+    ```
+    git clone https://github.com/abgulati/LARS-Enterprise
+    cd LARS
+    ```
+
+    - If prompted for GitHub authentication, use a [Personal Access Token](https://github.com/settings/tokens) as passwords are deprecated. Also accessible via:      
+        ```GitHub Settings -> Developer settings (located on the bottom left!) -> Personal access tokens```
+
+- Install Core Python Dependencies:
+    - Windows via PIP:
+        ```
+        pip install -r .\requirements.txt
+        ```
+    
+    - Linux via PIP3:
+        ```
+        pip3 install -r ./requirements.txt
+        ```
+
+    - Note on Azure: Some libraries are NOT available on the MacOS platform! A separate requirements_mac.txt file is therefore included for MacOS excluding these:
+
+    - MacOS:
+        ```
+        pip3 install -r ./requirements_mac.txt
+        ```
+
+- If Using Smart-Home Automation Features, Install Butler Requirements:
+    ```
+    pip install -r reqs_butler.txt
+    ``` 
+
+### 7. PyTorch
+
+- Install [Pytorch](https://pytorch.org/get-started/locally/)
+
+- NOTE: LARS built and tested with Pytorch v2.5.0 with CUDA 12.4.1 for Ampere & Ada GPUs, and Pytorch v2.7.1 with CUDA 12.8.1 for Blackwell GPUs
+
+- IMP: Make sure to add `torchaudio` to the install list (if planning to use Privion's speech features, which is recommended) as the website might not include it by default! For example:
+    ```
+    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+    ```
+
+### 8. Flash-Attention 2
 
 - Flash-Attention 2 is used to reduce the memory footprint of a model's KV-Cache context space, and speed up inferencing.
 
-- It has the following pre-:
-    ```
-    - CUDA toolkit or ROCm toolkit
-    - PyTorch 2.2 and above.
-    - packaging Python package (pip install packaging)
-    - ninja Python package (pip install ninja) *
-    ```
+- It has very specific hardware and software pre-requisites, make sure to check the [official repo](https://github.com/Dao-AILab/flash-attention) for the most up-to-date list of requirements.
 
-    * Make sure that ninja is installed and that it works correctly (e.g. `ninja --version` then `echo $?` should return exit code `0`). If not (sometimes `ninja --version` then `echo $?` returns a nonzero exit code), uninstall then reinstall ninja (`pip uninstall -y ninja && pip install ninja`). Without ninja, compiling can take a very long time (2h) since it does not use multiple CPU cores. With ninja compiling takes 3-5 minutes on a 64-core machine using CUDA toolkit.
+- NOTE (V. Imp): Make sure that ninja is installed and that it works correctly (e.g. `ninja --version` then `echo $?` should return exit code `0`). If not (sometimes `ninja --version` then `echo $?` returns a nonzero exit code), uninstall then reinstall ninja (`pip uninstall -y ninja && pip install ninja`). Without ninja, compiling can take a very long time (2h) since it does not use multiple CPU cores. With ninja compiling takes 3-5 minutes on a 64-core machine using CUDA toolkit.
 
 - To install:
 
-    0. Disable filename length limit - Git has a limit of 4096 chars for a filename which can lead to "Filename too long" errors when compiling FA2. To mitigate this, open an Admin command-prompt and run:
+    1. Disable filename length limit - Git has a limit of 4096 chars for a filename which can lead to "Filename too long" errors when compiling FA2. To mitigate this, open an Admin command-prompt and run:
         ```
         git config --system core.longpaths true
         ```
 
-    1. Clone the latest stable release (v2.7.4.post1 as of this writing, update as necessary) from the official repository:
+    2. Clone the latest stable release (v2.7.4.post1 as of this writing, update as necessary) from the official repository:
         ```
         git clone -b v2.7.4.post1 https://github.com/Dao-AILab/flash-attention.git
         cd flash-attention
         ```
 
-    2. Open the `setup.py` file and uncomment (or add) the following lines to the `extra_compile_args` on line 287 or thereabouts:
+    3. Open the `setup.py` file and uncomment (or add) the following lines to the `extra_compile_args` on line 287 or thereabouts:
         ```                        
         "-DFLASHATTENTION_DISABLE_BACKWARD",
         "-DFLASHATTENTION_DISABLE_DROPOUT",
@@ -549,7 +294,7 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
         ```
         This is as per an [official comment on how to reduce compilation times](https://github.com/Dao-AILab/flash-attention/pull/1025#issuecomment-2207077088)
     
-    3. Set MAX_JOBS (as per CPU thread-count) and run `pip install` to build (make sure Ninja is correctly installed as noted above):
+    4. Set MAX_JOBS (as per CPU thread-count) and run `pip install` to build (make sure Ninja is correctly installed as noted above):
         - On Windows:
             ```
             set MAX_JOBS=20
@@ -590,9 +335,13 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
             /home/<username>/.cache/pip/wheels/f6/b4/f5/30df6540ed09f56a99a1138f669e1dbee729478850845504f0/flash_attn-2.5.9.post1-cp310-cp310-linux_x86_64.whl
             ```
 
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
+### 9. ExLlamaV2
 
-### ExLlamaV2:
+- NOTE: Do NOT set this up in a location that's sync'ed by a cloud-backup service, such as OneDrive! This is because a lot of files are created by ExLlamaV2 during quantizing and deleted thereafter, and OneDrive especially likes to hold permissions hostage. If unavoidable, make sure to disable the cloud-backup service temporarily at the least.
+
+- ANOTHER NOTE: Disabling cloud-sync such as OneDrive can cause errors during quantization IF using a previosously synced repo after reinstalling Windows, as OneDrive might display the entire ExLlamaV2 dir the files haven't actaully been locally synced! In such cases, simply delete and re-run HF-Waitress, as it'll re-clone the ExLlamaV2 repo afresh.  
 
 - ExLlama is a highly optimized LLM inference library spcifically for consumer GPUs.
 
@@ -601,105 +350,213 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
 - Since HF-Waitress includes full management of ExLlama, including the downloading and quantization of models and saving of measurements for each model processed, it's required to clone the ExLlamav2 repo into the LARS `web_app` dir:
     ```
     cd LARS-Enterprise/web_app
-    git clone https://github.com/turboderp-org/exllamav2.git
+    git clone -b 0.3.1 https://github.com/turboderp-org/exllamav2.git
     cd exllamav2
     pip install .
     ```
 
 - There's no need to `pip install` the dependencies in the requirements.txt within the ExLlamaV2 dir as these are included in LARS's requirements.txt already.
 
-- Sometimes, after setup when trying to quantize a model for the first time, you may encounter an error:
+- In case you encounter `Permission` Errors when quantizing models with ExLlamaV2, try the following:
+
+    0. FIRSTLY, see notes at the start of this section!!
+
+    1. OneDrive is the most likely culprit if on a synced folder so make sure to disable or at least temporarily shut it.
+
+    2. If that doesn't work/apply, try running `python hf_waitress.py --exl2` via an Admin shell from within the `LARS-Enterprise/web_app` dir.
+
+    3. If all else fails, try uninstalling and re-installing via an `Admin` shell: run `pip uninstall exllamav2 -y` from within the `exllamav2` dir, delete the entire directory, re-clone and re-install, and retry quantization via `python hf_waitress.py --exl2` from within the `LARS-Enterprise/web_app` dir.
+
+### 10. Speech Features - ASR & TTS 
+
+- Privion, via HF-Waitress, can leverage various Automatic Speech Recogniton (ASR) models for Speech Transcription, so you can interact using your voice.
+
+- Further, Privion can leverage the Kokoro Text-To-Speech (TTS) model and voice package to speak to the user, thereby enabling full vocal interaction.
+
+- The following ASR models are supported as of Novemeber 2025:
+    1. Nvidia/Parakeet-tdt-0.6B-v3
+    2. Nvidia/Parakeet-tdt-0.6B-v2
+    3. Nvidia/Canary-Qwen-2.5B
+    4. Nvidia/Canary-1B-v2
+    5. OpenAI/Whisper-Large-v3
+    6. IBM-Granite/Granite-Speech-3.3-8B
+    7. IBM-Granite/Granite-Speech-3.3-2B
+
+- While the Nvidia models typically require Nvidia GPUs, the others work across a broad range of hardware via Transformers
+
+- To install these and enable both ASR & TTS, following the below steps:
+
+    1. Install ESpeak-NG (for [Kokoro-TTS](https://huggingface.co/hexgrad/Kokoro-82M)):
+
+        - Either download the installer via the [offical releases on GitHub](https://github.com/espeak-ng/espeak-ng/releases), or via an admin PowerShell, run the below and enter *Y* when prompted:
+            ```
+            winget install --id=eSpeak-NG.eSpeak-NG -e
+            ```
+
+        - Tested with v1.52 as of Nov-2025
+
+    2. Install FFMpeg:
+
+        - The specific version is related to TochCodec (specified in `reqs_speech.txt`, but more on this in a bit), which states that, ["TorchCodec with CUDA should work with FFmpeg versions in [4, 7] on all platforms, and FFmpeg version 8 is supported on Linux."](https://github.com/meta-pytorch/torchcodec?tab=readme-ov-file#installing-cuda-enabled-torchcodec), and ["TorchCodec for CPU supports major FFmpeg versions in [4, 7] on all platforms, and FFmpeg version 8 is supported on Mac and Linux."](https://github.com/meta-pytorch/torchcodec?tab=readme-ov-file#installing-cpu-only-torchcodec)
+
+        - That said, I did have no issues with the latest FFmpeg v8 build on Windows, but no hard sticking to the recommendation above!
+
+        - Having determined the version, Download the *SHARED (V.IMP!)* version of FFmpeg from this [link](https://www.gyan.dev/ffmpeg/builds/), for example `ffmpeg-7.1.1-full_build-shared.7z` or for v8, `ffmpeg-release-full-shared.7z`
+
+        - Unzip and add the `bin` directory to PATH in System Variables: `<full-path>\ffmpeg-7.1.1-full_build-shared\bin`
+
+        - Verify installation via a CMD window:
+            ```
+            ffmpeg -version
+            ```
+
+        - To verify GPU acceleration, run:
+            ```
+            ffmpeg -encoders | findstr nvenc
+            ```
+
+            And look for a list of Nvidia Encoders (`nvenc`), such as:
+            ```
+            V....D av1_nvenc            NVIDIA NVENC av1 encoder (codec av1)
+            V....D h264_nvenc           NVIDIA NVENC H.264 encoder (codec h264)
+            V....D hevc_nvenc           NVIDIA NVENC hevc encoder (codec hevc)
+            ```
+
+        - There's one last step, which we'll come back to it after the next step.
+
+    3. Install Python Libs:
+
+        - Determine the correct version of TorchCodec by cross-referencing the [Offical Support-Matrix](https://github.com/meta-pytorch/torchcodec?tab=readme-ov-file#installing-cpu-only-torchcodec) with the version of [PyTorch installed previously in Installation - Step 7](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#installation)
+
+        - Edit *line 2* in the `reqs_speech.txt` file accordingly, and then install:
+            ```
+            pip install -r reqs_speech.txt
+            ```
+
+        - NOTE: If encountering Nvidia/Nemo-Toolkit errors when installing on system without Nvidia GPUs and CUDA, edit the `reqs_speech.txt` file to remove `nemo_toolkit` and `nemo_toolkit[asr]` from it and re-try.
+
+    4. Copy FFmpeg `bin` dir contents to the `TorchCodec` dir:
+    
+        - This is a brute-force method that technically shouldn't be required as FFmpeg has been added to path, but was the only was to resolve a nasty error encountered when running ASR models:
+            ```
+            [start of libtorchcodec loading traceback]
+            FFmpeg version 7: Could not find module 'C:\Users\bob\AppData\Local\Programs\Python\Python311\Lib\site-packages\torchcodec\libtorchcodec_core7.dll' (or one of its dependencies). Try using the full path with constructor syntax.
+            FFmpeg version 6: Could not find module 'C:\Users\bob\AppData\Local\Programs\Python\Python311\Lib\site-packages\torchcodec\libtorchcodec_core6.dll' (or one of its dependencies). Try using the full path with constructor syntax.
+            FFmpeg version 5: Could not find module 'C:\Users\bob\AppData\Local\Programs\Python\Python311\Lib\site-packages\torchcodec\libtorchcodec_core5.dll' (or one of its dependencies). Try using the full path with constructor syntax.
+            FFmpeg version 4: Could not find module 'C:\Users\bob\AppData\Local\Programs\Python\Python311\Lib\site-packages\torchcodec\libtorchcodec_core4.dll' (or one of its dependencies). Try using the full path with constructor syntax.
+            [end of libtorchcodec loading traceback].
+            ```
+        
+        - To mitigate the above, copy everything from the FFmpeg `bin` dir that was added to path previously to the location where the `TorchCodec` package was installed. Example:
+
+            - From: `<full-path>\ffmpeg-7.1.1-full_build-shared\bin`
+            - To: `C:\Users\<username>\AppData\Local\Programs\Python\Python311\Lib\site-packages\torchcodec\`
+
+        - This is why we downloaded the *shared* version of FFmpeg earlier: The other versions only have the FFmpeg executables but not the DLLs!
+
+
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)    
+
+### 11. Docker
+
+- Privion uses Docker to pull & run the latest FlakorDB GraphDB container - without Docker, GraphRAG features will NOT work! 
+
+- Your CPU should support virtualization and it should be enabled in your system's BIOS/UEFI
+
+- If on Windows, you need to install the Windows Subsystem for Linux if it's not already present. To do so, open PowerShell as an Administrator and run the following:
     ```
-    FAILED: exllamav2_ext.pyd
-    "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.43.34808\bin\Hostx64\x64/link.exe" ext_bindings.o ext_cache.o ext_gemm.o ext_hadamard.o ext_norm.o ext_qattn.o ext_qmatrix.o ext_qmlp.o ext_quant.o ext_rope.o ext_stloader.o ext_sampling.o ext_element.o ext_tp.o graph.cuda.o h_add.cuda.o h_gemm.cuda.o lora.cuda.o pack_tensor.cuda.o quantize.cuda.o q_matrix.cuda.o q_attn.cuda.o q_mlp.cuda.o q_gemm.cuda.o rms_norm.cuda.o head_norm.cuda.o layer_norm.cuda.o rope.cuda.o cache.cuda.o util.cuda.o softcap.cuda.o tp.cuda.o kernel_select.cuda.o unit_gptq_1.cuda.o unit_gptq_2.cuda.o unit_gptq_3.cuda.o unit_exl2_1a.cuda.o unit_exl2_1b.cuda.o unit_exl2_2a.cuda.o unit_exl2_2b.cuda.o unit_exl2_3a.cuda.o unit_exl2_3b.cuda.o quantize_func.o profiling.o generator.o sampling.o sampling_avx2.o /nologo /DLL cublas.lib c10.lib c10_cuda.lib torch_cpu.lib torch_cuda.lib -INCLUDE:?warp_size@cuda@at@@YAHXZ torch.lib "/LIBPATH:C:\Users\LARS Demo\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\lib" torch_python.lib "/LIBPATH:C:\Users\LARS Demo\AppData\Local\Programs\Python\Python311\libs" "/LIBPATH:C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4\lib\x64" cudart.lib /out:exllamav2_ext.pyd
-    LINK : fatal error LNK1104: cannot open file 'exllamav2_ext.pyd'
-    ninja: build stopped: subcommand failed.
+    wsl --install
     ```
 
-- Having encountered this, the fix was to launch CMD as an admin, run `pip uninstall exllamav2 -y` from within the `exllamav2` dir, delete the entire directory and then re-clone and re-install, and retry quantization via `python hf_waitress.py --exl2` from the `web_app` dir, all from within the admin shell.
-
-- That said, Gemini-2.5-Pro had the following to say about this:
+- Ensure you have WSL version 2 by running:
     ```
-    Okay, this LNK1104: cannot open file 'exllamav2_ext.pyd' error is quite common when compiling C++/CUDA extensions for Python, especially on Windows. It almost always means the linker (link.exe) tried to write or modify the output file (exllamav2_ext.pyd), but couldn't because the file was locked or inaccessible.
-
-    Here's a breakdown of the common causes and how to fix them, starting with the most likely:
-
-    File is Locked by a Running Python Process:
-
-    Problem: The most frequent cause is that you have another Python script, interpreter, IDE (like VS Code with a Python kernel, Jupyter Notebook), or application (like a web UI using ExLlamaV2) running that has already imported the old version of exllamav2_ext.pyd. The operating system locks the file while it's loaded in memory.
-
-    Solution:
-
-    Close all Python instances: Shut down any running Python scripts, interactive shells (like cmd or PowerShell where you ran python), Jupyter notebooks, IDEs (VS Code, PyCharm, Spyder), and any applications that might be using ExLlamaV2.
-
-    Check Task Manager: Open Task Manager (Ctrl+Shift+Esc), go to the "Details" or "Processes" tab, and look for any python.exe or pythonw.exe processes. End any that might be related to your project or ExLlamaV2 usage. Pay attention to processes launched by web UIs or background tasks.
-
-    Restart your IDE/Terminal: Sometimes just closing the terminal or IDE window where you ran the previous Python code is enough.
-
-    Restart your computer: If you can't find the locking process, a simple reboot will ensure all file locks are released. Try the build again immediately after restarting.
-
-    Antivirus Interference:
-
-    Problem: Antivirus software can sometimes mistakenly flag .pyd files (which are essentially DLLs) during the compilation process, locking them temporarily for scanning or even quarantining them.
-
-    Solution:
-
-    Temporarily Disable: Temporarily disable your antivirus's real-time protection just for the duration of the build process. Remember to re-enable it immediately afterward.
-
-    Add Exclusions: A safer, more permanent solution is to add exclusions to your antivirus settings. Exclude:
-
-    The Python site-packages directory (e.g., C:\Users\LARS Demo\AppData\Local\Programs\Python\Python311\Lib\site-packages\exllamav2)
-
-    The build directory (if you know where ninja/setuptools creates it, often a build subfolder in your project).
-
-    Possibly the specific file exllamav2_ext.pyd.
-
-    Permission Issues:
-
-    Problem: The user account running the build process might not have sufficient write permissions in the target directory (likely within your Python installation's site-packages).
-
-    Solution:
-
-    Run as Administrator: Try running your command prompt (cmd or PowerShell) or your IDE "As Administrator" (right-click the icon -> Run as administrator) and then execute the build command again.
-
-    Check Folder Permissions: Navigate to the directory where exllamav2_ext.pyd is supposed to be created (find the exllamav2 folder inside C:\Users\LARS Demo\AppData\Local\Programs\Python\Python311\Lib\site-packages), right-click it, go to Properties -> Security, and ensure your user account has "Full control" or at least "Modify" and "Write" permissions.
-
-    Corrupted Build State / Leftover File:
-
-    Problem: A previous failed build might have left a corrupted or incomplete exllamav2_ext.pyd file that cannot be overwritten, or other build artifacts are causing issues.
-
-    Solution:
-
-    Manual Deletion: Go to the exllamav2 directory within your site-packages (C:\Users\LARS Demo\AppData\Local\Programs\Python\Python311\Lib\site-packages\exllamav2) and manually delete the exllamav2_ext.pyd file if it exists.
-
-    Clean Build: If you are building from source (e.g., using python setup.py install or pip install .):
-
-    Delete any build or dist folders in your source directory.
-
-    Delete the .egg-info directory related to exllamav2.
-
-    Uninstall the package first: pip uninstall exllamav2 -y
-
-    Then try reinstalling, potentially clearing the pip cache: pip install . --no-cache-dir -v (or however you were installing it).
-
-    Steps to Try:
-
-    Close everything: Shut down all Python-related processes and terminals. Try the build again.
-
-    Restart: If step 1 fails, restart your computer. Try the build again.
-
-    Admin Rights: If restarting fails, try running the build command from an Administrator terminal.
-
-    Antivirus: If Admin rights fail, temporarily disable your antivirus and try the build. Re-enable AV afterwards. If this works, add exclusions.
-
-    Clean Build: If AV isn't the issue, perform a clean build: uninstall, delete build artifacts (build/ folder, the .pyd file in site-packages), and reinstall.
-
-    Start with step 1, as it's the most common fix. Good luck!
+    wsl -v
+    # or
+    wsl --status
     ```
 
+- Update WSL if required:
+    ```
+    wsl --upgrade
+    ```
+
+- Ensure Docker Desktop is up and running, then open a Command Prompt / Terminal and execute the following command to ensure Docker is correctly installed and up and running:
+    ```
+    docker ps
+    ```
+
+- Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
+
+## Usage - First Run
+
+- After installing, run LARS using:
+    ```
+    cd web_app
+    python app.py   # Use 'python3' on Linux/macOS
+    ```
+
+- Navigate to ```http://localhost:5000/``` in your browser
+
+- All application directories required by LARS will now be created on disk
+
+- The HF-Waitress server will automatically start and will download an LLM (Qwen/Qwen2.5-1.5B-Instruct) on the first-run, which may take a while depending on your internet connection speed
+
+- On first-query, an embedding model (all-mpnet-base-v2) will be downloaded from HuggingFace Hub, which should take a brief time
+
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
 
-### LibreOffice:
+## Optional Dependencies
+
+
+### llama.cpp
+
+- Two Approaches: Either download a pre-built release or clone the repo and build manually
+
+- While the former is easier, often CUDA does not work right, and high CPU usage might be observed even with full offloading, so building from scratch is often the best practice
+
+- If setting up a pre-built version, skip to the last two steps in this section (add to PATH and test)
+
+- To self-build, start by downloading the `Source code (zip)` of the latest release from the [Official Repo's Releases Page](https://github.com/ggml-org/llama.cpp/releases)
+
+- Ensure VSBuildTools is installed if on Windows
+
+- Install CMAKE on Windows from the [Official Site](https://cmake.org/download/)
+
+    - add to PATH:   
+    ```C:\Program Files\CMake\bin```
+
+- Build llama.cpp with CMAKE:
+
+    - Note: For faster compilation, add the -j argument to run multiple jobs in parallel. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.
+
+    - Open a command window in llama.cpp dir
+
+    - Build with CUDA:   
+        ```
+        cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="52;61;70;75;80;86"
+        cmake --build build  --config Release
+        ```
+
+    - Build without CUDA:   
+        ```
+        cmake -B build
+        cmake --build build  --config Release
+        ```
+
+- If you face issues when attempting to run ```CMake -B build```, check the extensive [CMake Installation Troubleshooting steps below](https://github.com/abgulati/LARS/tree/main?tab=readme-ov-file#troubleshooting-installation-issues)
+
+- Add to PATH: `path_to_cloned_repo\llama.cpp\build\bin\Release`
+
+- Verify Installation via the terminal:
+
+    ```
+    llama-server
+    ```
+
+### LibreOffice
 
 - This is an optional, but highly recommended dependency - Only PDFs are supported if this setup is not completed
 
@@ -746,7 +603,7 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
         libreoffice --version
         ```
 
-### Poppler:
+### Poppler
 
 - LARS utilizes the pdf2image Python library to convert each page of a document into an image as required for OCR. This library is essentially a wrapper around the Poppler utility which handles the conversion process.
 
@@ -773,7 +630,7 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
     sudo apt-get install -y poppler-utils wget
     ```
 
-### PyTesseract (optional):
+### PyTesseract (optional)
 
 - This is an optional dependency - Tesseract-OCR is not actively used in LARS but methods to use it are present in the source code
 
@@ -804,7 +661,7 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
 
 - Install Python v3.11.x on Windows:
 
-    - Download v3.11.9 from the [Official Site](https://www.python.org/downloads/windows/)
+    - Download and install [Python 3.11.5](https://www.python.org/downloads/release/python-3115/) (should also work with any `3.10.x` or `3.11.x` versions)
 
     - During installation, ensure you check "Add Python 3.11 to PATH" or manually add it later, either via:
 
@@ -882,7 +739,7 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
             deactivate
             ```
 
-3. If problems persist, consider opening an issue on the [LARS GitHub repository](https://github.com/abgulati/LARS/issues) for support.
+3. If problems persist, consider opening an issue on the [LARS GitHub repository](https://github.com/abgulati/LARS-Enterprise/issues) for support.
 
 
 ### Other Issues:
@@ -893,7 +750,7 @@ There are many desktop applications for running LLMs locally, and LARS aims to b
 <img src="https://github.com/abgulati/LARS/blob/main/documents/images_and_screenshots/cmake-nmake-error.png"  align="center">
 </p>
 
-This typically indicates an issue with your Microsoft Visual Studio build tools, as CMake is unable to find the nmake tool, which is part of the Microsoft Visual Studio build tools. Try the below steps to resolve the issue:
+- This typically indicates an issue with your Microsoft Visual Studio build tools, as CMake is unable to find the nmake tool, which is part of the Microsoft Visual Studio build tools. Try the below steps to resolve the issue:
 
 1. Ensure Visual Studio Build Tools are Installed:
 
@@ -933,26 +790,26 @@ This typically indicates an issue with your Microsoft Visual Studio build tools,
     Failed to start llama.cpp local-server
     ```
 
-- This indicates that first-run has completed, all app directories have been created, but no LLMs are present in the ```models``` directory and may now be moved to it
+- This indicates that first-run has completed, all app directories have been created, but no LLMs are present in the `models` directory and may now be moved to it
 
-- Move your LLMs (any file format supported by llama.cpp, preferably GGUF) to the newly created ```models``` dir, located by default in the following locations:   
-    - Windows: ```C:/web_app_storage/models```
-    - Linux: ```/app/storage/models```
-    - MacOS: ```/app/models```
+- Move your LLMs (any file format supported by llama.cpp, preferably GGUF) to the newly created `models` dir, located by default in the following locations:   
+    - Windows: `C:/web_app_storage/models`
+    - Linux: `/app/storage/models`
+    - MacOS: `/app/models`
 
-- Once you've placed your LLMs in the appropriate ```models``` dir above, refresh ```http://localhost:5000/```
+- Once you've placed your LLMs in the appropriate `models` dir above, refresh `http://localhost:5000/`
 
-- You'll once again receive an error alert stating ```Failed to start llama.cpp local-server``` after approximately 60 seconds
+- You may once again receive an error alert stating `Failed to start llama.cpp local-server` after approximately 60 seconds
 
-- This is because your LLM now needs to be selected in the LARS ```Settings``` menu
+- This is because your LLM might need to be manually selected via `Settings`
 
-- Accept the alert and click on the ```Settings``` gear icon in the top-right
+- Accept the alert and click on the `Settings` gear icon in the top-right
 
-- In the ```LLM Selection``` tab, select your LLM and the appropriate Prompt-Template format from the appropriate dropdowns
+- In the `LLM Selection` tab, select your LLM and the appropriate Prompt-Template format from the appropriate dropdowns
 
-- Modify Advanced Settings to correctly set ```GPU``` options, the ```Context-Length```, and optionally, the token generation limit (```Maximum tokens to predict```) for your selected LLM
+- Modify Advanced Settings to correctly set `GPU` options, the `Context-Length`, and optionally, the token generation limit (`Maximum tokens to predict`) for your selected LLM
 
-- Hit ```Save``` and if an automatic refresh is not triggered, manually refresh the page
+- Hit `Save` and if an automatic refresh is not triggered, manually refresh the page
 
 - If all steps have been executed correctly, first-time setup is now complete, and LARS is ready for use
 
@@ -1119,6 +976,8 @@ This typically indicates an issue with your Microsoft Visual Studio build tools,
 ## Docker - Deploying Containerized LARS
 
 ### Background and Setup
+
+-  NOTE: THE BELOW IS MAINTAINED FOR LEGACY REASONS BUT NO LONGER SUPPORTED NOR RECOMMENDED. DO NOT FOLLOW THESE STEPS, THERE MAY BE A CONTAINER UPDATE IN THE FUTURE, BUT IT'S CURRENTLY NON-FUNCTIONAL.
 
 - LARS has been adapted to a Docker container-deployment environment via two separate images as below:
 
@@ -1330,43 +1189,5 @@ This typically indicates an issue with your Microsoft Visual Studio build tools,
     ```
     docker system df
     ```
-
-[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
-    
-
-## Current Development Roadmap
-
-| **Category**                                  | **Tasks**                                                                                                                                                                                                                   | **Status**                                |
-|-----------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------|
-| **Bug fixes:**                                | Zero-Byte text-file creation hazard - Sometimes if OCR/Text-Extraction of the input document fails, a 0B .txt file may be left over which causes further retry attempts to believe the file has already been loaded         | :calendar: Future Task                    |
-| **Practical Features:**                       | **Ease-of-use centric:**                                                                                                                                                                                                    |                                           |
-|                                               | Azure CV-OCR free-tier UI toggle                                                                                                                                                                                            | :white_check_mark: Done on 8th June 2024  |
-|                                               | Delete Chats                                                                                                                                                                                                                | :calendar: Future Task                    |
-|                                               | Rename Chats                                                                                                                                                                                                                | :calendar: Future Task                    |
-|                                               | PowerShell Installation Script                                                                                                                                                                                              | :calendar: Future Task                    |
-|                                               | Linux Installation Script                                                                                                                                                                                                   | :calendar: Future Task                    |
-|                                               | Ollama LLM-inferencing backend as an alternative to llama.cpp                                                                                                                                                               | :calendar: Future Task                    |
-|                                               | Integration of OCR services from other cloud providers (GCP, AWS, OCI, etc.)                                                                                                                                                | :calendar: Future Task                    |
-|                                               | UI toggle to ignore prior text-extracts when uploading a document                                                                                                                                                           | :calendar: Future Task                    |
-|                                               | Modal-popup for file uploads: mirror text-extraction options from settings, global over-write on submissions, toggle to persist settings                                                                                    | :calendar: Future Task                    | 
-|                                               | **Performance-centric:**                                                                                                                                                                                                    |                                           |
-|                                               | Nvidia TensorRT-LLM AWQ Support                                                                                                                                                                                             | :calendar: Future Task                    |
-| **Research Tasks:**                           | Investigate Nvidia TensorRT-LLM: Necessitates building AWQ-LLM TRT-engines specific to the target GPU, NvTensorRT-LLM is its own ecosystem and only works on Python v3.10.                                                  | :white_check_mark: Done on 13th June 2024 |
-|                                               | Local OCR with Vision LLMs: MS-TrOCR ([done](https://github.com/abgulati/LARS/blob/main/documents/refinements_research/Improving%20Text%20Extraction%20-%20Feb2024.pptx)), Kosmos-2.5 (high Priority), Llava, Florence-2    | :construction_worker: In-Progress [5th July 2024 Update](https://github.com/microsoft/unilm/issues/1596) |
-|                                               | RAG Improvements: Re-ranker, [RAPTOR](https://arxiv.org/html/2401.18059v1), [T-RAG](https://arxiv.org/abs/2402.07483)                                                                                                       | :calendar: Future Task                    |
-|                                               | Investigate GraphDB integration: using LLMs to extract entity-relationship data from documents and populate, update & maintain a GraphDB                                                                                    | :calendar: Future Task                    |
-
-[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
-
-
-# Support and Donations
-I hope that LARS has been valuable in your work, and I invite you to support its ongoing development! If you appreciate the tool and would like to contribute to its future enhancements, consider making a donation. Your support helps me to continue improving LARS and adding new features.
-
-How to Donate
-To make a donation, please use the following link to my PayPal:
-
-[Donate via PayPal](https://www.paypal.com/donate/?business=35EP992TTK5J6&no_recurring=0&item_name=If+you+appreciate+my+work+and+would+like+to+contribute+to+its+ongoing+development+%26+enhancements%2C+consider+making+a+donation%21&currency_code=CAD)
-
-Your contributions are greatly appreciated and will be used to fund further development efforts.
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
