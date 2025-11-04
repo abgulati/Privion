@@ -396,7 +396,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
         - The specific version is related to TochCodec (specified in `reqs_speech.txt`, but more on this in a bit), which states that, ["TorchCodec with CUDA should work with FFmpeg versions in [4, 7] on all platforms, and FFmpeg version 8 is supported on Linux."](https://github.com/meta-pytorch/torchcodec?tab=readme-ov-file#installing-cuda-enabled-torchcodec), and ["TorchCodec for CPU supports major FFmpeg versions in [4, 7] on all platforms, and FFmpeg version 8 is supported on Mac and Linux."](https://github.com/meta-pytorch/torchcodec?tab=readme-ov-file#installing-cpu-only-torchcodec)
 
-        - That said, I did have no issues with the latest FFmpeg v8 build on Windows, but no hard sticking to the recommendation above!
+        - That said, I had no issues with the latest FFmpeg v8 build on Windows, but no hard sticking to the recommendation above!
 
         - Having determined the version, Download the *SHARED (V.IMP!)* version of FFmpeg from this [link](https://www.gyan.dev/ffmpeg/builds/), for example `ffmpeg-7.1.1-full_build-shared.7z` or for v8, `ffmpeg-release-full-shared.7z`
 
@@ -419,7 +419,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
             V....D hevc_nvenc           NVIDIA NVENC hevc encoder (codec hevc)
             ```
 
-        - There's one last step, which we'll come back to it after the next step.
+        - *There's one last step, which we'll come back to it after the next step.*
 
     3. Install Python Libs:
 
@@ -501,6 +501,8 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 - The HF-Waitress server will automatically start and will download an LLM (Qwen/Qwen2.5-1.5B-Instruct) on the first-run, which may take a while depending on your internet connection speed
 
 - On first query, an embedding model (all-mpnet-base-v2) will be downloaded from HuggingFace Hub, which should take a brief time
+
+- *NOTE: ASR & TTS are not enabled by default, and must be enabled manually via the Settings menu!*
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
