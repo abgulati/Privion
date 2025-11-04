@@ -10,15 +10,15 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 ### Here's a list detailing Privion's feature-set as it stands today:
 
 1. Advanced RAG Capabilities:
-    - Detailed Citiations: LLM responses seamlessly incorporate citations & links to specific document pages complete with a document browser comprising all relevant documents for instant cross-referencing  
-    - Semantic + Lexical Searching: Combining the strengths of intent and keywood-based search techniques
+    - Detailed Citations: LLM responses seamlessly incorporate citations & links to specific document pages complete with a document browser comprising all relevant documents for instant cross-referencing  
+    - Semantic + Lexical Searching: Combining the strengths of intent and keyword-based search techniques
     - GraphRAG: Fully local, entirely offline custom GraphRAG system heavily leveraging Gemma2-2B to derive deep insights from data pools and provide thorough data analysis capabilities
     - Dynamic RAG: Autonomous selection of best RAG technique to respond to a given user query
     - Re-ranking: Heavily leverages re-ranking to filter out the best search results for RAG responses
     - Cutting-Edge Embedding & Re-ranker Models: Easily swap to the latest and greatest open-source Embedding and Re-ranking models by simply specifying the HuggingFace model IDs
-    - Advanced, Offline OCR: Full support for Kosmos-2.5 and Docling Standard & VLM OCR pipelines for high-accuracy offline & fully-local data-extraction from documents
-    - Knowledge Domains: Easily create and switch between knowledge-domains to seperate data with any level of granularityd esired
-    - Any Document Format: Upload files in any virtually any format
+    - Advanced, Offline OCR: Full support for Kosmos-2.5 and Docling Standard & VLM OCR pipelines for high-accuracy offline & fully local data-extraction from documents
+    - Knowledge Domains: Easily create and switch between knowledge-domains to separate data with any level of granularity desired
+    - Any Document Format: Upload files in virtually any format
     - Bulk Uploads: Upload multiple files and entire folders in one go
     - Google Drive Integration: Easily connect and sync your GDrive files
 
@@ -35,12 +35,12 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     - Custom HuggingFace-Waitress (HF-Waitress) Server with two backends: Transformers & ExLlamaV2
         - Support Any LLM from HuggingFace: Simply specify the Model ID from the HF Repo! 
         - Deploy native Transformer-SafeTensors for 0-day LLM support
-        - On-The-Fly Quantization: BitsAndBytes, Optimum-Quanto and HQQ for dynamically quantizing SafeTensors at memory loadtime
+        - On-The-Fly Quantization: BitsAndBytes, Optimum-Quanto and HQQ for dynamically quantizing SafeTensors at memory load time
         - FLUX Image Generation: Generate images with FLUX.1-Schnell, Dev, Kontext, etc.
         - Fully-Managed ExLlamaV2 Pipeline: Specify HuggingFace Model ID and Target Bits-Per-Word (BPW), and the model will be downloaded, quantized and saved on-disk
-        - Exl2 Measurement Reuse: The measurement.json generation occurs only once per model, and the results are saved to dramatically speed-up further quantization to other BPW targets
+        - Exl2 Measurement Reuse: The measurement.json generation occurs only once per model, and the results are saved to dramatically speed up further quantization runs to other BPW targets
         - Speech Transcription (ASR): Supports Nvidia Parakeet v2 & v3, Canary-Flash, Canary-Qwen-2.5B, IBM-Granite-Speech-3.3 2B & 8B, and OpenAI Whisper-Large-v3 for Transcription of audio files
-        - Live Speech Transcription (Live ASR): Live WebSocket conenction maps a client-side microphone to the selected ASR model for always-on speech transcription
+        - Live Speech Transcription (Live ASR): Live WebSocket connection maps a client-side microphone to the selected ASR model for always-on speech transcription
     - Fully-Managed Prompt Templating Across All Backends: No manual selection of LLM Prompt Template formats required for either HF-Waitress Transformers, ExLlamaV2 or llama.cpp backends
     - Generation-Control Args: Control Temperature, Top-P, Top-k, Min-P etc easily on a per-request basis regardless of inferencing backend
     - Text-To-Speech (TTS): Leverages Kokoro-82M for vocal interactions, supporting easy-switching between all American & British Male and Female voices available in the Kokoro package
@@ -262,7 +262,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 ### 8. Flash-Attention 2
 
-- Flash-Attention 2 is used to reduce the memory footprint of a model's KV-Cache context space, and speed up inferencing.
+- Flash-Attention 2 is used to reduce the memory footprint of a model's KV-Cache context space and speed up inferencing.
 
 - It has very specific hardware and software pre-requisites, make sure to check the [official repo](https://github.com/Dao-AILab/flash-attention) for the most up-to-date list of requirements.
 
@@ -336,11 +336,11 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 ### 9. ExLlamaV2
 
-- NOTE: Do NOT set this up in a location that's sync'ed by a cloud-backup service, such as OneDrive! This is because a lot of files are created by ExLlamaV2 during quantizing and deleted thereafter, and OneDrive especially likes to hold permissions hostage. If unavoidable, make sure to disable the cloud-backup service temporarily at the least.
+- NOTE: Do NOT set this up in a location that's synced by a cloud-backup service, such as OneDrive! This is because a lot of files are created by ExLlamaV2 during quantizing and deleted thereafter, and OneDrive especially likes to hold permissions hostage. If unavoidable, make sure to disable the cloud-backup service temporarily at the least.
 
-- ANOTHER NOTE: Disabling cloud-sync such as OneDrive can cause errors during quantization IF using a previosously synced repo after reinstalling Windows, as OneDrive might display the entire ExLlamaV2 dir the files haven't actaully been locally synced! In such cases, simply delete and re-run HF-Waitress, as it'll re-clone the ExLlamaV2 repo afresh.  
+- ANOTHER NOTE: Disabling cloud-sync such as OneDrive can cause errors during quantization IF using a previously synced repo after reinstalling Windows, as OneDrive might display the entire ExLlamaV2 dir the files haven't been locally synced though they may appear to be present in Explorer! In such cases, simply delete and re-run HF-Waitress, as it'll re-clone the ExLlamaV2 repo afresh.  
 
-- ExLlama is a highly optimized LLM inference library spcifically for consumer GPUs.
+- ExLlama is a highly optimized LLM inference library specifically for consumer GPUs.
 
 - It attempts to utilize Flash-Attention (v2.5.7+) by default so do install that before ExLlama (see above). MAKE SURE TO INSTALL IT AFTER INSTALLING FLASH ATTENTION 2!
 
@@ -370,7 +370,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - Further, Privion can leverage the Kokoro Text-To-Speech (TTS) model and voice package to speak to the user, thereby enabling full vocal interaction.
 
-- The following ASR models are supported as of Novemeber 2025:
+- The following ASR models are supported as of November 2025:
     1. Nvidia/Parakeet-tdt-0.6B-v3
     2. Nvidia/Parakeet-tdt-0.6B-v2
     3. Nvidia/Canary-Qwen-2.5B
@@ -385,7 +385,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
     1. Install ESpeak-NG (for [Kokoro-TTS](https://huggingface.co/hexgrad/Kokoro-82M)):
 
-        - Either download the installer via the [offical releases on GitHub](https://github.com/espeak-ng/espeak-ng/releases), or via an admin PowerShell, run the below and enter *Y* when prompted:
+        - Either download the installer via the [official releases on GitHub](https://github.com/espeak-ng/espeak-ng/releases), or via an admin PowerShell, run the below and enter *Y* when prompted:
             ```
             winget install --id=eSpeak-NG.eSpeak-NG -e
             ```
@@ -423,7 +423,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
     3. Install Python Libs:
 
-        - Determine the correct version of TorchCodec by cross-referencing the [Offical Support-Matrix](https://github.com/meta-pytorch/torchcodec?tab=readme-ov-file#installing-cpu-only-torchcodec) with the version of [PyTorch installed previously in Installation - Step 7](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#7-pytorch)
+        - Determine the correct version of TorchCodec by cross-referencing the [Official Support-Matrix](https://github.com/meta-pytorch/torchcodec?tab=readme-ov-file#installing-cpu-only-torchcodec) with the version of [PyTorch installed previously in Installation - Step 7](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#7-pytorch)
 
         - Edit *line 2* in the `reqs_speech.txt` file accordingly, and then install:
             ```
@@ -434,7 +434,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
     4. Copy FFmpeg `bin` dir contents to the `TorchCodec` dir:
     
-        - This is a brute-force method that technically shouldn't be required as FFmpeg has been added to path, but was the only was to resolve a nasty error encountered when running ASR models:
+        - This is a brute-force method that technically shouldn't be required as FFmpeg has been added to path, but was the only way to resolve a nasty error encountered when running ASR models:
             ```
             [start of libtorchcodec loading traceback]
             FFmpeg version 7: Could not find module 'C:\Users\bob\AppData\Local\Programs\Python\Python311\Lib\site-packages\torchcodec\libtorchcodec_core7.dll' (or one of its dependencies). Try using the full path with constructor syntax.
@@ -456,9 +456,9 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 ### 11. Docker
 
-- Privion uses Docker to pull & run the latest FlakorDB GraphDB container - without Docker, GraphRAG features will NOT work! 
+- Privion uses Docker to pull & run the latest FalkorDB Graph Database container - without Docker, GraphRAG features will NOT work! 
 
-- Your CPU should support virtualization and it should be enabled in your system's BIOS/UEFI
+- Your CPU should support virtualization, and it should be enabled in your system's BIOS/UEFI
 
 - If on Windows, you need to install the Windows Subsystem for Linux if it's not already present. To do so, open PowerShell as an Administrator and run the following:
     ```
@@ -500,7 +500,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - The HF-Waitress server will automatically start and will download an LLM (Qwen/Qwen2.5-1.5B-Instruct) on the first-run, which may take a while depending on your internet connection speed
 
-- On first-query, an embedding model (all-mpnet-base-v2) will be downloaded from HuggingFace Hub, which should take a brief time
+- On first query, an embedding model (all-mpnet-base-v2) will be downloaded from HuggingFace Hub, which should take a brief time
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
@@ -514,7 +514,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - While the former is easier, often CUDA does not work right, and high CPU usage might be observed even with full GPU offloading, so building from scratch is often the best practice
 
-- If setting up a pre-built version, skip to the last two steps in this section (i.e. add to PATH and Test)
+- If setting up a pre-built version, skip straight to the last two steps in this section (i.e. add to PATH and Test)
 
 - To self-build, start by downloading the `Source code (zip)` of the latest release from the [Official Repo's Releases Page](https://github.com/ggml-org/llama.cpp/releases)
 
@@ -697,7 +697,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
     - If a specific package version causes an error, edit the corresponding requirements.txt file to remove the version constraint, that is the `==version.number` segment, for example:    
     ```urllib3==2.0.4```    
-    becomes simply:    
+    simply becomes:    
     ```urllib3```
 
 2. Create and use a Python virtual environment:
@@ -820,6 +820,8 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 ## General User Guide - Post First-Run Steps
 
+- *NOTE: THIS SECTION HAS NOT BEEN UPDATED FOR THE LATEST PRIVION FEATURES! SOME POINTS MAY STILL BE RELEVANT BUT DO NOT REFLECT THE LATEST FEATURES*
+
 1. Document Formats Supported:
 
     - If LibreOffice is installed and added to PATH as detailed in Step 4 of the [Dependencies](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#dependencies) section, the following formats are supported:
@@ -915,7 +917,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
     - Via the ```Settings``` menu, the user may force enable or disable RAG (Retrieval Augmented Generation – the use of content from your documents to improve LLM-generated responses) whenever required 
     
-    - This is often useful for the purposes of evaluating LLM responses in both scenarios
+    - This is often useful for the purpose of evaluating LLM responses in both scenarios
     
     - Force disabling will also turn off attribution features
     
@@ -977,7 +979,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 ### Background and Setup
 
--  NOTE: THE BELOW IS MAINTAINED FOR LEGACY REASONS BUT NO LONGER SUPPORTED NOR RECOMMENDED. DO NOT FOLLOW THESE STEPS, THERE MAY BE A CONTAINER UPDATE IN THE FUTURE, BUT IT'S CURRENTLY NON-FUNCTIONAL.
+- *NOTE: THE BELOW IS MAINTAINED FOR LEGACY REASONS BUT NO LONGER SUPPORTED NOR RECOMMENDED. DO NOT FOLLOW THESE STEPS, THERE MAY BE A CONTAINER UPDATE IN THE FUTURE, BUT IT'S CURRENTLY NON-FUNCTIONAL.*
 
 - LARS has been adapted to a Docker container-deployment environment via two separate images as below:
 
@@ -1144,7 +1146,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     docker run --gpus all -p 5000:5000 -p 8080:8080 -v lars_storage:/app/storage lars-nvcuda
     ```
 
-- Once done, Navigate to ```http://localhost:5000/``` in your browser and follow the remainder of the [First Run Steps](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#first-run---important-steps-for-first-time-setup) and [User Guide](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#general-user-guide---post-first-run-steps)
+- Once done, navigate to ```http://localhost:5000/``` in your browser and follow the remainder of the [First Run Steps](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#first-run---important-steps-for-first-time-setup) and [User Guide](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#general-user-guide---post-first-run-steps)
 
 - The [Troubleshooting](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting) sections applies to Container-LARS as well
 
