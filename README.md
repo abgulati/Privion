@@ -347,7 +347,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 - Since HF-Waitress includes full management of ExLlama, including the downloading and quantization of models and saving of measurements for each model processed, it's required to clone the ExLlamav2 repo into the LARS `web_app` dir:
     ```
     cd LARS-Enterprise/web_app
-    git clone -b 0.3.1 https://github.com/turboderp-org/exllamav2.git
+    git clone -b 0.3.2 https://github.com/turboderp-org/exllamav2.git
     cd exllamav2
     pip install .
     ```
