@@ -600,6 +600,8 @@ Privion is a versatile AI application focused on privacy and offline inferencing
         libreoffice --version
         ```
 
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
+
 ### Poppler
 
 - LARS utilizes the pdf2image Python library to convert each page of a document into an image as required for OCR. This library is essentially a wrapper around the Poppler utility which handles the conversion process.
