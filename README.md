@@ -740,6 +740,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 3. If problems persist, consider opening an issue on the [LARS GitHub repository](https://github.com/abgulati/LARS-Enterprise/issues) for support.
 
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
 ### Other Issues:
 
@@ -781,6 +782,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 5. If problems persist, consider opening an issue on the [LARS GitHub repository](https://github.com/abgulati/LARS/issues) for support.
 
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
 ## First Run with llama.cpp
 
@@ -815,7 +817,6 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 - LARS will also remember your LLM settings for subsequent use
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
-
 
 ## General User Guide - Post First-Run Steps
 
