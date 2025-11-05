@@ -866,10 +866,12 @@ async function getReferences(do_rag, params, responseContentID, masterWrapperID,
 
 
 async function fetchTTSVoice(text) {
+    const ttsText = text.includes("</think>") ? text.split("</think>")[1].trim() : text;
+    // console.log("ttsText: ", ttsText);
     const response = await fetch('/tts_voice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({'text': text})
+        body: JSON.stringify({'text': ttsText})
     });
     if (!response.ok) {
         const err = await response.json();
