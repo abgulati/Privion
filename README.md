@@ -525,7 +525,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - Install CMAKE on Windows from the [Official Site](https://cmake.org/download/)
 
-    - add to PATH:   
+    - add to PATH (if you didn't already elect to add to PATH in CMake's installer):   
     ```C:\Program Files\CMake\bin```
 
 - Build llama.cpp with CMAKE:
@@ -538,6 +538,14 @@ Privion is a versatile AI application focused on privacy and offline inferencing
         ```
         cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="52;61;70;75;80;86"
         cmake --build build  --config Release
+        ```
+    
+    - **NOTE: Check the [Official llama.cpp CUDA Guide](https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md#cuda) for the latest instructions**
+    
+    - **Check [Nvidia's CUDA GPU Compatibility Chart here](https://developer.nvidia.com/cuda-gpus). Example:**
+        ```
+        # If building on a system with a 3090 and a 5090, which have CUDA compatibility 8.6 and 12.0 respectively, set archs as follows:
+        make -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="86;120"
         ```
 
     - Build without CUDA:   
