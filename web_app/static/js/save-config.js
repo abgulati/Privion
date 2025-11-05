@@ -25,9 +25,12 @@ function getLlmConfig() {
             config.llama_cpp_no_of_seqs_to_par_decode = parseInt(document.getElementById('NoOfSeqsToParDecode').value);
             config.llama_cpp_offload_to_devices = document.getElementById('OffloadToDevices').value;
             config.llama_cpp_cpu_only_moe = document.getElementById('CpuOnlyMoe').checked;
+            config.llama_cpp_num_cpu_moe = parseInt(document.getElementById('LlamaCppNumCpuMoe').value);
             config.llama_cpp_mlock = document.getElementById('Mlock').checked;
             config.llama_cpp_no_nmap = document.getElementById('NoNmap').checked;
             config.llama_cpp_context_length = parseInt(document.getElementById('LlmCtxLgt').value);
+            config.llama_cpp_batch_size = parseInt(document.getElementById('LlamaCppBatchSize').value);
+            config.llama_cpp_ubatch_size = parseInt(document.getElementById('LlamaCppUbatchSize').value);
             config.llama_cpp_max_new_tokens = parseInt(document.getElementById('MaxNewToks').value);
             config.llama_cpp_temperature = parseFloat(document.getElementById('tempSlider').value);
             config.llama_cpp_top_k = parseInt(document.getElementById('topkSlider').value);

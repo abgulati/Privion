@@ -153,6 +153,8 @@ function loadCoreLarsConfig() {
         'llama_cpp_use_gpu',
         'llama_cpp_gpu_layers',
         'llama_cpp_context_length',
+        'llama_cpp_batch_size',
+        'llama_cpp_ubatch_size',
         'llama_cpp_max_new_tokens',
         'llama_cpp_unified_kv_buffer',
         'llama_cpp_disable_kv_offloading',
@@ -161,6 +163,7 @@ function loadCoreLarsConfig() {
         'llama_cpp_no_of_seqs_to_par_decode',
         'llama_cpp_offload_to_devices',
         'llama_cpp_cpu_only_moe',
+        'llama_cpp_num_cpu_moe',
         'llama_cpp_mlock',
         'llama_cpp_no_nmap',
         'llama_cpp_temperature',
@@ -641,9 +644,12 @@ function setLlamaCppCheckboxes(values) {
 function setLlamaCppValues(values) {
     document.getElementById('NumbGpuLayers').value = values.llama_cpp_gpu_layers;
     document.getElementById('LlmCtxLgt').value = values.llama_cpp_context_length;
+    document.getElementById('LlamaCppBatchSize').value = values.llama_cpp_batch_size;
+    document.getElementById('LlamaCppUbatchSize').value = values.llama_cpp_ubatch_size;
     document.getElementById('NoOfSeqsToParDecode').value = values.llama_cpp_no_of_seqs_to_par_decode;
     document.getElementById('OffloadToDevices').value = values.llama_cpp_offload_to_devices;
     document.getElementById('MaxNewToks').value = values.llama_cpp_max_new_tokens;
+    document.getElementById('LlamaCppNumCpuMoe').value = values.llama_cpp_num_cpu_moe;
     document.getElementById('tempSlider').value = values.llama_cpp_temperature;
     document.getElementById('tempSliderValue').textContent = values.llama_cpp_temperature;
     document.getElementById('topkSlider').value = values.llama_cpp_top_k;
@@ -807,6 +813,17 @@ function toggleNGL() {  // Enable or disable ngl based on use_gpu
 }
 
 
+function toggleLlamaCppCpuMoE() {
+    var selection = document.getElementById('CpuOnlyMoe').checked;
+    if (selection) {
+        document.getElementById('LlamaCppNumCpuMoe').disabled = true;
+        document.getElementById('LlamaCppNumCpuMoe').value = "0";
+    } else {
+        document.getElementById('LlamaCppNumCpuMoe').disabled = false;
+    }
+}
+
+
 function toggleHfwDiffusersConfig() {
     var selection = document.querySelector('input[name="hf_use_diffusers"]:checked').value;
     if (selection === 'y') {
@@ -953,6 +970,9 @@ function initializeEventListenersForLLMTab() {
     // Event Listener for toggle GPU:
     document.getElementById('UseGpu').addEventListener('change', toggleNGL);
 
+    // Event listener for CPU-MoE Toggle:
+    document.getElementById('CpuOnlyMoe').addEventListener('change', toggleLlamaCppCpuMoE);
+
     // Event listener for toggle Vision:
     document.getElementById('hf_waitress_vision_yes').addEventListener('change', toggleHfwVisionConfig);
     document.getElementById('hf_waitress_vision_no').addEventListener('change', toggleHfwVisionConfig);
@@ -982,6 +1002,7 @@ function initializeEventListenersForLLMTab() {
     toggleLocalLlmSelection();
     toggleLlmApiForm();
     toggleNGL();
+    toggleLlamaCppCpuMoE();
 
     document.getElementById('update_azure_gpt').addEventListener('change', function() {
         document.getElementById('azure_openai_api_url').disabled = !this.checked;   

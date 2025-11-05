@@ -5376,7 +5376,9 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             [
                 'model_dir',
                 'model_choice', 
-                'llama_cpp_context_length', 
+                'llama_cpp_context_length',
+                'llama_cpp_batch_size',
+                'llama_cpp_ubatch_size',
                 'llama_cpp_max_new_tokens',
                 'llama_cpp_gpu_layers', 
                 'llama_cpp_server_timeout_seconds',
@@ -5390,7 +5392,8 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                 'llama_cpp_mlock',
                 'llama_cpp_no_nmap',
                 'llama_cpp_offload_to_devices',
-                'llama_cpp_cpu_only_moe'
+                'llama_cpp_cpu_only_moe',
+                'llama_cpp_num_cpu_moe'
             ]
         )
         llama_cpp_base_url = get_url_for_server('llama-cpp')
@@ -5408,6 +5411,8 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             '--model', cpp_model,
             '--n-gpu-layers', str(read_return["llama_cpp_gpu_layers"]),
             '--ctx-size', str(read_return["llama_cpp_context_length"]),
+            '--batch-size', str(read_return["llama_cpp_batch_size"]),
+            '--ubatch-size', str(read_return["llama_cpp_ubatch_size"]),
             '--n-predict', str(read_return["llama_cpp_max_new_tokens"]),
             '--cache-type-k', str(read_return["llama_cpp_key_cache_data_type"]),
             '--cache-type-v', str(read_return["llama_cpp_value_cache_data_type"]),
@@ -5427,8 +5432,10 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             llama_cpp_args.append('--mlock')
         if read_return['llama_cpp_no_nmap']:
             llama_cpp_args.append('--no-mmap')
-        if read_return['llama_cpp_cpu_only_moe']:
+        if read_return['llama_cpp_cpu_only_moe'] and int(read_return['llama_cpp_num_cpu_moe']) == 0:
             llama_cpp_args.append('--cpu-moe')
+        if int(read_return['llama_cpp_num_cpu_moe']) > 0:
+            llama_cpp_args.extend(['--n-cpu-moe', str(read_return['llama_cpp_num_cpu_moe'])])
 
         print(f"\n\nLaunching llama.cpp server with args: {llama_cpp_args}\n\n")
         # full_command = ' '.join(llama_cpp_args)
@@ -7271,8 +7278,8 @@ def execute_graph_rag(user_query:str, docs_with_graph_entities: list[Document]) 
     try:
         complete_chunk_entities = assemble_chunks_for_graph_rag(docs_with_graph_entities, user_query=None)
         print(f"\n\nlen of complete_chunk_entities: \n {len(complete_chunk_entities.items())}\n\n")
-        for item in list(complete_chunk_entities.items()):
-            print(f"\n\n{item}\n\n")
+        # for item in list(complete_chunk_entities.items()):
+        #     print(f"\n\n{item}\n\n")
     except Exception as e:
         handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
 

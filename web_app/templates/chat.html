@@ -689,6 +689,20 @@
                                                         </div>
             
                                                         <br>
+
+                                                        <div id="llama_cpp_batch_size" class="restart-settings-group">
+                                                            <label for="LlamaCppBatchSize">Batch Size (--batch-size) [default: 2048]: </label>
+                                                            <input type="number" id="LlamaCppBatchSize" name="LlamaCppBatchSize" min="1" class="settings-input-fields" value="2048">
+                                                        </div>
+
+                                                        <br>
+
+                                                        <div id="llama_cpp_ubatch_size" class="restart-settings-group">
+                                                            <label for="LlamaCppUbatchSize">UBatch Size (--ubatch-size) [default: 512]: </label>
+                                                            <input type="number" id="LlamaCppUbatchSize" name="LlamaCppUbatchSize" min="1" class="settings-input-fields" value="512">
+                                                        </div>
+
+                                                        <br>
             
                                                         <div id="llm_max_new_tokens" class="restart-settings-group">
                                                             <label for="MaxNewToks">Maximum Tokens to Predict (--n-predict) [default: -1, -1 = infinity]: </label>
@@ -762,6 +776,13 @@
                                                         <div id="llm_cpu_only_moe" class="restart-settings-group">
                                                             <input type="checkbox" id="CpuOnlyMoe" name="CpuOnlyMoe" style="margin-left: 7px;">
                                                             <label for="CpuOnlyMoe">CPU-only MOE (--cpu-moe) [default: Disabled]</label>
+                                                        </div>
+
+                                                        <br>
+
+                                                        <div id="llama_cpp_num_cpu_moe" class="restart-settings-group">
+                                                            <label for="LlamaCppNumCpuMoe">Number of CPU MOE layers (--n-cpu-moe) [default: 0 | 0 = Disabled]: </label>
+                                                            <input type="number" id="LlamaCppNumCpuMoe" name="LlamaCppNumCpuMoe" min="0" class="settings-input-fields" value="0">
                                                         </div>
 
                                                         <br>
