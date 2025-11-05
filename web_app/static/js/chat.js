@@ -865,25 +865,69 @@ async function getReferences(do_rag, params, responseContentID, masterWrapperID,
 }
 
 
+// async function fetchTTSVoice(text) {
+//     const ttsText = text.includes("</think>") ? text.split("</think>")[1].trim() : text;
+//     // console.log("ttsText: ", ttsText);
+//     const response = await fetch('/tts_voice', {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify({'text': ttsText})
+//     });
+//     if (!response.ok) {
+//         const err = await response.json();
+//         console.error(err.error);
+//         return;
+//     }
+
+//     const blob = await response.blob();
+//     const url = URL.createObjectURL(blob);
+//     const audio = document.getElementById('ttsAudio');
+//     audio.src = url;
+//     try { await audio.play(); } catch (_) {}
+// }
+
+
 async function fetchTTSVoice(text) {
-    const ttsText = text.includes("</think>") ? text.split("</think>")[1].trim() : text;
-    // console.log("ttsText: ", ttsText);
-    const response = await fetch('/tts_voice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({'text': ttsText})
-    });
-    if (!response.ok) {
-        const err = await response.json();
-        console.error(err.error);
+    // Ensure we have an active AudioContext. If not, we can't play audio this way.
+    if (!audioContext || audioContext.state !== 'running') {
+        console.warn('AudioContext is not active. TTS audio playback will not work.');
         return;
     }
 
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const audio = document.getElementById('ttsAudio');
-    audio.src = url;
-    try { await audio.play(); } catch (_) {}
+    const ttsText = text.includes("</think>") ? text.split("</think>")[1].trim() : text;
+    console.log("ttsText for AudioContext to play TTS voice: ", ttsText);
+
+    try {
+        const response = await fetch('/tts_voice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({'text': ttsText})
+        });
+        if (!response.ok) {
+            const err = await response.json();
+            console.error(err.error);
+            return;
+        }
+
+        // 1. Get the audio data as an ArrayBuffer
+        const audioData = await response.arrayBuffer();
+
+        // 2. Decode the audio data into a usable format for the WebAudio API
+        const audioBuffer = await audioContext.decodeAudioData(audioData);
+
+        // 3. Create a source node to play the buffer
+        const ttsSourceNode = audioContext.createBufferSource();
+        ttsSourceNode.buffer = audioBuffer;
+
+        // 4. Connect the TTS source directly to the audio context's destination (the speakers)
+        ttsSourceNode.connect(audioContext.destination);
+
+        // 5. Start playback
+        ttsSourceNode.start();
+
+    } catch (error) {
+        console.error('Error fetching or playing TTS voice:', error);
+    }
 }
 
 

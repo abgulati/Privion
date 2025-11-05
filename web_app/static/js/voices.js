@@ -799,11 +799,40 @@ async function startRecording() {
     chunks = [];
 
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });  // mouse-hover for additional details! 
+        // Step 1: Get the microphone stream with AEC enabled.
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+            }
+        });
         mediaStream = stream;
+
+        // Step 2: Create a fresh AudioContext.
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         inputSampleRate = audioContext.sampleRate;
 
+        // Step 3: CRITICAL FIX - Find the default speaker and explicitly set it as the output sink.
+        if (typeof audioContext.setSinkId === 'function') {
+            try {
+                // We don't need to enumerate devices. 'default' is a valid ID.
+                // This tells the context to use whatever the OS default is AT THIS MOMENT.
+                await audioContext.setSinkId('default');
+                console.log("Successfully bound AudioContext output to the system's default speaker.");
+            } catch (err) {
+                console.error('Failed to set audio output device. AEC may not work.', err);
+            }
+        } else {
+            console.warn('This browser does not support setSinkId. AEC for separate devices may not work.');
+        }
+
+        // Step 4: Resume the context if needed (browser security policy).
+        if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+        }
+
+        // Step 5: Create the source node to connect the microphone to the audio context.
         sourceNode = audioContext.createMediaStreamSource(stream);
 
         // Try modern AudioWorklet; fall back to ScriptProcessor only if unavailable
