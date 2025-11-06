@@ -864,28 +864,21 @@ async function getReferences(do_rag, params, responseContentID, masterWrapperID,
     }
 }
 
+let currentTtsSourceNode = null;
 
-// async function fetchTTSVoice(text) {
-//     const ttsText = text.includes("</think>") ? text.split("</think>")[1].trim() : text;
-//     // console.log("ttsText: ", ttsText);
-//     const response = await fetch('/tts_voice', {
-//         method: 'POST',
-//         headers: { 'Content-Type': 'application/json' },
-//         body: JSON.stringify({'text': ttsText})
-//     });
-//     if (!response.ok) {
-//         const err = await response.json();
-//         console.error(err.error);
-//         return;
-//     }
-
-//     const blob = await response.blob();
-//     const url = URL.createObjectURL(blob);
-//     const audio = document.getElementById('ttsAudio');
-//     audio.src = url;
-//     try { await audio.play(); } catch (_) {}
-// }
-
+function stopTTSPlayback() {
+    if (currentTtsSourceNode) {
+        try {
+            currentTtsSourceNode.stop();
+            console.log("TTS playback stopped");
+        } catch (error) {
+            console.error('Error stopping TTS playback:', error);
+        } finally {
+            currentTtsSourceNode = null;
+        }
+    }
+}
+window.stopTTSPlayback = stopTTSPlayback;   // make it available globally for the ASGI server to call
 
 async function fetchTTSVoice(text) {
     // Ensure we have an active AudioContext. If not, we can't play audio this way.
@@ -894,7 +887,13 @@ async function fetchTTSVoice(text) {
         return;
     }
 
-    const ttsText = text.includes("</think>") ? text.split("</think>")[1].trim() : text;
+    // Stop any current TTS playback before starting a new one
+    stopTTSPlayback();
+
+    let ttsText = text.includes("</think>") ? text.split("</think>")[1].trim() : text;
+    
+    // remove all special characters from ttsText, except for spaces, newlines, tabs, commas, question and exclamation marks, and periods
+    ttsText = ttsText.replace(/[^a-zA-Z0-9\s\n\t\.,!?"']/g, '');
     console.log("ttsText for AudioContext to play TTS voice: ", ttsText);
 
     try {
@@ -922,8 +921,18 @@ async function fetchTTSVoice(text) {
         // 4. Connect the TTS source directly to the audio context's destination (the speakers)
         ttsSourceNode.connect(audioContext.destination);
 
+        // Store reference to allow interruptions
+        currentTtsSourceNode = ttsSourceNode;
+
         // 5. Start playback
         ttsSourceNode.start();
+
+        // Clean up when playback completes
+        ttsSourceNode.onended = () => {
+            if (currentTtsSourceNode === ttsSourceNode) {
+                currentTtsSourceNode = null;
+            }
+        };
 
     } catch (error) {
         console.error('Error fetching or playing TTS voice:', error);

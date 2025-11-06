@@ -188,6 +188,7 @@ function resetWakeDebounce() {
 function cancelIfStop(text) {
     const low = String(text || '').toLowerCase();
     if (low.includes('cancel') || low.includes('never mind') || low.includes('stop')) {
+        console.log('Cancel/Stop detected - clearing wake debounce and resetting wake session');
         clearWakeDebounce();
         wakeSession.armed = false;
         wakeSession.assembled = '';
@@ -210,11 +211,12 @@ async function determineLlmUse(transcription) {
     if (rollingBuffer.length > 100) rollingBuffer.shift();  // The shift() method removes the first element of the array and returns it.
 
     // Optional stop/cancel handling (works both pre and post wake)
-    if (cancelIfStop(text)) return;
+    // if (cancelIfStop(text)) return;
 
     if (!wakeSession.armed) {
         // Wait for wake word
         if (text.toLowerCase().includes(wakeWord)) {
+            if (window.stopTTSPlayback) window.stopTTSPlayback();   // stop TTS playback if it's playing
             const cleaned = stripWakeWord(text);
             console.log('Transcription after stripping wake word:', cleaned);
             wakeSession.armed = true;
