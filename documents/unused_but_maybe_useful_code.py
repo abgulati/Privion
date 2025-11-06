@@ -6036,3 +6036,54 @@ def build_asgi_app():
         Mount("/", app=mounted),
         WebSocketRoute("/ws/asr", endpoint=ws_asr),
     ])
+
+
+
+# Old TTS Logic:
+
+// async function fetchTTSVoice(text) {
+//     const ttsText = text.includes("</think>") ? text.split("</think>")[1].trim() : text;
+//     // console.log("ttsText: ", ttsText);
+//     const response = await fetch('/tts_voice', {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify({'text': ttsText})
+//     });
+//     if (!response.ok) {
+//         const err = await response.json();
+//         console.error(err.error);
+//         return;
+//     }
+
+//     const blob = await response.blob();
+//     const url = URL.createObjectURL(blob);
+//     const audio = document.getElementById('ttsAudio');
+//     audio.src = url;
+//     try { await audio.play(); } catch (_) {}
+// }
+
+    <body style="background-color: #181a1b;">
+
+        <div id="chatState" style="display: none;" data-ongoing-chat-id="" data-latest-sequence-id="" data-llm-model="" data-tts="false"></div>
+
+        <audio id="ttsAudio" controls autoplay style="display: none;"></audio>
+        
+        <div class="header-container">
+            
+            <div class="nav-toggle" onclick="openNav()">
+                <span class="header-icons history-hamburger-icon">&#9776;</span>
+                <!-- <img src="{{ url_for('static', filename='images/L-Flow-Logo.jpeg') }}" class="lars-logo" alt="LARS Logo" style="width: 64px; height: auto; margin-bottom: 0px; margin-left: 10px;"> -->
+                <!-- <div class="app-title">
+                    <span>L</span><span>A</span><span>R</span><span>S</span>
+                </div> -->
+                <!-- <div class="app-title">
+                    <img src="{{ url_for('static', filename='images/P.png') }}" class="letter-p" alt="P">
+                    <img src="{{ url_for('static', filename='images/R.png') }}" class="letter-r" alt="R">
+                    <img src="{{ url_for('static', filename='images/I.png') }}" class="letter-i" alt="I">
+                    <img src="{{ url_for('static', filename='images/V.png') }}" class="letter-v" alt="V">
+                    <img src="{{ url_for('static', filename='images/I.png') }}" class="letter-i2" alt="I">
+                    <img src="{{ url_for('static', filename='images/O.png') }}" class="letter-o" alt="O">
+                    <img src="{{ url_for('static', filename='images/N.png') }}" class="letter-n" alt="N">
+                </div> -->
+                <div class="app-title-playfair"><span>Privion</span></div>
+            </div>
