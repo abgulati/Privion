@@ -3651,7 +3651,7 @@ def exl2_fim_stream():
 
         # Create messages in OpenAI format for chat template
         messages = [
-            {"role": "system", "content": "You are a code completion assistant."},
+            {"role": "system", "content": f"You are a code completion assistant. Complete the code between the prefix and suffix provided by the user. Only output the completion - no explanations & exclude the prefix and suffix. ONLY COMPLETION. Language: {language}"},
             {"role": "user", "content": fim_content}
         ]
 

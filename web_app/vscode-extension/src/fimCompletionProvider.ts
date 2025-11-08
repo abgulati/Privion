@@ -189,6 +189,7 @@ export class FIMCompletionProvider implements vscode.InlineCompletionItemProvide
     private async fetchCompletion(request: FIMRequest, signal: AbortSignal): Promise<string | null> {
         // We need the built-in 'http' module from Node.js
         const http = require('http');
+        // We use HTTP instead of HTTPS because // We use HTTP instead of HTTPS because the model server only supports HTTP
         
         return new Promise((resolve) => {
             // The request body needs to be a JSON string
@@ -213,62 +214,78 @@ export class FIMCompletionProvider implements vscode.InlineCompletionItemProvide
                 let fullRawCompletion = '';
                 // This buffer handles data chunks that might end in the middle of a message.
                 let buffer = '';
+                let skipNextData = false;
                 
                 // STAGE 1: Accumulate data as it streams in.
                 res.on('data', (chunk: any) => {
-                    buffer += chunk.toString();
-                    // A complete message in a text/event-stream ends with a newline.
+                    buffer += chunk.toString('utf8');
                     let boundary = buffer.indexOf('\n');
-                    
+
                     while (boundary !== -1) {
-                        const line = buffer.substring(0, boundary).trim();
-                        // Move the buffer forward, keeping any partial line for the next chunk.
+                        const line = buffer.substring(0, boundary);
                         buffer = buffer.substring(boundary + 1);
-    
+
+                        // Track SSE events so we can ignore the END sentinel payload
+                        if (line.startsWith('event: ')) {
+                            const evt = line.slice(7).trim();
+                            if (evt === 'END') skipNextData = true;
+                            boundary = buffer.indexOf('\n');
+                            continue;
+                        }
+
                         if (line.startsWith('data: ')) {
+                            // If the previous line was 'event: END', skip this payload.
+                            if (skipNextData) {
+                                skipNextData = false;
+                                boundary = buffer.indexOf('\n');
+                                continue;
+                            }
+
                             const payload = line.slice(6).trim();
-                            // Ignore the final null payload event within the data handler.
-                            if (payload && payload !== "null") {
+                            if (payload) {
                                 try {
-                                    // JSON.parse is crucial for correctly interpreting escapes like "\\n" and "\\t".
-                                    const parsedChunk = JSON.parse(payload);
-                                    fullRawCompletion += parsedChunk;
+                                    const parsed = JSON.parse(payload); // yields string chunks, or "null" → 'null'
+                                    // Ignore both JSON null and the string "null"
+                                    if (parsed !== null && parsed !== 'null') {
+                                        fullRawCompletion += parsed;
+                                    }
                                 } catch (e) {
                                     console.error("Failed to parse JSON payload:", payload, e);
                                 }
                             }
                         }
-                        // Look for the next message boundary in the buffer.
+
                         boundary = buffer.indexOf('\n');
                     }
                 });
-                
+
                 // STAGE 2: The stream has ended. Now, we clean the accumulated data.
                 res.on('end', () => {
                     let finalCompletion = fullRawCompletion;
-    
-                    // --- FIM Suffix Cleanup Logic ---
-                    // Get the suffix that was used in the FIM request.
-                    // This assumes your FIMRequest interface has a 'suffix' property.
-                    const suffix = request.suffix; 
-    
-                    // Only perform cleanup if a suffix was provided and exists in the output.
-                    if (suffix && finalCompletion.includes(suffix)) {
-                        // Using lastIndexOf is safer than a simple split. It ensures we only
-                        // remove the suffix at the very end of the generation.
-                        const suffixStartIndex = finalCompletion.lastIndexOf(suffix);
-                        
-                        // As a safety check, only trim the suffix if it appears near the end.
-                        // This prevents removing the text if it appeared naturally mid-completion.
-                        if (suffixStartIndex !== -1) {
-                             finalCompletion = finalCompletion.substring(0, suffixStartIndex);
+
+                    // Strip model-added code fences if present
+                    finalCompletion = finalCompletion.replace(/^\s*```[a-z0-9_-]*\s*\n?/i, '');
+                    finalCompletion = finalCompletion.replace(/\n?```\s*$/i, '');
+
+                    // FIM Suffix Cleanup Logic
+                    const suffix = request.suffix ?? '';
+
+                    if (suffix) {
+                        const norm = (s: string) => s.replace(/\r\n/g, '\n');
+                        let fc = norm(finalCompletion);
+                        const suf = norm(suffix);
+
+                        const idx = fc.lastIndexOf(suf);
+                        // Only trim if the suffix occurs near the end (tail-guard)
+                        if (idx !== -1 && idx >= fc.length - suf.length - 8) {
+                            fc = fc.slice(0, idx);
                         }
+                        finalCompletion = fc;
                     }
-                    
-                    // Finally, remove any trailing whitespace left over after suffix removal.
+
                     finalCompletion = finalCompletion.trimEnd();
-    
                     console.log('Complete and CLEANED completion:', finalCompletion);
+                    finalCompletion = finalCompletion.replace(/\s*$/i, '').replace(/null\s*$/i, '').trimEnd();
                     resolve(finalCompletion || null);
                 });
             });
