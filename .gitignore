@@ -37,6 +37,8 @@ web_app/exllamav2/
 web_app/graph-model-servers/graph-extraction-model-server/exllamav2/
 web_app/graph-model-servers/graph-summary-generator-server/exllamav2/
 web_app/voice-model-servers/asr-model-server/exllamav2/
+web_app/vscode-extension/node_modules
+web_app/vscode-extension/out
 
 documents/refinements_research/Docling-OCR/
 
