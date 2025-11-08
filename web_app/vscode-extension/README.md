@@ -39,3 +39,38 @@ Access settings via `Ctrl+,` → Search for "HF-Waitress FIM":
 ## Supported Languages
 
 Python, JavaScript, TypeScript, Java, C/C++, Rust, Go, PHP, Ruby, Swift, Kotlin, Scala, HTML, CSS, SQL, Bash, PowerShell, YAML, JSON, XML, Markdown
+
+## Installation instructions
+
+Simply use the pre-packaged VSIX installer:
+
+1. Open VSCode
+2. Hit `Ctrl+Shift+P`
+3. Type `Extension: Install from VSIX` and proceed to install
+
+## For Developers
+
+If making changes to the extensions code, recompile and reinstall:
+
+1. Initialize the extension:
+    ```
+    npm init -y
+    npm install --save-dev @types/vscode @types/node typescript
+    ```
+
+2. Compile:
+    ```
+    npm run compile
+    ```
+
+3. Install VSCode Extension CLI:
+    ```
+    npm install -g vsce
+    ```
+
+4. Package:
+    ```
+    vsce package
+    ```
+
+5. Install as per Installation Instructions above
