@@ -3572,53 +3572,15 @@ def exl2_stream():
 def create_fim_content(prefix: str, suffix: str, middle: str, language: str = 'python') -> str:
     '''Create FIM content for the chat template'''
 
-    # Language specific formatting - backticks tell the model which language it's working with:
-    language_markers = {
-        "python": "```python",
-        "javascript": "```javascript",
-        "java": "```java",
-        "c": "```c",
-        "c++": "```c++",
-        "c#": "```c#",
-        "ruby": "```ruby",
-        "php": "```php",
-        "go": "```go",
-        "rust": "```rust",
-        "scala": "```scala",
-        "kotlin": "```kotlin",
-        "swift": "```swift",
-        "typescript": "```typescript",
-        "html": "```html",
-        "css": "```css",
-        "sql": "```sql",
-        "other": "```"
-    }
+    # 1. Define the special FIM tokens for your model.
+    # These are standard for CodeLlama, DeepSeek Coder, etc.
+    FIM_PREFIX_TOKEN = "<fim_prefix>"
+    FIM_SUFFIX_TOKEN = "<fim_suffix>"
+    FIM_MIDDLE_TOKEN = "<fim_middle>"
 
-    marker = language_markers.get(language.lower(), language_markers['other'])
-
-    content_parts = [
-        "Complete the code between the prefix and suffix:",
-        "",
-        f"{marker}",
-        "# PREFIX:",
-        prefix,
-        "# SUFFIX:",
-        suffix,
-    ]
-
-    if middle:
-        content_parts.extend([
-            "# MIDDLE:",
-            middle,
-        ])
-
-    content_parts.extend([
-        "```",
-        "",
-        "Provide only the completion code:"
-    ])
-
-    return "\n".join(content_parts)
+    # 2. Construct the prompt in the correct, raw FIM format.
+    # This is the ONLY thing the model should see. No chat, no instructions.
+    return f"{FIM_PREFIX_TOKEN}{prefix}{FIM_SUFFIX_TOKEN}{suffix}{FIM_MIDDLE_TOKEN}"
 
 
 def truncate_fim_content(prefix: str, suffix: str, middle: str, language: str, max_seq_len: int) -> str:
@@ -3643,36 +3605,7 @@ def truncate_fim_content(prefix: str, suffix: str, middle: str, language: str, m
     if len(middle) > middle_chars:
         middle = middle[:middle_chars]
 
-    return create_fim_content(prefix, suffix, middle, language)   
-
-
-def clean_fim_output(text: str, suffix: str) -> str:
-    """
-    Minimal cleanup of FIM output to remove any artifacts
-    Cleanup is overwhelmingly focused on the suffix as generative models view the prefix as the past, and generate forwards from there.
-    This means there's a high probability of the model generating the suffix itself, which we need to remove.
-    """
-
-    # Remove common artifacts:
-    text = text.strip()
-
-    # Remove code block markers if they appear:
-    if text.startswith('```'):
-        lines = text.split('\n')
-        if len(lines) > 1 and lines[0].strip().startswith('```'):
-            text = '\n'.join(lines[1:])
-
-    if text.endswith('```'):
-        text = text.rsplit('```', 1)[0]
-
-    # Remove trailing newlines
-    text = text.rstrip()
-
-    # Ensure we don't include the suffix:
-    if suffix and suffix in text:
-        text = text.split(suffix)[0]
-
-    return text
+    return create_fim_content(prefix, suffix, middle, language)
 
 
 @app.route('/exl2_fim_stream', methods=['POST'])
@@ -3718,14 +3651,8 @@ def exl2_fim_stream():
 
         # Create messages in OpenAI format for chat template
         messages = [
-            {
-                "role": "system",
-                "content": f"You are a code completion assistant. Complete the code between the prefix and suffix provided by the user. Only output the completion, no explanations. Language: {language}"
-            },
-            {
-                "role": "user",
-                "content": fim_content
-            }
+            {"role": "system", "content": "You are a code completion assistant."},
+            {"role": "user", "content": fim_content}
         ]
 
         tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)    
@@ -3774,17 +3701,15 @@ def exl2_fim_stream():
                 
                 if len(current_token) == 1 and 'text' in current_token[0]:
                     text = current_token[0]['text']  # thus best to capture the current iteration's output and then access the 'text' key!
-                    # Clean up FIM artifacts
-                    text = clean_fim_output(text, suffix)
-                    if text.strip():
+                    if text:
                         output_queue.put(text)
                 
                 elif len(current_token) > 1:
                     for job in current_token:
                         if 'stage' in job and job['stage'] == 'streaming':
                             if 'text' in job: 
-                                text = clean_fim_output(job['text'], suffix)
-                                if text.strip():
+                                text = job['text']
+                                if text:
                                     output_queue.put(text)
         
         except Exception as e:

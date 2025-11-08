@@ -187,10 +187,13 @@ export class FIMCompletionProvider implements vscode.InlineCompletionItemProvide
     }
 
     private async fetchCompletion(request: FIMRequest, signal: AbortSignal): Promise<string | null> {
-        const http = require('http');  // Use http instead of https
+        // We need the built-in 'http' module from Node.js
+        const http = require('http');
         
         return new Promise((resolve) => {
+            // The request body needs to be a JSON string
             const postData = JSON.stringify(request);
+            
             const options = {
                 hostname: 'localhost',
                 port: 9069,
@@ -198,37 +201,88 @@ export class FIMCompletionProvider implements vscode.InlineCompletionItemProvide
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    // These are example headers, adjust as needed for your API
                     'X-Max-New-Tokens': this.maxTokens.toString(),
                     'X-Temperature': this.temperature.toString(),
                     'Content-Length': Buffer.byteLength(postData)
                 }
             };
-
+    
             const req = http.request(options, (res: any) => {
-                let data = '';
-                res.on('data', (chunk: any) => data += chunk);
-                res.on('end', () => {
-                    // Parse response
-                    const lines = data.split('\n');
-                    let completion = '';
-                    for (const line of lines) {
+                // This will store the raw, complete response from the server, including the suffix.
+                let fullRawCompletion = '';
+                // This buffer handles data chunks that might end in the middle of a message.
+                let buffer = '';
+                
+                // STAGE 1: Accumulate data as it streams in.
+                res.on('data', (chunk: any) => {
+                    buffer += chunk.toString();
+                    // A complete message in a text/event-stream ends with a newline.
+                    let boundary = buffer.indexOf('\n');
+                    
+                    while (boundary !== -1) {
+                        const line = buffer.substring(0, boundary).trim();
+                        // Move the buffer forward, keeping any partial line for the next chunk.
+                        buffer = buffer.substring(boundary + 1);
+    
                         if (line.startsWith('data: ')) {
-                            const content = line.slice(6).replace(/^"|"$/g, '');
-                            if (content !== 'null' && content !== '[DONE]') {
-                                completion += content;
+                            const payload = line.slice(6).trim();
+                            // Ignore the final null payload event within the data handler.
+                            if (payload && payload !== "null") {
+                                try {
+                                    // JSON.parse is crucial for correctly interpreting escapes like "\\n" and "\\t".
+                                    const parsedChunk = JSON.parse(payload);
+                                    fullRawCompletion += parsedChunk;
+                                } catch (e) {
+                                    console.error("Failed to parse JSON payload:", payload, e);
+                                }
                             }
                         }
+                        // Look for the next message boundary in the buffer.
+                        boundary = buffer.indexOf('\n');
                     }
-                    resolve(completion.trim() || null);
+                });
+                
+                // STAGE 2: The stream has ended. Now, we clean the accumulated data.
+                res.on('end', () => {
+                    let finalCompletion = fullRawCompletion;
+    
+                    // --- FIM Suffix Cleanup Logic ---
+                    // Get the suffix that was used in the FIM request.
+                    // This assumes your FIMRequest interface has a 'suffix' property.
+                    const suffix = request.suffix; 
+    
+                    // Only perform cleanup if a suffix was provided and exists in the output.
+                    if (suffix && finalCompletion.includes(suffix)) {
+                        // Using lastIndexOf is safer than a simple split. It ensures we only
+                        // remove the suffix at the very end of the generation.
+                        const suffixStartIndex = finalCompletion.lastIndexOf(suffix);
+                        
+                        // As a safety check, only trim the suffix if it appears near the end.
+                        // This prevents removing the text if it appeared naturally mid-completion.
+                        if (suffixStartIndex !== -1) {
+                             finalCompletion = finalCompletion.substring(0, suffixStartIndex);
+                        }
+                    }
+                    
+                    // Finally, remove any trailing whitespace left over after suffix removal.
+                    finalCompletion = finalCompletion.trimEnd();
+    
+                    console.log('Complete and CLEANED completion:', finalCompletion);
+                    resolve(finalCompletion || null);
                 });
             });
-
+            
+            // Standard error handling for the request itself.
             req.on('error', (error: any) => {
                 console.error('API Request Error:', error);
                 resolve(null);
             });
-
+            
+            // Abort the request if the signal is received.
             signal.addEventListener('abort', () => req.destroy());
+            
+            // Send the request body and finalize.
             req.write(postData);
             req.end();
         });
