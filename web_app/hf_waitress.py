@@ -3220,32 +3220,24 @@ def completions_stream():
 
     try:
         read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep'])
-        max_new_tokens = int(read_return['max_new_tokens'])
-        return_full_text = str(read_return['return_full_text']).lower() == 'true'
-        temperature = float(read_return['temperature'])
-        do_sample = str(read_return['do_sample']).lower() == 'true'
-        top_k = int(read_return['top_k'])
-        top_p = float(read_return['top_p'])
-        min_p = float(read_return['min_p'])
-        n_keep = int(read_return['n_keep'])
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not read values from hf_config.json when attempting /completions_stream, encountered error: ", e)
 
     try:    # Create a GenerationConfig object
         generation_config = {
-            "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
-            "return_full_text": request.headers.get('X-Return-Full-Text', str(return_full_text)).lower() == 'true',
-            "temperature": float(request.headers.get('X-Temperature', str(temperature))),
-            "do_sample": request.headers.get('X-Do-Sample', str(do_sample)).lower() == 'true',
-            "top_k": int(request.headers.get('X-Top-K', str(top_k))),
-            "top_p": float(request.headers.get('X-Top-P', str(top_p))),
-            "min_p": float(request.headers.get('X-Min-P', str(min_p))),
+            "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', read_return['max_new_tokens'])),
+            "return_full_text": request.headers.get('X-Return-Full-Text', str(read_return['return_full_text'])).lower() == 'true',
+            "temperature": float(request.headers.get('X-Temperature', str(read_return['temperature']))),
+            "do_sample": request.headers.get('X-Do-Sample', str(read_return['do_sample'])).lower() == 'true',
+            "top_k": int(request.headers.get('X-Top-K', str(read_return['top_k']))),
+            "top_p": float(request.headers.get('X-Top-P', str(read_return['top_p']))),
+            "min_p": float(request.headers.get('X-Min-P', str(read_return['min_p']))),
             "use_cache": True
         }
     except Exception as e:
         handle_error_no_return("Could not set generation-arguments for /completions_stream, proceeding without them. Encountered error: ", e)
-        generation_config = {"max_new_tokens": max_new_tokens,"use_cache": True}
+        generation_config = {"max_new_tokens": read_return['max_new_tokens'],"use_cache": True}
 
     try:
         print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
@@ -3316,6 +3308,8 @@ def completions_stream():
     return Response(generate(), content_type='text/event-stream')
 
 
+###################################-------------Exl2 Logic Begins-------------###################################
+
 def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
     """
     Checks if a given prompt fits within the max context length of the model.
@@ -3357,7 +3351,7 @@ def set_global_exl2_dynamic_generator(batch_mode: bool = False):
     The generator object's cache builds up over time which is why it's best to create a new generator object for new chat requests as they may eb from different users.
 
     Args:
-        batch_mode: Whether to use batch mode. Default is False.
+        batch_mode: Whether to use batch mode. Default is False - which internally sets to Auto batch size determination basis available cache space.
 
     Returns:
         The ExLlamaV2DynamicGenerator object.
@@ -3388,8 +3382,7 @@ def set_global_exl2_dynamic_generator(batch_mode: bool = False):
 def get_exl2_gen_settings(request):
 
     try:
-        config_data = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'knowledge_graph_cache_dir'])
-        requested_max_new_tokens = config_data['max_new_tokens']    # safe value for return
+        config_data = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'knowledge_graph_cache_dir', 'exl2_max_seq_len'])
     except Exception as e:  # Not using `handle_local_error` as the necessary params may be in the request headers so why error out here?
         handle_error_no_return("Could not read values from hf_config.json when attempting exl2-grapher, relying on request headers instead. Encountered error: ", e)
         config_data = {}
@@ -3401,13 +3394,13 @@ def get_exl2_gen_settings(request):
             top_k = int(request.headers.get('X-Top-K', str(config_data.get('top_k', '')))),
             top_p = float(request.headers.get('X-Top-P', str(config_data.get('top_p', ''))))
         )
-        requested_max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens', ''))))
+        config_data['max_new_tokens'] = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens', '2048'))))
         print("\nExLlamaV2Sampler.Settings Defined Successfully\n")
     except Exception as e:
         handle_error_no_return("Could not set generation-arguments for exl2-grapher, proceeding without them. Encountered error: ", e)
         gen_settings = None
 
-    return gen_settings, requested_max_new_tokens, config_data.get('knowledge_graph_cache_dir', '/')
+    return gen_settings, config_data
 
 
 def exl2_test_encoding_logic(tokenized_messages: str):
@@ -3463,6 +3456,13 @@ def exl2_test_encoding_logic(tokenized_messages: str):
 
 @app.route('/exl2_stream', methods=['POST'])
 def exl2_stream():
+    """
+    Streaming text generation using ExLlamaV2 model
+    
+    This endpoint provides streaming text generation using the ExLlamaV2 model with dynamic generation capabilities.
+    
+    OpenAPI 3.0.0 Specification is available in the `hfw-openapi-3-specs.yaml` file.
+    """
 
     print("\n\nexl2-stream route triggered - attempting to acquire LLM semaphore\n\n")
 
@@ -3475,7 +3475,7 @@ def exl2_stream():
         if isinstance(data, str):   # must convert to a list
             data = json.loads(data)
         messages = data.get('messages', [])
-        gen_settings, max_new_tokens, _  = get_exl2_gen_settings(request)
+        gen_settings, config_data  = get_exl2_gen_settings(request)
         # print(f"\nRead request - message received: {messages}\n")
     except Exception as e:
         llm_semaphore.release()
@@ -3504,7 +3504,7 @@ def exl2_stream():
         print("\nCreating ExLlamaV2-DynamicJob Object...\n")
         job = ExLlamaV2DynamicJob(
             input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
+            max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens')))),
             stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id],
             gen_settings = gen_settings
         )
@@ -3569,8 +3569,266 @@ def exl2_stream():
     return Response(generate(), content_type='text/event-stream')
 
 
+def create_fim_content(prefix: str, suffix: str, middle: str, language: str = 'python') -> str:
+    '''Create FIM content for the chat template'''
 
-### Exl2 Graph Helper Functions ###
+    # Language specific formatting - backticks tell the model which language it's working with:
+    language_markers = {
+        "python": "```python",
+        "javascript": "```javascript",
+        "java": "```java",
+        "c": "```c",
+        "c++": "```c++",
+        "c#": "```c#",
+        "ruby": "```ruby",
+        "php": "```php",
+        "go": "```go",
+        "rust": "```rust",
+        "scala": "```scala",
+        "kotlin": "```kotlin",
+        "swift": "```swift",
+        "typescript": "```typescript",
+        "html": "```html",
+        "css": "```css",
+        "sql": "```sql",
+        "other": "```"
+    }
+
+    marker = language_markers.get(language.lower(), language_markers['other'])
+
+    content_parts = [
+        "Complete the code between the prefix and suffix:",
+        "",
+        f"{marker}",
+        "# PREFIX:",
+        prefix,
+        "# SUFFIX:",
+        suffix,
+    ]
+
+    if middle:
+        content_parts.extend([
+            "# MIDDLE:",
+            middle,
+        ])
+
+    content_parts.extend([
+        "```",
+        "",
+        "Provide only the completion code:"
+    ])
+
+    return "\n".join(content_parts)
+
+
+def truncate_fim_content(prefix: str, suffix: str, middle: str, language: str, max_seq_len: int) -> str:
+    '''Truncate FIM content to fit within token limits'''
+
+    # Estimate toekn count (rough approximation: 1 token = 4 chars)
+    chars_per_token = 4
+    max_chars = max_seq_len * chars_per_token
+
+    # Truncate proportionally:
+    prefix_chars = int(max_chars * 0.4)
+    suffix_chars = int(max_chars * 0.4)
+    middle_chars = max_chars - prefix_chars - suffix_chars - 200 # Reserve for formatting
+
+    # Truncate prefix from start, suffix from end
+    if len(prefix) > prefix_chars:
+        prefix = prefix[-prefix_chars:]
+
+    if len(suffix) > suffix_chars:
+        suffix = suffix[:suffix_chars]
+
+    if len(middle) > middle_chars:
+        middle = middle[:middle_chars]
+
+    return create_fim_content(prefix, suffix, middle, language)   
+
+
+def clean_fim_output(text: str, suffix: str) -> str:
+    """
+    Minimal cleanup of FIM output to remove any artifacts
+    Cleanup is overwhelmingly focused on the suffix as generative models view the prefix as the past, and generate forwards from there.
+    This means there's a high probability of the model generating the suffix itself, which we need to remove.
+    """
+
+    # Remove common artifacts:
+    text = text.strip()
+
+    # Remove code block markers if they appear:
+    if text.startswith('```'):
+        lines = text.split('\n')
+        if len(lines) > 1 and lines[0].strip().startswith('```'):
+            text = '\n'.join(lines[1:])
+
+    if text.endswith('```'):
+        text = text.rsplit('```', 1)[0]
+
+    # Remove trailing newlines
+    text = text.rstrip()
+
+    # Ensure we don't include the suffix:
+    if suffix and suffix in text:
+        text = text.split(suffix)[0]
+
+    return text
+
+
+@app.route('/exl2_fim_stream', methods=['POST'])
+def exl2_fim_stream():
+    """
+    Fill-in-the-Middle (FIM) code completion using ExLlamaV2 model
+    
+    This endpoint provides streaming code completion using Fill-in-the-Middle technique,
+    where the model completes code between a prefix and suffix context.
+    
+    OpenAPI 3.0.0 Specification is available in the `hfw-openapi-3-specs.yaml` file.
+    """
+
+    print("\n\nexl2-fim-stream route triggered - attempting to acquire LLM semaphore\n\n")
+
+    llm_semaphore.acquire()
+
+    print("\nLLM semaphore acquired by exl2-fim-stream\n")
+
+    try:
+        data = request.json
+        if isinstance(data, str):   # must convert to a list
+            data = json.loads(data)
+        
+        prefix = data.get('prefix', '')
+        suffix = data.get('suffix', '')
+        middle = data.get('middle', '')
+        language = data.get('language', 'python')
+
+        if not prefix and not suffix:
+            llm_semaphore.release()
+            return handle_api_error("Prefix and suffix cannot be empty for FIM completion, encountered error: ", e)
+
+        gen_settings, config_data  = get_exl2_gen_settings(request)
+    
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not read POST-request messages for exl2-fim-stream, encountered error: ", e)
+    
+    # Create FIM prompt based on language and content
+    try:
+        fim_content = create_fim_content(prefix, suffix, middle, language)
+
+        # Create messages in OpenAI format for chat template
+        messages = [
+            {
+                "role": "system",
+                "content": f"You are a code completion assistant. Complete the code between the prefix and suffix provided by the user. Only output the completion, no explanations. Language: {language}"
+            },
+            {
+                "role": "user",
+                "content": fim_content
+            }
+        ]
+
+        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)    
+
+        # Check if prompt fits within context:
+        tokenized_prompt = EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True)
+        if len(tokenized_prompt) > config_data.get('exl2_max_seq_len') - 50:    # small buffer
+            # Truncate prefix/suffix to fit
+            fim_content = truncate_fim_content(prefix, suffix, middle, language, config_data.get('exl2_max_seq_len') - 50)
+            messages[1]['content'] = fim_content
+            tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+    
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not create FIM prompt with chat template, encountered error: ", e)
+    
+    try:
+        exl2_dynamic_generator = set_global_exl2_dynamic_generator()
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
+
+    try:
+        print("\nCreating ExLlamaV2-DynamicJob Object for FIM...\n")
+        job = ExLlamaV2DynamicJob(
+            input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
+            max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens')))),
+            stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id],
+            gen_settings = gen_settings
+        )
+        exl2_dynamic_generator.enqueue(job)
+        print("\nExLlamaV2-DynamicJob Defined & Enqueued Successfully\n")
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not create ExLlamaV2-DynamicJob object for exl2-fim-stream, encountered error: ", e)
+
+    stop_thread = threading.Event()
+    output_queue = queue.Queue()
+
+    def llm_task():
+
+        try:            
+            while exl2_dynamic_generator.num_remaining_jobs():
+                # output_queue.put(exl2_dynamic_generator.iterate()[0])  # Will print dict with keys: dict_keys(['job', 'stage', 'eos', 'serial', 'text', 'token_ids']) ### USE: yield f"data: {(line)}\n\n"
+                current_token = exl2_dynamic_generator.iterate()   # directly trying to access the 'text' key here will result in a KeyError as iteration may not have completed yet!
+                
+                if len(current_token) == 1 and 'text' in current_token[0]:
+                    text = current_token[0]['text']  # thus best to capture the current iteration's output and then access the 'text' key!
+                    # Clean up FIM artifacts
+                    text = clean_fim_output(text, suffix)
+                    if text.strip():
+                        output_queue.put(text)
+                
+                elif len(current_token) > 1:
+                    for job in current_token:
+                        if 'stage' in job and job['stage'] == 'streaming':
+                            if 'text' in job: 
+                                text = clean_fim_output(job['text'], suffix)
+                                if text.strip():
+                                    output_queue.put(text)
+        
+        except Exception as e:
+            return handle_error_no_return("Response generation failed, encountered error: ", e)
+        finally:
+            output_queue.put(None)
+            print("\n\nLLM stream done, releasing semaphore\n\n")
+            llm_semaphore.release()
+            stop_thread.set()
+
+    def generate():
+
+        global STOP_GENERATION
+        STOP_GENERATION = False
+
+        thread = threading.Thread(target=llm_task)
+        thread.start()
+
+        while True:
+            if STOP_GENERATION:
+                print("\n\nStopping generation with stop_event\n\n")
+                output_queue.put(None)
+                STOP_GENERATION = False
+                thread.join()
+            
+            line = output_queue.get()
+            if line is None:
+                print("\nNone read, breaking and stopping thread\n")
+                thread.join()
+                break
+            
+            # send clean code completion
+            yield f"data: {json.dumps(line)}\n\n"
+        
+        yield f"event: END\ndata: \"null\"\n\n"
+        print("\nexl2-fim-stream done\n")
+
+    print("\n\nInferencing Begins!\n\n")
+    return Response(generate(), content_type='text/event-stream')
+
+
+###################################-------------Exl2 Logic Ends-------------###################################
+
+###################################-------------Exl2 Graph Functions Begin-------------###################################
 
 def trim_response(response, start_substring, end_substring, include_start_substring=False, include_end_substring=False):
     print("\nAttempting to trim response...\n")
@@ -3846,7 +4104,9 @@ def exl2_graph_extractor():
     try:
         chunk_entities = request.json.get('chunk_entities')
         rag_response_mode = request.json.get('rag_response_mode', False)
-        gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
+        gen_settings, config_data = get_exl2_gen_settings(request)
+        requested_max_new_tokens = int(config_data.get('max_new_tokens'))
+        knowledge_graph_cache_dir = config_data.get('knowledge_graph_cache_dir', '/')
         reuse_graph_extraction_cache = str(request.headers.get('X-Reuse-Extraction-Cache', str(read_config(['reuse_graph_extraction_cache'])['reuse_graph_extraction_cache']).lower())).lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
@@ -4174,7 +4434,9 @@ def exl2_graph_summarizer():
 
     try:
         chunk_entities = request.json.get('chunk_entities')
-        gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
+        gen_settings, config_data = get_exl2_gen_settings(request)
+        requested_max_new_tokens = int(config_data.get('max_new_tokens'))
+        knowledge_graph_cache_dir = config_data.get('knowledge_graph_cache_dir', '/')
         reuse_graph_summary_cache = str(request.headers.get('X-Reuse-Summary-Cache', str(read_config(['reuse_graph_summary_cache'])['reuse_graph_summary_cache']).lower())).lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
