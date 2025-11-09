@@ -83,6 +83,10 @@ from waitress import serve
 if not os.path.exists(os.path.join(os.getcwd(), 'exllamav2')):
     subprocess.run(['git', 'clone', '-b', 'v0.3.2', 'https://github.com/turboderp-org/exllamav2.git'], check=True)  # check=True raises an exception on non-zero exit code
 
+if not os.path.exists(os.path.join(os.getcwd(), 'exllamav3')):
+    subprocess.run(['git', 'clone', '-b', 'v0.0.12', 'https://github.com/turboderp-org/exllamav3'], check=True)  # check=True raises an exception on non-zero exit code
+
+
 app = Flask(__name__)
 CORS(app)
 
@@ -348,14 +352,32 @@ def write_config(config_updates:dict, filename:str=None) -> dict:
             'exl2_bpw',
             'exl2_cache_type',
             'exl2_max_seq_len',
-            'exl2_force_regenerate_measurement'
+            'exl2_force_regenerate_measurement',
+            'exl3',
+            'exl3_bpw',
+            'exl3_total_context',
+            'exl3_tensor_parallel',
+            'exl3_tp_output_device',
+            'exl3_use_per_device',
+            'exl3_max_chunk_size',
+            'exl3_max_batch_size',
+            'exl3_show_gen_visualizer'
         ]
 
         triggers_for_hard_reboot = [
             'exl2',
             'exl2_bpw',
             'exl2_max_seq_len',
-            'exl2_cache_type'
+            'exl2_cache_type',
+            'exl3',
+            'exl3_bpw',
+            'exl3_total_context',
+            'exl3_tensor_parallel',
+            'exl3_tp_output_device',
+            'exl3_use_per_device',
+            'exl3_max_chunk_size',
+            'exl3_max_batch_size',
+            'exl3_show_gen_visualizer'
         ]
         
         for key in config_updates:
@@ -366,6 +388,10 @@ def write_config(config_updates:dict, filename:str=None) -> dict:
 
         if config_updates.get('exl2', False) and model_changed:
             print("ExL2 status changed and model changed, setting hard_reboot_required to True")
+            hard_reboot_required = True
+
+        if config_updates.get('exl3', False) and model_changed:
+            print("ExL3 status changed and model changed, setting hard_reboot_required to True")
             hard_reboot_required = True
 
         # Auto-detect Flux and Llama-3.2-Vision models
@@ -448,6 +474,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'reuse_graph_summary_cache':True,       # dev flag: controlled by X-Reuse-Summary-Cache header
                     'exl3':False,
                     'exl3_bpw':3.0,
+                    'exl3_resume_quant_job':False,
                     'exl3_total_context':2048,
                     'exl3_tensor_parallel':False,
                     'exl3_tp_output_device':None,
@@ -1169,6 +1196,7 @@ def parse_arguments():
                 'exl2_no_flash_attn',
                 'exl3',
                 'exl3_bpw',
+                'exl3_resume_quant_job',
                 'exl3_total_context',
                 'exl3_tensor_parallel',
                 'exl3_tp_output_device',
@@ -1265,6 +1293,7 @@ def parse_arguments():
         # ExLlamaV3:
         parser.add_argument("--exl3", action="store_true", default=False, help="Add this flag when loading models via ExLlamaV3. Defaults to False.")
         parser.add_argument("--exl3_bpw", type=float, default=read_return['exl3_bpw'], help="Specify the bpw to be used when quantizing ExLlamaV3 models. Remembers previously set value and falls-back to 3.0 as the default.")
+        parser.add_argument("--exl3_resume_quant_job", action="store_true", default=False, help="Add this flag to resume a previous quantization job. Defaults to False.")
         parser.add_argument("--exl3_total_context", type=int, default=read_return['exl3_total_context'], help="Specify the total context size to be used when loading ExLlamaV3 models. Remembers previously set value and falls-back to 2048 as the default.")
         parser.add_argument("--exl3_tensor_parallel", action="store_true", default=read_return['exl3_tensor_parallel'], help="Specify whether to load the model in tensor parallel mode. Remembers previously set value and falls-back to False as the default.")
         parser.add_argument("--exl3_tp_output_device", type=str, default=read_return['exl3_tp_output_device'], help="Specify the output device for the tensor parallel model. Remembers previously set value and falls-back to None as the default.")
@@ -1298,6 +1327,7 @@ def parse_arguments():
                     'exl2_no_flash_attn',
                     'exl3',
                     'exl3_bpw',
+                    'exl3_resume_quant_job',
                     'exl3_total_context',
                     'exl3_tensor_parallel',
                     'exl3_tp_output_device',
@@ -1400,6 +1430,7 @@ def parse_arguments():
                     'exl2_no_flash_attn':args.exl2_no_flash_attn,
                     'exl3':args.exl3,
                     'exl3_bpw':args.exl3_bpw,
+                    'exl3_resume_quant_job':args.exl3_resume_quant_job,
                     'exl3_total_context':args.exl3_total_context,
                     'exl3_tensor_parallel':args.exl3_tensor_parallel,
                     'exl3_tp_output_device':args.exl3_tp_output_device,
@@ -2106,7 +2137,7 @@ def exllama3_bpw_quantize_model(model_id: str, model_snapshot_path: os.PathLike,
     print(f"\n\nAttempting to quantize model {model_id} to {exl3_bpw}bpw...\n\n")
     
     try:
-        read_return = read_config(['transformer_models_folder'])
+        read_return = read_config(['transformer_models_folder', 'exl3_resume_quant_job'])
         transformer_models_folder = str(read_return['transformer_models_folder'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to exllama3-bpw_quantize_model(), encountered error: ", e)
@@ -2125,14 +2156,22 @@ def exllama3_bpw_quantize_model(model_id: str, model_snapshot_path: os.PathLike,
         return quantized_model_path
     
     convert_script_path = os.path.normpath(os.path.join(os.getcwd(), "exllamav3", "convert.py"))
-    command = [
-        'python' if platform.system() == 'Windows' else 'python3',
-        convert_script_path,
-        '-i', model_snapshot_path,
-        '-o', quantized_model_path,
-        '-w', temp_dir,
-        '-b', str(exl3_bpw)
-    ]
+    if read_return['exl3_resume_quant_job']:
+        command = [
+            'python' if platform.system() == 'Windows' else 'python3',
+            convert_script_path,
+            '-w', temp_dir,
+            '-r'
+        ]
+    else:
+        command = [
+            'python' if platform.system() == 'Windows' else 'python3',
+            convert_script_path,
+            '-i', model_snapshot_path,
+            '-o', quantized_model_path,
+            '-w', temp_dir,
+            '-b', str(exl3_bpw)
+        ]
 
     try:
         print(f"\nRunning ExLlamaV3 bpw quantizer for {model_id}...\n")
@@ -2140,7 +2179,7 @@ def exllama3_bpw_quantize_model(model_id: str, model_snapshot_path: os.PathLike,
         print(f"\nExLlamaV3 Conversion of {model_id} to {exl3_bpw}bpw completed successfully!\n")
         safe_remove_folder_from_filepath(temp_dir)  # conversion completed, deleting temp dir to free space
     except Exception as e:
-        safe_remove_folder_from_filepath(temp_dir)  # Since conversion errored out, restarting afresh by clearing the temp dir is safer
+        # safe_remove_folder_from_filepath(temp_dir)  # Since conversion errored out, restarting afresh by clearing the temp dir is safer
         handle_local_error("Could not run ExLlamaV3 bpw quantizer, encountered error: ", e)
 
     return quantized_model_path
@@ -2204,9 +2243,7 @@ def get_raw_stop_token_ids(quantized_model_path: os.PathLike) -> list | int:
         raw_model_config_path = os.path.join(quantized_model_path, "config.json")
         with open(raw_model_config_path, 'r') as file:
             raw_model_config = json.load(file)
-        print(f"\nRaw model config: {raw_model_config}\n")
         raw_stop_token_ids = raw_model_config['eos_token_id']
-        print(f"\nRaw stop token ids: {raw_stop_token_ids}\n")
         return raw_stop_token_ids
     except Exception as e:
         handle_local_error("Could not get raw stop token ids for model {quantized_model_path}, encountered error: ", e)
@@ -2219,6 +2256,7 @@ def set_full_exl3_model_stop_token_list(raw_stop_token_ids: list | int):
 
     print(f"AUTO_TOKENIZER.eos_token_id: {AUTO_TOKENIZER.eos_token_id}")
     print(f"EXL3_TOKENIZER.eos_token_id: {EXL3_TOKENIZER.eos_token_id}")
+    print(f"Raw stop token ids: {raw_stop_token_ids}")
     
     full_list = []
     try:
@@ -2239,6 +2277,8 @@ def set_full_exl3_model_stop_token_list(raw_stop_token_ids: list | int):
                 full_list.append(token_ids)
         else:
             full_list.append(raw_stop_token_ids)
+
+        full_list = list(set(full_list))
         print(f"\nFull model stop token list: {full_list}\n")
         STOP_TOKENS = full_list
         return True
@@ -3981,7 +4021,6 @@ def get_exl3_sampler(request):
 
     try:
         config_data = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'min_p', 'rep_p', 'pres_p', 'freq_p', 'rep_sustain_range', 'rep_decay_range', 'exl3_total_context'])
-        print(f"\nRead config_data: {config_data}\n")
     except Exception as e:  # Not using `handle_local_error` as the necessary params may be in the request headers so why error out here?
         handle_error_no_return("Could not read values from hf_config.json when attempting exl3-sampler, relying on request headers instead. Encountered error: ", e)
         config_data = {}
