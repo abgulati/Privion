@@ -218,3 +218,353 @@ paths:
                   error:
                     type: string
                     description: Error message
+  /exl3_stream:
+    post:
+      summary: Streaming text generation with ExLlamaV3
+      description: |
+        Generate text using the ExLlamaV3 model with Server-Sent Events (SSE) streaming.
+        Accepts a conversation history and returns generated text in real-time.
+      tags:
+        - ExLlamaV3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - messages
+              properties:
+                messages:
+                  type: array
+                  description: Array of conversation messages in OpenAI format
+                  items:
+                    type: object
+                    required:
+                      - role
+                      - content
+                    properties:
+                      role:
+                        type: string
+                        enum: [system, user, assistant]
+                        description: Role of the message sender
+                      content:
+                        type: string
+                        description: Content of the message
+                  example:
+                    - role: system
+                      content: "You are a helpful assistant."
+                    - role: user
+                      content: "What is the capital of France?"
+      parameters:
+        - in: header
+          name: X-Max-New-Tokens
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 32768
+            default: 2048
+          description: Maximum number of new tokens to generate
+        - in: header
+          name: X-Temperature
+          schema:
+            type: number
+            format: float
+            minimum: 0.0
+            maximum: 2.0
+            default: 0.1
+          description: Sampling temperature
+        - in: header
+          name: X-Top-K
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 40
+          description: Top-k sampling parameter
+        - in: header
+          name: X-Top-P
+          schema:
+            type: number
+            format: float
+            minimum: 0.0
+            maximum: 1.0
+            default: 0.9
+          description: Top-p (nucleus) sampling parameter
+        - in: header
+          name: X-Min-P
+          schema:
+            type: number
+            format: float
+            minimum: 0.0
+            maximum: 1.0
+            default: 0.1
+          description: Minimum probability threshold
+        - in: header
+          name: X-Repetition-Penalty
+          schema:
+            type: number
+            format: float
+            minimum: 0.0
+            maximum: 2.0
+            default: 1.0
+          description: Repetition penalty
+        - in: header
+          name: X-Presence-Penalty
+          schema:
+            type: number
+            format: float
+            minimum: -2.0
+            maximum: 2.0
+            default: 0.0
+          description: Presence penalty
+        - in: header
+          name: X-Frequency-Penalty
+          schema:
+            type: number
+            format: float
+            minimum: -2.0
+            maximum: 2.0
+            default: 0.0
+          description: Frequency penalty
+        - in: header
+          name: X-Repetition-Sustain-Range
+          schema:
+            type: integer
+            minimum: 0
+            default: 10000000
+          description: Repetition penalty sustain range
+        - in: header
+          name: X-Repetition-Decay-Range
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Repetition penalty decay range
+      responses:
+        '200':
+          description: Successful streaming response
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |
+                data: "Hello"
+                data: " there"
+                data: "!"
+                event: END
+                data: "null"
+        '400':
+          description: Bad request - invalid JSON or missing required fields
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+      x-code-samples:
+        - lang: curl
+          source: |
+            curl -X POST http://localhost:5000/exl3_stream \
+              -H "Content-Type: application/json" \
+              -H "X-Max-New-Tokens: 100" \
+              -H "X-Temperature: 0.7" \
+              -d '{
+                "messages": [
+                  {"role": "user", "content": "Explain quantum computing"}
+                ]
+              }'
+        - lang: javascript
+          source: |
+            const response = await fetch('/exl3_stream', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Max-New-Tokens': '100',
+                'X-Temperature': '0.7'
+              },
+              body: JSON.stringify({
+                messages: [
+                  {role: 'user', content: 'Explain quantum computing'}
+                ]
+              })
+            });
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            
+            while (true) {
+              const {done, value} = await reader.read();
+              if (done) break;
+              
+              const chunk = decoder.decode(value);
+              const lines = chunk.split('\\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6);
+                  if (data === '"null"') break;
+                  console.log(JSON.parse(data));
+                }
+              }
+            }
+  /exl3_fim_stream:
+    post:
+      summary: Stream FIM code completion using ExLlamaV3 model
+      description: This endpoint provides streaming Fill-in-the-Middle code completion using the ExLlamaV3 model with dynamic generation capabilities.
+      tags:
+        - Code Completion
+      requestBody:
+        description: Code context and completion parameters
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prefix:
+                  type: string
+                  description: Code before the completion point
+                suffix:
+                  type: string
+                  description: Code after the completion point
+                middle:
+                  type: string
+                  description: Optional existing code in the middle (for editing)
+                  default: ""
+                language:
+                  type: string
+                  description: Programming language for context
+                  default: "python"
+                  enum: [python, javascript, typescript, java, cpp, c, rust, go, php, ruby, swift, kotlin, scala, html, css, sql, bash, powershell, yaml, json, xml, markdown]
+              required:
+                - prefix
+                - suffix
+              example:
+                prefix: "def fibonacci(n):\n    if n <= 1:\n        return n\n    "
+                suffix: "\n    return fibonacci(n-1) + fibonacci(n-2)"
+                middle: ""
+                language: "python"
+      parameters:
+        - in: header
+          name: X-Max-New-Tokens
+          schema:
+            type: integer
+          description: Maximum number of new tokens to generate (overrides default)
+          required: false
+        - in: header
+          name: X-Temperature
+          schema:
+            type: number
+            format: float
+          description: Sampling temperature for generation
+          required: false
+        - in: header
+          name: X-Top-P
+          schema:
+            type: number
+            format: float
+          description: Top-p (nucleus) sampling parameter
+          required: false
+        - in: header
+          name: X-Top-K
+          schema:
+            type: integer
+          description: Top-k sampling parameter
+          required: false
+        - in: header
+          name: X-Min-P
+          schema:
+            type: number
+            format: float
+            minimum: 0.0
+            maximum: 1.0
+            default: 0.1
+          description: Minimum probability threshold
+        - in: header
+          name: X-Repetition-Penalty
+          schema:
+            type: number
+            format: float
+            minimum: 0.0
+            maximum: 2.0
+            default: 1.0
+          description: Repetition penalty
+        - in: header
+          name: X-Presence-Penalty
+          schema:
+            type: number
+            format: float
+            minimum: -2.0
+            maximum: 2.0
+            default: 0.0
+          description: Presence penalty
+        - in: header
+          name: X-Frequency-Penalty
+          schema:
+            type: number
+            format: float
+            minimum: -2.0
+            maximum: 2.0
+            default: 0.0
+          description: Frequency penalty
+        - in: header
+          name: X-Repetition-Sustain-Range
+          schema:
+            type: integer
+            minimum: 0
+            default: 10000000
+          description: Repetition penalty sustain range
+        - in: header
+          name: X-Repetition-Decay-Range
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Repetition penalty decay range
+      responses:
+        '200':
+          description: Streaming code completion response
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-sent events stream with code completion tokens
+              example: |
+                data: "else"
+                
+                data: ":"
+                
+                data: "\n        "
+                
+                event: END
+                data: "null"
+        '400':
+          description: Bad request - invalid input parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Error message
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Error message

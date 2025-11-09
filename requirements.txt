@@ -44,3 +44,4 @@ wheel>=0.45.1
 opencv-python-headless==4.11.0.86
 starlette>=0.48.0
 asgiref>=3.10.0
+kbnf>=0.4.2
