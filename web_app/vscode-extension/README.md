@@ -19,7 +19,10 @@ AI-powered Fill-in-the-Middle code completion using ExLlamaV2 models via the HF-
 
 Access settings via `Ctrl+,` → Search for "HF-Waitress FIM":
 
-- `hfw-fim.serverUrl`: Your HF-Waitress URL
+- `hfw-fim.serverUrl`: Your HF-Waitress URL (default: http://localhost:9069)
+- `hfw-fim.host`: HF-Waitress hostname (default: localhost)
+- `hfw-fim.port`: HF-Waitress server port (default: 9069)
+- `hfw-fim.apiEndpoint`: HF-Waitress FIM API endpoint (default: /exl3_fim_stream) 
 - `hfw-fim.maxTokens`: Maximum tokens to generate (default: 100)
 - `hfw-fim.temperature`: Sampling temperature (default: 0.3)
 - `hfw-fim.autoComplete`: Enable automatic completions (default: true)

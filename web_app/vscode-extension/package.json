@@ -33,6 +33,21 @@
                     "default": "http://localhost:9069",
                     "description": "HF-Waitress URL"
                 },
+                "hfw-fim.host": {
+                    "type": "string",
+                    "default": "localhost",
+                    "description": "HF-Waitress host"
+                },
+                "hfw-fim.port": {
+                    "type": "number",
+                    "default": 9069,
+                    "description": "HF-Waitress port"
+                },
+                "hfw-fim.apiEndpoint": {
+                    "type": "string",
+                    "default": "/exl3_fim_stream",
+                    "description": "HF-Waitress API endpoint"
+                },
                 "hfw-fim.maxTokens": {
                     "type": "number",
                     "default": 100,

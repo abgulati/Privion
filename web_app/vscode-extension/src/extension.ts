@@ -15,7 +15,7 @@ export function activate(context: vscode.ExtensionContext) {
     provider.testAPIConnection().then(connected => {
         console.log('API Connected:', connected);
         if (!connected) {
-            vscode.window.showWarningMessage('HF-Waitress API not found at localhost:9069');
+            vscode.window.showWarningMessage(`HF-Waitress API not found at ${vscode.workspace.getConfiguration('hfw-fim').serverUrl}`);
         } else {
             vscode.window.showInformationMessage('HF-Waitres FIM Extension Loaded');
         }

@@ -9,6 +9,9 @@ interface FIMRequest {
 
 export class FIMCompletionProvider implements vscode.InlineCompletionItemProvider {
     private serverUrl!: string; // ! here is a defninite assignment assertion, and tells TypeScript "I promise these will be initialized before use"!
+    private host!: string;
+    private port!: number;
+    private apiEndpoint!: string;
     private maxTokens!: number;
     private temperature!: number;
     private autoComplete!: boolean;
@@ -30,6 +33,9 @@ export class FIMCompletionProvider implements vscode.InlineCompletionItemProvide
     private updateConfig() {
         const config = vscode.workspace.getConfiguration('hfw-fim');
         this.serverUrl = config.get('serverUrl', 'http://localhost:9069/');
+        this.host = config.get('host', 'localhost');
+        this.port = config.get('port', 9069);
+        this.apiEndpoint = config.get('apiEndpoint', '/exl3_fim_stream');
         this.maxTokens = config.get('maxTokens', 100);
         this.temperature = config.get('temperature', 0.3);
         this.autoComplete = config.get('autoComplete', true);
@@ -196,16 +202,14 @@ export class FIMCompletionProvider implements vscode.InlineCompletionItemProvide
             const postData = JSON.stringify(request);
             
             const options = {
-                hostname: 'localhost',
-                port: 9069,
-                path: '/exl2_fim_stream',
+                hostname: this.host,
+                port: this.port,
+                path: this.apiEndpoint,
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    // These are example headers, adjust as needed for your API
                     'X-Max-New-Tokens': this.maxTokens.toString(),
-                    'X-Temperature': this.temperature.toString(),
-                    'Content-Length': Buffer.byteLength(postData)
+                    'X-Temperature': this.temperature.toString()
                 }
             };
     
@@ -331,9 +335,9 @@ export class FIMCompletionProvider implements vscode.InlineCompletionItemProvide
             });
             
             const options = {
-                hostname: 'localhost',
-                port: 9069,
-                path: '/exl2_fim_stream',
+                hostname: this.host,
+                port: this.port,
+                path: this.apiEndpoint,
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
