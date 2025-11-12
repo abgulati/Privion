@@ -38,6 +38,10 @@ function setExl2(exl2) {
     document.getElementById('chatState').setAttribute('data-exl2', exl2);
 }
 
+function setExl3(exl3) {
+    document.getElementById('chatState').setAttribute('data-exl3', exl3);
+}
+
 function setVision(vision) {
     document.getElementById('chatState').setAttribute('data-vision', vision);
 }
@@ -64,6 +68,10 @@ function getVision() {
 
 function getExl2() {
     return document.getElementById('chatState').getAttribute('data-exl2');
+}
+
+function getExl3() {
+    return document.getElementById('chatState').getAttribute('data-exl3');
 }
 
 function getChatId() {
@@ -1599,11 +1607,12 @@ function addNewGraphSummarizerModel(model) {
 
 
 function disableTransformersSettings() {
-    enableNonExl2Settings();
+    enableNonExl2Settings();    // because this is only called when enabling Diffusers!
     document.getElementById('advancedHfLlmSettingsToggle').style.display = 'none';
     document.getElementById('hf_waitress_is_awq').style.display = 'none';
     document.getElementById('hf_waitress_trust_remote_code').style.display = 'none';
     document.getElementById('hf_waitress_exl2').style.display = 'none';
+    document.getElementById('hf_waitress_exl3').style.display = 'none';
     // document.getElementById('hf_waitress_vision').style.display = 'none';
 }
 
@@ -1614,6 +1623,7 @@ function enableTransformersSettings() {
     document.getElementById('hf_waitress_is_awq').style.display = 'block';
     document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
     document.getElementById('hf_waitress_exl2').style.display = 'block';
+    document.getElementById('hf_waitress_exl3').style.display = 'block';
     // document.getElementById('hf_waitress_vision').style.display = 'block';
 }
 
@@ -1646,6 +1656,22 @@ function enableNonExl2Settings() {
     document.getElementById('hf_waitress_hqq_group_size').style.display = 'block';
     document.getElementById('hf_waitress_minp_value').style.display = 'block';
     document.getElementById('hf_waitress_return_full_text').style.display = 'block';
+}
+
+
+function hideExl3SamplingParams() {
+    document.getElementById('hf_waitress_minp_value').style.display = 'none';
+    document.getElementById('hf_waitress_repetition_penalty_value').style.display = 'none';
+    document.getElementById('hf_waitress_presence_penalty_value').style.display = 'none';
+    document.getElementById('hf_waitress_frequency_penalty_value').style.display = 'none';
+}
+
+
+function showExl3SamplingParams() {
+    document.getElementById('hf_waitress_minp_value').style.display = 'block';
+    document.getElementById('hf_waitress_repetition_penalty_value').style.display = 'block';
+    document.getElementById('hf_waitress_presence_penalty_value').style.display = 'block';
+    document.getElementById('hf_waitress_frequency_penalty_value').style.display = 'block';
 }
 
 
