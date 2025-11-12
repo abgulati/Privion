@@ -37,6 +37,9 @@ function getLlmConfig() {
             config.llama_cpp_top_p = parseFloat(document.getElementById('toppSlider').value);
             config.llama_cpp_min_p = parseFloat(document.getElementById('minpSlider').value);
             config.llama_cpp_n_keep = parseInt(document.getElementById('nkeepSlider').value);
+            config.llama_cpp_repetition_penalty = parseFloat(document.getElementById('repetitionPenaltySlider').value);
+            config.llama_cpp_presence_penalty = parseFloat(document.getElementById('presencePenaltySlider').value);
+            config.llama_cpp_frequency_penalty = parseFloat(document.getElementById('frequencyPenaltySlider').value);
         } else if (config.local_llm_server === "hf-waitress") {
             config.hf_waitress_serving_url = document.getElementById('HfwServingUrl').value;
             config.hf_waitress_access_url = document.getElementById('HfwAccessUrl').value;
@@ -378,13 +381,28 @@ function getHfWaitressConfig() {
         'exl2_bpw': parseFloat(document.getElementById('HfwExl2Bpw').value),
         'exl2_max_seq_len': parseInt(document.getElementById('HfwExl2MaxSeqLen').value),
         'exl2_cache_type': document.getElementById('hf_waitress_exl2_cache_type_choice').value,
+        'exl2_no_flash_attn': document.getElementById('hf_waitress_exl2_no_flash_attn_yes').checked,
         'exl2_force_regenerate_measurement': document.getElementById('hf_waitress_exl2_force_regenerate_measurement').checked,
+        'exl3': document.getElementById('hf_waitress_exl3_yes').checked,
+        'exl3_bpw': parseFloat(document.getElementById('HfwExl3Bpw').value),
+        'exl3_device': document.getElementById('HfwExl3Device').value,
+        'exl3_resume_quant_job': document.getElementById('HfwExl3ResumeQuantJob').checked,
+        'exl3_total_context': parseInt(document.getElementById('HfwExl3TotalContext').value),
+        'exl3_tensor_parallel': document.getElementById('HfwExl3TensorParallel').checked,
+        'exl3_tp_output_device': document.getElementById('HfwExl3TpOutputDevice').value,
+        'exl3_use_per_device': document.getElementById('HfwExl3UsePerDevice').value,
+        'exl3_max_chunk_size': parseInt(document.getElementById('HfwExl3MaxChunkSize').value),
+        'exl3_max_batch_size': parseInt(document.getElementById('HfwExl3MaxBatchSize').value),
+        'exl3_show_gen_visualizer': document.getElementById('HfwExl3ShowGenVisualizer').checked,
         'awq': document.getElementById('hf_waitress_is_awq_yes').checked,
         'pipeline_task': document.getElementById('hf_waitress_pipeline_task_choice').value,
         'max_new_tokens': parseInt(document.getElementById('HfwMaxNewToks').value),
         'top_k': parseInt(document.getElementById('HfwTopkSlider').value),
         'top_p': parseFloat(document.getElementById('HfwToppSlider').value),
         'min_p': parseFloat(document.getElementById('HfwMinpSlider').value),
+        'rep_p': parseFloat(document.getElementById('HfwRepetitionPenaltySlider').value),
+        'pres_p': parseFloat(document.getElementById('HfwPresencePenaltySlider').value),
+        'freq_p': parseFloat(document.getElementById('HfwFrequencyPenaltySlider').value),
         'return_full_text': document.getElementById('hf_waitress_return_full_text_yes').checked,
         'quantize': document.getElementById('hf_waitress_quantization_choice').value,
         'quant_level': document.getElementById('hf_waitress_quantization_level_choice').value,
