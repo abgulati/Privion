@@ -3923,41 +3923,25 @@ def exl2_fim_stream():
         llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for exl2-fim-stream, encountered error: ", e)
     
-    # Create FIM prompt based on language and content
-    try:
-        fim_content = create_fim_content(prefix, suffix, middle, language)
-
-        # Create messages in OpenAI format for chat template
-        messages = [
-            {"role": "system", "content": f"You are a code completion assistant. Complete the code between the prefix and suffix provided by the user. Only output the completion - no explanations & exclude the prefix and suffix. ONLY COMPLETION. Language: {language}"},
-            {"role": "user", "content": fim_content}
-        ]
-
-        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)    
-
-        # Check if prompt fits within context:
-        tokenized_prompt = EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True)
-        if len(tokenized_prompt) > config_data.get('exl2_max_seq_len') - 50:    # small buffer
-            # Truncate prefix/suffix to fit
-            fim_content = truncate_fim_content(prefix, suffix, middle, language, config_data.get('exl2_max_seq_len') - 50)
-            messages[1]['content'] = fim_content
-            tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
-    
-    except Exception as e:
-        llm_semaphore.release()
-        return handle_api_error("Could not create FIM prompt with chat template, encountered error: ", e)
-    
     try:
         exl2_dynamic_generator = set_global_exl2_dynamic_generator()
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
+    
+    # Create FIM prompt based on language and content
+    try:
+        # exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL2_TOKENIZER, prefix, suffix, middle, language, (int(config_data['exl3_total_context']) - 50))
+        exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL2_TOKENIZER, prefix, suffix, middle, language, 8192) # max 8k tokens
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not create FIM prompt with chat template, encountered error: ", e)
 
     try:
         print("\nCreating ExLlamaV2-DynamicJob Object for FIM...\n")
         job = ExLlamaV2DynamicJob(
-            input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens')))),
+            input_ids= exl_encoded_fim_input_ids,
+            max_new_tokens = config_data['max_new_tokens'],
             stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id],
             gen_settings = gen_settings
         )
