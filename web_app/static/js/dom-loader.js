@@ -171,6 +171,9 @@ function loadCoreLarsConfig() {
         'llama_cpp_top_p',
         'llama_cpp_min_p',
         'llama_cpp_n_keep',
+        'llama_cpp_repetition_penalty',
+        'llama_cpp_presence_penalty',
+        'llama_cpp_frequency_penalty',
         'azure_cv_free_tier',
         'skip_system_prompt',
         'force_re_extract',
@@ -261,6 +264,11 @@ function loadCoreHfConfig() {
         'top_p',
         'min_p',
         'n_keep',
+        'rep_p',
+        'pres_p',
+        'freq_p',
+        'rep_sustain_range',
+        'rep_decay_range',
         'quantize',
         'quant_level',
         'awq',
@@ -271,9 +279,21 @@ function loadCoreHfConfig() {
         'vision',
         'exl2',
         'exl2_bpw',
+        'exl2_no_flash_attn',
         'exl2_max_seq_len',
         'exl2_cache_type',
-        'exl2_force_regenerate_measurement'
+        'exl2_force_regenerate_measurement',
+        'exl3',
+        'exl3_bpw',
+        'exl3_device',
+        'exl3_resume_quant_job',
+        'exl3_total_context',
+        'exl3_tensor_parallel',
+        'exl3_tp_output_device',
+        'exl3_use_per_device',
+        'exl3_max_chunk_size',
+        'exl3_max_batch_size',
+        'exl3_show_gen_visualizer'
     ]
     
     const hfWaitress_URL = getHfwUrl();
@@ -550,6 +570,12 @@ function initializeHfRadioButtons(all_values) {
     document.getElementById('hf_waitress_exl2_yes').checked = all_values.exl2;
     document.getElementById('hf_waitress_exl2_no').checked = !all_values.exl2;
 
+    document.getElementById('hf_waitress_exl2_no_flash_attn_yes').checked = all_values.exl2_no_flash_attn;
+    document.getElementById('hf_waitress_exl2_no_flash_attn_no').checked = !all_values.exl2_no_flash_attn;
+
+    document.getElementById('hf_waitress_exl3_yes').checked = all_values.exl3;
+    document.getElementById('hf_waitress_exl3_no').checked = !all_values.exl3;
+
     document.getElementById('hf_waitress_is_awq_yes').checked = all_values.awq;
     document.getElementById('hf_waitress_is_awq_no').checked = !all_values.awq;
 
@@ -564,6 +590,8 @@ function initializeHfRadioButtons(all_values) {
 
     toggleHfwDiffusersConfig();
     toggleHfwExl2Config();
+    toggleHfwExl3Config();
+    if (getExl2() === "true") disableNonExl2Settings();  // as it might be taggled by the Exl3 toggle method! 
 
     document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').checked = all_values.flux_low_vram_optimizations;
     document.getElementById('hf_waitress_diffusers_low_vram_optimizations_no').checked = !all_values.flux_low_vram_optimizations;
@@ -590,9 +618,25 @@ function setHfSlidersAndTextAreas(values) {
     document.getElementById('HfwToppSliderValue').textContent = values.top_p;
     document.getElementById('HfwMinpSlider').value = values.min_p;
     document.getElementById('HfwMinpSliderValue').textContent = values.min_p;
-    document.getElementById('HfwExl2Bpw').value = values.exl2_bpw;
+    document.getElementById('HfwRepetitionPenaltySlider').value = values.rep_p;
+    document.getElementById('HfwRepetitionPenaltySliderValue').textContent = values.rep_p;
+    document.getElementById('HfwPresencePenaltySlider').value = values.pres_p;
+    document.getElementById('HfwPresencePenaltySliderValue').textContent = values.pres_p;
+    document.getElementById('HfwFrequencyPenaltySlider').value = values.freq_p;
+    document.getElementById('HfwFrequencyPenaltySliderValue').textContent = values.freq_p;
+    document.getElementById('HfwExl2Bpw').value = parseFloat(values.exl2_bpw);
     document.getElementById('HfwExl2MaxSeqLen').value = values.exl2_max_seq_len;
     document.getElementById('hf_waitress_exl2_force_regenerate_measurement').checked = values.exl2_force_regenerate_measurement;
+    document.getElementById('HfwExl3Bpw').value = parseFloat(values.exl3_bpw);
+    document.getElementById('HfwExl3Device').value = values.exl3_device;
+    document.getElementById('HfwExl3ResumeQuantJob').checked = values.exl3_resume_quant_job;
+    document.getElementById('HfwExl3TotalContext').value = values.exl3_total_context;
+    document.getElementById('HfwExl3TensorParallel').checked = values.exl3_tensor_parallel;
+    document.getElementById('HfwExl3TpOutputDevice').value = values.exl3_tp_output_device;
+    document.getElementById('HfwExl3UsePerDevice').value = values.exl3_use_per_device;
+    document.getElementById('HfwExl3MaxChunkSize').value = values.exl3_max_chunk_size;
+    document.getElementById('HfwExl3MaxBatchSize').value = values.exl3_max_batch_size;
+    document.getElementById('HfwExl3ShowGenVisualizer').checked = values.exl3_show_gen_visualizer;
 }
 
 
@@ -601,6 +645,7 @@ function initializeHfwServerConfig() {
         .then(hf_values => {
             setVision(hf_values.vision);
             setExl2(hf_values.exl2);
+            setExl3(hf_values.exl3);
             initializeHfWaitressCustomDropdown(hf_values.model_list, hf_values.model_id);
             initializeHfSettingsDropdowns(hf_values);
             initializeHfRadioButtons(hf_values);
@@ -659,6 +704,12 @@ function setLlamaCppValues(values) {
     document.getElementById('minpSlider').value = values.llama_cpp_min_p;
     document.getElementById('minpSliderValue').textContent = values.llama_cpp_min_p;
     document.getElementById('nkeepSlider').value = values.llama_cpp_n_keep;
+    document.getElementById('repetitionPenaltySlider').value = values.llama_cpp_repetition_penalty;
+    document.getElementById('repetitionPenaltySliderValue').textContent = values.llama_cpp_repetition_penalty;
+    document.getElementById('presencePenaltySlider').value = values.llama_cpp_presence_penalty;
+    document.getElementById('presencePenaltySliderValue').textContent = values.llama_cpp_presence_penalty;
+    document.getElementById('frequencyPenaltySlider').value = values.llama_cpp_frequency_penalty;
+    document.getElementById('frequencyPenaltySliderValue').textContent = values.llama_cpp_frequency_penalty;
 }
 
 
@@ -829,6 +880,7 @@ function toggleHfwDiffusersConfig() {
     if (selection === 'y') {
         document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'block';
         document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'none';
+        document.getElementById('hf-waitress-exl3-configuration-div').style.display = 'none';
         disableTransformersSettings();
         collapseAdvancedSettings('advancedHfLlmSettings');
     } else {
@@ -842,11 +894,34 @@ function toggleHfwExl2Config() {
     var selection = document.querySelector('input[name="hf_use_exl2"]:checked').value;
     if (selection === 'y') {
         document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'block';
+        document.getElementById('hf-waitress-exl3-configuration-div').style.display = 'none';
         document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
+        document.getElementById('hf_waitress_exl3').style.display = 'none';
+        hideExl3SamplingParams();
         disableNonExl2Settings();
     } else {
         document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'none';
+        document.getElementById('hf_waitress_exl3').style.display = 'block';
         enableNonExl2Settings();
+    }
+}
+
+
+function toggleHfwExl3Config() {
+    var selection = document.querySelector('input[name="hf_use_exl3"]:checked').value;
+    if (selection === 'y') {
+        document.getElementById('hf-waitress-exl3-configuration-div').style.display = 'block';
+        document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
+        document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'none';
+        document.getElementById('hf_waitress_exl2').style.display = 'none';
+        showExl3SamplingParams();
+        disableNonExl2Settings();
+    }
+    else {
+        document.getElementById('hf-waitress-exl3-configuration-div').style.display = 'none';
+        document.getElementById('hf_waitress_exl2').style.display = 'block';
+        enableNonExl2Settings();
+        hideExl3SamplingParams();
     }
 }
 
@@ -985,6 +1060,10 @@ function initializeEventListenersForLLMTab() {
     document.getElementById('hf_waitress_exl2_yes').addEventListener('change', toggleHfwExl2Config);
     document.getElementById('hf_waitress_exl2_no').addEventListener('change', toggleHfwExl2Config);
 
+    // Event listener for toggle Exl3:
+    document.getElementById('hf_waitress_exl3_yes').addEventListener('change', toggleHfwExl3Config);
+    document.getElementById('hf_waitress_exl3_no').addEventListener('change', toggleHfwExl3Config);
+
     // Event listener for toggle Flux Low Vram:
     document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').addEventListener('change', disableFluxQuantization);
 
@@ -1061,6 +1140,18 @@ function initializeEventListenersForLLMTabSliders() {
         document.getElementById('minpSliderValue').textContent = this.value;
     });
 
+    document.getElementById('repetitionPenaltySlider').addEventListener('input', function() {
+        document.getElementById('repetitionPenaltySliderValue').textContent = this.value;
+    });
+
+    document.getElementById('presencePenaltySlider').addEventListener('input', function() {
+        document.getElementById('presencePenaltySliderValue').textContent = this.value;
+    });
+
+    document.getElementById('frequencyPenaltySlider').addEventListener('input', function() {
+        document.getElementById('frequencyPenaltySliderValue').textContent = this.value;
+    });
+
     document.getElementById('HfwTempSlider').addEventListener('input', function() {
         document.getElementById('HfwTempSliderValue').textContent = this.value;
     });
@@ -1075,6 +1166,18 @@ function initializeEventListenersForLLMTabSliders() {
 
     document.getElementById('HfwMinpSlider').addEventListener('input', function() {
         document.getElementById('HfwMinpSliderValue').textContent = this.value;
+    });
+
+    document.getElementById('HfwRepetitionPenaltySlider').addEventListener('input', function() {
+        document.getElementById('HfwRepetitionPenaltySliderValue').textContent = this.value;
+    });
+
+    document.getElementById('HfwPresencePenaltySlider').addEventListener('input', function() {
+        document.getElementById('HfwPresencePenaltySliderValue').textContent = this.value;
+    });
+
+    document.getElementById('HfwFrequencyPenaltySlider').addEventListener('input', function() {
+        document.getElementById('HfwFrequencyPenaltySliderValue').textContent = this.value;
     });
 
     document.getElementById('HfDGuidanceScaleSlider').addEventListener('input', function() {
