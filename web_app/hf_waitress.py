@@ -352,9 +352,11 @@ def write_config(config_updates:dict, filename:str=None) -> dict:
             'exl2_bpw',
             'exl2_cache_type',
             'exl2_max_seq_len',
+            'exl2_no_flash_attn',
             'exl2_force_regenerate_measurement',
             'exl3',
             'exl3_bpw',
+            'exl3_device',
             'exl3_total_context',
             'exl3_tensor_parallel',
             'exl3_tp_output_device',
@@ -367,10 +369,12 @@ def write_config(config_updates:dict, filename:str=None) -> dict:
         triggers_for_hard_reboot = [
             'exl2',
             'exl2_bpw',
+            'exl2_no_flash_attn',
             'exl2_max_seq_len',
             'exl2_cache_type',
             'exl3',
             'exl3_bpw',
+            'exl3_device',
             'exl3_total_context',
             'exl3_tensor_parallel',
             'exl3_tp_output_device',
@@ -378,7 +382,7 @@ def write_config(config_updates:dict, filename:str=None) -> dict:
             'exl3_max_chunk_size',
             'exl3_max_batch_size',
             'exl3_show_gen_visualizer'
-        ]
+        ]   # if the key is also here, it means the server must be fully shutdown (typically via the /shutdown API) and then restarted
         
         for key in config_updates:
             if key in triggers_for_hf_restart and config_updates[key] != hf_config.get(key):
@@ -474,6 +478,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'reuse_graph_summary_cache':True,       # dev flag: controlled by X-Reuse-Summary-Cache header
                     'exl3':False,
                     'exl3_bpw':3.0,
+                    'exl3_device':'cuda:0',
                     'exl3_resume_quant_job':False,
                     'exl3_total_context':2048,
                     'exl3_tensor_parallel':False,
@@ -1065,7 +1070,7 @@ def shutdown_all():
     # Clean up memory
     import gc
     gc.collect()
-    safe_empty_cuda_cache()
+    
     return True
 
 ############################-----------------------------------------------###############################
@@ -1196,6 +1201,7 @@ def parse_arguments():
                 'exl2_no_flash_attn',
                 'exl3',
                 'exl3_bpw',
+                'exl3_device',
                 'exl3_resume_quant_job',
                 'exl3_total_context',
                 'exl3_tensor_parallel',
@@ -1293,6 +1299,7 @@ def parse_arguments():
         # ExLlamaV3:
         parser.add_argument("--exl3", action="store_true", default=False, help="Add this flag when loading models via ExLlamaV3. Defaults to False.")
         parser.add_argument("--exl3_bpw", type=float, default=read_return['exl3_bpw'], help="Specify the bpw to be used when quantizing ExLlamaV3 models. Remembers previously set value and falls-back to 3.0 as the default.")
+        parser.add_argument("--exl3_device", type=str, default=read_return['exl3_device'], help="Specify the device to be used when loading ExLlamaV3 models. Remembers previously set value and falls-back to cuda:0 as the default.")
         parser.add_argument("--exl3_resume_quant_job", action="store_true", default=False, help="Add this flag to resume a previous quantization job. Defaults to False.")
         parser.add_argument("--exl3_total_context", type=int, default=read_return['exl3_total_context'], help="Specify the total context size to be used when loading ExLlamaV3 models. Remembers previously set value and falls-back to 2048 as the default.")
         parser.add_argument("--exl3_tensor_parallel", action="store_true", default=read_return['exl3_tensor_parallel'], help="Specify whether to load the model in tensor parallel mode. Remembers previously set value and falls-back to False as the default.")
@@ -1327,6 +1334,7 @@ def parse_arguments():
                     'exl2_no_flash_attn',
                     'exl3',
                     'exl3_bpw',
+                    'exl3_device',
                     'exl3_resume_quant_job',
                     'exl3_total_context',
                     'exl3_tensor_parallel',
@@ -1430,6 +1438,7 @@ def parse_arguments():
                     'exl2_no_flash_attn':args.exl2_no_flash_attn,
                     'exl3':args.exl3,
                     'exl3_bpw':args.exl3_bpw,
+                    'exl3_device':args.exl3_device,
                     'exl3_resume_quant_job':args.exl3_resume_quant_job,
                     'exl3_total_context':args.exl3_total_context,
                     'exl3_tensor_parallel':args.exl3_tensor_parallel,
@@ -2202,7 +2211,7 @@ def define_exllamav3_generator_components(quantized_model_path: os.PathLike):
         handle_local_error("Could not define ExLlamaV3 model, encountered error: ", e)
     
     try:
-        exl3_config = read_config(['exl3_total_context', 'exl3_tensor_parallel', 'exl3_tp_output_device', 'exl3_use_per_device', 'exl3_max_chunk_size'])
+        exl3_config = read_config(['exl3_device', 'exl3_total_context', 'exl3_tensor_parallel', 'exl3_tp_output_device', 'exl3_use_per_device', 'exl3_max_chunk_size'])
     except Exception as e:
         handle_local_error("Could not read exl3-total_context from hf_config.json, encountered error: ", e)
 
@@ -2216,11 +2225,12 @@ def define_exllamav3_generator_components(quantized_model_path: os.PathLike):
     try:
         print(f"\nLoading model...\n")
         EXL3_MODEL.load(
+            progressbar=True,
+            device=exl3_config['exl3_device'],
+            max_chunk_size=exl3_config['exl3_max_chunk_size'],
             tensor_p=exl3_config['exl3_tensor_parallel'],
             tp_output_device=exl3_config['exl3_tp_output_device'],
-            use_per_device=exl3_config['exl3_use_per_device'],
-            max_chunk_size=exl3_config['exl3_max_chunk_size'],
-            progressbar=True
+            use_per_device=exl3_config['exl3_use_per_device']
         )
         print("\nExl3 model loaded successfully\n")
     except Exception as e:
@@ -2309,7 +2319,7 @@ def load_exllamav3_pipeline():
         handle_local_error(f"Could not find a local snapshot for {read_return['model_id']}. Please check your connection and access token if you're using a private model.")
 
     try:
-        quantized_model_path = exllama3_bpw_quantize_model(read_return['model_id'], latest_snapshot_path, read_return['exl3_bpw'])
+        quantized_model_path = exllama3_bpw_quantize_model(read_return['model_id'], latest_snapshot_path, float(read_return['exl3_bpw']))
     except Exception as e:
         handle_local_error(f"Error ExLlamaV3 quantizing {read_return['model_id']} to {read_return['exl3_bpw']} bits per word. Encountered error: ", e)
 
@@ -3802,7 +3812,7 @@ def exl2_stream():
 
 
 def create_fim_content(prefix: str, suffix: str, middle: str, language: str = 'python') -> str:
-    '''Create FIM content for the chat template'''
+    '''Prepare chat template with FIM tokens'''
 
     # 1. Define the special FIM tokens for your model.
     # These are standard for CodeLlama, DeepSeek Coder, etc.
@@ -3815,10 +3825,29 @@ def create_fim_content(prefix: str, suffix: str, middle: str, language: str = 'p
     return f"{FIM_PREFIX_TOKEN}{prefix}{FIM_SUFFIX_TOKEN}{suffix}{FIM_MIDDLE_TOKEN}"
 
 
+def assemble_fim_messages(prefix: str, suffix: str, middle: str, language: str) -> list:
+    try:
+        fim_content = create_fim_content(prefix, suffix, middle, language)
+        return [
+            {"role": "system", "content": f"You are a code completion assistant. Complete the code between the prefix and suffix provided by the user. Only output the completion - no explanations & exclude the prefix and suffix. ONLY COMPLETION. Language: {language}"},
+            {"role": "user", "content": fim_content}
+        ]
+    except Exception as e:
+        handle_local_error("Could not assemble FIM messages, encountered error: ", e)
+
+
+def auto_tokenize_and_encode_fim_messages(exl_tokenizer, fim_messages: list) -> list:
+    try:
+        templated_messages = AUTO_TOKENIZER.apply_chat_template(fim_messages, add_generation_prompt=True, tokenize=False)
+        return exl_tokenizer.encode(templated_messages, encode_special_tokens=True)
+    except Exception as e:
+        handle_local_error("Could not get templated and encoded FIM messages, encountered error: ", e)
+
+
 def truncate_fim_content(prefix: str, suffix: str, middle: str, language: str, max_seq_len: int) -> str:
     '''Truncate FIM content to fit within token limits'''
 
-    # Estimate toekn count (rough approximation: 1 token = 4 chars)
+    # Estimate token count (rough approximation: 1 token = 4 chars)
     chars_per_token = 4
     max_chars = max_seq_len * chars_per_token
 
@@ -3837,7 +3866,24 @@ def truncate_fim_content(prefix: str, suffix: str, middle: str, language: str, m
     if len(middle) > middle_chars:
         middle = middle[:middle_chars]
 
-    return create_fim_content(prefix, suffix, middle, language)
+    return assemble_fim_messages(prefix, suffix, middle, language)
+
+
+def get_final_exl_encoded_fim_input_ids(exl_tokenizer, prefix: str, suffix: str, middle: str, language: str, max_length: int) -> list:
+
+    try:
+        fim_messages = assemble_fim_messages(prefix, suffix, middle, language)
+        exl_tokenized_messages = auto_tokenize_and_encode_fim_messages(exl_tokenizer, fim_messages)
+
+        while len(exl_tokenized_messages[0]) > max_length:
+            print(f"FIM messages are too long, truncating... Current length: {len(exl_tokenized_messages[0])}, Max length: {max_length}")
+            trimmed_fim_messages = truncate_fim_content(prefix, suffix, middle, language, max_length)
+            exl_tokenized_messages = auto_tokenize_and_encode_fim_messages(exl_tokenizer, trimmed_fim_messages)
+
+        print(f"Length of final ExLlama encoded FIM input IDs: {len(exl_tokenized_messages[0])}. Max length: {max_length}")
+        return exl_tokenized_messages
+    except Exception as e:
+        handle_local_error("Could not get final ExLlama encoded FIM input IDs, encountered error: ", e)
 
 
 @app.route('/exl2_fim_stream', methods=['POST'])
@@ -4193,40 +4239,25 @@ def exl3_fim_stream():
         llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for exl3-fim-stream, encountered error: ", e)
     
-    # Create FIM prompt based on language and content
-    try:
-        fim_content = create_fim_content(prefix, suffix, middle, language)
-
-        # Create messages in OpenAI format for chat template
-        messages = [
-            {"role": "system", "content": f"You are a code completion assistant. Complete the code between the prefix and suffix provided by the user. Only output the completion - no explanations & exclude the prefix and suffix. ONLY COMPLETION. Language: {language}"},
-            {"role": "user", "content": fim_content}
-        ]
-
-        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)    
-
-        # Check if prompt fits within context:
-        tokenized_prompt = EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True)
-        if len(tokenized_prompt) > int(config_data.get('exl3_total_context')) - 50:    # small buffer
-            # Truncate prefix/suffix to fit
-            fim_content = truncate_fim_content(prefix, suffix, middle, language, int(config_data.get('exl3_total_context')) - 50)
-            messages[1]['content'] = fim_content
-            tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
-    
-    except Exception as e:
-        llm_semaphore.release()
-        return handle_api_error("Could not create FIM prompt with chat template, encountered error: ", e)
-    
     try:
         exl3_generator = set_global_exl3_dynamic_generator()
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not set global Exl3 Generator, encountered error: ", e)
+    
+    # Create FIM prompt based on language and content
+    try:
+        # exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL3_TOKENIZER, prefix, suffix, middle, language, (int(config_data['exl3_total_context']) - 50))
+        exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL3_TOKENIZER, prefix, suffix, middle, language, 8192) # max 8k tokens
 
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not get final ExLlama encoded FIM input IDs, encountered error: ", e)
+    
     try:
         print("\nCreating ExLlamaV3 Job Object...\n")
         job = Job(
-            input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
+            input_ids= exl_encoded_fim_input_ids,
             max_new_tokens = config_data['max_new_tokens'],
             stop_conditions = STOP_TOKENS,
             sampler = exl3_sampler
@@ -4242,7 +4273,7 @@ def exl3_fim_stream():
 
     def llm_task():
 
-        try:            
+        try:
             while exl3_generator.num_remaining_jobs():
                 results = exl3_generator.iterate()
                 
@@ -5214,16 +5245,17 @@ def health():
             # Treat any backend being ready as healthy:
             pipe_ready = PIPE is not None
             exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, AUTO_TOKENIZER])
+            exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, STOP_TOKENS, AUTO_TOKENIZER])
             asr_ready = MODEL is not None
             
-            print(f"\n\nhealth readiness → pipe={pipe_ready}, exl2={exl2_ready}, asr={asr_ready}\n\n")
+            print(f"\n\nhealth readiness → pipe={pipe_ready}, exl2={exl2_ready}, exl3={exl3_ready}, asr={asr_ready}\n\n")
 
-            if not (pipe_ready or exl2_ready or asr_ready):
-                return jsonify(status="error", message="None of the core backends (transformers, exl2, asr) are loaded"), 503 # Service Unavailable
+            if not (pipe_ready or exl2_ready or exl3_ready or asr_ready):
+                return jsonify(status="error", message="None of the core backends (transformers, exl2, exl3, asr) are loaded"), 503 # Service Unavailable
 
             model_info = {}
 
-            if pipe_ready and not exl2_ready and not asr_ready: # Implies only Transformers backend is loaded!
+            if pipe_ready and not exl2_ready and not exl3_ready and not asr_ready: # Implies only Transformers backend is loaded!
                 model_info = get_transformers_model_info()
             
             print(f"HF-Waitress LLM-server health-check completed successfully, returning.\n")
