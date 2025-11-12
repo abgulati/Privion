@@ -5585,7 +5585,13 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
         return precheck_result
     
     try:
-        hf_read_return = read_hf_config(['model_id', 'awq', 'use_flash_attention_2', 'flux_diffusers', 'flux_low_vram_optimizations', 'load_quantized_flux', 'vision', 'exl2'])
+        hf_read_return = read_hf_config(
+            [
+                'model_id', 'awq', 'use_flash_attention_2', 'flux_diffusers', 
+                'flux_low_vram_optimizations', 'load_quantized_flux', 'vision',
+                'exl2', 'exl2_no_flash_attn','exl3', 'exl3_resume_quant_job'
+            ]
+        )   # ONLY include those settings that default to False and are not persisted in hf_config.json!
     except Exception as e:
         handle_error_no_return("Could not read hf_config.json - proceeding with safe defaults for first launch. Encountered error: ", e)
         hf_read_return = {}
@@ -5598,8 +5604,11 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
     
     print("\n\nProceeding to launch HF-Waitress server\n\n")
     
+    # Basic params
     hf_waitress_host, hf_waitress_port = get_hf_waitress_serving_host_and_port()
     launch_args = f'--host={hf_waitress_host} --port={hf_waitress_port} '
+
+    # Transformers params
     if hf_read_return.get('model_id'):
         launch_args += f'--model={hf_read_return.get("model_id")} '
     if hf_read_return.get('awq'):
@@ -5614,11 +5623,22 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
         launch_args += '--load_quantized_flux '
     if hf_read_return.get('vision'):
         launch_args += '--vision '
+    
+    # ExLlama Config
     if hf_read_return.get('exl2'):
         launch_args += '--exl2 '
+        if hf_read_return.get('exl2_no_flash_attn'):
+            launch_args += '--exl2_no_flash_attn '
+    
+    elif hf_read_return.get('exl3'):
+        launch_args += '--exl3 '
+        if hf_read_return.get('exl3_resume_quant_job'):
+            launch_args += '--exl3_resume_quant_job '
+
     launch_args = launch_args.strip()
     base_command = 'python' if platform.system() == 'Windows' else 'python3'
     full_command = f"{base_command} hf_waitress.py {launch_args}"
+    print(f"Full command: {full_command}")
 
     try:
         if platform.system() == 'Windows':
