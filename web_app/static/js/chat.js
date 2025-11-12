@@ -410,6 +410,9 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
     requestData.top_p = parseFloat(document.getElementById('toppSlider').value);
     requestData.min_p = parseFloat(document.getElementById('minpSlider').value);
     requestData.n_keep = parseInt(document.getElementById('nkeepSlider').value);
+    requestData.repeat_penalty = parseFloat(document.getElementById('repetitionPenaltySlider').value);
+    requestData.presence_penalty = parseFloat(document.getElementById('presencePenaltySlider').value);
+    requestData.frequency_penalty = parseFloat(document.getElementById('frequencyPenaltySlider').value);
 
     try {
 
@@ -558,6 +561,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
 
     const vision = getVision();
     const exl2 = getExl2();
+    const exl3 = getExl3();
     if (vision === "true") {
         console.log("Invoking vision_stream");
         const hfWaitress_URL = getHfwUrl();
@@ -586,6 +590,25 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
 
         rawBodyJSONObj = JSON.parse(formattedPrompt);                                
         rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
+    } else if (exl3 === "true") {
+        console.log("Invoking exl3_stream");
+        const hfWaitress_URL = getHfwUrl();
+        url = `${hfWaitress_URL}/exl3_stream`;
+
+        hfwHeaders = new Headers();
+        hfwHeaders.append("Content-Type", "application/json");
+        hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
+        hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
+        hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
+        hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
+        hfwHeaders.append("X-Min-P", document.getElementById('HfwMinpSlider').value);
+        hfwHeaders.append("X-Repetition-Penalty", document.getElementById('HfwRepetitionPenaltySlider').value);
+        hfwHeaders.append("X-Presence-Penalty", document.getElementById('HfwPresencePenaltySlider').value);
+        hfwHeaders.append("X-Frequency-Penalty", document.getElementById('HfwFrequencyPenaltySlider').value);
+
+        rawBodyJSONObj = JSON.parse(formattedPrompt);                                
+        rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
+
     } else {
         console.log("Invoking completions_stream");
         const hfWaitress_URL = getHfwUrl();
