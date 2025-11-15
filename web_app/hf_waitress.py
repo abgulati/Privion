@@ -84,7 +84,7 @@ if not os.path.exists(os.path.join(os.getcwd(), 'exllamav2')):
     subprocess.run(['git', 'clone', '-b', 'v0.3.2', 'https://github.com/turboderp-org/exllamav2.git'], check=True)  # check=True raises an exception on non-zero exit code
 
 if not os.path.exists(os.path.join(os.getcwd(), 'exllamav3')):
-    subprocess.run(['git', 'clone', '-b', 'v0.0.12', 'https://github.com/turboderp-org/exllamav3'], check=True)  # check=True raises an exception on non-zero exit code
+    subprocess.run(['git', 'clone', '-b', 'v0.0.14', 'https://github.com/turboderp-org/exllamav3'], check=True)  # check=True raises an exception on non-zero exit code
 
 
 app = Flask(__name__)
