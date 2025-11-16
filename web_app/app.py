@@ -1199,15 +1199,40 @@ def start_kosmos_container() -> bool:
     command = ['docker', 'start', f'{kosmos_container_name}']
 
     try:
-        subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE) if platform.system() == 'Windows' else subprocess.Popen(command, shell=True)
+        # subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE) if platform.system() == 'Windows' else subprocess.Popen(command, shell=True)
+
+        if platform.system() == 'Windows':
+            kosmos_container_process = subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        
+        else:
+            with open('kosmos_container_output_log.txt', 'w') as f:
+                kosmos_container_process = subprocess.Popen(
+                    command,
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                    text=True
+                )
+        
         # Check if the container is running
         timeout = 5
         attempts = 50
         for _ in range(attempts):
+            # Detect early crash of Kosmos Docker container:
+            if kosmos_container_process is not None:
+                exit_code = kosmos_container_process.poll()
+                if exit_code is not None:
+                    if exit_code != 0:  # `docker start` is expected to exit quickly with code 0 when it succeeds!
+                        handle_local_error(
+                            "Kosmos Docker container process exited early before becoming available. "
+                            f"Return code: {exit_code}. Check the Kosmos Docker container log for details. ",
+                            RuntimeError(f"Kosmos Docker container exited with code {exit_code}")
+                        )
+
             if check_if_container_is_running(kosmos_container_name):
                 print(f"\nKosmos Docker container launched successfully! Returning in {timeout} seconds...\n")
                 time.sleep(timeout) # small delay to ensure the container is fully started
                 return True
+            
             else:
                 print(f"Kosmos Docker container not yet running, waiting {timeout} seconds before retrying...")
                 time.sleep(timeout)
@@ -1215,7 +1240,7 @@ def start_kosmos_container() -> bool:
     except Exception as e:
         handle_local_error("Could not launch Kosmos Docker container, encountered error: ", e)
 
-    return True
+    return False
 
 
 def get_kosmos_request_params() -> tuple[str, dict, dict]:
@@ -2386,44 +2411,69 @@ def bring_graph_summarizer_model_online():  # Launch HF-Waitress instance with g
     except Exception as e:
         handle_local_error(f"Could not reserve minimum GPU memory ({config_data['minimum_free_vram_for_graph_summarizer_model']}MB) required for Graph-Summarizer model, encountered error: ", e)
 
-    # Need to format this way because the f"""<>""" multiline way will maintain newlines in the command, which will cause the command to fail!
-    # Also cannot format this as we have in hf_waitress.py's exllama_bpw_quantize_model() because of the command seperators (&& and ;), which would be incorrectly treated as parameters to the cd command in that list format!
-    # We cd first because the command should execute from within that directory otherwise the main hf_config.json gets incorrectly modified! 
-    command = (
-        f"cd {hf_waitress_graph_summarizer_server_path} "
-        f"{'&&' if platform.system() == 'Windows' else ';'} "
-        f"{'python' if platform.system() == 'Windows' else 'python3'} hf_waitress.py "
-        f"--port {str(config_data['graph_summarizer_server_port'])} "
-        f"--model_id {str(config_data['graph_summarizer_model'])} "
-        f"--max_new_tokens {str(config_data['graph_summarizer_max_new_tokens'])} "
-    )
+    base_command = 'python' if platform.system() == 'Windows' else 'python3'
+
+    cmd_list = [
+        base_command,
+        'hf_waitress.py',
+        '--port', str(config_data['graph_summarizer_server_port']),
+        '--model_id', str(config_data['graph_summarizer_model']),
+        '--max_new_tokens', str(config_data['graph_summarizer_max_new_tokens']),
+    ]
+
     if str(config_data['exl2_quantize_graph_summarizer_model']).lower() == 'true':
-        command += f" --exl2 --exl2_bpw {str(config_data['exl2_quantize_graph_summarizer_model_bpw'])} --exl2_max_seq_len {str(config_data['graph_summarizer_max_seq_len'])}"
+        cmd_list.extend([
+            '--exl2',
+            '--exl2_bpw', str(config_data['exl2_quantize_graph_summarizer_model_bpw']),
+            '--exl2_max_seq_len', str(config_data['graph_summarizer_max_seq_len']),
+        ])
     else:
-        command += f" --quantize {str(config_data['quantize_graph_summarizer_model'])} --quant_level {str(config_data['quantize_graph_summarizer_model_bits'])}"
+        cmd_list.extend([
+            '--quantize', str(config_data['quantize_graph_summarizer_model']),
+            '--quant_level', str(config_data['quantize_graph_summarizer_model_bits']),
+        ])
 
     try:
         if platform.system() == 'Windows':
-            windows_command = f'start cmd /c "{command}"'   # /k tells cmd to keep the window open even after the command has finished, which is useful for debugging, versus /c which closes the window after the command has finished.
-            subprocess.Popen(windows_command, shell=True)   # Popen is used to launch the command in a new process in a new terminal, while subprocess.run() is used to simply run the command and wait for it to finish.
-            # Using `start` in this manner explicitly instructs Windows to start a new command window to run the command, while CREATE_NEW_CONSOLE combined with shell=True might not work correctly as the shell itself might capture the console!
+            graph_summarizer_process = subprocess.Popen(
+                cmd_list,
+                cwd=hf_waitress_graph_summarizer_server_path,
+                creationflags=subprocess.CREATE_NEW_CONSOLE,  # or CREATE_NEW_PROCESS_GROUP
+            )
         else:
-            subprocess.Popen(command, shell=True)
-        # The shell=True lets the system's shell interpret the command string, including special operators like && (Windows) or ; (Unix) that chain commands together.
-        # This is exactly what you need when you want to change directory before running a script!
+            with open('graph_summarizer_model_output_log.txt', 'w') as f:
+                graph_summarizer_process = subprocess.Popen(
+                    cmd_list,
+                    cwd=hf_waitress_graph_summarizer_server_path,
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
 
         timeout = 5
         attempts = 25
         for _ in range(attempts):
+
+            # Detect early crash of KB-Generator HF-Waitress process:
+            if graph_summarizer_process is not None:
+                exit_code = graph_summarizer_process.poll()
+                if exit_code is not None:
+                    handle_local_error(
+                        "Graph-Summarizer model HF-Waitress server process exited early before becoming available. "
+                        f"Return code: {exit_code}. Check the Graph-Summarizer model server log for details. ",
+                        RuntimeError(f"Graph-Summarizer model HF-Waitress exited with code {exit_code}")
+                    )
+                    return False
+
             if utils.is_local_server_online(f"http://{config_data['graph_summarizer_access_url']}:{config_data['graph_summarizer_server_port']}")['server_online']:
-                print(f"\nGraph summarizer model launched successfully!\n")
+                print(f"\nGraph-Summarizer model launched successfully!\n")
                 return True
-            else:
-                print(f"Graph summarizer model not yet running, waiting {timeout} seconds before retrying...")
-                time.sleep(timeout)
-            
+
+            print(f"Graph-Summarizer model not yet running, waiting {timeout} seconds before retrying...")
+            time.sleep(timeout)
+
     except Exception as e:
-        handle_local_error("Could not launch HF-Waitress instance with kb-generator model, encountered error: ", e)
+        handle_local_error("Could not launch HF-Waitress instance with graph-summarizer model, encountered error: ", e)
     
     return False
 
@@ -2841,44 +2891,69 @@ def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with k
     except Exception as e:
         handle_local_error(f"Could not reserve minimum GPU memory ({config_data['minimum_free_vram_for_graph_extraction_model']}MB) required for Graph-Extraction model, encountered error: ", e)
 
-    # Need to format this way because the f"""<>""" multiline way will maintain newlines in the command, which will cause the command to fail!
-    # Also cannot format this as we have in hf_waitress.py's exllama_bpw_quantize_model() because of the command seperators (&& and ;), which would be incorrectly treated as parameters to the cd command in that list format!
-    # We cd first because the command should execute from within that directory otherwise the main hf_config.json gets incorrectly modified! 
-    command = (
-        f"cd {hf_waitress_kb_generator_server_path} "
-        f"{'&&' if platform.system() == 'Windows' else ';'} "
-        f"{'python' if platform.system() == 'Windows' else 'python3'} hf_waitress.py "
-        f"--port {str(config_data['graph_model_server_port'])} "
-        f"--model_id {str(config_data['graph_generator_model'])} "
-        f"--max_new_tokens {str(config_data['graph_model_max_new_tokens'])} "
-    )
+    base_command = 'python' if platform.system() == 'Windows' else 'python3'
+
+    cmd_list = [
+        base_command,
+        'hf_waitress.py',
+        '--port', str(config_data['graph_model_server_port']),
+        '--model_id', str(config_data['graph_generator_model']),
+        '--max_new_tokens', str(config_data['graph_model_max_new_tokens']),
+    ]
+
     if str(config_data['exl2_quantize_graph_model']).lower() == 'true':
-        command += f" --exl2 --exl2_bpw {str(config_data['exl2_quantize_graph_model_bpw'])} --exl2_max_seq_len {str(config_data['graph_model_max_seq_len'])}"
+        cmd_list.extend([
+            '--exl2',
+            '--exl2_bpw', str(config_data['exl2_quantize_graph_model_bpw']),
+            '--exl2_max_seq_len', str(config_data['graph_model_max_seq_len']),
+        ])
     else:
-        command += f" --quantize {str(config_data['quantize_graph_model'])} --quant_level {str(config_data['quantize_graph_model_bits'])}"
+        cmd_list.extend([
+            '--quantize', str(config_data['quantize_graph_model']),
+            '--quant_level', str(config_data['quantize_graph_model_bits']),
+        ])
 
     try:
         if platform.system() == 'Windows':
-            windows_command = f'start cmd /c "{command}"'   # /k tells cmd to keep the window open even after the command has finished, which is useful for debugging, versus /c which closes the window after the command has finished.
-            subprocess.Popen(windows_command, shell=True)   # Popen is used to launch the command in a new process in a new terminal, while subprocess.run() is used to simply run the command and wait for it to finish.
-            # Using `start` in this manner explicitly instructs Windows to start a new command window to run the command, while CREATE_NEW_CONSOLE combined with shell=True might not work correctly as the shell itself might capture the console!
+            graph_extraction_process = subprocess.Popen(
+                cmd_list,
+                cwd=hf_waitress_kb_generator_server_path,
+                creationflags=subprocess.CREATE_NEW_CONSOLE,  # or CREATE_NEW_PROCESS_GROUP
+            )
         else:
-            subprocess.Popen(command, shell=True)
-        # The shell=True lets the system's shell interpret the command string, including special operators like && (Windows) or ; (Unix) that chain commands together.
-        # This is exactly what you need when you want to change directory before running a script!
+            with open('graph_extraction_model_output_log.txt', 'w') as f:
+                graph_extraction_process = subprocess.Popen(
+                    cmd_list,
+                    cwd=hf_waitress_kb_generator_server_path,
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
 
         timeout = 5
         attempts = 25
         for _ in range(attempts):
+
+            # Detect early crash of Graph-Extraction model HF-Waitress process:
+            if graph_extraction_process is not None:
+                exit_code = graph_extraction_process.poll()
+                if exit_code is not None:
+                    handle_local_error(
+                        "Graph-Extraction model HF-Waitress server process exited early before becoming available. "
+                        f"Return code: {exit_code}. Check the Graph-Extraction model server log for details. ",
+                        RuntimeError(f"Graph-Extraction model HF-Waitress exited with code {exit_code}")
+                    )
+                    return False
+
             if utils.is_local_server_online(f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}")['server_online']:
-                print(f"\nKB-Generator model launched successfully!\n")
+                print(f"\nGraph-Extraction model launched successfully!\n")
                 return True
-            else:
-                print(f"KB-Generator model not yet running, waiting {timeout} seconds before retrying...")
-                time.sleep(timeout)
-            
+
+            print(f"Graph-Extraction model not yet running, waiting {timeout} seconds before retrying...")
+            time.sleep(timeout)
+
     except Exception as e:
-        handle_local_error("Could not launch HF-Waitress instance with kb-generator model, encountered error: ", e)
+        handle_local_error("Could not launch HF-Waitress instance with graph-extraction model, encountered error: ", e)
     
     return False
 
@@ -5111,41 +5186,73 @@ def asr_server_starter(hard_reboot_required: bool = False):
     
     print("\n\nProceeding to launch HF-Waitress ASR-ASGI server\n\n")
     
-    # Need to format this way because the f"""<>""" multiline way will maintain newlines in the command, which will cause the command to fail!
-    # Also cannot format this as we have in hf_waitress.py's exllama_bpw_quantize_model() because of the command seperators (&& and ;), which would be incorrectly treated as parameters to the cd command in that list format!
-    # We cd first because the command should execute from within that directory otherwise the main hf_config.json gets incorrectly modified! 
-    command = (
-        f"cd {hf_waitress_asr_server_path} "
-        f"{'&&' if platform.system() == 'Windows' else ';'} "
-        f"{'python' if platform.system() == 'Windows' else 'python3'} hf_waitress_asgi.py "
-        f"--port {str(config_data['asr_waitress_server_port'])} "
-        f"--model_id {str(config_data['asr_model'])} "
-        f"--torch_device_map {str(config_data['asr_torch_device'])} "
-        "--quantize n"
-    )
+    asr_base_command = 'python' if platform.system() == 'Windows' else 'python3'
+
+    cmd_list = [
+        asr_base_command,
+        'hf_waitress_asgi.py',
+        '--port', str(config_data['asr_waitress_server_port']),
+        '--model_id', str(config_data['asr_model']),
+        '--torch_device_map', str(config_data['asr_torch_device']),
+        '--quantize', 'n',
+    ]
 
     try:
         if platform.system() == 'Windows':
-            windows_command = f'start cmd /c "{command}"'   # /k tells cmd to keep the window open even after the command has finished, which is useful for debugging, versus /c which closes the window after the command has finished.
-            subprocess.Popen(windows_command, shell=True)   # Popen is used to launch the command in a new process in a new terminal, while subprocess.run() is used to simply run the command and wait for it to finish.
-            # Using `start` in this manner explicitly instructs Windows to start a new command window to run the command, while CREATE_NEW_CONSOLE combined with shell=True might not work correctly as the shell itself might capture the console!
+            asr_waitress_process = subprocess.Popen(
+                cmd_list,
+                cwd=hf_waitress_asr_server_path,
+                creationflags=subprocess.CREATE_NEW_CONSOLE,  # or CREATE_NEW_PROCESS_GROUP
+            )
         else:
-            subprocess.Popen(command, shell=True)
-        # The shell=True lets the system's shell interpret the command string, including special operators like && (Windows) or ; (Unix) that chain commands together.
-        # This is exactly what you need when you want to change directory before running a script!
+            with open('asr_waitress_output_log.txt', 'w') as f:
+                asr_waitress_process = subprocess.Popen(
+                    cmd_list,
+                    cwd=hf_waitress_asr_server_path,
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
     except Exception as e:
         handle_local_error("Could not launch ASR-Waitress instance, encountered error: ", e)
 
     try:
         for _ in range(config_data['hf_waitress_server_retry_attempts']):
+
+            # Detect early crash of ASR-Waitress process:
+            if asr_waitress_process is not None:
+                exit_code = asr_waitress_process.poll()
+                if exit_code is not None:
+                    # Process died before the HTTP server came up
+                    # Optional: on non‑Windows you already log to asr_waitress_output_log.txt
+                    # so you can tell the user to check that file.
+                    return handle_api_error(
+                        "ASR-Waitress server process exited early before becoming available. "
+                        f"Return code: {exit_code}. Check the ASR-Waitress server log for details. ",
+                        RuntimeError(f"ASR-Waitress exited with code {exit_code}")
+                    )
+            
             if utils.is_local_server_online(asr_base_url)['server_online']:
                 print(f"\nASR server launched successfully!\n")
-                return {'success': True, 'asr_model': config_data['asr_model'], 'asr_server_running': True, 'skip_fresh_start': False, 'reboot_failed': False}
+                return {
+                    'success': True,
+                    'asr_model': config_data['asr_model'],
+                    'asr_server_running': True,
+                    'skip_fresh_start': False,
+                    'reboot_failed': False
+                }
+            
             time.sleep(config_data['hf_waitress_server_timeout_seconds'])
     except Exception as e:
         handle_local_error("Could not check status of ASR-Waitress server after launch attempt, printing error and returning: ", e)
 
-    return {'success': False, 'asr_model': config_data['asr_model'], 'asr_server_running': False, 'skip_fresh_start': False, 'reboot_failed': precheck_result.get('reboot_failed', False)}
+    return {
+        'success': False,
+        'asr_model': config_data['asr_model'],
+        'asr_server_running': False,
+        'skip_fresh_start': False,
+        'reboot_failed': precheck_result.get('reboot_failed', False)
+    }
 
 
 @app.route('/asr_server_starter_endpoint', methods=['POST'])
@@ -5349,11 +5456,11 @@ def run_prechecks_for_llama_cpp_server_starter(exclusive_server_mode: bool):
             hf_waitress_server_running = True # Set to True as we've determined the other server is running and we failed to terminate it
             err_msg = "Could not terminate running HF-Waitress process before launching llama.cpp, proceeding regardless. Your IP may not be whitelisted for this action, contact the administrator for help."
             handle_error_no_return(f"{err_msg} Provide the following technical details: ", waitress_shutdown_result['message'])
-    else:
-        try:    # to set an accurate value for the boolean regardless of exclusive_server_mode
-            hf_waitress_server_running = utils.is_local_server_online(hf_waitress_base_url)['server_available']
-        except Exception as e:
-            handle_error_no_return("Warning: Could not check if HF-Waitress server is running. Proceeding to launch llama.cpp server. Encountered error: ", e)
+    # else:
+    #     try:    # to set an accurate value for the boolean regardless of exclusive_server_mode
+    #         hf_waitress_server_running = utils.is_local_server_online(hf_waitress_base_url)['server_available']
+    #     except Exception as e:
+    #         handle_error_no_return("Warning: Could not check if HF-Waitress server is running. Proceeding to launch llama.cpp server. Encountered error: ", e)
 
     try:
         llama_cpp_server_running = utils.is_local_server_online(llama_cpp_base_url)['server_available']
@@ -5525,14 +5632,43 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
 
     try:
         for _ in range(read_return['llama_cpp_server_retry_attempts']):
+
+            # Detect early crash of llama.cpp process:
+            if LLAMA_CPP_PROCESS is not None:
+                exit_code = LLAMA_CPP_PROCESS.poll()
+                if exit_code is not None:
+                    # Process died before the HTTP server came up
+                    # Optional: on non‑Windows you already log to llama_cpp_server_output_log.txt
+                    # so you can tell the user to check that file.
+                    return handle_api_error(
+                        "llama.cpp server process exited early before becoming available. "
+                        f"Return code: {exit_code}. Check the llama.cpp server log for details. ",
+                        RuntimeError(f"llama.cpp exited with code {exit_code}")
+                    )
+            
             if utils.is_local_server_online(llama_cpp_base_url)['server_available']:
                 print("\n\nllama.cpp server launched succesfully! Returning.\n\n")
-                return {'success': True, 'llm_model': read_return['model_choice'], 'hf_waitress_server_running': precheck_result.get('hf_waitress_server_running', False), 'llama_cpp_server_running': True, 'skip_fresh_start': False, 'reboot_failed': False}
+                return {
+                    'success': True,
+                    'llm_model': read_return['model_choice'],
+                    'hf_waitress_server_running': precheck_result.get('hf_waitress_server_running', False),
+                    'llama_cpp_server_running': True,
+                    'skip_fresh_start': False,
+                    'reboot_failed': False
+                }
+            
             time.sleep(read_return['llama_cpp_server_timeout_seconds'])
     except Exception as e:
         handle_error_no_return("Could not check server status after launch attempt, printing error and returning: ", e)
 
-    return {'success': False, 'llm_model': None, 'hf_waitress_server_running': precheck_result.get('hf_waitress_server_running', False), 'llama_cpp_server_running': False, 'skip_fresh_start': False, 'reboot_failed': precheck_result.get('reboot_failed', False)}
+    return {
+        'success': False,
+        'llm_model': None,
+        'hf_waitress_server_running': precheck_result.get('hf_waitress_server_running', False),
+        'llama_cpp_server_running': False,
+        'skip_fresh_start': False,
+        'reboot_failed': precheck_result.get('reboot_failed', False)
+    }
 
 
 def get_hf_waitress_serving_host_and_port():
@@ -5587,12 +5723,12 @@ def run_prechecks_for_hf_waitress_server_starter(exclusive_server_mode: bool, ha
             llama_cpp_server_running = True    # We know the llama.cpp server is running, which means `llama-server` is available, so we set LLM-LOADED_UP to True
             err_msg = "Could not terminate running llama.cpp process before launching HF-Waitress, proceeding regardless. Privion cannot control the llama.cpp server as it was likely launched by another user or process, contact the administrator for help."
             handle_error_no_return(f"{err_msg} Provide the following technical details: ", llama_cpp_shutdown_result['message'])
-    else:
-        try:    # to set an accurate value for the boolean regardless of exclusive_server_mode - LLAMA-CPP_PROCESS might be None but server may be online from elsewhere!
-            llama_cpp_server_running = utils.is_local_server_online(llama_cpp_base_url)['server_available']
-        except Exception as e:
-            llama_cpp_server_running = False
-            handle_error_no_return("Warning: Could not check if llama.cpp server is running. Proceeding to launch HF-Waitress server. Encountered error: ", e)
+    # else:
+    #     try:    # to set an accurate value for the boolean regardless of exclusive_server_mode - LLAMA-CPP_PROCESS might be None but server may be online from elsewhere!
+    #         llama_cpp_server_running = utils.is_local_server_online(llama_cpp_base_url)['server_available']
+    #     except Exception as e:
+    #         llama_cpp_server_running = False
+    #         handle_error_no_return("Warning: Could not check if llama.cpp server is running. Proceeding to launch HF-Waitress server. Encountered error: ", e)
 
     if hard_reboot_required:    # will be specified by HF-Waitress itself and passed to this method
         print("\nHard-Reboot of HF-Waitress server requested.\n")
@@ -5684,38 +5820,67 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
 
     launch_args = launch_args.strip()
     base_command = 'python' if platform.system() == 'Windows' else 'python3'
-    full_command = f"{base_command} hf_waitress.py {launch_args}"
-    print(f"Full command: {full_command}")
+    command_list = [base_command, 'hf_waitress.py']
+    if launch_args.strip():  # Add any additional arguments - Only if there are actual arguments
+        command_list.extend(launch_args.split())
 
     try:
         if platform.system() == 'Windows':
-            windows_command = f'start cmd /c "{full_command}"'  # /c - closes window after command finishes, /k - keeps window open (useful for debugging)
-            subprocess.Popen(windows_command, shell=True) 
+            hf_waitress_process = subprocess.Popen(command_list, creationflags=subprocess.CREATE_NEW_CONSOLE)
+            
+            # full_command = f"{base_command} hf_waitress.py {launch_args}"
+            # print(f"Full command: {full_command}")
+            # windows_command = f'start cmd /c "{full_command}"'  # /c - closes window after command finishes, /k - keeps window open (useful for debugging)
+            # subprocess.Popen(windows_command, shell=True)
 
         else:
             # Platform & container agnostic - On Linux/Unix, you need to explicitly provide the arguments as a list to avoid shell interpretation issues:
-            command_list = [base_command]  # 'python3'
-            command_list.append('hf_waitress.py')   # Add script name
-            
-            if launch_args.strip():  # Add any additional arguments - Only if there are actual arguments
-                command_list.extend(launch_args.split())
-            
             with open('hf_waitress_output_log.txt', 'w') as f:
-                subprocess.Popen(command_list, shell=True)
+                # hf_waitress_process = subprocess.Popen(command_list, shell=True)
+                hf_waitress_process = subprocess.Popen(command_list, stdout=f, stderr=subprocess.STDOUT, text=True)
 
     except Exception as e:
         return handle_api_error(f"Could not launch HF-Waitress process in directory: {os.getcwd()}, encountered error: ", e)
 
     try:
         for _ in range(lars_read_return['hf_waitress_server_retry_attempts']):
+
+            # Detect early crash of HF-Waitress process:
+            if hf_waitress_process is not None:
+                exit_code = hf_waitress_process.poll()
+                if exit_code is not None:
+                    # Process died before the HTTP server came up
+                    # Optional: on non‑Windows you already log to hf_waitress_output_log.txt
+                    # so you can tell the user to check that file.
+                    return handle_api_error(
+                        "HF-Waitress server process exited early before becoming available. "
+                        f"Return code: {exit_code}. Check the HF-Waitress server log for details. ",
+                        RuntimeError(f"HF-Waitress exited with code {exit_code}")
+                    )
+
             if utils.is_local_server_online(hf_waitress_base_url)['server_available']:
                 print(f"\n\nHF-Waitress server launched succesfully with model: {hf_read_return.get('model_id')}! Returning.\n\n")
-                return {'success': True, 'llm_model': hf_read_return.get('model_id'), 'hf_waitress_server_running': True, 'llama_cpp_server_running': precheck_result.get('llama_cpp_server_running', False), 'skip_fresh_start': False, 'reboot_failed': False}
+                return {
+                    'success': True,
+                    'llm_model': hf_read_return.get('model_id'),
+                    'hf_waitress_server_running': True,
+                    'llama_cpp_server_running': precheck_result.get('llama_cpp_server_running', False),
+                    'skip_fresh_start': False,
+                    'reboot_failed': False
+                }
+            
             time.sleep(lars_read_return['hf_waitress_server_timeout_seconds'])
     except Exception as e:
         handle_error_no_return("Could not check server status after launch attempt, printing error and returning: ", e)
 
-    return {'success': False, 'llm_model': None, 'hf_waitress_server_running': False, 'llama_cpp_server_running': precheck_result.get('llama_cpp_server_running', False), 'skip_fresh_start': False, 'reboot_failed': precheck_result.get('reboot_failed', False)}
+    return {
+        'success': False,
+        'llm_model': None,
+        'hf_waitress_server_running': False,
+        'llama_cpp_server_running': precheck_result.get('llama_cpp_server_running', False),
+        'skip_fresh_start': False,
+        'reboot_failed': precheck_result.get('reboot_failed', False)
+    }
 
 
 @app.route('/hf_waitress_server_starter_endpoint', methods=['POST'])
