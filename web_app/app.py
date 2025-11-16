@@ -3385,6 +3385,42 @@ def load_local_models():
     return jsonify({'success': True, 'models': models})
 
 
+@app.route('/gguf_reader', methods=['POST'])
+def gguf_reader():
+
+    try:
+        model_name = request.json.get('model_name')
+        model_dir = read_config(['model_dir'])['model_dir']
+        model_path = pathlib.Path(rf"{str(model_dir)}").resolve() / str(model_name)
+    except Exception as e:
+        return handle_api_error("Could not obtain model path, encountered error: ", e)
+
+    try:
+        from gguf.gguf_reader import GGUFReader
+    except Exception as e:
+        return handle_api_error("Could not import GGUFReader, please `pip install gguf`. Encountered error: ", e)
+
+    gguf_details = ""
+    try:
+        reader   = GGUFReader(model_path)   # loads and memory-maps the GGUF file :contentReference[oaicite:0]{index=0}
+
+        #print(f"=== Tensors in {model_path.name} ===")
+        # reader.tensors is now a list of ReaderTensor(NamedTuple) :contentReference[oaicite:1]{index=1}
+        for tensor in reader.tensors:
+            name        = tensor.name                     # tensor name, e.g. "layers.0.ffn_up_proj_exps"
+            dtype       = tensor.tensor_type.name         # quantization / dtype, e.g. "Q4_K", "F32"
+            shape       = tuple(int(dim) for dim in tensor.shape)  # e.g. (4096, 11008)
+            n_elements  = tensor.n_elements                # total number of elements
+            n_bytes     = tensor.n_bytes                   # total byte size on disk
+
+            #print(f"{name}\tshape={shape}\tdtype={dtype}\telements={n_elements}\tbytes={n_bytes}")
+            gguf_details += f"{name}\tshape={shape}\tdtype={dtype}\telements={n_elements}\tbytes={n_bytes}\n"
+    except Exception as e:
+        return handle_api_error("Could not create GGUFReader, encountered error: ", e)
+
+    return jsonify(success=True, gguf_details=gguf_details)
+
+
 @app.route('/upload_new_llm', methods=['POST'])
 def upload_new_llm():
     print("\n\nUploading new LLM\n\n")
@@ -5393,7 +5429,10 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                 'llama_cpp_no_nmap',
                 'llama_cpp_offload_to_devices',
                 'llama_cpp_cpu_only_moe',
-                'llama_cpp_num_cpu_moe'
+                'llama_cpp_num_cpu_moe',
+                'llama_cpp_split_mode',
+                'llama_cpp_tensor_split',
+                'llama_cpp_override_tensor'
             ]
         )
         llama_cpp_base_url = get_url_for_server('llama-cpp')
@@ -5418,6 +5457,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             '--cache-type-v', str(read_return["llama_cpp_value_cache_data_type"]),
             '--parallel', str(read_return["llama_cpp_no_of_seqs_to_par_decode"]),
             '--device', str(read_return["llama_cpp_offload_to_devices"]),
+            '--split-mode', str(read_return["llama_cpp_split_mode"]),
             '--jinja',
             '--host', '127.0.0.1',
             '--port', '8080'
@@ -5432,10 +5472,17 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             llama_cpp_args.append('--mlock')
         if read_return['llama_cpp_no_nmap']:
             llama_cpp_args.append('--no-mmap')
-        if read_return['llama_cpp_cpu_only_moe'] and int(read_return['llama_cpp_num_cpu_moe']) == 0:
-            llama_cpp_args.append('--cpu-moe')
-        if int(read_return['llama_cpp_num_cpu_moe']) > 0:
-            llama_cpp_args.extend(['--n-cpu-moe', str(read_return['llama_cpp_num_cpu_moe'])])
+        if read_return['llama_cpp_tensor_split']:
+            llama_cpp_args.extend(['--tensor-split', str(read_return['llama_cpp_tensor_split'])])
+        
+        # MoE Management:
+        if read_return['llama_cpp_override_tensor'] and read_return['llama_cpp_override_tensor'] != '':
+            llama_cpp_args.extend(['--override-tensor', str(read_return['llama_cpp_override_tensor'])])
+        else:
+            if int(read_return['llama_cpp_num_cpu_moe']) == 0 and read_return['llama_cpp_cpu_only_moe']:
+                llama_cpp_args.append('--cpu-moe')
+            elif int(read_return['llama_cpp_num_cpu_moe']) > 0:
+                llama_cpp_args.extend(['--n-cpu-moe', str(read_return['llama_cpp_num_cpu_moe'])])
 
         print(f"\n\nLaunching llama.cpp server with args: {llama_cpp_args}\n\n")
         # full_command = ' '.join(llama_cpp_args)

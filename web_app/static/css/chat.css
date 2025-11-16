@@ -1325,6 +1325,10 @@ tr:hover {
     padding-bottom: 10px;
 }
 
+.adv-settings-textarea {
+    width: -webkit-fill-available !important;
+}
+
 .hf-select-settings-divs-group {
     display: flex;
     align-items: center;

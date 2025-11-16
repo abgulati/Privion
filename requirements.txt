@@ -7,6 +7,7 @@ docling>=2.36.1
 falkordb>=1.1.2
 Flask>=3.1.1
 Flask-Cors>=6.0.0
+gguf>=0.17.1
 hqq>=0.2.7
 huggingface-hub>=0.32.4
 igraph>=0.11.8

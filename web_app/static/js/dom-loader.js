@@ -166,6 +166,9 @@ function loadCoreLarsConfig() {
         'llama_cpp_num_cpu_moe',
         'llama_cpp_mlock',
         'llama_cpp_no_nmap',
+        'llama_cpp_split_mode',
+        'llama_cpp_tensor_split',
+        'llama_cpp_override_tensor',
         'llama_cpp_temperature',
         'llama_cpp_top_k',
         'llama_cpp_top_p',
@@ -673,6 +676,14 @@ function setLlamaCppDropdowns(values) {
             break;
         }
     }
+
+    const splitMode = document.getElementById('SplitMode');
+    for (let option of splitMode.options) {
+        if (option.value == values.llama_cpp_split_mode) {
+            option.selected = true;
+            break;
+        }
+    }
 }
 
 
@@ -693,6 +704,8 @@ function setLlamaCppValues(values) {
     document.getElementById('LlamaCppUbatchSize').value = values.llama_cpp_ubatch_size;
     document.getElementById('NoOfSeqsToParDecode').value = values.llama_cpp_no_of_seqs_to_par_decode;
     document.getElementById('OffloadToDevices').value = values.llama_cpp_offload_to_devices;
+    document.getElementById('TensorSplit').value = values.llama_cpp_tensor_split;
+    document.getElementById('OverrideTensor').value = values.llama_cpp_override_tensor;
     document.getElementById('MaxNewToks').value = values.llama_cpp_max_new_tokens;
     document.getElementById('LlamaCppNumCpuMoe').value = values.llama_cpp_num_cpu_moe;
     document.getElementById('tempSlider').value = values.llama_cpp_temperature;
@@ -751,6 +764,7 @@ function initializeModelDropdown(model_choice) {
                 if (typeof model !== 'undefined' && typeof model_choice !== 'undefined') {
                     if (model.toLowerCase() == model_choice.toLowerCase()) {
                         option.selected = true;
+                        readGGUF(model);
                     }
                 }
                 dropdown.appendChild(option);

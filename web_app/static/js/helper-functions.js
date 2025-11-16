@@ -230,6 +230,33 @@ function updateUIForFile(row, status) {
 }
 
 
+function readGGUF(model) {
+    document.getElementById('GgufDetails').value = "Loading... Reading GGUF details for model: " + model + "...";
+    fetch('/gguf_reader', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model_name: model })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error)});
+        }
+        return response.json()
+    })
+    .then(data => {
+        if (data.success) {
+            // console.log("GGUF details read successfully:", data.gguf_details);
+            document.getElementById('GgufDetails').value = data.gguf_details;
+        } else {
+            throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
+        }
+    })
+    .catch(error => {
+        document.getElementById('GgufDetails').value = "Error reading GGUF details: " + String(error.message);
+    });
+}
+
+
 function getUserMessageContent(element) {
     const childNodes = Array.from(element.childNodes);  //childNodes is a property that returns a live collection of all child nodes of an element, including text nodes, comment nodes, and element nodes
     const textNode = childNodes.find(node => node.nodeType === Node.TEXT_NODE);

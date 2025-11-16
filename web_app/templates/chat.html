@@ -691,7 +691,7 @@
                                             <div  id="localLlmSelection" style="width: 100%;">
                                                 <label style="margin-bottom: 3px;">Select a local LLM:</label>
                                                 <br>
-                                                <select class="modal-selects" name="model_choice" id="modelDropdown" style="width: 100%; max-width: 60vh;">
+                                                <select class="modal-selects" name="model_choice" id="modelDropdown" style="width: 100%; max-width: 60vh;" onchange="readGGUF(this.value);">
                                                     
                                                 </select>
                                             </div>
@@ -866,6 +866,40 @@
                                                         <div id="llm_no_nmap" class="restart-settings-group">
                                                             <input type="checkbox" id="NoNmap" name="NoNmap" style="margin-left: 7px;">
                                                             <label for="NoNmap">No Mmap (--no-mmap) [default: Disabled]</label>
+                                                        </div>
+
+                                                        <br>
+
+                                                        <div id="llm_split_mode" class="restart-settings-group">
+                                                            <label for="SplitMode">Split Mode (--split-mode) [default: layer]: </label>
+                                                            <select class="modal-selects" id="SplitMode">
+                                                                <option value="layer">Layer (Default) [Split layers and KV across GPUs]</option>
+                                                                <option value="row">Row [Split rows across GPUs]</option>
+                                                                <option value="none">None [Use one GPU only]</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <br>
+
+                                                        <div id="llm_tensor_split" class="restart-settings-group">
+                                                            <label for="TensorSplit">Tensor Split (--tensor-split) [default: None | comma-separated list of proportions, e.g. 3,1]: </label>
+                                                            <input type="text" id="TensorSplit" name="TensorSplit" value="None">
+                                                        </div>
+
+                                                        <br>
+
+                                                        <div id="llm_override_tensor" class="restart-settings-group">
+                                                            <label for="OverrideTensor">Override Tensor (--override-tensor) [default: None | Check 'GGUF Details' below to determine tensor names]: </label>
+                                                            <br>
+                                                            <textarea class="adv-settings-textarea" id="OverrideTensor" name="OverrideTensor" rows="1" cols="130" value="None"></textarea>
+                                                        </div>
+
+                                                        <br>
+
+                                                        <div id="gguf_details" class="restart-settings-group">
+                                                            <label for="GgufDetails" style="font-weight:700;">GGUF Details:</label>
+                                                            <br>
+                                                            <textarea class="adv-settings-textarea" id="GgufDetails" name="GgufDetails" rows="10" cols="130" disabled></textarea>
                                                         </div>
 
                                                         <br>

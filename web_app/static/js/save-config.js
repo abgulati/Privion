@@ -28,6 +28,9 @@ function getLlmConfig() {
             config.llama_cpp_num_cpu_moe = parseInt(document.getElementById('LlamaCppNumCpuMoe').value);
             config.llama_cpp_mlock = document.getElementById('Mlock').checked;
             config.llama_cpp_no_nmap = document.getElementById('NoNmap').checked;
+            config.llama_cpp_split_mode = document.getElementById('SplitMode').value;
+            config.llama_cpp_tensor_split = document.getElementById('TensorSplit').value;
+            config.llama_cpp_override_tensor = document.getElementById('OverrideTensor').value;
             config.llama_cpp_context_length = parseInt(document.getElementById('LlmCtxLgt').value);
             config.llama_cpp_batch_size = parseInt(document.getElementById('LlamaCppBatchSize').value);
             config.llama_cpp_ubatch_size = parseInt(document.getElementById('LlamaCppUbatchSize').value);
