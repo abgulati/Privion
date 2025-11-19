@@ -3591,38 +3591,19 @@ def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
         return True
 
 
-def set_global_exl2_dynamic_generator(batch_mode: bool = False):
+def set_global_exl2_dynamic_generator():
     """
     Defines and returns an ExLlamaV2DynamicGenerator object.
-    The generator object's cache builds up over time which is why it's best to create a new generator object for new chat requests as they may eb from different users.
-
-    Args:
-        batch_mode: Whether to use batch mode. Default is False - which internally sets to Auto batch size determination basis available cache space.
-
-    Returns:
-        The ExLlamaV2DynamicGenerator object.
+    The generator object's cache builds up over time which is why it's best to create a new generator object for new chat requests as they may be from different users.
     """
 
     try:
-        if batch_mode:
-            print("\nDefining ExLlamaV2DynamicGenerator in batch mode\n")
-            max_batch_size = read_config(['max_batch_size'])
-            max_tokens_per_sequence = read_config(['max_tokens_per_sequence'])
-            exl2_dynamic_generator = ExLlamaV2DynamicGenerator(
-                model = EXL2_MODEL,
-                cache = EXL2_CACHE,
-                tokenizer = EXL2_TOKENIZER,
-                max_batch_size = max_batch_size,
-                max_q_size = max_tokens_per_sequence
-            )
-        else:
-            print("\nDefining ExLlamaV2DynamicGenerator in single-sequence mode\n")
-            exl2_dynamic_generator = ExLlamaV2DynamicGenerator(model = EXL2_MODEL, cache = EXL2_CACHE, tokenizer = EXL2_TOKENIZER)
-        
+        print("\nDefining ExLlamaV2DynamicGenerator...\n")
+        exl2_dynamic_generator = ExLlamaV2DynamicGenerator(model = EXL2_MODEL, cache = EXL2_CACHE, tokenizer = EXL2_TOKENIZER)
         print("\nGenerator defined successfully\n")
         return exl2_dynamic_generator
     except Exception as e:
-        handle_local_error("Could not define ExLlamaV2 generator, encountered error: ", e)
+        handle_local_error("Could not define ExLlamaV2DynamicGenerator, encountered error: ", e)
 
 
 def get_exl2_gen_settings(request):
