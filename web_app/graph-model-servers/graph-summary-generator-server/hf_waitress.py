@@ -11,6 +11,12 @@ except ImportError:
     print("exllamav2 is not installed. Skipping import.")
 
 try:
+    from exllamav3 import Model, Config, Cache, Tokenizer, Generator, Job
+    from exllamav3.generator.sampler import ComboSampler
+except ImportError:
+    print("exllamav3 is not installed. Skipping import.")
+
+try:
     from transformers import AutoModelForSpeechSeq2Seq
     import sounddevice as sd
     import numpy as np
@@ -74,8 +80,18 @@ from flask_cors import CORS
 
 from waitress import serve
 
-if not os.path.exists(os.path.join(os.getcwd(), 'exllamav2')):
-    subprocess.run(['git', 'clone', '-b', 'v0.3.2', 'https://github.com/turboderp-org/exllamav2.git'], check=True)  # check=True raises an exception on non-zero exit code
+try:
+    if not os.path.exists(os.path.join(os.getcwd(), 'exllamav2')):
+        subprocess.run(['git', 'clone', '-b', 'v0.3.2', 'https://github.com/turboderp-org/exllamav2.git'], check=True)  # check=True raises an exception on non-zero exit code
+except Exception as e:
+    print(f"Could not clone exllamav2, encountered error: {e}")
+
+try:
+    if not os.path.exists(os.path.join(os.getcwd(), 'exllamav3')):
+        subprocess.run(['git', 'clone', '-b', 'v0.0.14', 'https://github.com/turboderp-org/exllamav3'], check=True)  # check=True raises an exception on non-zero exit code
+except Exception as e:
+    print(f"Could not clone exllamav3, encountered error: {e}")
+
 
 app = Flask(__name__)
 CORS(app)
@@ -108,7 +124,11 @@ VISION_MODEL = None
 EXL2_MODEL = None
 EXL2_TOKENIZER = None
 EXL2_CACHE = None
+EXL3_MODEL = None
+EXL3_TOKENIZER = None
+EXL3_CACHE = None
 AUTO_TOKENIZER = None
+STOP_TOKENS = None
 
 STOP_GENERATION = False
 llm_semaphore = threading.Semaphore(1)
@@ -338,15 +358,37 @@ def write_config(config_updates:dict, filename:str=None) -> dict:
             'exl2_bpw',
             'exl2_cache_type',
             'exl2_max_seq_len',
-            'exl2_force_regenerate_measurement'
+            'exl2_no_flash_attn',
+            'exl2_force_regenerate_measurement',
+            'exl3',
+            'exl3_bpw',
+            'exl3_device',
+            'exl3_total_context',
+            'exl3_tensor_parallel',
+            'exl3_tp_output_device',
+            'exl3_use_per_device',
+            'exl3_max_chunk_size',
+            'exl3_max_batch_size',
+            'exl3_show_gen_visualizer'
         ]
 
         triggers_for_hard_reboot = [
             'exl2',
             'exl2_bpw',
+            'exl2_no_flash_attn',
             'exl2_max_seq_len',
-            'exl2_cache_type'
-        ]
+            'exl2_cache_type',
+            'exl3',
+            'exl3_bpw',
+            'exl3_device',
+            'exl3_total_context',
+            'exl3_tensor_parallel',
+            'exl3_tp_output_device',
+            'exl3_use_per_device',
+            'exl3_max_chunk_size',
+            'exl3_max_batch_size',
+            'exl3_show_gen_visualizer'
+        ]   # if the key is also here, it means the server must be fully shutdown (typically via the /shutdown API) and then restarted
         
         for key in config_updates:
             if key in triggers_for_hf_restart and config_updates[key] != hf_config.get(key):
@@ -356,6 +398,10 @@ def write_config(config_updates:dict, filename:str=None) -> dict:
 
         if config_updates.get('exl2', False) and model_changed:
             print("ExL2 status changed and model changed, setting hard_reboot_required to True")
+            hard_reboot_required = True
+
+        if config_updates.get('exl3', False) and model_changed:
+            print("ExL3 status changed and model changed, setting hard_reboot_required to True")
             hard_reboot_required = True
 
         # Auto-detect Flux and Llama-3.2-Vision models
@@ -436,6 +482,17 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'exl2_no_flash_attn':False,
                     'reuse_graph_extraction_cache':True,    # dev flag: controlled by X-Reuse-Extraction-Cache header
                     'reuse_graph_summary_cache':True,       # dev flag: controlled by X-Reuse-Summary-Cache header
+                    'exl3':False,
+                    'exl3_bpw':3.0,
+                    'exl3_device':'cuda:0',
+                    'exl3_resume_quant_job':False,
+                    'exl3_total_context':2048,
+                    'exl3_tensor_parallel':False,
+                    'exl3_tp_output_device':None,
+                    'exl3_use_per_device':None,
+                    'exl3_max_chunk_size':2048,
+                    'exl3_max_batch_size':256,
+                    'exl3_show_gen_visualizer':False,
                     'gguf':False,
                     'awq':False,
                     'flux_diffusers':False,
@@ -482,8 +539,13 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'temperature':0.1,
                     'do_sample':True, 
                     'top_k':40, 
-                    'top_p':0.95, 
-                    'min_p':0.05, 
+                    'top_p':0.9, 
+                    'min_p':0.1,
+                    'rep_p':1.0,
+                    'pres_p':0.0,
+                    'freq_p':0.0,
+                    'rep_sustain_range':int(10e7),
+                    'rep_decay_range':0,
                     'n_keep':0,
                     'port':9069,
                     'host':'0.0.0.0',
@@ -999,121 +1061,25 @@ def safe_empty_cuda_cache(timeout=10):
 
 def shutdown_all():
     print("\n\nShutting down all models and pipelines\n\n")
+    
+    global_vars = [
+        'VISION_MODEL', 'PIPE', 'MODEL', 'TOKENIZER', 
+        'AUTO_TOKENIZER', 'PROCESSOR', 'STOP_TOKENS',
+        'EXL2_MODEL', 'EXL2_CACHE', 'EXL2_TOKENIZER',
+        'EXL3_MODEL', 'EXL3_CACHE', 'EXL3_TOKENIZER'
+    ]
+    
+    # Clear all references
+    for var_name in global_vars:
+        globals()[var_name] = None
 
-    # --- Vision Model ---
-    print("\n\nShutting down vision-model\n\n")
-    global VISION_MODEL
+    # Clean up memory
+    import gc
+    gc.collect()
     
-    if VISION_MODEL:
-        try:
-            print("Attempting graceful offload of model")
-            del VISION_MODEL
-            print("Model graceful-offload successful")
-        except Exception as e:
-            handle_error_no_return("Could not gracefully offload model. Proceeding to directly force-offload. Encountered error: ", e)
-        finally:
-            VISION_MODEL = None
-    print("\n\nModel offloading complete\n\n")
-
-    global PIPE
-    print("\n\nShutting down pipeline\n\n")
-    
-    if PIPE:
-        try:
-            print("Attempting graceful offload of pipeline")
-            del PIPE
-            print("Pipeline graceful-offload successful")
-        except Exception as e:
-            handle_error_no_return("Could not gracefully offload pipeline. Proceeding to directly force-offload pipeline. Encountered error: ", e)
-        finally:
-            PIPE = None
-    print("\n\nPipeline offloading complete\n\n")
-
-    # --- ASR Model ---
-    print("\n\nShutting down ASR model\n\n")
-    global MODEL, TOKENIZER, PROCESSOR
-    
-    if MODEL:
-        try:
-            print("Attempting to free ASR model")
-            del MODEL
-            print("ASR model freed successfully")
-        except Exception as e:
-            handle_error_no_return("Could not free ASR model, encountered error: ", e)
-        finally:
-            MODEL = None
-    
-    if TOKENIZER:
-        try:
-            print("Attempting to free ASR tokenizer")
-            del TOKENIZER
-            print("ASR tokenizer freed successfully")
-        except Exception as e:
-            handle_error_no_return("Could not free ASR tokenizer, encountered error: ", e)
-        finally:
-            TOKENIZER = None
-    
-    if PROCESSOR:
-        try:
-            print("Attempting to free ASR processor")
-            del PROCESSOR
-            print("ASR processor freed successfully")
-        except Exception as e:
-            handle_error_no_return("Could not free ASR processor, encountered error: ", e)
-        finally:
-            PROCESSOR = None
-    print("\n\nASR model cleanup complete\n\n")
-
-     # --- ExLlamaV2 Model ---
-    print("\n\nShutting down ExLlamaV2 model\n\n")
-    global EXL2_CACHE, EXL2_TOKENIZER, EXL2_MODEL, AUTO_TOKENIZER
-
-    if EXL2_MODEL:
-        try:
-            print("Attempting to free ExLlamaV2 model")
-            del EXL2_MODEL
-            print("ExLlamaV2 model freed successfully")
-        except Exception as e:
-            handle_error_no_return("Could not free ExLlamaV2 model, encountered error: ", e)
-        finally:
-            EXL2_MODEL = None
-    
-    if EXL2_CACHE:
-        try:
-            print("Attempting to free ExLlamaV2 cache")
-            del EXL2_CACHE
-            print("ExLlamaV2 cache freed successfully")
-        except Exception as e:
-            handle_error_no_return("Could not free ExLlamaV2 cache, encountered error: ", e)
-        finally:
-            EXL2_CACHE = None
-    
-    if EXL2_TOKENIZER:
-        try:
-            print("Attempting to free ExLlamaV2 tokenizer")
-            del EXL2_TOKENIZER
-            print("ExLlamaV2 tokenizer freed successfully")
-        except Exception as e:
-            handle_error_no_return("Could not free ExLlamaV2 tokenizer, encountered error: ", e)
-        finally:
-            EXL2_TOKENIZER = None
-
-    if AUTO_TOKENIZER:
-        try:
-            print("Attempting to free AutoTokenizer")
-            del AUTO_TOKENIZER
-            print("AutoTokenizer freed successfully")
-        except Exception as e:
-            handle_error_no_return("Could not free AutoTokenizer, encountered error: ", e)
-        finally:
-            AUTO_TOKENIZER = None
-        
-    print("\n\nExLlamaV2 cleanup complete\n\n")
     return True
 
 ############################-----------------------------------------------###############################
-
-
 
 
 def safe_int(value, default):
@@ -1237,6 +1203,17 @@ def parse_arguments():
                 'exl2_max_seq_len',
                 'exl2_force_regenerate_measurement',
                 'exl2_no_flash_attn',
+                'exl3',
+                'exl3_bpw',
+                'exl3_device',
+                'exl3_resume_quant_job',
+                'exl3_total_context',
+                'exl3_tensor_parallel',
+                'exl3_tp_output_device',
+                'exl3_use_per_device',
+                'exl3_max_chunk_size',
+                'exl3_max_batch_size',
+                'exl3_show_gen_visualizer',
                 'gguf',
                 'awq',
                 'flux_diffusers',
@@ -1262,6 +1239,11 @@ def parse_arguments():
                 'top_k',
                 'top_p',
                 'min_p',
+                'rep_p',
+                'pres_p',
+                'freq_p',
+                'rep_sustain_range',
+                'rep_decay_range',
                 'n_keep',
                 'port',
                 'host',
@@ -1299,8 +1281,13 @@ def parse_arguments():
         parser.add_argument("--temperature", type=float, default=read_return['temperature'], help="Set LLM temperature on a scale of 0.0 to 2.0. Remembers previously set value. Default: 0.1")
         parser.add_argument("--do_sample", action="store_true", default=read_return['do_sample'], help="Perform sampling when selecting response tokens. Remembers previously set value. Default: True. Must be set to True when temperature is above 0.0. For greedy decoding, leave this as False and set temp to 0.0")
         parser.add_argument("--top_k", type=int, default=read_return['top_k'], help="Limit the next token selection to the K most probable tokens. Remembers previously set value. Default: 40")
-        parser.add_argument("--top_p", type=float, default=read_return['top_p'], help="Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P. Remembers previously set value. Default: 0.95")
-        parser.add_argument("--min_p", type=float, default=read_return['min_p'], help="The minimum probability for a token to be considered, relative to the probability of the most likely token. Remembers previously set value. Default: 0.05")
+        parser.add_argument("--top_p", type=float, default=read_return['top_p'], help="Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P. Remembers previously set value. Default: 0.9")
+        parser.add_argument("--min_p", type=float, default=read_return['min_p'], help="The minimum probability for a token to be considered, relative to the probability of the most likely token. Remembers previously set value. Default: 0.1")
+        parser.add_argument("--rep_p", type=float, default=read_return['rep_p'], help="The repetition penalty to be used when sampling tokens. Remembers previously set value. Default: 1.0")
+        parser.add_argument("--pres_p", type=float, default=read_return['pres_p'], help="The presence penalty to be used when sampling tokens. Remembers previously set value. Default: 0.0")
+        parser.add_argument("--freq_p", type=float, default=read_return['freq_p'], help="The frequency penalty to be used when sampling tokens. Remembers previously set value. Default: 0.0")
+        parser.add_argument("--rep_sustain_range", type=int, default=read_return['rep_sustain_range'], help="The sustain range to be used when sampling tokens. Remembers previously set value. Default: int(10e7)")
+        parser.add_argument("--rep_decay_range", type=int, default=read_return['rep_decay_range'], help="The decay range to be used when sampling tokens. Remembers previously set value. Default: 0")
         parser.add_argument("--n_keep", type=int, default=read_return['n_keep'], help="Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded. Remembers previously set value. Default: 0. Use -1 to retain all tokens from the prompt.")
         parser.add_argument("--port", type=int, default=read_return['port'], help="Specify the port to be used by the server. Remembers previously set value. Default: 9069")
         parser.add_argument("--host", type=str, default=read_return['host'], help="Specify the host to be used by the server. Remembers previously set value. Default: 0.0.0.0")
@@ -1313,6 +1300,19 @@ def parse_arguments():
         parser.add_argument("--exl2_max_seq_len", type=int, default=read_return['exl2_max_seq_len'], help="Specify the max sequence length (context size) to be used when loading ExLlamaV2 models. Remembers previously set value and falls-back to 2048 as the default.")
         parser.add_argument("--exl2_no_flash_attn", action="store_true", default=False, help="Use this flag to disable Flash Attention 2 for ExLlamaV2 models. Defaults to False.")
         
+        # ExLlamaV3:
+        parser.add_argument("--exl3", action="store_true", default=False, help="Add this flag when loading models via ExLlamaV3. Defaults to False.")
+        parser.add_argument("--exl3_bpw", type=float, default=read_return['exl3_bpw'], help="Specify the bpw to be used when quantizing ExLlamaV3 models. Remembers previously set value and falls-back to 3.0 as the default.")
+        parser.add_argument("--exl3_device", type=str, default=read_return['exl3_device'], help="Specify the device to be used when loading ExLlamaV3 models. Remembers previously set value and falls-back to cuda:0 as the default.")
+        parser.add_argument("--exl3_resume_quant_job", action="store_true", default=False, help="Add this flag to resume a previous quantization job. Defaults to False.")
+        parser.add_argument("--exl3_total_context", type=int, default=read_return['exl3_total_context'], help="Specify the total context size to be used when loading ExLlamaV3 models. Remembers previously set value and falls-back to 2048 as the default.")
+        parser.add_argument("--exl3_tensor_parallel", action="store_true", default=read_return['exl3_tensor_parallel'], help="Specify whether to load the model in tensor parallel mode. Remembers previously set value and falls-back to False as the default.")
+        parser.add_argument("--exl3_tp_output_device", type=str, default=read_return['exl3_tp_output_device'], help="Specify the output device for the tensor parallel model. Remembers previously set value and falls-back to None as the default.")
+        parser.add_argument("--exl3_use_per_device", type=str, default=read_return['exl3_use_per_device'], help="Specify the amount of memory to use per device. Remembers previously set value and falls-back to None as the default.")
+        parser.add_argument("--exl3_max_chunk_size", type=int, default=read_return['exl3_max_chunk_size'], help="Specify the maximum chunk size to be used when loading ExLlamaV3 models. Remembers previously set value and falls-back to 2048 as the default.")
+        parser.add_argument("--exl3_max_batch_size", type=int, default=read_return['exl3_max_batch_size'], help="Specify the maximum batch size to be used when loading ExLlamaV3 models. Remembers previously set value and falls-back to 256 as the default.")
+        parser.add_argument("--exl3_show_gen_visualizer", action="store_true", default=read_return['exl3_show_gen_visualizer'], help="Specify whether to show the generation visualizer for debugging ExLlamaV3 models. Remembers previously set value and falls-back to False as the default.")
+
         args = parser.parse_args()
         print(f"\n\nparser.parse_args():\n\n{args}\n\n")
 
@@ -1336,6 +1336,15 @@ def parse_arguments():
                     'exl2_max_seq_len',
                     'exl2_force_regenerate_measurement',
                     'exl2_no_flash_attn',
+                    'exl3',
+                    'exl3_bpw',
+                    'exl3_device',
+                    'exl3_resume_quant_job',
+                    'exl3_total_context',
+                    'exl3_tensor_parallel',
+                    'exl3_tp_output_device',
+                    'exl3_use_per_device',
+                    'exl3_max_chunk_size',
                     'gguf',
                     'awq',
                     'flux_diffusers',
@@ -1361,6 +1370,11 @@ def parse_arguments():
                     'top_k',
                     'top_p',
                     'min_p',
+                    'rep_p',
+                    'pres_p',
+                    'freq_p',
+                    'rep_sustain_range',
+                    'rep_decay_range',
                     'n_keep',
                     'port',
                     'host'
@@ -1426,6 +1440,15 @@ def parse_arguments():
                     'exl2_cache_type':args.exl2_cache_type,
                     'exl2_max_seq_len':args.exl2_max_seq_len,
                     'exl2_no_flash_attn':args.exl2_no_flash_attn,
+                    'exl3':args.exl3,
+                    'exl3_bpw':args.exl3_bpw,
+                    'exl3_device':args.exl3_device,
+                    'exl3_resume_quant_job':args.exl3_resume_quant_job,
+                    'exl3_total_context':args.exl3_total_context,
+                    'exl3_tensor_parallel':args.exl3_tensor_parallel,
+                    'exl3_tp_output_device':args.exl3_tp_output_device,
+                    'exl3_use_per_device':args.exl3_use_per_device,
+                    'exl3_max_chunk_size':args.exl3_max_chunk_size,
                     'asr':args.asr,
                     'gguf':args.gguf,
                     'awq':args.awq,
@@ -1450,7 +1473,12 @@ def parse_arguments():
                     'do_sample':args.do_sample, 
                     'top_k':args.top_k, 
                     'top_p':args.top_p, 
-                    'min_p':args.min_p, 
+                    'min_p':args.min_p,
+                    'rep_p':args.rep_p,
+                    'pres_p':args.pres_p,
+                    'freq_p':args.freq_p,
+                    'rep_sustain_range':args.rep_sustain_range,
+                    'rep_decay_range':args.rep_decay_range,
                     'n_keep':args.n_keep,
                     'port':args.port,
                     'host':args.host
@@ -2118,6 +2146,218 @@ def load_exllama_pipeline():
     return True
 
 
+def exllama3_bpw_quantize_model(model_id: str, model_snapshot_path: os.PathLike, exl3_bpw: float) -> os.PathLike:
+    print(f"\n\nAttempting to quantize model {model_id} to {exl3_bpw}bpw...\n\n")
+    
+    try:
+        read_return = read_config(['transformer_models_folder', 'exl3_resume_quant_job'])
+        transformer_models_folder = str(read_return['transformer_models_folder'])
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when attempting to exllama3-bpw_quantize_model(), encountered error: ", e)
+
+    try:
+        temp_dir = os.path.join(os.getcwd(), "exllamav3", "temp-converter-files")
+        os.makedirs(temp_dir, exist_ok=True)
+
+        quantized_model_path = os.path.join(transformer_models_folder, model_id, "exl3-qaunts", f"{exl3_bpw}bpw")
+        os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)   # Create parent directory structure - final `{exl3_bpw}bpw` directory will be created by ExLlamaV3 converter
+    except Exception as e:
+        handle_local_error("Could not create directory to store quantized model when attempting to exllama3-bpw_quantize_model(), encountered error: ", e)
+
+    if os.path.exists(quantized_model_path):
+        print(f"\nQuantized model for {model_id} already exists. Skipping quantization.\n")
+        return quantized_model_path
+    
+    convert_script_path = os.path.normpath(os.path.join(os.getcwd(), "exllamav3", "convert.py"))
+    if read_return['exl3_resume_quant_job']:
+        command = [
+            'python' if platform.system() == 'Windows' else 'python3',
+            convert_script_path,
+            '-w', temp_dir,
+            '-r'
+        ]
+    else:
+        command = [
+            'python' if platform.system() == 'Windows' else 'python3',
+            convert_script_path,
+            '-i', model_snapshot_path,
+            '-o', quantized_model_path,
+            '-w', temp_dir,
+            '-b', str(exl3_bpw)
+        ]
+
+    try:
+        print(f"\nRunning ExLlamaV3 bpw quantizer for {model_id}...\n")
+        subprocess.run(command, check=True) # check=True ensures that the command will raise an exception if it fails
+        print(f"\nExLlamaV3 Conversion of {model_id} to {exl3_bpw}bpw completed successfully!\n")
+        safe_remove_folder_from_filepath(temp_dir)  # conversion completed, deleting temp dir to free space
+    except Exception as e:
+        # safe_remove_folder_from_filepath(temp_dir)  # Since conversion errored out, restarting afresh by clearing the temp dir is safer
+        handle_local_error("Could not run ExLlamaV3 bpw quantizer, encountered error: ", e)
+
+    return quantized_model_path
+
+
+def define_exllamav3_generator_components(quantized_model_path: os.PathLike):
+    print(f"\n\nAttempting to define ExLlamaV3 Generator Components for Model: {quantized_model_path}...\n\n")
+
+    try:
+        config = Config.from_directory(quantized_model_path)
+        print("\nConfig defined successfully\n")
+    except Exception as e:
+        handle_local_error("Could not define ExLlamaV3 config, encountered error: ", e)
+    
+    try:
+        global EXL3_MODEL
+        EXL3_MODEL = Model.from_config(config)
+        print("\nExl3 model defined successfully\n")
+    except Exception as e:
+        handle_local_error("Could not define ExLlamaV3 model, encountered error: ", e)
+    
+    try:
+        exl3_config = read_config(['exl3_device', 'exl3_total_context', 'exl3_tensor_parallel', 'exl3_tp_output_device', 'exl3_use_per_device', 'exl3_max_chunk_size'])
+    except Exception as e:
+        handle_local_error("Could not read exl3-total_context from hf_config.json, encountered error: ", e)
+
+    try:
+        global EXL3_CACHE
+        EXL3_CACHE = Cache(EXL3_MODEL, max_num_tokens = exl3_config['exl3_total_context'])
+        print(f"\nCache defined successfully with max_num_tokens: {exl3_config['exl3_total_context']}\n")
+    except Exception as e:
+        handle_local_error("Could not define ExLlamaV3 cache, encountered error: ", e)
+
+    try:
+        print(f"\nLoading model...\n")
+        EXL3_MODEL.load(
+            progressbar=True,
+            device=exl3_config['exl3_device'],
+            max_chunk_size=exl3_config['exl3_max_chunk_size'],
+            tensor_p=exl3_config['exl3_tensor_parallel'],
+            tp_output_device=exl3_config['exl3_tp_output_device'],
+            use_per_device=exl3_config['exl3_use_per_device']
+        )
+        print("\nExl3 model loaded successfully\n")
+    except Exception as e:
+        handle_local_error("Could not load ExLlamaV3 model, encountered error: ", e)
+
+    try:
+        global EXL3_TOKENIZER
+        EXL3_TOKENIZER = Tokenizer.from_config(config)
+        print("\nTokenizer defined successfully\n")
+    except Exception as e:
+        handle_local_error("Could not define ExLlamaV3 tokenizer, encountered error: ", e)
+
+    return True
+
+
+def get_raw_stop_token_ids(quantized_model_path: os.PathLike) -> list | int:
+    print(f"\n\nAttempting to set stop tokens for model {quantized_model_path}...\n\n")
+    
+    try:
+        raw_model_config_path = os.path.join(quantized_model_path, "config.json")
+        with open(raw_model_config_path, 'r') as file:
+            raw_model_config = json.load(file)
+        raw_stop_token_ids = raw_model_config['eos_token_id']
+        return raw_stop_token_ids
+    except Exception as e:
+        handle_local_error("Could not get raw stop token ids for model {quantized_model_path}, encountered error: ", e)
+
+
+def set_full_exl3_model_stop_token_list(raw_stop_token_ids: list | int):
+    print(f"\n\nAttempting to set full model stop token list for {raw_stop_token_ids}...\n\n")
+
+    global STOP_TOKENS
+
+    print(f"AUTO_TOKENIZER.eos_token_id: {AUTO_TOKENIZER.eos_token_id}")
+    print(f"EXL3_TOKENIZER.eos_token_id: {EXL3_TOKENIZER.eos_token_id}")
+    print(f"Raw stop token ids: {raw_stop_token_ids}")
+    
+    full_list = []
+    try:
+        if isinstance(EXL3_TOKENIZER.eos_token_id, list):
+            for token_ids in EXL3_TOKENIZER.eos_token_id:
+                full_list.append(token_ids)
+        else:
+            full_list.append(EXL3_TOKENIZER.eos_token_id)
+        
+        if isinstance(AUTO_TOKENIZER.eos_token_id, list):
+            for token_ids in AUTO_TOKENIZER.eos_token_id:
+                full_list.append(token_ids)
+        else:
+            full_list.append(AUTO_TOKENIZER.eos_token_id)
+        
+        if isinstance(raw_stop_token_ids, list):
+            for token_ids in raw_stop_token_ids:
+                full_list.append(token_ids)
+        else:
+            full_list.append(raw_stop_token_ids)
+
+        full_list = list(set(full_list))
+        print(f"\nFull model stop token list: {full_list}\n")
+        STOP_TOKENS = full_list
+        return True
+    except Exception as e:
+        handle_local_error("Could not set full model stop token list, encountered error: ", e)
+
+
+def load_exllamav3_pipeline():
+    print("\n\nLoading ExLlamaV3 Pipeline\n\n")
+
+    try:
+        read_return = read_config(['model_id', 'exl3_bpw', 'exl3_total_context'])
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when attempting to load the ExLlamaV3 pipeline, encountered error: ", e)
+
+    latest_snapshot_path = None
+    try:
+        latest_snapshot_path = download_model_from_hf_hub(read_return['model_id'])
+    except Exception as e:
+        handle_error_no_return(f"Could not download {read_return['model_id']} from HF-Hub. Attempting to scan for pre-existing local snapshots. Encountered error: ", e)
+        try:
+            latest_revision = get_latest_revision_for_model(read_return['model_id'])
+            latest_snapshot_path = os_sanitize_path(latest_revision.snapshot_path)
+        except Exception as e:
+            handle_local_error(f"Error attempting to work with local snapshot for {read_return['model_id']}. Encountered error: ", e)
+    
+    if latest_snapshot_path is None:
+        handle_local_error(f"Could not find a local snapshot for {read_return['model_id']}. Please check your connection and access token if you're using a private model.")
+
+    try:
+        quantized_model_path = exllama3_bpw_quantize_model(read_return['model_id'], latest_snapshot_path, float(read_return['exl3_bpw']))
+    except Exception as e:
+        handle_local_error(f"Error ExLlamaV3 quantizing {read_return['model_id']} to {read_return['exl3_bpw']} bits per word. Encountered error: ", e)
+
+    try:
+        define_exllamav3_generator_components(quantized_model_path)
+    except Exception as e:
+        handle_local_error(f"Error loading ExLlamaV3 quantized model from {quantized_model_path}. Encountered error: ", e)
+
+    try:
+        global AUTO_TOKENIZER
+        AUTO_TOKENIZER = AutoTokenizer.from_pretrained(read_return['model_id'], trust_remote_code=True)    # Using Transformers' AutoTokenizer as ExLlamaV3's Tokenizer does not contain an equivalent apply_chat_template() method!
+        print("\nTransformers-AutoTokenizer configured successfully for automated prompt-formatting\n")
+    except Exception as e:
+        handle_local_error(f"Error loading AutoTokenizer for {read_return['model_id']}. Encountered error: ", e)
+
+    try:
+        raw_stop_token_ids = get_raw_stop_token_ids(quantized_model_path)
+    except Exception as e:
+        handle_error_no_return(f"Error manually setting stop tokens for {read_return['model_id']}. Relying purely on EXL & Auto Tokenizers' eos_token_id's instead, good luck! Encountered error: ", e)
+        raw_stop_token_ids = []
+
+    try:
+        set_full_exl3_model_stop_token_list(raw_stop_token_ids)
+    except Exception as e:
+        handle_local_error(f"Error setting full model stop token list for {read_return['model_id']}. Encountered error: ", e)
+
+    try:
+        print(f"Model's context-length (max_num_tokens) is: {read_return['exl3_total_context']}")
+    except Exception as e:
+        handle_error_no_return("Could not determine the model's context-length (max_num_tokens), encountered error: ", e)
+    
+    print("\n\nExLlamaV3 Pipeline Loaded Successfully!\n\n")
+    return True
+
 
 class CustomStream(io.StringIO):
     def __init__(self, callback=None):  # this callback stream to handle written data is not thread-safe!
@@ -2156,7 +2396,7 @@ def restart_server_stream():
     safe_empty_cuda_cache()
 
     try:
-        read_return = read_config(['model_id', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'exl2'])
+        read_return = read_config(['model_id', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'exl2', 'exl3'])
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not read values from hf_config.json when attempting restart-server-stream, encountered error: ", e)
@@ -2196,6 +2436,9 @@ def restart_server_stream():
                 if read_return['exl2']:
                     print("\n\nExLlamaV2 Selected - Loading...\n\n")
                     load_exllama_pipeline()
+                elif read_return['exl3']:
+                    print("\n\nExLlamaV3 Selected - Loading...\n\n")
+                    load_exllamav3_pipeline()
                 elif read_return['vision']:
                     print("\nVision Model Selected - Loading...\n")
                     PIPE = load_vision_pipeline(PIPE, model_params)
@@ -2253,7 +2496,7 @@ def initialize_model():
     global PIPE
 
     try:
-        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'exl2'])
+        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'exl2', 'exl3'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
     
@@ -2271,6 +2514,9 @@ def initialize_model():
         if read_return['exl2']:
             print("\n\nExLlamaV2 Selected - Loading...\n\n")
             load_exllama_pipeline()
+        elif read_return['exl3']:
+            print("\n\nExLlamaV3 Selected - Loading...\n\n")
+            load_exllamav3_pipeline()
         
         else:
             model_params = get_model_params()
@@ -3220,32 +3466,24 @@ def completions_stream():
 
     try:
         read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep'])
-        max_new_tokens = int(read_return['max_new_tokens'])
-        return_full_text = str(read_return['return_full_text']).lower() == 'true'
-        temperature = float(read_return['temperature'])
-        do_sample = str(read_return['do_sample']).lower() == 'true'
-        top_k = int(read_return['top_k'])
-        top_p = float(read_return['top_p'])
-        min_p = float(read_return['min_p'])
-        n_keep = int(read_return['n_keep'])
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not read values from hf_config.json when attempting /completions_stream, encountered error: ", e)
 
     try:    # Create a GenerationConfig object
         generation_config = {
-            "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
-            "return_full_text": request.headers.get('X-Return-Full-Text', str(return_full_text)).lower() == 'true',
-            "temperature": float(request.headers.get('X-Temperature', str(temperature))),
-            "do_sample": request.headers.get('X-Do-Sample', str(do_sample)).lower() == 'true',
-            "top_k": int(request.headers.get('X-Top-K', str(top_k))),
-            "top_p": float(request.headers.get('X-Top-P', str(top_p))),
-            "min_p": float(request.headers.get('X-Min-P', str(min_p))),
+            "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', read_return['max_new_tokens'])),
+            "return_full_text": request.headers.get('X-Return-Full-Text', str(read_return['return_full_text'])).lower() == 'true',
+            "temperature": float(request.headers.get('X-Temperature', str(read_return['temperature']))),
+            "do_sample": request.headers.get('X-Do-Sample', str(read_return['do_sample'])).lower() == 'true',
+            "top_k": int(request.headers.get('X-Top-K', str(read_return['top_k']))),
+            "top_p": float(request.headers.get('X-Top-P', str(read_return['top_p']))),
+            "min_p": float(request.headers.get('X-Min-P', str(read_return['min_p']))),
             "use_cache": True
         }
     except Exception as e:
         handle_error_no_return("Could not set generation-arguments for /completions_stream, proceeding without them. Encountered error: ", e)
-        generation_config = {"max_new_tokens": max_new_tokens,"use_cache": True}
+        generation_config = {"max_new_tokens": read_return['max_new_tokens'],"use_cache": True}
 
     try:
         print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
@@ -3316,6 +3554,8 @@ def completions_stream():
     return Response(generate(), content_type='text/event-stream')
 
 
+###################################-------------Exl2 Logic Begins-------------###################################
+
 def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
     """
     Checks if a given prompt fits within the max context length of the model.
@@ -3357,7 +3597,7 @@ def set_global_exl2_dynamic_generator(batch_mode: bool = False):
     The generator object's cache builds up over time which is why it's best to create a new generator object for new chat requests as they may eb from different users.
 
     Args:
-        batch_mode: Whether to use batch mode. Default is False.
+        batch_mode: Whether to use batch mode. Default is False - which internally sets to Auto batch size determination basis available cache space.
 
     Returns:
         The ExLlamaV2DynamicGenerator object.
@@ -3388,8 +3628,7 @@ def set_global_exl2_dynamic_generator(batch_mode: bool = False):
 def get_exl2_gen_settings(request):
 
     try:
-        config_data = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'knowledge_graph_cache_dir'])
-        requested_max_new_tokens = config_data['max_new_tokens']    # safe value for return
+        config_data = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'knowledge_graph_cache_dir', 'exl2_max_seq_len'])
     except Exception as e:  # Not using `handle_local_error` as the necessary params may be in the request headers so why error out here?
         handle_error_no_return("Could not read values from hf_config.json when attempting exl2-grapher, relying on request headers instead. Encountered error: ", e)
         config_data = {}
@@ -3401,13 +3640,13 @@ def get_exl2_gen_settings(request):
             top_k = int(request.headers.get('X-Top-K', str(config_data.get('top_k', '')))),
             top_p = float(request.headers.get('X-Top-P', str(config_data.get('top_p', ''))))
         )
-        requested_max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens', ''))))
+        config_data['max_new_tokens'] = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens', '2048'))))
         print("\nExLlamaV2Sampler.Settings Defined Successfully\n")
     except Exception as e:
         handle_error_no_return("Could not set generation-arguments for exl2-grapher, proceeding without them. Encountered error: ", e)
         gen_settings = None
 
-    return gen_settings, requested_max_new_tokens, config_data.get('knowledge_graph_cache_dir', '/')
+    return gen_settings, config_data
 
 
 def exl2_test_encoding_logic(tokenized_messages: str):
@@ -3463,28 +3702,29 @@ def exl2_test_encoding_logic(tokenized_messages: str):
 
 @app.route('/exl2_stream', methods=['POST'])
 def exl2_stream():
+    """
+    Streaming text generation using ExLlamaV2 model
+    
+    This endpoint provides streaming text generation using the ExLlamaV2 model with dynamic generation capabilities.
+    
+    OpenAPI 3.0.0 Specification is available in the `hfw-openapi-3-specs.yaml` file.
+    """
 
-    print("\n\nexl2-stream route triggered - attempting to acquire LLM semaphore\n\n")
-
-    llm_semaphore.acquire()
-
-    print("\nLLM semaphore acquired by exl2-stream\n")
+    print("\n\nexl2-stream route triggered\n\n")
 
     try:
         data = request.json
         if isinstance(data, str):   # must convert to a list
             data = json.loads(data)
         messages = data.get('messages', [])
-        gen_settings, max_new_tokens, _  = get_exl2_gen_settings(request)
+        gen_settings, config_data  = get_exl2_gen_settings(request)
         # print(f"\nRead request - message received: {messages}\n")
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for exl2-stream, encountered error: ", e)
     
     try:
         exl2_dynamic_generator = set_global_exl2_dynamic_generator()
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
     
     try:
@@ -3492,7 +3732,6 @@ def exl2_stream():
         # print(f"\nTokenized messages: {tokenized_messages}\n")
         # exl2_test_encoding_logic(tokenized_messages)
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
     
     if not exl2_prompt_fits_within_max_context_length(tokenized_messages):
@@ -3504,14 +3743,13 @@ def exl2_stream():
         print("\nCreating ExLlamaV2-DynamicJob Object...\n")
         job = ExLlamaV2DynamicJob(
             input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
+            max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens')))),
             stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id],
             gen_settings = gen_settings
         )
         exl2_dynamic_generator.enqueue(job)
         print("\nExLlamaV2-DynamicJob Defined & Enqueued Successfully\n")
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not create ExLlamaV2-DynamicJob object for exl2-stream, encountered error: ", e)
 
     stop_thread = threading.Event()
@@ -3535,8 +3773,7 @@ def exl2_stream():
             return handle_error_no_return("Response generation failed, encountered error: ", e)
         finally:
             output_queue.put(None)
-            print("\n\nLLM stream done, releasing semaphore\n\n")
-            llm_semaphore.release()
+            print("\n\nExl2 stream done\n\n")
             stop_thread.set()
 
     def generate():
@@ -3569,8 +3806,472 @@ def exl2_stream():
     return Response(generate(), content_type='text/event-stream')
 
 
+def create_fim_content(prefix: str, suffix: str, middle: str, language: str = 'python') -> str:
+    '''Prepare chat template with FIM tokens'''
 
-### Exl2 Graph Helper Functions ###
+    # 1. Define the special FIM tokens for your model.
+    # These are standard for CodeLlama, DeepSeek Coder, etc.
+    FIM_PREFIX_TOKEN = "<fim_prefix>"
+    FIM_SUFFIX_TOKEN = "<fim_suffix>"
+    FIM_MIDDLE_TOKEN = "<fim_middle>"
+
+    # 2. Construct the prompt in the correct, raw FIM format.
+    # This is the ONLY thing the model should see. No chat, no instructions.
+    return f"{FIM_PREFIX_TOKEN}{prefix}{FIM_SUFFIX_TOKEN}{suffix}{FIM_MIDDLE_TOKEN}"
+
+
+def assemble_fim_messages(prefix: str, suffix: str, middle: str, language: str) -> list:
+    try:
+        fim_content = create_fim_content(prefix, suffix, middle, language)
+        return [
+            {"role": "system", "content": f"You are a code completion assistant. Complete the code between the prefix and suffix provided by the user. Only output the completion - no explanations & exclude the prefix and suffix. ONLY COMPLETION. Language: {language}"},
+            {"role": "user", "content": fim_content}
+        ]
+    except Exception as e:
+        handle_local_error("Could not assemble FIM messages, encountered error: ", e)
+
+
+def auto_tokenize_and_encode_fim_messages(exl_tokenizer, fim_messages: list) -> list:
+    try:
+        templated_messages = AUTO_TOKENIZER.apply_chat_template(fim_messages, add_generation_prompt=True, tokenize=False)
+        return exl_tokenizer.encode(templated_messages, encode_special_tokens=True)
+    except Exception as e:
+        handle_local_error("Could not get templated and encoded FIM messages, encountered error: ", e)
+
+
+def truncate_fim_content(prefix: str, suffix: str, middle: str, language: str, max_seq_len: int) -> str:
+    '''Truncate FIM content to fit within token limits'''
+
+    # Estimate token count (rough approximation: 1 token = 4 chars)
+    chars_per_token = 4
+    max_chars = max_seq_len * chars_per_token
+
+    # Truncate proportionally:
+    prefix_chars = int(max_chars * 0.4)
+    suffix_chars = int(max_chars * 0.4)
+    middle_chars = max_chars - prefix_chars - suffix_chars - 200 # Reserve for formatting
+
+    # Truncate prefix from start, suffix from end
+    if len(prefix) > prefix_chars:
+        prefix = prefix[-prefix_chars:]
+
+    if len(suffix) > suffix_chars:
+        suffix = suffix[:suffix_chars]
+
+    if len(middle) > middle_chars:
+        middle = middle[:middle_chars]
+
+    return assemble_fim_messages(prefix, suffix, middle, language)
+
+
+def get_final_exl_encoded_fim_input_ids(exl_tokenizer, prefix: str, suffix: str, middle: str, language: str, max_length: int) -> list:
+
+    try:
+        fim_messages = assemble_fim_messages(prefix, suffix, middle, language)
+        exl_tokenized_messages = auto_tokenize_and_encode_fim_messages(exl_tokenizer, fim_messages)
+
+        while len(exl_tokenized_messages[0]) > max_length:
+            print(f"FIM messages are too long, truncating... Current length: {len(exl_tokenized_messages[0])}, Max length: {max_length}")
+            trimmed_fim_messages = truncate_fim_content(prefix, suffix, middle, language, max_length)
+            exl_tokenized_messages = auto_tokenize_and_encode_fim_messages(exl_tokenizer, trimmed_fim_messages)
+
+        print(f"Length of final ExLlama encoded FIM input IDs: {len(exl_tokenized_messages[0])}. Max length: {max_length}")
+        return exl_tokenized_messages
+    except Exception as e:
+        handle_local_error("Could not get final ExLlama encoded FIM input IDs, encountered error: ", e)
+
+
+@app.route('/exl2_fim_stream', methods=['POST'])
+def exl2_fim_stream():
+    """
+    Fill-in-the-Middle (FIM) code completion using ExLlamaV2 model
+    
+    This endpoint provides streaming code completion using Fill-in-the-Middle technique,
+    where the model completes code between a prefix and suffix context.
+    
+    OpenAPI 3.0.0 Specification is available in the `hfw-openapi-3-specs.yaml` file.
+    """
+
+    print("\n\nexl2-fim-stream route triggered\n\n")
+
+    try:
+        data = request.json
+        if isinstance(data, str):   # must convert to a list
+            data = json.loads(data)
+        
+        prefix = data.get('prefix', '')
+        suffix = data.get('suffix', '')
+        middle = data.get('middle', '')
+        language = data.get('language', 'python')
+
+        if not prefix and not suffix:
+            return handle_api_error("Prefix and suffix cannot be empty for FIM completion, encountered error: ", e)
+
+        gen_settings, config_data  = get_exl2_gen_settings(request)
+    
+    except Exception as e:
+        return handle_api_error("Could not read POST-request messages for exl2-fim-stream, encountered error: ", e)
+    
+    try:
+        exl2_dynamic_generator = set_global_exl2_dynamic_generator()
+    except Exception as e:
+        return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
+    
+    # Create FIM prompt based on language and content
+    try:
+        # exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL2_TOKENIZER, prefix, suffix, middle, language, (int(config_data['exl3_total_context']) - 50))
+        exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL2_TOKENIZER, prefix, suffix, middle, language, 8192) # max 8k tokens
+    except Exception as e:
+        return handle_api_error("Could not create FIM prompt with chat template, encountered error: ", e)
+
+    try:
+        print("\nCreating ExLlamaV2-DynamicJob Object for FIM...\n")
+        job = ExLlamaV2DynamicJob(
+            input_ids= exl_encoded_fim_input_ids,
+            max_new_tokens = config_data['max_new_tokens'],
+            stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id],
+            gen_settings = gen_settings
+        )
+        exl2_dynamic_generator.enqueue(job)
+        print("\nExLlamaV2-DynamicJob Defined & Enqueued Successfully\n")
+    except Exception as e:
+        return handle_api_error("Could not create ExLlamaV2-DynamicJob object for exl2-fim-stream, encountered error: ", e)
+
+    stop_thread = threading.Event()
+    output_queue = queue.Queue()
+
+    def llm_task():
+
+        try:            
+            while exl2_dynamic_generator.num_remaining_jobs():
+                # output_queue.put(exl2_dynamic_generator.iterate()[0])  # Will print dict with keys: dict_keys(['job', 'stage', 'eos', 'serial', 'text', 'token_ids']) ### USE: yield f"data: {(line)}\n\n"
+                current_token = exl2_dynamic_generator.iterate()   # directly trying to access the 'text' key here will result in a KeyError as iteration may not have completed yet!
+                
+                if len(current_token) == 1 and 'text' in current_token[0]:
+                    text = current_token[0]['text']  # thus best to capture the current iteration's output and then access the 'text' key!
+                    if text:
+                        output_queue.put(text)
+                
+                elif len(current_token) > 1:
+                    for job in current_token:
+                        if 'stage' in job and job['stage'] == 'streaming':
+                            if 'text' in job: 
+                                text = job['text']
+                                if text:
+                                    output_queue.put(text)
+        
+        except Exception as e:
+            return handle_error_no_return("Response generation failed, encountered error: ", e)
+        finally:
+            output_queue.put(None)
+            print("\n\nExl2-FIM stream done\n\n")
+            stop_thread.set()
+
+    def generate():
+
+        global STOP_GENERATION
+        STOP_GENERATION = False
+
+        thread = threading.Thread(target=llm_task)
+        thread.start()
+
+        while True:
+            if STOP_GENERATION:
+                print("\n\nStopping generation with stop_event\n\n")
+                output_queue.put(None)
+                STOP_GENERATION = False
+                thread.join()
+            
+            line = output_queue.get()
+            if line is None:
+                print("\nNone read, breaking and stopping thread\n")
+                thread.join()
+                break
+            
+            # send clean code completion
+            yield f"data: {json.dumps(line)}\n\n"
+        
+        yield f"event: END\ndata: \"null\"\n\n"
+        print("\nexl2-fim-stream done\n")
+
+    print("\n\nInferencing Begins!\n\n")
+    return Response(generate(), content_type='text/event-stream')
+
+
+###################################-------------Exl2 Logic Ends-------------###################################
+
+
+###################################-------------Exl3 Logic Begins-------------###################################
+
+def set_global_exl3_dynamic_generator():
+    """
+    Defines and returns an ExLlamaV3 Generator object.
+    The generator object's cache builds up over time which is why it's best to create a new generator object for new chat requests as they may be from different users.
+
+    Args:
+        batch_mode: Whether to use batch mode. Default is False - which internally sets to Auto batch size determination basis available cache space.
+
+    Returns:
+        The ExLlamaV2DynamicGenerator object.
+    """
+
+    try:
+        exl3_generator_config = read_config(['exl3_max_batch_size', 'exl3_max_chunk_size', 'exl3_show_gen_visualizer'])
+        exl3_generator = Generator(
+            model = EXL3_MODEL,
+            cache = EXL3_CACHE,
+            tokenizer = EXL3_TOKENIZER,
+            max_batch_size = exl3_generator_config['exl3_max_batch_size'],
+            max_chunk_size = exl3_generator_config['exl3_max_chunk_size'],
+            show_visualizer = exl3_generator_config['exl3_show_gen_visualizer']
+        )
+        
+        print("\nGenerator defined successfully\n")
+        return exl3_generator
+    except Exception as e:
+        handle_local_error("Could not define ExLlamaV2 generator, encountered error: ", e)
+
+
+def get_exl3_sampler(request):
+
+    try:
+        config_data = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'min_p', 'rep_p', 'pres_p', 'freq_p', 'rep_sustain_range', 'rep_decay_range', 'exl3_total_context'])
+    except Exception as e:  # Not using `handle_local_error` as the necessary params may be in the request headers so why error out here?
+        handle_error_no_return("Could not read values from hf_config.json when attempting exl3-sampler, relying on request headers instead. Encountered error: ", e)
+        config_data = {}
+
+    try:
+        exl3_sampler = ComboSampler(
+            rep_p = float(request.headers.get('X-Repetition-Penalty', str(config_data.get('repetition_penalty', '1')))),
+            pres_p = float(request.headers.get('X-Presence-Penalty', str(config_data.get('presence_penalty', '0')))),
+            freq_p = float(request.headers.get('X-Frequency-Penalty', str(config_data.get('frequency_penalty', '0')))),
+            rep_sustain_range = int(float(request.headers.get('X-Repetition-Sustain-Range', str(config_data.get('penalty_range', '10e7'))))),
+            rep_decay_range = int(request.headers.get('X-Repetition-Decay-Range', str(config_data.get('penalty_range', '0')))),
+            temperature = float(request.headers.get('X-Temperature', str(config_data.get('temperature', '0.1')))),
+            min_p = float(request.headers.get('X-Min-P', str(config_data.get('min_p', '0.1')))),
+            top_k = int(request.headers.get('X-Top-K', str(config_data.get('top_k', '40')))),
+            top_p = float(request.headers.get('X-Top-P', str(config_data.get('top_p', '0.9'))))
+        )
+        config_data['max_new_tokens'] = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens', '2048'))))
+        print("\nExLlamaV3 Sampler Defined Successfully\n")
+    except Exception as e:
+        handle_error_no_return("Could not create ExLlamaV3 Sampler, encountered error: ", e)
+        exl3_sampler = None
+    
+    return exl3_sampler, config_data
+
+
+@app.route('/exl3_stream', methods=['POST'])
+def exl3_stream():
+    """
+    Streaming text generation using ExLlamaV3 model
+    
+    This endpoint provides streaming text generation using the ExLlamaV3 model with dynamic generation capabilities.
+    
+    ---
+    OpenAPI 3.0.0 Specification is available in the `hfw-openapi-3-specs.yaml` file.
+    """
+
+    print("\n\nexl3-stream route triggered\n\n")
+
+    try:
+        data = request.json
+        if isinstance(data, str):   # must convert to a list
+            data = json.loads(data)
+        messages = data.get('messages', [])
+        exl3_sampler, config_data  = get_exl3_sampler(request)
+        # print(f"\nRead request - message received: {messages}\n")
+    except Exception as e:
+        return handle_api_error("Could not read POST-request messages for exl2-stream, encountered error: ", e)
+    
+    try:
+        exl3_generator = set_global_exl3_dynamic_generator()
+    except Exception as e:
+        return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
+    
+    try:
+        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+    except Exception as e:
+        return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
+    
+    # if not exl2_prompt_fits_within_max_context_length(tokenized_messages):
+    #     return handle_api_error("Prompt does not fit within max context length, enabling auto-truncation as a fallback. Encountered error: ", e)
+
+    try:
+        print("\nCreating ExLlamaV3 Job Object...\n")
+        job = Job(
+            input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
+            max_new_tokens = config_data['max_new_tokens'],
+            stop_conditions = STOP_TOKENS,
+            sampler = exl3_sampler
+        )
+        exl3_generator.enqueue(job)
+        print("\nExLlamaV3 Job Defined & Enqueued Successfully\n")
+    except Exception as e:
+        return handle_api_error("Could not create ExLlamaV3 Job object for exl3-stream, encountered error: ", e)
+
+    stop_thread = threading.Event()
+    output_queue = queue.Queue()
+
+    def llm_task():
+
+        try:            
+            while exl3_generator.num_remaining_jobs():
+                results = exl3_generator.iterate()
+                
+                # Each iteration returns a list of results, each of which may contain output tokens for a running job. We only care about the "text" field here.
+                for result in results:
+                    if 'text' in result:
+                        output_queue.put(result.get('text'))
+                
+        except Exception as e:
+            return handle_error_no_return("Response generation failed, encountered error: ", e)
+        finally:
+            output_queue.put(None)
+            print("\n\nExl3 stream done\n\n")
+            stop_thread.set()
+
+    def generate():
+
+        global STOP_GENERATION
+        STOP_GENERATION = False
+
+        thread = threading.Thread(target=llm_task)
+        thread.start()
+
+        while True:
+            if STOP_GENERATION:
+                print("\n\nStopping generation with stop_event\n\n")
+                output_queue.put(None)
+                STOP_GENERATION = False
+                thread.join()
+            
+            line = output_queue.get()
+            if line is None:
+                print("\nNone read, breaking and stopping thread\n")
+                thread.join()
+                break
+            yield f"data: {json.dumps(line)}\n\n"
+        
+        yield f"event: END\ndata: \"null\"\n\n"
+
+        print("\nexl3-stream done\n")
+
+    print("\n\nInferencing Begins!\n\n")
+    return Response(generate(), content_type='text/event-stream')
+
+
+@app.route('/exl3_fim_stream', methods=['POST'])
+def exl3_fim_stream():
+    """
+    Fill-in-the-Middle (FIM) code completion using ExLlamaV3 model
+    
+    This endpoint provides streaming code completion using Fill-in-the-Middle technique,
+    where the model completes code between a prefix and suffix context.
+    
+    ---
+    OpenAPI 3.0.0 Specification is available in the `hfw-openapi-3-specs.yaml` file.
+    """
+
+    print("\n\nexl3-fim-stream route triggered\n\n")
+
+    try:
+        data = request.json
+        if isinstance(data, str):   # must convert to a list
+            data = json.loads(data)
+        
+        prefix = data.get('prefix', '')
+        suffix = data.get('suffix', '')
+        middle = data.get('middle', '')
+        language = data.get('language', 'python')
+
+        if not prefix and not suffix:
+            return handle_api_error("Prefix and suffix cannot be empty for FIM completion, encountered error: ", e)
+
+        exl3_sampler, config_data  = get_exl3_sampler(request)
+    
+    except Exception as e:
+        return handle_api_error("Could not read POST-request messages for exl3-fim-stream, encountered error: ", e)
+    
+    try:
+        exl3_generator = set_global_exl3_dynamic_generator()
+    except Exception as e:
+        return handle_api_error("Could not set global Exl3 Generator, encountered error: ", e)
+    
+    # Create FIM prompt based on language and content
+    try:
+        # exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL3_TOKENIZER, prefix, suffix, middle, language, (int(config_data['exl3_total_context']) - 50))
+        exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL3_TOKENIZER, prefix, suffix, middle, language, 8192) # max 8k tokens
+
+    except Exception as e:
+        return handle_api_error("Could not get final ExLlama encoded FIM input IDs, encountered error: ", e)
+    
+    try:
+        print("\nCreating ExLlamaV3 Job Object...\n")
+        job = Job(
+            input_ids= exl_encoded_fim_input_ids,
+            max_new_tokens = config_data['max_new_tokens'],
+            stop_conditions = STOP_TOKENS,
+            sampler = exl3_sampler
+        )
+        exl3_generator.enqueue(job)
+        print("\nExLlamaV3 Job Defined & Enqueued Successfully\n")
+    except Exception as e:
+        return handle_api_error("Could not create ExLlamaV3 Job object for exl3-fim-stream, encountered error: ", e)
+
+    stop_thread = threading.Event()
+    output_queue = queue.Queue()
+
+    def llm_task():
+
+        try:
+            while exl3_generator.num_remaining_jobs():
+                results = exl3_generator.iterate()
+                
+                # Each iteration returns a list of results, each of which may contain output tokens for a running job. We only care about the "text" field here.
+                for result in results:
+                    if 'text' in result:
+                        output_queue.put(result.get('text'))
+                
+        except Exception as e:
+            return handle_error_no_return("Response generation failed, encountered error: ", e)
+        finally:
+            output_queue.put(None)
+            print("\n\nExl3-FIM stream done\n\n")
+            stop_thread.set()
+
+    def generate():
+
+        global STOP_GENERATION
+        STOP_GENERATION = False
+
+        thread = threading.Thread(target=llm_task)
+        thread.start()
+
+        while True:
+            if STOP_GENERATION:
+                print("\n\nStopping generation with stop_event\n\n")
+                output_queue.put(None)
+                STOP_GENERATION = False
+                thread.join()
+            
+            line = output_queue.get()
+            if line is None:
+                print("\nNone read, breaking and stopping thread\n")
+                thread.join()
+                break
+            
+            # send clean code completion
+            yield f"data: {json.dumps(line)}\n\n"
+        
+        yield f"event: END\ndata: \"null\"\n\n"
+        print("\nexl3-fim-stream done\n")
+
+    print("\n\nInferencing Begins!\n\n")
+    return Response(generate(), content_type='text/event-stream')
+
+
+###################################-------------Exl2 Graph Functions Begin-------------###################################
 
 def trim_response(response, start_substring, end_substring, include_start_substring=False, include_end_substring=False):
     print("\nAttempting to trim response...\n")
@@ -3839,18 +4540,17 @@ def exl2_graph_extractor():
     }
     '''
 
-    print("\n\nexl2-graph-extractor route triggered - attempting to acquire LLM semaphore\n\n")
-    llm_semaphore.acquire()
-    print("\nLLM semaphore acquired by /exl2-graph-extractor\n")
+    print("\n\nexl2-graph-extractor route triggered\n\n")
 
     try:
         chunk_entities = request.json.get('chunk_entities')
         rag_response_mode = request.json.get('rag_response_mode', False)
-        gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
+        gen_settings, config_data = get_exl2_gen_settings(request)
+        requested_max_new_tokens = int(config_data.get('max_new_tokens'))
+        knowledge_graph_cache_dir = config_data.get('knowledge_graph_cache_dir', '/')
         reuse_graph_extraction_cache = str(request.headers.get('X-Reuse-Extraction-Cache', str(read_config(['reuse_graph_extraction_cache'])['reuse_graph_extraction_cache']).lower())).lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for /exl2-graph-extractor, encountered error: ", e)
 
     stop_thread = threading.Event()
@@ -4102,7 +4802,6 @@ def exl2_graph_extractor():
                 cache_queue.put(None)
             
             print("\n\nLLM stream done, releasing semaphore\n\n")
-            llm_semaphore.release()
             stop_thread.set()
 
 
@@ -4168,17 +4867,16 @@ def exl2_graph_summarizer():
     }
     '''
 
-    print("\n\nexl2-graph-summarizer route triggered - attempting to acquire LLM semaphore\n\n")
-    llm_semaphore.acquire()
-    print("\nLLM semaphore acquired by /exl2-graph-summarizer\n")
+    print("\n\nexl2-graph-summarizer route triggered\n\n")
 
     try:
         chunk_entities = request.json.get('chunk_entities')
-        gen_settings, requested_max_new_tokens, knowledge_graph_cache_dir = get_exl2_gen_settings(request)
+        gen_settings, config_data = get_exl2_gen_settings(request)
+        requested_max_new_tokens = int(config_data.get('max_new_tokens'))
+        knowledge_graph_cache_dir = config_data.get('knowledge_graph_cache_dir', '/')
         reuse_graph_summary_cache = str(request.headers.get('X-Reuse-Summary-Cache', str(read_config(['reuse_graph_summary_cache'])['reuse_graph_summary_cache']).lower())).lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for /exl2-graph-summarizer, encountered error: ", e)
 
     stop_thread = threading.Event()
@@ -4307,7 +5005,6 @@ def exl2_graph_summarizer():
             output_queue.put(None)
             cache_queue.put(None)
             print("\n\nLLM stream done, releasing semaphore\n\n")   # TODO: investigate hanging here - likely caused by (previously) uncaught exception in `create-and_execute_exl2_job` that led to unexpected behavior. Added error-handling, ready for re-test.
-            llm_semaphore.release()
             stop_thread.set()
 
 
@@ -4490,16 +5187,17 @@ def health():
             # Treat any backend being ready as healthy:
             pipe_ready = PIPE is not None
             exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, AUTO_TOKENIZER])
+            exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, STOP_TOKENS, AUTO_TOKENIZER])
             asr_ready = MODEL is not None
             
-            print(f"\n\nhealth readiness → pipe={pipe_ready}, exl2={exl2_ready}, asr={asr_ready}\n\n")
+            print(f"\n\nhealth readiness → pipe={pipe_ready}, exl2={exl2_ready}, exl3={exl3_ready}, asr={asr_ready}\n\n")
 
-            if not (pipe_ready or exl2_ready or asr_ready):
-                return jsonify(status="error", message="None of the core backends (transformers, exl2, asr) are loaded"), 503 # Service Unavailable
+            if not (pipe_ready or exl2_ready or exl3_ready or asr_ready):
+                return jsonify(status="error", message="None of the core backends (transformers, exl2, exl3, asr) are loaded"), 503 # Service Unavailable
 
             model_info = {}
 
-            if pipe_ready and not exl2_ready and not asr_ready: # Implies only Transformers backend is loaded!
+            if pipe_ready and not exl2_ready and not exl3_ready and not asr_ready: # Implies only Transformers backend is loaded!
                 model_info = get_transformers_model_info()
             
             print(f"HF-Waitress LLM-server health-check completed successfully, returning.\n")

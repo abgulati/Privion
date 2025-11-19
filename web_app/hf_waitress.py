@@ -80,11 +80,17 @@ from flask_cors import CORS
 
 from waitress import serve
 
-if not os.path.exists(os.path.join(os.getcwd(), 'exllamav2')):
-    subprocess.run(['git', 'clone', '-b', 'v0.3.2', 'https://github.com/turboderp-org/exllamav2.git'], check=True)  # check=True raises an exception on non-zero exit code
+try:
+    if not os.path.exists(os.path.join(os.getcwd(), 'exllamav2')):
+        subprocess.run(['git', 'clone', '-b', 'v0.3.2', 'https://github.com/turboderp-org/exllamav2.git'], check=True)  # check=True raises an exception on non-zero exit code
+except Exception as e:
+    print(f"Could not clone exllamav2, encountered error: {e}")
 
-if not os.path.exists(os.path.join(os.getcwd(), 'exllamav3')):
-    subprocess.run(['git', 'clone', '-b', 'v0.0.14', 'https://github.com/turboderp-org/exllamav3'], check=True)  # check=True raises an exception on non-zero exit code
+try:
+    if not os.path.exists(os.path.join(os.getcwd(), 'exllamav3')):
+        subprocess.run(['git', 'clone', '-b', 'v0.0.14', 'https://github.com/turboderp-org/exllamav3'], check=True)  # check=True raises an exception on non-zero exit code
+except Exception as e:
+    print(f"Could not clone exllamav3, encountered error: {e}")
 
 
 app = Flask(__name__)
@@ -1074,8 +1080,6 @@ def shutdown_all():
     return True
 
 ############################-----------------------------------------------###############################
-
-
 
 
 def safe_int(value, default):
@@ -3706,11 +3710,7 @@ def exl2_stream():
     OpenAPI 3.0.0 Specification is available in the `hfw-openapi-3-specs.yaml` file.
     """
 
-    print("\n\nexl2-stream route triggered - attempting to acquire LLM semaphore\n\n")
-
-    llm_semaphore.acquire()
-
-    print("\nLLM semaphore acquired by exl2-stream\n")
+    print("\n\nexl2-stream route triggered\n\n")
 
     try:
         data = request.json
@@ -3720,13 +3720,11 @@ def exl2_stream():
         gen_settings, config_data  = get_exl2_gen_settings(request)
         # print(f"\nRead request - message received: {messages}\n")
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for exl2-stream, encountered error: ", e)
     
     try:
         exl2_dynamic_generator = set_global_exl2_dynamic_generator()
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
     
     try:
@@ -3734,7 +3732,6 @@ def exl2_stream():
         # print(f"\nTokenized messages: {tokenized_messages}\n")
         # exl2_test_encoding_logic(tokenized_messages)
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
     
     if not exl2_prompt_fits_within_max_context_length(tokenized_messages):
@@ -3753,7 +3750,6 @@ def exl2_stream():
         exl2_dynamic_generator.enqueue(job)
         print("\nExLlamaV2-DynamicJob Defined & Enqueued Successfully\n")
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not create ExLlamaV2-DynamicJob object for exl2-stream, encountered error: ", e)
 
     stop_thread = threading.Event()
@@ -3777,8 +3773,7 @@ def exl2_stream():
             return handle_error_no_return("Response generation failed, encountered error: ", e)
         finally:
             output_queue.put(None)
-            print("\n\nLLM stream done, releasing semaphore\n\n")
-            llm_semaphore.release()
+            print("\n\nExl2 stream done\n\n")
             stop_thread.set()
 
     def generate():
@@ -3897,11 +3892,7 @@ def exl2_fim_stream():
     OpenAPI 3.0.0 Specification is available in the `hfw-openapi-3-specs.yaml` file.
     """
 
-    print("\n\nexl2-fim-stream route triggered - attempting to acquire LLM semaphore\n\n")
-
-    llm_semaphore.acquire()
-
-    print("\nLLM semaphore acquired by exl2-fim-stream\n")
+    print("\n\nexl2-fim-stream route triggered\n\n")
 
     try:
         data = request.json
@@ -3914,19 +3905,16 @@ def exl2_fim_stream():
         language = data.get('language', 'python')
 
         if not prefix and not suffix:
-            llm_semaphore.release()
             return handle_api_error("Prefix and suffix cannot be empty for FIM completion, encountered error: ", e)
 
         gen_settings, config_data  = get_exl2_gen_settings(request)
     
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for exl2-fim-stream, encountered error: ", e)
     
     try:
         exl2_dynamic_generator = set_global_exl2_dynamic_generator()
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
     
     # Create FIM prompt based on language and content
@@ -3934,7 +3922,6 @@ def exl2_fim_stream():
         # exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL2_TOKENIZER, prefix, suffix, middle, language, (int(config_data['exl3_total_context']) - 50))
         exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL2_TOKENIZER, prefix, suffix, middle, language, 8192) # max 8k tokens
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not create FIM prompt with chat template, encountered error: ", e)
 
     try:
@@ -3948,7 +3935,6 @@ def exl2_fim_stream():
         exl2_dynamic_generator.enqueue(job)
         print("\nExLlamaV2-DynamicJob Defined & Enqueued Successfully\n")
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not create ExLlamaV2-DynamicJob object for exl2-fim-stream, encountered error: ", e)
 
     stop_thread = threading.Event()
@@ -3978,8 +3964,7 @@ def exl2_fim_stream():
             return handle_error_no_return("Response generation failed, encountered error: ", e)
         finally:
             output_queue.put(None)
-            print("\n\nLLM stream done, releasing semaphore\n\n")
-            llm_semaphore.release()
+            print("\n\nExl2-FIM stream done\n\n")
             stop_thread.set()
 
     def generate():
@@ -4087,11 +4072,7 @@ def exl3_stream():
     OpenAPI 3.0.0 Specification is available in the `hfw-openapi-3-specs.yaml` file.
     """
 
-    print("\n\nexl3-stream route triggered - attempting to acquire LLM semaphore\n\n")
-
-    llm_semaphore.acquire()
-
-    print("\nLLM semaphore acquired by exl2-stream\n")
+    print("\n\nexl3-stream route triggered\n\n")
 
     try:
         data = request.json
@@ -4101,19 +4082,16 @@ def exl3_stream():
         exl3_sampler, config_data  = get_exl3_sampler(request)
         # print(f"\nRead request - message received: {messages}\n")
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for exl2-stream, encountered error: ", e)
     
     try:
         exl3_generator = set_global_exl3_dynamic_generator()
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
     
     try:
         tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
     
     # if not exl2_prompt_fits_within_max_context_length(tokenized_messages):
@@ -4130,7 +4108,6 @@ def exl3_stream():
         exl3_generator.enqueue(job)
         print("\nExLlamaV3 Job Defined & Enqueued Successfully\n")
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not create ExLlamaV3 Job object for exl3-stream, encountered error: ", e)
 
     stop_thread = threading.Event()
@@ -4151,8 +4128,7 @@ def exl3_stream():
             return handle_error_no_return("Response generation failed, encountered error: ", e)
         finally:
             output_queue.put(None)
-            print("\n\nExl3 stream done, releasing semaphore\n\n")
-            llm_semaphore.release()
+            print("\n\nExl3 stream done\n\n")
             stop_thread.set()
 
     def generate():
@@ -4197,11 +4173,7 @@ def exl3_fim_stream():
     OpenAPI 3.0.0 Specification is available in the `hfw-openapi-3-specs.yaml` file.
     """
 
-    print("\n\nexl3-fim-stream route triggered - attempting to acquire LLM semaphore\n\n")
-
-    llm_semaphore.acquire()
-
-    print("\nLLM semaphore acquired by exl2-fim-stream\n")
+    print("\n\nexl3-fim-stream route triggered\n\n")
 
     try:
         data = request.json
@@ -4214,19 +4186,16 @@ def exl3_fim_stream():
         language = data.get('language', 'python')
 
         if not prefix and not suffix:
-            llm_semaphore.release()
             return handle_api_error("Prefix and suffix cannot be empty for FIM completion, encountered error: ", e)
 
         exl3_sampler, config_data  = get_exl3_sampler(request)
     
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for exl3-fim-stream, encountered error: ", e)
     
     try:
         exl3_generator = set_global_exl3_dynamic_generator()
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not set global Exl3 Generator, encountered error: ", e)
     
     # Create FIM prompt based on language and content
@@ -4235,7 +4204,6 @@ def exl3_fim_stream():
         exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL3_TOKENIZER, prefix, suffix, middle, language, 8192) # max 8k tokens
 
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not get final ExLlama encoded FIM input IDs, encountered error: ", e)
     
     try:
@@ -4249,7 +4217,6 @@ def exl3_fim_stream():
         exl3_generator.enqueue(job)
         print("\nExLlamaV3 Job Defined & Enqueued Successfully\n")
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not create ExLlamaV3 Job object for exl3-fim-stream, encountered error: ", e)
 
     stop_thread = threading.Event()
@@ -4270,8 +4237,7 @@ def exl3_fim_stream():
             return handle_error_no_return("Response generation failed, encountered error: ", e)
         finally:
             output_queue.put(None)
-            print("\n\nExl3 fim stream done, releasing semaphore\n\n")
-            llm_semaphore.release()
+            print("\n\nExl3-FIM stream done\n\n")
             stop_thread.set()
 
     def generate():
@@ -4574,9 +4540,7 @@ def exl2_graph_extractor():
     }
     '''
 
-    print("\n\nexl2-graph-extractor route triggered - attempting to acquire LLM semaphore\n\n")
-    llm_semaphore.acquire()
-    print("\nLLM semaphore acquired by /exl2-graph-extractor\n")
+    print("\n\nexl2-graph-extractor route triggered\n\n")
 
     try:
         chunk_entities = request.json.get('chunk_entities')
@@ -4587,7 +4551,6 @@ def exl2_graph_extractor():
         reuse_graph_extraction_cache = str(request.headers.get('X-Reuse-Extraction-Cache', str(read_config(['reuse_graph_extraction_cache'])['reuse_graph_extraction_cache']).lower())).lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for /exl2-graph-extractor, encountered error: ", e)
 
     stop_thread = threading.Event()
@@ -4839,7 +4802,6 @@ def exl2_graph_extractor():
                 cache_queue.put(None)
             
             print("\n\nLLM stream done, releasing semaphore\n\n")
-            llm_semaphore.release()
             stop_thread.set()
 
 
@@ -4905,9 +4867,7 @@ def exl2_graph_summarizer():
     }
     '''
 
-    print("\n\nexl2-graph-summarizer route triggered - attempting to acquire LLM semaphore\n\n")
-    llm_semaphore.acquire()
-    print("\nLLM semaphore acquired by /exl2-graph-summarizer\n")
+    print("\n\nexl2-graph-summarizer route triggered\n\n")
 
     try:
         chunk_entities = request.json.get('chunk_entities')
@@ -4917,7 +4877,6 @@ def exl2_graph_summarizer():
         reuse_graph_summary_cache = str(request.headers.get('X-Reuse-Summary-Cache', str(read_config(['reuse_graph_summary_cache'])['reuse_graph_summary_cache']).lower())).lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
-        llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for /exl2-graph-summarizer, encountered error: ", e)
 
     stop_thread = threading.Event()
@@ -5046,7 +5005,6 @@ def exl2_graph_summarizer():
             output_queue.put(None)
             cache_queue.put(None)
             print("\n\nLLM stream done, releasing semaphore\n\n")   # TODO: investigate hanging here - likely caused by (previously) uncaught exception in `create-and_execute_exl2_job` that led to unexpected behavior. Added error-handling, ready for re-test.
-            llm_semaphore.release()
             stop_thread.set()
 
 
