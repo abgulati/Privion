@@ -925,10 +925,12 @@ function resetHfLlmAdvancedDefaults() {
     document.getElementById('hf_waitress_is_awq_no').checked = true;
     document.getElementById('hf_waitress_trust_remote_code_yes').checked = true;
     document.getElementById('hf_waitress_trust_remote_code_no').checked = false;
-    document.getElementById('hf_waitress_use_flash_attention_2_yes').checked = false;
-    document.getElementById('hf_waitress_use_flash_attention_2_no').checked = true;
-    document.getElementById('hf_waitress_return_full_text_yes').checked = false;
-    document.getElementById('hf_waitress_return_full_text_no').checked = true;
+    // document.getElementById('hf_waitress_use_flash_attention_2_yes').checked = false;
+    // document.getElementById('hf_waitress_use_flash_attention_2_no').checked = true;
+    document.getElementById('hf_use_exl2_no_flash_attn_checkbox').checked = false;
+    // document.getElementById('hf_waitress_return_full_text_yes').checked = false;
+    // document.getElementById('hf_waitress_return_full_text_no').checked = true;
+    document.getElementById('hf_waitress_return_full_text_checkbox').checked = false;
     document.getElementById('update_hf_access_token').checked = false;
     document.getElementById('hf_access_token').disabled = true;
     document.getElementById('hf_waitress_torch_device_map_choice').value = 'auto';
@@ -1674,15 +1676,15 @@ function enableNonExl2Settings() {
     document.getElementById('hf_waitress_is_awq').style.display = 'block';
     document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
     document.getElementById('hf_waitress_diffusers').style.display = 'block';
-    document.getElementById('hf_waitress_use_flash_attention_2').style.display = 'block';
-    document.getElementById('hf_waitress_torch_device_map').style.display = 'flex';
-    document.getElementById('hf_waitress_torch_dtype').style.display = 'flex';
-    document.getElementById('hf_waitress_pipeline_task').style.display = 'flex';
-    document.getElementById('hf_waitress_quantization').style.display = 'flex';
-    document.getElementById('hf_waitress_quantization_level').style.display = 'flex';
-    document.getElementById('hf_waitress_hqq_group_size').style.display = 'block';
-    document.getElementById('hf_waitress_minp_value').style.display = 'block';
-    document.getElementById('hf_waitress_return_full_text').style.display = 'block';
+    document.getElementById('hf_waitress_use_flash_attention_2').style.display = 'table-row';
+    document.getElementById('hf_waitress_torch_device_map').style.display = 'table-row';
+    document.getElementById('hf_waitress_torch_dtype').style.display = 'table-row';
+    document.getElementById('hf_waitress_pipeline_task').style.display = 'table-row';
+    document.getElementById('hf_waitress_quantization').style.display = 'table-row';
+    document.getElementById('hf_waitress_quantization_level').style.display = 'table-row';
+    document.getElementById('hf_waitress_hqq_group_size').style.display = 'table-row';
+    document.getElementById('hf_waitress_minp_value').style.display = 'table-row';
+    document.getElementById('hf_waitress_return_full_text').style.display = 'table-row';
 }
 
 
@@ -1695,10 +1697,10 @@ function hideExl3SamplingParams() {
 
 
 function showExl3SamplingParams() {
-    document.getElementById('hf_waitress_minp_value').style.display = 'block';
-    document.getElementById('hf_waitress_repetition_penalty_value').style.display = 'block';
-    document.getElementById('hf_waitress_presence_penalty_value').style.display = 'block';
-    document.getElementById('hf_waitress_frequency_penalty_value').style.display = 'block';
+    document.getElementById('hf_waitress_minp_value').style.display = 'table-row';
+    document.getElementById('hf_waitress_repetition_penalty_value').style.display = 'table-row';
+    document.getElementById('hf_waitress_presence_penalty_value').style.display = 'table-row';
+    document.getElementById('hf_waitress_frequency_penalty_value').style.display = 'table-row';
 }
 
 

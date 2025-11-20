@@ -1314,8 +1314,51 @@ tr:hover {
     background-color: #7057af;
 }
 
-.settings-requiring-restart-container, .hf-waitress-diffusers-configuration-div {
-    border: 1px solid #3A3E41;
+.settings-table-container table {
+    border-collapse: separate !important;
+    border-spacing: 0px !important;
+}
+
+.settings-table-container th {
+    text-align: center;
+}
+
+.settings-table-container td, .settings-table-container th {
+    border-width: 1px !important;
+    padding: 15px !important;
+}
+
+.restart-settings-table td, .restart-settings-table th {
+    border-width: 1px !important;
+    border-color: red !important;
+    padding: 15px !important;
+}
+
+.settings_table_setting_name {
+    text-align: center;
+}
+
+.settings_table_setting_value {
+    text-align: center;
+}
+
+.settings-table-container input[type="range"] {
+    width: 120px !important;
+    vertical-align: middle !important;
+    cursor: pointer !important;
+}
+
+.settings-table-container span {
+    display: inline-block;
+    width: 35px; /* Prevents layout shift when numbers change (e.g. 0.9 vs 0.95) */
+    text-align: left;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.settings-requiring-restart-container {
+    /* border: 1px solid #3A3E41; */
+    border: 1px solid red;
     padding: 10px;
     position: relative;
     border-radius: 5px;
@@ -1354,7 +1397,13 @@ tr:hover {
     font-weight: 500;
 }
 
-.restart-warning i {
+.restart-warning-right-side-container {
+    padding-top: 15px;
+    font-size: 16px;    /*Adjusts the size of icon & text*/
+    font-weight: 500;
+}
+
+.restart-warning i, .restart-warning-right-side-container i {
     margin-right: 5px;
     color: #ffcc00;
 }

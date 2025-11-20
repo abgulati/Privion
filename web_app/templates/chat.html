@@ -272,16 +272,6 @@
                                         <br>
 
                                         <div id="hf_waitress_div" style="display: none;">
-                                        
-                                            <!-- <div id="localHfLlmSelection">
-                                                <label style="margin-bottom: 3px;">Select a local LLM:</label>
-                                                <br>
-                                                <select class="modal-selects" name="hf_model_choice" id="hfModelDropdown">
-                                                    
-                                                </select>
-                                            </div>
-
-                                            <br> -->
 
                                             <div class="hf-waitress-llm-custom-select llm-settings-standard-styling" id="hf-waitress-llm-custom-select">
                                                 <label style="margin-bottom: 3px;">Select a local LLM:</label>
@@ -342,48 +332,73 @@
                                             <!-- <br> -->
 
                                             <div class="hf-waitress-diffusers-configuration-div" id="hf-waitress-diffusers-configuration-div" style="display: none;">
-                                                
-                                                <div id="hf_waitress_diffusers_low_vram_optimizations" title="Instant load-times, slow CPU renders. Recommended for most users." class="llm-settings-standard-styling">
-                                                    <label class="hf-select-settings-labels-group">Low VRAM Optimizations for FLUX - Enable CPU Offload, VAE Slicing & Tiling?</label>
-                                                    <input type="radio" id="hf_waitress_diffusers_low_vram_optimizations_yes" name="hf_diffusers_use_low_vram_optimizations" value="y" style="margin-left: 7px;"> Yes (Default)
-                                                    <input type="radio" id="hf_waitress_diffusers_low_vram_optimizations_no" name="hf_diffusers_use_low_vram_optimizations" value="n" style="margin-left: 7px;"> No
-                                                </div>
-    
-                                                <div id="hf_waitress_diffusers_fp8" title="Very slow load-times, fast GPU renders. Requires Optimum-Quanto Python package. NOT recommended for most users!" class="llm-settings-standard-styling">
-                                                    <label class="hf-select-settings-labels-group">FP8 Quantized FLUX Inferencing - GPU Inferencing Under 16GB VRAM?</label>
-                                                    <input type="radio" id="hf_waitress_diffusers_fp8_yes" name="hf_diffusers_use_fp8" value="y" style="margin-left: 7px;"> Yes
-                                                    <input type="radio" id="hf_waitress_diffusers_fp8_no" name="hf_diffusers_use_fp8" value="n" style="margin-left: 7px;"> No (Default)
-                                                </div>
-    
-                                                <div id="hf_waitress_diffusers_guidance_scale" class="llm-settings-standard-styling">
-                                                    <label for="HfDGuidanceScaleSlider" class="hf-select-settings-labels-group">Guidance Scale (Only for Guidance-Distilled Models, example: Flux-Dev (default: 7.0). Enable by setting > 1) (X-Guidance-Scale): </label>
-                                                    <input type="range" id="HfDGuidanceScaleSlider" min="0" max="2" step="0.1" value="0.0">
-                                                    <span id="HfDGuidanceScaleSliderValue">0.0</span>
-                                                </div>
-    
-                                                <div id="hf_waitress_diffusers_height" class="restart-settings-group llm-settings-standard-styling">
-                                                    <label for="HfDHeight" class="hf-select-settings-labels-group">Height (Y-Height): </label>
-                                                    <input type="number" id="HfDHeight" min="0" class="settings-input-fields" value="768">
+
+                                                <div class="settings-table-container">
+                                                    <table class="settings-table">
+                                                        <tr class="settings-table-header-row">
+                                                            <th style="width: 20%;">Sampling Parameters</th>
+                                                            <th>Description</th>
+                                                            <th style="width: 20%;">Value</th>
+                                                        </tr>
+                                                        <tr class="settings-table-row" id="hf_waitress_diffusers_guidance_scale">
+                                                            <td class="settings_table_setting_name">X-Guidance-Scale </td>
+                                                            <td class="settings_table_setting_description">Guidance Scale for FLUX Inferencing. Only for Guidance-Distilled Models, example: Flux-Dev (default: 7.0). Enable by setting > 1.</td>
+                                                            <td class="settings_table_setting_value"><input type="number" id="HfDGuidanceScaleSlider" min="0" max="2" step="0.1" value="0.0"></td>
+                                                        </tr>
+                                                        <tr class="settings-table-row" id="hf_waitress_diffusers_height">
+                                                            <td class="settings_table_setting_name">Y-Height </td>
+                                                            <td class="settings_table_setting_description">Height for FLUX Inferencing.</td>
+                                                            <td class="settings_table_setting_value"><input type="number" id="HfDHeight" min="0" class="settings-input-fields" value="768"></td>
+                                                        </tr>
+                                                        <tr class="settings-table-row" id="hf_waitress_diffusers_width">
+                                                            <td class="settings_table_setting_name">X-Width </td>
+                                                            <td class="settings_table_setting_description">Width for FLUX Inferencing.</td>
+                                                            <td class="settings_table_setting_value"><input type="number" id="HfDWidth" min="0" class="settings-input-fields" value="1360"></td>
+                                                        </tr>
+                                                        <tr class="settings-table-row" id="hf_waitress_diffusers_num_inference_steps">
+                                                            <td class="settings_table_setting_name">X-Num-Inference-Steps </td>
+                                                            <td class="settings_table_setting_description">Number of Inference Steps for FLUX Inferencing.</td>
+                                                            <td class="settings_table_setting_value"><input type="number" id="HfDNumInfSteps" min="0" class="settings-input-fields" value="3"></td>
+                                                        </tr>
+                                                        <tr class="settings-table-row" id="hf_waitress_diffusers_sequence_length">
+                                                            <td class="settings_table_setting_name">X-Max-Sequence-Length </td>
+                                                            <td class="settings_table_setting_description">Sequence Length for FLUX Inferencing.</td>
+                                                            <td class="settings_table_setting_value"><input type="number" id="HfDSeqLen" min="0" max="65535" class="settings-input-fields" value="256"></td>
+                                                        </tr>
+                                                        <tr class="settings-table-row" id="hf_waitress_diffusers_num_images_per_prompt">
+                                                            <td class="settings_table_setting_name">X-Num-Images-Per-Prompt </td>
+                                                            <td class="settings_table_setting_description">Number of Images per Prompt for FLUX Inferencing.</td>
+                                                            <td class="settings_table_setting_value"><input type="number" id="HfDNumImgPerPrompt" min="0"  max="10" class="settings-input-fields" value="1"></td>
+                                                        </tr>
+                                                    </table>
                                                 </div>
 
-                                                <div id="hf_waitress_diffusers_width" class="restart-settings-group llm-settings-standard-styling">
-                                                    <label for="HfDWidth" class="hf-select-settings-labels-group">Width (X-Width): </label>
-                                                    <input type="number" id="HfDWidth" min="0" class="settings-input-fields" value="1360">
+                                                <br>
+
+                                                <div class="restart-warning-right-side-container">
+                                                    <i class="fa-solid fa-exclamation-triangle"></i> Changes to the below settings trigger a restart!
                                                 </div>
 
-                                                <div id="hf_waitress_diffusers_num_inference_steps" class="restart-settings-group llm-settings-standard-styling">
-                                                    <label for="HfDNumInfSteps" class="hf-select-settings-labels-group">Number of Inference Steps (X-Num-Inference-Steps): </label>
-                                                    <input type="number" id="HfDNumInfSteps" min="0" class="settings-input-fields" value="3">
-                                                </div>
+                                                <br>
 
-                                                <div id="hf_waitress_diffusers_sequence_length" class="restart-settings-group llm-settings-standard-styling">
-                                                    <label for="HfDSeqLen" class="hf-select-settings-labels-group">Sequence Length (X-Max-Sequence-Length): </label>
-                                                    <input type="number" id="HfDSeqLen" min="0"  max="65535" class="settings-input-fields" value="256">
-                                                </div>
-
-                                                <div id="hf_waitress_diffusers_num_images_per_prompt" class="restart-settings-group">
-                                                    <label for="HfDNumImgPerPrompt" class="hf-select-settings-labels-group">Number of Images per Prompt (X-Num-Images-Per-Prompt): </label>
-                                                    <input type="number" id="HfDNumImgPerPrompt" min="0"  max="10" class="settings-input-fields" value="1">
+                                                <div class="settings-table-container">
+                                                    <table class="restart-settings-table">
+                                                        <tr class="settings-table-header-row">
+                                                            <th style="width: 20%;">Launch Args</th>
+                                                            <th>Description</th>
+                                                            <th style="width: 20%;">Value</th>
+                                                        </tr>
+                                                        <tr class="settings-table-row" id="hf_waitress_diffusers_low_vram_optimizations">
+                                                            <td class="settings_table_setting_name">--flux_low_vram_optimizations</td>
+                                                            <td class="settings_table_setting_description">Enable CPU Offload, VAE Slicing & Tiling for FLUX Inferencing.</td>
+                                                            <td class="settings_table_setting_value"><input type="checkbox" id="hf_waitress_diffusers_low_vram_optimizations_checkbox" name="hf_waitress_diffusers_low_vram_optimizations_checkbox"></td>
+                                                        </tr>
+                                                        <tr class="settings-table-row" id="hf_waitress_diffusers_fp8">
+                                                            <td class="settings_table_setting_name">--load_quantized_flux</td>
+                                                            <td class="settings_table_setting_description">Enable FP8 Quantized FLUX Inferencing for GPU Inferencing under 16GB VRAM.</td>
+                                                            <td class="settings_table_setting_value"><input type="checkbox" id="hf_waitress_diffusers_fp8_checkbox" name="hf_waitress_diffusers_fp8_checkbox"></td>
+                                                        </tr>
+                                                    </table>
                                                 </div>
 
                                             </div>
@@ -397,283 +412,326 @@
                                                 <div class="card card-body" style="background-color: #181A1B; border: none;">
                                                     
                                                     <!-- Add options here | TODO: style "Advanced Settings" button! -->
-        
-                                                    <button class="btn btn-primary llm-settings-standard-styling" type="button" id="resetHfLlmAdvancedDefaults">Reset to Defaults</button>
-        
+
                                                     <div class="form-group llm-settings-standard-styling" style="display: flex; align-items: center;">
                                                         <input type="checkbox" id="update_hf_access_token" name="update_hf_access_token" style="margin-right: 10px;">
                                                         <label for="update_hf_access_token" style="margin-right: 20px;">Update HF Access Token for Gated Models</label>
                                                         <input type="text" id="hf_access_token" name="hf_access_token" style="width: 100%;" disabled>
-                                                    </div>  
-        
-                                                    <div class="settings-requiring-restart-container llm-settings-standard-styling">
-
-                                                        <div class="hf-waitress-exl2-configuration-div restart-settings-group" id="hf-waitress-exl2-configuration-div" style="display: none; margin-bottom: 25px;">
-
-                                                            <div id="hf_waitress_exl2_no_flash_attn" class="restart-settings-group llm-settings-standard-styling">
-                                                                <label class="hf-select-settings-labels-group">Disable Flash Attention 2? (--exl2_no_flash_attn):</label>
-                                                                <input type="radio" id="hf_waitress_exl2_no_flash_attn_yes" name="hf_use_exl2_no_flash_attn" value="y" style="margin-left: 7px;"> Yes
-                                                                <input type="radio" id="hf_waitress_exl2_no_flash_attn_no" name="hf_use_exl2_no_flash_attn" value="n" style="margin-left: 7px;"> No (Default)
-                                                            </div>
-                                                
-                                                            <div id="hf_waitress_exl2_bpw" class="restart-settings-group llm-settings-standard-styling">
-                                                                <label for="HfwExl2Bpw" class="hf-select-settings-labels-group">Bits Per Word (--exl2_bpw): </label>
-                                                                <input type="number" id="HfwExl2Bpw" min="2.0" max="8.0" step="0.01" class="settings-input-fields" value="3.0">
-                                                            </div>
-            
-                                                            <div id="hf_waitress_exl2_max_seq_len" class="restart-settings-group llm-settings-standard-styling">
-                                                                <label for="HfwExl2MaxSeqLen" class="hf-select-settings-labels-group">Max Sequence Length [Must be multiple of 256] (--exl2_max_seq_len): </label>
-                                                                <input type="number" id="HfwExl2MaxSeqLen" min="1024" step="1" class="settings-input-fields" value="2048">
-                                                            </div>
-            
-                                                            <div id="hf_waitress_exl2_cache_type" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling" style="width: 100%;">
-                                                                <label class="hf-select-settings-labels-group">Cache Type (--exl2_cache_type):</label>
-                                                                <br>
-                                                                <select class="modal-selects" id="hf_waitress_exl2_cache_type_choice" style="width: 100%; max-width: 20vh;">
-                                                                    <option value="ExLlamaV2Cache">Full ExLlamaV2Cache (default)</option>
-                                                                    <option value="c8">FP8-bit</option>
-                                                                    <option value="cq4">Q4 (Recommended)</option>
-                                                                    <option value="cq6">Q6</option>
-                                                                    <option value="cq8">Q8</option>
-                                                                </select>
-                                                            </div>
-            
-                                                            <div class="form-group">
-                                                                <input type="checkbox" id="hf_waitress_exl2_force_regenerate_measurement" name="hf_waitress_exl2_force_regenerate_measurement">
-                                                                <label for="hf_waitress_exl2_force_regenerate_measurement">Force Regenerate Measurement File?</label>
-                                                            </div>
-            
-                                                        </div>
-
-                                                        <div class="hf-waitress-exl3-configuration-div restart-settings-group" id="hf-waitress-exl3-configuration-div" style="display: none; margin-bottom: 25px;">
-
-                                                            <div id="hf_waitress_exl3_bpw" class="restart-settings-group llm-settings-standard-styling">
-                                                                <label for="HfwExl3Bpw" class="hf-select-settings-labels-group">Bits Per Word (--exl3_bpw | Default: 3.0): </label>
-                                                                <input type="number" id="HfwExl3Bpw" min="2.0" max="8.0" step="0.01" class="settings-input-fields" value="3.0">
-                                                            </div>
-
-                                                            <div id="hf_waitress_exl3_device" class="restart-settings-group llm-settings-standard-styling">
-                                                                <label for="HfwExl3Device" class="hf-select-settings-labels-group">Device (--exl3_device | Default: cuda:0): </label>
-                                                                <input type="text" id="HfwExl3Device" class="settings-input-fields" value="cuda:0">
-                                                            </div>
-
-                                                            <div id="hf_waitress_exl3_resume_quant_job" class="restart-settings-group llm-settings-standard-styling">
-                                                                <label for="HfwExl3ResumeQuantJob" class="hf-select-settings-labels-group">Resume Quantization Job (--exl3_resume_quant_job | Default: False): </label>
-                                                                <input type="checkbox" id="HfwExl3ResumeQuantJob" name="hf_waitress_exl3_resume_quant_job">
-                                                            </div>
-
-                                                            <div id="hf_waitress_exl3_total_context" class="restart-settings-group llm-settings-standard-styling">
-                                                                <label for="HfwExl3TotalContext" class="hf-select-settings-labels-group">Total Context (--exl3_total_context | Default: 2048): </label>
-                                                                <input type="number" id="HfwExl3TotalContext" min="1024" step="1" class="settings-input-fields" value="2048">
-                                                            </div>
-
-                                                            <div id="hf_waitress_exl3_tensor_parallel" class="restart-settings-group llm-settings-standard-styling">
-                                                                <label for="HfwExl3TensorParallel" class="hf-select-settings-labels-group">Tensor Parallel (--exl3_tensor_parallel | Default: False): </label>
-                                                                <input type="checkbox" id="HfwExl3TensorParallel" name="hf_waitress_exl3_tensor_parallel">
-                                                            </div>
-
-                                                            <div id="hf_waitress_exl3_tp_output_device" class="restart-settings-group llm-settings-standard-styling">
-                                                                <label for="HfwExl3TpOutputDevice" class="hf-select-settings-labels-group">Tensor Parallel Output Device (--exl3_tp_output_device | Eg: cuda:1 | Default: None): </label>
-                                                                <input type="text" id="HfwExl3TpOutputDevice" class="settings-input-fields" value="None">
-                                                            </div>
-
-                                                            <div id="hf_waitress_exl3_use_per_device" class="restart-settings-group llm-settings-standard-styling">
-                                                                <label for="HfwExl3UsePerDevice" class="hf-select-settings-labels-group">Use Per Device (--exl3_use_per_device | Eg: List - [20, 0, 15] | Default: None): </label>
-                                                                <input type="text" id="HfwExl3UsePerDevice" class="settings-input-fields" value="None">
-                                                            </div>
-
-                                                            <div id="hf_waitress_exl3_max_chunk_size" class="restart-settings-group llm-settings-standard-styling">
-                                                                <label for="HfwExl3MaxChunkSize" class="hf-select-settings-labels-group">Max Chunk Size (--exl3_max_chunk_size | Default: 2048): </label>
-                                                                <input type="number" id="HfwExl3MaxChunkSize" min="1024" step="1" class="settings-input-fields" value="2048">
-                                                            </div>
-
-                                                            <div id="hf_waitress_exl3_max_batch_size" class="restart-settings-group llm-settings-standard-styling">
-                                                                <label for="HfwExl3MaxBatchSize" class="hf-select-settings-labels-group">Max Batch Size (--exl3_max_batch_size | Default: 256): </label>
-                                                                <input type="number" id="HfwExl3MaxBatchSize" min="1" step="1" class="settings-input-fields" value="256">
-                                                            </div>
-
-                                                            <div id="hf_waitress_exl3_show_gen_visualizer" class="restart-settings-group llm-settings-standard-styling" style="margin-bottom: 0px;">
-                                                                <label for="HfwExl3ShowGenVisualizer" class="hf-select-settings-labels-group">Show Generation Visualizer (--exl3_show_gen_visualizer | Default: False): </label>
-                                                                <input type="checkbox" id="HfwExl3ShowGenVisualizer" name="hf_waitress_exl3_show_gen_visualizer">
-                                                            </div>
-
-                                                        </div>
-
-                                                        <div id="hf_waitress_use_flash_attention_2" class="restart-settings-group llm-settings-standard-styling">
-                                                            <label class="hf-select-settings-labels-group">Use Flash Attention 2? Ensure hardware and software requirements met (--use_flash_attention_2):</label>
-                                                            <input type="radio" id="hf_waitress_use_flash_attention_2_yes" name="hf_use_fa2" value="y" style="margin-left: 7px;"> Yes
-                                                            <input type="radio" id="hf_waitress_use_flash_attention_2_no" name="hf_use_fa2" value="n" style="margin-left: 7px;"> No (Default)
-                                                        </div>
-    
-                                                        <div id="hf_waitress_torch_device_map" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
-                                                            <label class="hf-select-settings-labels-group">Select Inference Device basis appropriate PyTorch Installation (--torch_device_map):</label>
-                                                            <br>
-                                                            <select class="modal-selects" id="hf_waitress_torch_device_map_choice">
-                                                                <option value="auto">auto (default)</option>
-                                                                <option value="cuda">CUDA</option>
-                                                                <option value="rocm">ROCm</option>
-                                                                <option value="cpu">CPU</option>
-                                                            </select>
-                                                        </div>
-            
-                                                        <div id="hf_waitress_torch_dtype" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
-                                                            <label class="hf-select-settings-labels-group">Select Torch data type basis model Tensor type (--torch_dtype):</label>
-                                                            <br>
-                                                            <select class="modal-selects" id="hf_waitress_torch_dtype_choice">
-                                                                <option value="auto">auto (default)</option>
-                                                                <option value="torch.bfloat16">torch.bfloat16</option>
-                                                                <option value="torch.float16">torch.float16</option>
-                                                                <option value="torch.float32">torch.float32</option>
-                                                                <option value="torch.float64">torch.float64</option>
-                                                                <option value="torch.int8">torch.int8</option>
-                                                                <option value="torch.int16">torch.int16</option>
-                                                                <option value="torch.int32">torch.int32</option>
-                                                                <option value="torch.int64">torch.int64</option>
-                                                                <option value="torch.uint8">torch.uint8</option>
-                                                                <option value="torch.bool">torch.bool</option>
-                                                            </select>
-                                                        </div>
-
-                                                        <div id="hf_waitress_pipeline_task" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
-                                                            <label class="hf-select-settings-labels-group">Select Pipeline Task (--pipeline_task):</label>
-                                                            <br>
-                                                            <select class="modal-selects" id="hf_waitress_pipeline_task_choice">
-                                                                <option value="text-generation">text-generation (default)</option>
-                                                                <option value="audio-classification">audio-classification (in-development)</option>
-                                                                <option value="automatic-speech-recognition">automatic-speech-recognition (in-development)</option>
-                                                                <option value="depth-estimation">depth-estimation (in-development)</option>
-                                                                <option value="document-question-answering">document-question-answering (in-development)</option>
-                                                                <option value="feature-extraction">feature-extraction (in-development)</option>
-                                                                <option value="fill-mask">fill-mask (in-development)</option>
-                                                                <option value="image-classification">image-classification (in-development)</option>
-                                                                <option value="image-feature-extraction">image-feature-extraction (in-development)</option>
-                                                                <option value="image-segmentation">image-segmentation (in-development)</option>
-                                                                <option value="image-to-image">image-to-image (in-development)</option>
-                                                                <option value="image-to-text">image-to-text (in-development)</option>
-                                                                <option value="mask-generation">mask-generation (in-development)</option>
-                                                                <option value="object-detection">object-detection (in-development)</option>
-                                                                <option value="question-answering">question-answering (in-development)</option>
-                                                                <option value="summarization">summarization (in-development)</option>
-                                                                <option value="table-question-answering">table-question-answering (in-development)</option>
-                                                                <option value="text2text-generation">text2text-generation (in-development)</option>
-                                                                <option value="text-classification">text-classification (in-development)</option>
-                                                                <option value="text-generation">text-generation (in-development)</option>
-                                                                <option value="text-to-audio">text-to-audio (in-development)</option>
-                                                                <option value="token-classification">token-classification (in-development)</option>
-                                                                <option value="translation">translation (in-development)</option>
-                                                                <option value="translation_xx_to_yy">translation_xx_to_yy (in-development)</option>
-                                                                <option value="video-classification">video-classification (in-development)</option>
-                                                                <option value="visual-question-answering">visual-question-answering (in-development)</option>
-                                                                <option value="zero-shot-classification">zero-shot-classification (in-development)</option>
-                                                                <option value="zero-shot-image-classification">zero-shot-image-classification (in-development)</option>
-                                                                <option value="zero-shot-audio-classification">zero-shot-audio-classification (in-development)</option>
-                                                                <option value="zero-shot-object-detection">zero-shot-object-detection (in-development)</option>
-                                                            </select>
-                                                        </div>
-
-                                                        <div id="hf_waitress_quantization" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
-                                                            <label class="hf-select-settings-labels-group">Quantization Method (--quantize):</label>
-                                                            <br>
-                                                            <select class="modal-selects" id="hf_waitress_quantization_choice">
-                                                                <option value="quanto" title="Supports CPUs, NvCUDA, & Apple M-Silicon Macs">Optimum-Quanto (Default)</option>
-                                                                <option value="bitsandbytes" title="Primarily Supports NvCUDA. CPU & AMD ROCm Experimentally Supported. Apple Silicon Macs Not Supported Yet.">BitsAndBytes</option>
-                                                                <option value="hqq" title="Supports CPUs and NvCUDA Only">HQQ</option>
-                                                                <option value="n">No Quantization</option>
-                                                            </select>
-                                                        </div>
-
-
-                                                        <div id="hf_waitress_quantization_level" class="restart-settings-group hf-select-settings-divs-group llm-settings-standard-styling">
-                                                            <label class="hf-select-settings-labels-group">Quantization Level (--quant_level):</label>
-                                                            <br>
-                                                            <select class="modal-selects" id="hf_waitress_quantization_level_choice">
-                                                                <option value="float8" title="For use with Quanto: Float8 Quantization of Weights & Activations. ">Float8 (Quanto Only)</option>
-                                                                <option value="int8" title="Supported by All.">Int8 (Recommended)</option>
-                                                                <option value="int4" title="Supported by All.">Int4 (Default)</option>
-                                                                <option value="int3" title="Supported by HQQ Only.">Int3 (HQQ Only)</option>
-                                                                <option value="int2" title="Supported by Quanto & HQQ only.">Int2 (Quanto & HQQ only)</option>
-                                                                <option value="int1" title="Supported by HQQ Only - Not Recommended!">Int1 (HQQ Only - Not Recommended!)</option>
-                                                            </select>
-                                                        </div>
-            
-                                                        <div id="hf_waitress_hqq_group_size" class="restart-settings-group llm-settings-standard-styling" style="display: none;">
-                                                            <label for="HfwHqqGroupSize" class="hf-select-settings-labels-group">HQQ Group Size (must be divisible by group_size) (--hqq_group_size): </label>
-                                                            <input class="settings-input-fields" type="number" id="HfwHqqGroupSize" min="0" value="64">
-                                                        </div>
-
-                                                        <div id="hf_waitress_serving_url" class="restart-settings-group llm-settings-standard-styling">
-                                                            <label for="HfwServingUrl" class="hf-select-settings-labels-group">HF-Waitress Server Serving URL on Host Machine (default: 0.0.0.0) (--hf_waitress_serving_url): </label>
-                                                            <input class="settings-input-fields" type="text" id="HfwServingUrl" value="0.0.0.0">
-                                                        </div>
-
-                                                        <div id="hf_waitress_access_url" class="restart-settings-group llm-settings-standard-styling">
-                                                            <label for="HfwAccessUrl" class="hf-select-settings-labels-group">HF-Waitress Server Access URL from Web Browser (default: localhost) (--hf_waitress_access_url): </label>
-                                                            <input class="settings-input-fields" type="text" id="HfwAccessUrl" value="localhost">
-                                                        </div>
-        
-                                                        <div id="hf_waitress_port" class="restart-settings-group llm-settings-standard-styling">
-                                                            <label for="HfwPort" class="hf-select-settings-labels-group">HF-Waitress Server Port (default: 9069) (--hf_waitress_server_port): </label>
-                                                            <input class="settings-input-fields" type="number" id="HfwPort" min="0"  max="65535" value="9069">
-                                                        </div>
-                
-                                                        <div class="restart-warning">
-                                                            <i class="fa-solid fa-exclamation-triangle"></i> Changes trigger restart!
-                                                        </div>
-        
-                                                    </div>
-                    
-                                                    <div id="hf_waitress_max_new_tokens" class="llm-settings-standard-styling">
-                                                        <label for="HfwMaxNewToks" class="hf-select-settings-labels-group">Maximum New Tokens (X-Max-New-Tokens): </label>
-                                                        <input type="number" id="HfwMaxNewToks" min="100" class="settings-input-fields" value="500">
                                                     </div>
 
-                                                    <div id="hf_waitress_return_full_text" class="hf-select-settings-divs-group llm-settings-standard-styling">
-                                                        <label class="hf-select-settings-labels-group">Return Full Text (X-Return-Full-Text):</label>
-                                                        <input type="radio" id="hf_waitress_return_full_text_yes" name="hf_return_full_text" value="y" style="margin-left: 7px;"> Yes
-                                                        <input type="radio" id="hf_waitress_return_full_text_no" name="hf_return_full_text" value="n" style="margin-left: 7px;"> No (Default)
-                                                    </div>
-        
-                                                    <div id="hf_waitress_temperature_value" class="llm-settings-standard-styling">
-                                                        <label for="HfwTempSlider" class="hf-select-settings-labels-group">Temperature (Randomness of generated text) (X-Temperature): </label>
-                                                        <input type="range" id="HfwTempSlider" min="0" max="2" step="0.01" value="0.3">
-                                                        <span id="HfwTempSliderValue">0.3</span>
-                                                    </div>
-                
-                                                    <div id="hf_waitress_topk_value" class="llm-settings-standard-styling">
-                                                        <label for="HfwTopkSlider" class="hf-select-settings-labels-group">Limit to K most probable tokens (X-Top-K): </label>
-                                                        <input type="range" id="HfwTopkSlider" min="-1" max="100" step="1" value="40">
-                                                        <span id="HfwTopkSliderValue">40</span>
-                                                    </div>
-                
-                                                    <div id="hf_waitress_topp_value" class="llm-settings-standard-styling">
-                                                        <label for="HfwToppSlider" class="hf-select-settings-labels-group">Limit to a subset of tokens with a cumulative probability above (X-Top-P): </label>
-                                                        <input type="range" id="HfwToppSlider" min="0" max="1" step="0.01" value="0.95">
-                                                        <span id="HfwToppSliderValue">0.95</span>
-                                                    </div>
-                
-                                                    <div id="hf_waitress_minp_value" class="llm-settings-standard-styling">
-                                                        <label for="HfwMinpSlider" class="hf-select-settings-labels-group">Minimum probability for considering a token, relative to most likely (X-Min-P): </label>
-                                                        <input type="range" id="HfwMinpSlider" min="0" max="1" step="0.01" value="0.05">
-                                                        <span id="HfwMinpSliderValue">0.05</span>
+                                                    <div class="settings-table-container">
+                                                        <table class="settings-table">
+                                                            <tr class="settings-table-header-row">
+                                                                <th style="width: 20%;">Sampling Parameters</th>
+                                                                <th>Description</th>
+                                                                <th style="width: 20%;">Value</th>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_max_new_tokens">     <!--Row IDs below are provided for JS (row hiding etc.!-->
+                                                                <td class="settings_table_setting_name">Max New Tokens</td>
+                                                                <td class="settings_table_setting_description">Maximum number of new tokens to generate</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="HfwMaxNewToks" min="100" class="settings-input-fields" value="500"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_return_full_text">
+                                                                <td class="settings_table_setting_name">Return Full Text (Developers Only!)</td>
+                                                                <td class="settings_table_setting_description">When set to True, the LLM response contains the entire messages list with the latest response appended at the end. [Default: Disabled]</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="hf_waitress_return_full_text_checkbox" name="hf_waitress_return_full_text_checkbox"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_temperature_value">
+                                                                <td class="settings_table_setting_name">Temperature</td>
+                                                                <td class="settings_table_setting_description">Set LLM temperature on a scale of 0.0 to 2.0. [Default: 0.1]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="HfwTempSlider" min="0" max="2" step="0.01" value="0.3"><span id="HfwTempSliderValue">0.3</span></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_topk_value">
+                                                                <td class="settings_table_setting_name">Top-K</td>
+                                                                <td class="settings_table_setting_description">Limit the next token selection to the K most probable tokens. [Default: 40]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="HfwTopkSlider" min="-1" max="100" step="1" value="40"><span id="HfwTopkSliderValue">40</span></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_topp_value">
+                                                                <td class="settings_table_setting_name">Top-P</td>
+                                                                <td class="settings_table_setting_description">Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P. [Default: 0.9]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="HfwToppSlider" min="0" max="1" step="0.01" value="0.95"><span id="HfwToppSliderValue">0.95</span></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_minp_value">
+                                                                <td class="settings_table_setting_name">Min-P</td>
+                                                                <td class="settings_table_setting_description">The minimum probability for a token to be considered, relative to the probability of the most likely token. [Default: 0.1]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="HfwMinpSlider" min="0" max="1" step="0.01" value="0.05"><span id="HfwMinpSliderValue">0.05</span></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_repetition_penalty_value">
+                                                                <td class="settings_table_setting_name">Repetition Penalty</td>
+                                                                <td class="settings_table_setting_description">Repetition penalty to discourage the generation of repeated tokens. [Default: 1.0]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="HfwRepetitionPenaltySlider" min="0" max="2" step="0.01" value="1.0"><span id="HfwRepetitionPenaltySliderValue">1.0</span></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_presence_penalty_value">
+                                                                <td class="settings_table_setting_name">Presence Penalty</td>
+                                                                <td class="settings_table_setting_description">Presence penalty to discourage the generation of tokens that have already been generated. [Default: 0.0]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="HfwPresencePenaltySlider" min="-2" max="2" step="0.01" value="0.0"><span id="HfwPresencePenaltySliderValue">0.0</span></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_frequency_penalty_value">
+                                                                <td class="settings_table_setting_name">Frequency Penalty</td>
+                                                                <td class="settings_table_setting_description">Frequency penalty to discourage the generation of tokens that have already been generated. [Default: 0.0]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="HfwFrequencyPenaltySlider" min="-2" max="2" step="0.01" value="0.0"><span id="HfwFrequencyPenaltySliderValue">0.0</span></td>
+                                                            </tr>
+                                                        </table>
                                                     </div>
 
-                                                    <div id="hf_waitress_repetition_penalty_value" class="llm-settings-standard-styling">
-                                                        <label for="HfwRepetitionPenaltySlider" class="hf-select-settings-labels-group">Repetition Penalty (X-Repetition-Penalty): </label>
-                                                        <input type="range" id="HfwRepetitionPenaltySlider" min="0" max="2" step="0.01" value="1.0">
-                                                        <span id="HfwRepetitionPenaltySliderValue">1.0</span>
+                                                    <br>
+
+                                                    <div class="restart-warning-right-side-container">
+                                                        <i class="fa-solid fa-exclamation-triangle"></i> Changes to the below settings trigger a restart!
                                                     </div>
 
-                                                    <div id="hf_waitress_presence_penalty_value" class="llm-settings-standard-styling">
-                                                        <label for="HfwPresencePenaltySlider" class="hf-select-settings-labels-group">Presence Penalty (X-Presence-Penalty): </label>
-                                                        <input type="range" id="HfwPresencePenaltySlider" min="-2" max="2" step="0.01" value="0.0">
-                                                        <span id="HfwPresencePenaltySliderValue">0.0</span>
+                                                    <br>
+
+                                                    <div class="hf-waitress-exl2-configuration-div restart-settings-group" id="hf-waitress-exl2-configuration-div" style="display: none; margin-bottom: 25px;">
+
+                                                        <div class="settings-table-container">
+                                                            <table class="restart-settings-table">
+                                                                <tr class="settings-table-header-row">
+                                                                    <th style="width: 20%;">Launch Args</th>
+                                                                    <th>Description</th>
+                                                                    <th style="width: 20%;">Value</th>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl2_no_flash_attn">
+                                                                    <td class="settings_table_setting_name">--exl2_no_flash_attn</td>
+                                                                    <td class="settings_table_setting_description">Disable Flash Attention 2 for ExLlamaV2 backend.</td>
+                                                                    <td class="settings_table_setting_value"><input type="checkbox" id="hf_use_exl2_no_flash_attn_checkbox" name="hf_use_exl2_no_flash_attn_checkbox"></td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl2_bpw">
+                                                                    <td class="settings_table_setting_name">--exl2_bpw</td>
+                                                                    <td class="settings_table_setting_description">Bits Per Word for ExLlamaV2 backend. Range: 1.00 to 8.0. Default: 3.0</td>
+                                                                    <td class="settings_table_setting_value"><input type="number" id="HfwExl2Bpw" min="1.0" max="8.0" step="0.01" class="settings-input-fields" value="3.0"></td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl2_max_seq_len">
+                                                                    <td class="settings_table_setting_name">--exl2_max_seq_len</td>
+                                                                    <td class="settings_table_setting_description">Max Sequence Length for ExLlamaV2 backend.</td>
+                                                                    <td class="settings_table_setting_value"><input type="number" id="HfwExl2MaxSeqLen" min="1024" step="1" class="settings-input-fields" value="2048"></td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl2_cache_type">
+                                                                    <td class="settings_table_setting_name">--exl2_cache_type</td>
+                                                                    <td class="settings_table_setting_description">Cache Type for ExLlamaV2 backend.</td>
+                                                                    <td class="settings_table_setting_value">
+                                                                        <select class="modal-selects" id="hf_waitress_exl2_cache_type_choice" style="width: 100%; max-width: 20vh;">
+                                                                            <option value="ExLlamaV2Cache">Full ExLlamaV2Cache (default)</option>
+                                                                            <option value="c8">FP8-bit</option>
+                                                                            <option value="cq4">Q4 (Recommended)</option>
+                                                                            <option value="cq6">Q6</option>
+                                                                            <option value="cq8">Q8</option>
+                                                                        </select>
+                                                                    </td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl2_force_regen">
+                                                                    <td class="settings_table_setting_name">--exl2_force_regenerate_measurement</td>
+                                                                    <td class="settings_table_setting_description">Force Regenerate Measurement File for ExLlamaV2 backend.</td>
+                                                                    <td class="settings_table_setting_value"><input type="checkbox" id="hf_waitress_exl2_force_regenerate_measurement" name="hf_waitress_exl2_force_regenerate_measurement"></td>
+                                                                </tr>
+                                                            </table>
+                                                        </div>
                                                     </div>
-                                                    
-                                                    <div id="hf_waitress_frequency_penalty_value" class="llm-settings-standard-styling">
-                                                        <label for="HfwFrequencyPenaltySlider" class="hf-select-settings-labels-group">Frequency Penalty (X-Frequency-Penalty): </label>
-                                                        <input type="range" id="HfwFrequencyPenaltySlider" min="-2" max="2" step="0.01" value="0.0">
-                                                        <span id="HfwFrequencyPenaltySliderValue">0.0</span>
+
+                                                    <div class="hf-waitress-exl3-configuration-div restart-settings-group" id="hf-waitress-exl3-configuration-div" style="display: none; margin-bottom: 25px;">
+
+                                                        <div class="settings-table-container">
+                                                            <table class="restart-settings-table">
+                                                                <tr class="settings-table-header-row">
+                                                                    <th style="width: 20%;">Launch Args</th>
+                                                                    <th>Description</th>
+                                                                    <th style="width: 20%;">Value</th>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl3_bpw">
+                                                                    <td class="settings_table_setting_name">--exl3_bpw</td>
+                                                                    <td class="settings_table_setting_description">Bits Per Word for ExLlamaV3 backend. Range: 1.00 to 8.0. Default: 3.0</td>
+                                                                    <td class="settings_table_setting_value"><input type="number" id="HfwExl3Bpw" min="1.0" max="8.0" step="0.01" class="settings-input-fields" value="3.0"></td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl3_device">
+                                                                    <td class="settings_table_setting_name">--exl3_device</td>
+                                                                    <td class="settings_table_setting_description">If specified, load to single device, e.g. "cuda:0"</td>
+                                                                    <td class="settings_table_setting_value"><input type="text" id="HfwExl3Device" class="settings-input-fields" value="cuda:0"></td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl3_resume_quant_job">
+                                                                    <td class="settings_table_setting_name">--exl3_resume_quant_job</td>
+                                                                    <td class="settings_table_setting_description">Resume Quantization Job for ExLlamaV3 backend.</td>
+                                                                    <td class="settings_table_setting_value"><input type="checkbox" id="HfwExl3ResumeQuantJob"></td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl3_total_context">
+                                                                    <td class="settings_table_setting_name">--exl3_total_context</td>
+                                                                    <td class="settings_table_setting_description">Total Context for ExLlamaV3 backend.</td>
+                                                                    <td class="settings_table_setting_value"><input type="number" id="HfwExl3TotalContext" min="1024" step="1" class="settings-input-fields" value="2048"></td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl3_tensor_parallel">
+                                                                    <td class="settings_table_setting_name">--exl3_tensor_parallel</td>
+                                                                    <td class="settings_table_setting_description">Load in tensor-parallel mode. By default, attempt to split model according to available VRAM.
+                                                                        Allocation can be overridden with use_per_device.</td>
+                                                                    <td class="settings_table_setting_value"><input type="checkbox" id="HfwExl3TensorParallel"></td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl3_tp_output_device">
+                                                                    <td class="settings_table_setting_name">--exl3_tp_output_device</td>
+                                                                    <td class="settings_table_setting_description">(optional) If loading with tensor_p == True, device on which to gather output logits. 
+                                                                        Must be one of the active devices in the split. Default is first device in split</td>
+                                                                    <td class="settings_table_setting_value"><input type="text" id="HfwExl3TpOutputDevice" class="settings-input-fields" value="None"></td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl3_use_per_device">
+                                                                    <td class="settings_table_setting_name">--exl3_use_per_device</td>
+                                                                    <td class="settings_table_setting_description">(optional) Amount of memory to use per device. Eg: use up to 23 GB on cuda:0 and 
+                                                                        cuda:2, do not load on cuda:1 and cuda:3 (if present) model.load(use_per_device = [23, 0, 23])</td>
+                                                                    <td class="settings_table_setting_value"><input type="text" id="HfwExl3UsePerDevice" class="settings-input-fields" value="None"></td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl3_max_chunk_size">
+                                                                    <td class="settings_table_setting_name">--exl3_max_chunk_size</td>
+                                                                    <td class="settings_table_setting_description">I] For Model Loading: The maximum number of tokens to expect in a single forward pass. 
+                                                                        Informs the layer split only, and makes no difference when loading on a single device.
+                                                                        II] For Generation: Maximum number of tokens to process in parallel during prefill (prompt ingestion). Should not
+                                                                        exceed the model's max_input_len but can be lowered to trade off prompt speed for a shorter
+                                                                        interruption to ongoing jobs when a new job is started.</td>
+                                                                    <td class="settings_table_setting_value"><input type="number" id="HfwExl3MaxChunkSize" min="1024" step="1" class="settings-input-fields" value="2048"></td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl3_max_batch_size">
+                                                                    <td class="settings_table_setting_name">--exl3_max_batch_size</td>
+                                                                    <td class="settings_table_setting_description">The maximum number of sequences to process in parallel. 
+                                                                        The generator will also limit this dynamically considering the available cache space.</td>
+                                                                    <td class="settings_table_setting_value"><input type="number" id="HfwExl3MaxBatchSize" min="1" step="1" class="settings-input-fields" value="256"></td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl3_show_gen_visualizer">
+                                                                    <td class="settings_table_setting_name">--exl3_show_gen_visualizer</td>
+                                                                    <td class="settings_table_setting_description">Open window to render visualization of cache (for debug/demonstration purposes)</td>
+                                                                    <td class="settings_table_setting_value"><input type="checkbox" id="HfwExl3ShowGenVisualizer"></td>
+                                                                </tr>
+                                                            </table>
+                                                        </div>
                                                     </div>
+
+                                                    <div class="settings-table-container">
+                                                        <table class="restart-settings-table">
+                                                            <tr class="settings-table-header-row">
+                                                                <th style="width: 20%;">Launch Args</th>
+                                                                <th>Description</th>
+                                                                <th style="width: 20%;">Value</th>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_use_flash_attention_2">
+                                                                <td class="settings_table_setting_name">--use_flash_attention_2</td>
+                                                                <td class="settings_table_setting_description">Use Flash Attention 2 for Transformers backend.</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="hf_waitress_use_flash_attention_2_checkbox"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_pipeline_task">
+                                                                <td class="settings_table_setting_name">--pipeline_task</td>
+                                                                <td class="settings_table_setting_description">(Developers Only!) Pipeline Task for Transformers backend. [default: text-generation]</td>
+                                                                <td class="settings_table_setting_value">
+                                                                    <select class="modal-selects" id="hf_waitress_pipeline_task_choice">
+                                                                        <option value="text-generation">text-generation (default)</option>
+                                                                        <option value="audio-classification">audio-classification (in-development)</option>
+                                                                        <option value="automatic-speech-recognition">automatic-speech-recognition (in-development)</option>
+                                                                        <option value="depth-estimation">depth-estimation (in-development)</option>
+                                                                        <option value="document-question-answering">document-question-answering (in-development)</option>
+                                                                        <option value="feature-extraction">feature-extraction (in-development)</option>
+                                                                        <option value="fill-mask">fill-mask (in-development)</option>
+                                                                        <option value="image-classification">image-classification (in-development)</option>
+                                                                        <option value="image-feature-extraction">image-feature-extraction (in-development)</option>
+                                                                        <option value="image-segmentation">image-segmentation (in-development)</option>
+                                                                        <option value="image-to-image">image-to-image (in-development)</option>
+                                                                        <option value="image-to-text">image-to-text (in-development)</option>
+                                                                        <option value="mask-generation">mask-generation (in-development)</option>
+                                                                        <option value="object-detection">object-detection (in-development)</option>
+                                                                        <option value="question-answering">question-answering (in-development)</option>
+                                                                        <option value="summarization">summarization (in-development)</option>
+                                                                        <option value="table-question-answering">table-question-answering (in-development)</option>
+                                                                        <option value="text2text-generation">text2text-generation (in-development)</option>
+                                                                        <option value="text-classification">text-classification (in-development)</option>
+                                                                        <option value="text-generation">text-generation (in-development)</option>
+                                                                        <option value="text-to-audio">text-to-audio (in-development)</option>
+                                                                        <option value="token-classification">token-classification (in-development)</option>
+                                                                        <option value="translation">translation (in-development)</option>
+                                                                        <option value="translation_xx_to_yy">translation_xx_to_yy (in-development)</option>
+                                                                        <option value="video-classification">video-classification (in-development)</option>
+                                                                        <option value="visual-question-answering">visual-question-answering (in-development)</option>
+                                                                        <option value="zero-shot-classification">zero-shot-classification (in-development)</option>
+                                                                        <option value="zero-shot-image-classification">zero-shot-image-classification (in-development)</option>
+                                                                        <option value="zero-shot-audio-classification">zero-shot-audio-classification (in-development)</option>
+                                                                        <option value="zero-shot-object-detection">zero-shot-object-detection (in-development)</option>
+                                                                    </select>
+                                                                </td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_torch_device_map">
+                                                                <td class="settings_table_setting_name">--torch_device_map</td>
+                                                                <td class="settings_table_setting_description">Select Inference Device basis appropriate PyTorch Installation. [default: auto]</td>
+                                                                <td class="settings_table_setting_value">
+                                                                    <select class="modal-selects" id="hf_waitress_torch_device_map_choice">
+                                                                        <option value="auto">auto (default)</option>
+                                                                        <option value="cuda">CUDA</option>
+                                                                        <option value="rocm">ROCm</option>
+                                                                        <option value="cpu">CPU</option>
+                                                                    </select>
+                                                                </td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_torch_dtype">
+                                                                <td class="settings_table_setting_name">--torch_dtype</td>
+                                                                <td class="settings_table_setting_description">Select Torch data type basis model Tensor type. [default: auto]</td>
+                                                                <td class="settings_table_setting_value">
+                                                                    <select class="modal-selects" id="hf_waitress_torch_dtype_choice">
+                                                                        <option value="auto">auto (default)</option>
+                                                                        <option value="torch.bfloat16">torch.bfloat16</option>
+                                                                        <option value="torch.float16">torch.float16</option>
+                                                                        <option value="torch.float32">torch.float32</option>
+                                                                        <option value="torch.float64">torch.float64</option>
+                                                                        <option value="torch.int8">torch.int8</option>
+                                                                        <option value="torch.int16">torch.int16</option>
+                                                                        <option value="torch.int32">torch.int32</option>
+                                                                        <option value="torch.int64">torch.int64</option>
+                                                                        <option value="torch.uint8">torch.uint8</option>
+                                                                        <option value="torch.bool">torch.bool</option>
+                                                                    </select>
+                                                                </td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_quantization">
+                                                                <td class="settings_table_setting_name">--quantize</td>
+                                                                <td class="settings_table_setting_description">Quantization Type for Transformers backend. [default: auto]</td>
+                                                                <td class="settings_table_setting_value">
+                                                                    <select class="modal-selects" id="hf_waitress_quantization_choice">
+                                                                        <option value="quanto">Quanto [Default]</option>
+                                                                        <option value="bitsandbytes">BitsAndBytes [Recommended]</option>
+                                                                        <option value="hqq">HQQ</option>
+                                                                        <option value="n">No Quantization</option>
+                                                                    </select>
+                                                                </td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_quantization_level">
+                                                                <td class="settings_table_setting_name">--quant_level</td>
+                                                                <td class="settings_table_setting_description">Quantization Level for Transformers backend. [default: auto]</td>
+                                                                <td class="settings_table_setting_value">
+                                                                    <select class="modal-selects" id="hf_waitress_quantization_level_choice">
+                                                                        <option value="auto">auto (default)</option>
+                                                                        <option value="int8">int8</option>
+                                                                        <option value="int4">int4</option>
+                                                                        <option value="int2">int2</option>
+                                                                        <option value="int1">int1</option>
+                                                                        <option value="n">No Quantization</option>
+                                                                    </select>
+                                                                </td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_hqq_group_size">
+                                                                <td class="settings_table_setting_name">--hqq_group_size</td>
+                                                                <td class="settings_table_setting_description">Specify group_size for HQQ quantization. No restrictions as long as weight.numel() is divisible by the group_size. Remembers previously set value. Default: 64</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="HfwHqqGroupSize" min="1" step="1" class="settings-input-fields" value="64"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_serving_url">
+                                                                <td class="settings_table_setting_name">--hf_waitress_serving_url</td>
+                                                                <td class="settings_table_setting_description">HF-Waitress Server Serving URL on Host Machine - This is the IP passed to the WSGI serve() / ASGI run() method. [default: 0.0.0.0]</td>
+                                                                <td class="settings_table_setting_value"><input type="text" id="HfwServingUrl" class="settings-input-fields" value="0.0.0.0"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_access_url">
+                                                                <td class="settings_table_setting_name">--hf_waitress_access_url</td>
+                                                                <td class="settings_table_setting_description">HF-Waitress Server Access URL from Web Browser - This is the IP the Privion client-side will use to access the HF-Waitress server. [default: localhost]</td>
+                                                                <td class="settings_table_setting_value"><input type="text" id="HfwAccessUrl" class="settings-input-fields" value="localhost"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="hf_waitress_port">
+                                                                <td class="settings_table_setting_name">--hf_waitress_server_port</td>
+                                                                <td class="settings_table_setting_description">HF-Waitress Server Port - This is the port passed to the WSGI serve() / ASGI run() method. [default: 9069]</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="HfwPort" min="0"  max="65535" class="settings-input-fields" value="9069"></td>
+                                                            </tr>
+                                                        </table>
+                                                    </div>
+
+                                                    <br>
+
+                                                    <button class="btn btn-primary llm-settings-standard-styling" type="button" id="resetHfLlmAdvancedDefaults">Reset to Defaults</button>
                                                     
                                                 </div>
                                             </div>
@@ -731,248 +789,228 @@
                                                 <div class="card card-body" style="background-color: #181A1B; border: none;">
                                                     
                                                     <!-- Add options here | TODO: style "Advanced Settings" button! -->
+
+                                                    <div class="settings-table-container">
+                                                        <table class="settings-table">
+                                                            <tr class="settings-table-header-row">
+                                                                <th style="width: 20%;">Sampling Parameters</th>
+                                                                <th>Description</th>
+                                                                <th style="width: 20%;">Value</th>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="temperature_value">
+                                                                <td class="settings_table_setting_name">Temperature</td>
+                                                                <td class="settings_table_setting_description">Set LLM temperature on a scale of 0.0 to 2.0. [Default: 0.1]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="tempSlider" min="0" max="2" step="0.01" value="0.3"><span id="tempSliderValue">0.3</span></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="topk_value">
+                                                                <td class="settings_table_setting_name">Top-K</td>
+                                                                <td class="settings_table_setting_description">Limit the next token selection to the K most probable tokens. [Default: 40]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="topkSlider" min="-1" max="100" step="1" value="40"><span id="topkSliderValue">40</span></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="topp_value">
+                                                                <td class="settings_table_setting_name">Top-P</td>
+                                                                <td class="settings_table_setting_description">Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P. [Default: 0.9]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="toppSlider" min="0" max="1" step="0.01" value="0.95"><span id="toppSliderValue">0.95</span></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="minp_value">
+                                                                <td class="settings_table_setting_name">Min-P</td>
+                                                                <td class="settings_table_setting_description">The minimum probability for a token to be considered, relative to the probability of the most likely token. [Default: 0.1]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="minpSlider" min="0" max="1" step="0.01" value="0.05"><span id="minpSliderValue">0.05</span></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="nkeep_value">
+                                                                <td class="settings_table_setting_name">N-Keep</td>
+                                                                <td class="settings_table_setting_description">Prompt-tokens retained when context-size exceeded. [Default: 0 | Retain All: -1]</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="nkeepSlider" name="nkeepSlider" min="-1" class="settings-input-fields" value="0"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="repetition_penalty_value">
+                                                                <td class="settings_table_setting_name">Repetition Penalty</td>
+                                                                <td class="settings_table_setting_description">Repetition penalty to discourage the generation of repeated tokens. [Default: 1.0]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="repetitionPenaltySlider" min="0" max="2" step="0.01" value="1.0"><span id="repetitionPenaltySliderValue">1.0</span></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="presence_penalty_value">
+                                                                <td class="settings_table_setting_name">Presence Penalty</td>
+                                                                <td class="settings_table_setting_description">Presence penalty to discourage the generation of repeated tokens. [Default: 0.0]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="presencePenaltySlider" min="-2" max="2" step="0.01" value="0.0"><span id="presencePenaltySliderValue">0.0</span></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="frequency_penalty_value">
+                                                                <td class="settings_table_setting_name">Frequency Penalty</td>
+                                                                <td class="settings_table_setting_description">Frequency penalty to discourage the generation of repeated tokens. [Default: 0.0]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="frequencyPenaltySlider" min="-2" max="2" step="0.01" value="0.0"><span id="frequencyPenaltySliderValue">0.0</span></td>
+                                                            </tr>
+                                                        </table>
+                                                    </div>
+
+                                                    <br>
+
+                                                    <div class="settings-table-container">
+                                                        <table class="restart-settings-table">
+                                                            <tr class="settings-table-header-row">
+                                                                <th style="width: 20%;">Launch Args</th>
+                                                                <th>Description</th>
+                                                                <th style="width: 20%;">Value</th>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="use_gpu">
+                                                                <td class="settings_table_setting_name">--use-gpu</td>
+                                                                <td class="settings_table_setting_description">Use GPU for inference</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="UseGpu" name="UseGpu" style="margin-left: 7px;"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_numb_gpu_layers">
+                                                                <td class="settings_table_setting_name">--n-gpu-layers</td>
+                                                                <td class="settings_table_setting_description">Number of layers to store in VRAM</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="NumbGpuLayers" name="NumbGpuLayers" min="-1" class="settings-input-fields" value="0" disabled></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_ctx_length">
+                                                                <td class="settings_table_setting_name">--ctx-size</td>
+                                                                <td class="settings_table_setting_description">Size of the prompt context (default: 4096, 0 = loaded from model)</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="LlmCtxLgt" name="LlmCtxLgt" min="128" class="settings-input-fields" value="4096"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_batch_size">
+                                                                <td class="settings_table_setting_name">--batch-size</td>
+                                                                <td class="settings_table_setting_description">Logical maximum batch size (default: 2048)</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="LlamaCppBatchSize" name="LlamaCppBatchSize" min="1" class="settings-input-fields" value="2048"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_ubatch_size">
+                                                                <td class="settings_table_setting_name">--ubatch-size</td>
+                                                                <td class="settings_table_setting_description">Physical maximum batch size (default: 512)</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="LlamaCppUbatchSize" name="LlamaCppUbatchSize" min="1" class="settings-input-fields" value="512"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_max_new_tokens">
+                                                                <td class="settings_table_setting_name">--n-predict</td>
+                                                                <td class="settings_table_setting_description">Number of tokens to predict (default: -1, -1 = infinity)</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="MaxNewToks" name="MaxNewToks" min="-1" class="settings-input-fields" value="-1"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_unified_kv_buffer">
+                                                                <td class="settings_table_setting_name">--kv-unified</td>
+                                                                <td class="settings_table_setting_description">Use single unified KV buffer for the KV cache of all sequences (default: false)</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="UnifiedKvBuffer" name="UnifiedKvBuffer" style="margin-left: 7px;"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_disable_kv_offloading">
+                                                                <td class="settings_table_setting_name">--no-kv-offload</td>
+                                                                <td class="settings_table_setting_description">Disable KV offload</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="DisableKvOffloading" name="DisableKvOffloading" style="margin-left: 7px;"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_key_cache_data_type">
+                                                                <td class="settings_table_setting_name">--cache-type-k</td>
+                                                                <td class="settings_table_setting_description">KV cache data type for Key
+                                                                    allowed values: f32, f16, bf16, q8_0, q4_0, q4_1, iq4_nl, q5_0, q5_1
+                                                                    (default: f16)
+                                                                </td>
+                                                                <td class="settings_table_setting_value">
+                                                                    <select class="modal-selects" id="KeyCacheDataType">
+                                                                        <option value="f32">f32</option>
+                                                                        <option value="f16">f16 (Default)</option>
+                                                                        <option value="bf16">bf16</option>
+                                                                        <option value="q8_0">q8_0</option>
+                                                                        <option value="q4_0">q4_0</option>
+                                                                        <option value="q4_1">q4_1</option>
+                                                                        <option value="iq4_nl">iq4_nl</option>
+                                                                        <option value="q5_0">q5_0</option>
+                                                                        <option value="q5_1">q5_1</option>
+                                                                    </select>
+                                                                </td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_value_cache_data_type">
+                                                                <td class="settings_table_setting_name">--cache-type-v</td>
+                                                                <td class="settings_table_setting_description">KV cache data type for Value
+                                                                    allowed values: f32, f16, bf16, q8_0, q4_0, q4_1, iq4_nl, q5_0, q5_1
+                                                                    (default: f16)
+                                                                </td>
+                                                                <td class="settings_table_setting_value">
+                                                                    <select class="modal-selects" id="ValueCacheDataType">
+                                                                        <option value="f32">f32</option>
+                                                                        <option value="f16">f16 (Default)</option>
+                                                                        <option value="bf16">bf16</option>
+                                                                        <option value="q8_0">q8_0</option>
+                                                                        <option value="q4_0">q4_0</option>
+                                                                        <option value="q4_1">q4_1</option>
+                                                                        <option value="iq4_nl">iq4_nl</option>
+                                                                        <option value="q5_0">q5_0</option>
+                                                                        <option value="q5_1">q5_1</option>
+                                                                    </select>
+                                                                </td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_no_of_seqs_to_par_decode">
+                                                                <td class="settings_table_setting_name">--parallel</td>
+                                                                <td class="settings_table_setting_description">Number of parallel sequences to decode (default: 1)</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="NoOfSeqsToParDecode" name="NoOfSeqsToParDecode" min="1" class="settings-input-fields" value="1"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_offload_to_devices">
+                                                                <td class="settings_table_setting_name">--device</td>
+                                                                <td class="settings_table_setting_description">Comma-separated list of devices to use for offloading (none = don't offload).
+                                                                    Use `llama-server --list-devices` to see a list of available devices.</td>
+                                                                <td class="settings_table_setting_value"><input type="text" id="OffloadToDevices" name="OffloadToDevices" value="none"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_cpu_only_moe">
+                                                                <td class="settings_table_setting_name">--cpu-moe</td>
+                                                                <td class="settings_table_setting_description">Keep all Mixture of Experts (MoE) weights in the CPU.</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="CpuOnlyMoe" name="CpuOnlyMoe" style="margin-left: 7px;"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_num_cpu_moe">
+                                                                <td class="settings_table_setting_name">--n-cpu-moe</td>
+                                                                <td class="settings_table_setting_description">Keep the Mixture of Experts (MoE) weights of the first N layers in the CPU</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="LlamaCppNumCpuMoe" name="LlamaCppNumCpuMoe" min="0" class="settings-input-fields" value="0"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_mlock">
+                                                                <td class="settings_table_setting_name">--mlock</td>
+                                                                <td class="settings_table_setting_description">Force system to keep model in RAM rather than swapping or compressing</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="Mlock" name="Mlock" style="margin-left: 7px;"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_no_nmap">
+                                                                <td class="settings_table_setting_name">--no-mmap</td>
+                                                                <td class="settings_table_setting_description">Do not memory-map model (slower load but may reduce pageouts if not using mlock)</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="NoNmap" name="NoNmap" style="margin-left: 7px;"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_split_mode">
+                                                                <td class="settings_table_setting_name">--split-mode</td>
+                                                                <td class="settings_table_setting_description">How to split the model across multiple GPUs, one of:
+                                                                    1] none: use one GPU only
+                                                                    2] layer (default): split layers and KV across GPUs
+                                                                    3] row: split rows across GPUs
+                                                                </td>
+                                                                <td class="settings_table_setting_value">
+                                                                    <select class="modal-selects" id="SplitMode">
+                                                                        <option value="none">none</option>
+                                                                        <option value="auto">auto</option>
+                                                                        <option value="manual">manual</option>
+                                                                    </select>
+                                                                </td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_tensor_split">
+                                                                <td class="settings_table_setting_name">--tensor-split</td>
+                                                                <td class="settings_table_setting_description">Fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 
+                                                                    3,1 to specify a 75/35 split or 1,1 for a 50/50. Specify this as preferred: 7.5,3.5 and 0.5,0.5 would have the same respective meanings!</td>
+                                                                <td class="settings_table_setting_value"><input type="text" id="TensorSplit" name="TensorSplit" value="none"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llm_override_tensor">
+                                                                <td class="settings_table_setting_name">--override-tensor</td>
+                                                                <td class="settings_table_setting_description">This arg enables an advanced user to specify a RegEx detailing the exact specification for splitting the model across multiple GPUs -  
+                                                                    writing this requires inspecting the GGUF file itself to uncover the model architecture (see below for details of the selected GGUF file). <br>
+                                                                    It's recommended to write the RegEx in a text editor with RegEx support, and copy-paste into the text area here. <br><br>
+                                                                    Example RegEx: 'blk\.(0|2|4|6|8|10)\.ffn_(down|gate|up)_exps\.weight=CUDA0,blk\.(1|3|5|7|9|11)\.ffn_(down|gate|up)_exps\.weight=CUDA1,
+                                                                    blk\.([1][2-9]|[2-5][0-9]|6[01])\.ffn_(down|gate|up)_exps\.weight=CPU', <br><br>
+                                                                    which translates to an interleaved (even/odd) split of the first 12 expert Feed-Forward-Network (MoE FFN) layers between GPUs 1 & 2,
+                                                                    while the rest (12-19, 20-59, 60 & 61) are sent to the CPU. <br> Use this with --n-gpu-layer to 99 to ensure all non-MoE layers
+                                                                    (output, token_embed, prompt processing etc) are kept on the GPU!</td>
+                                                                <td class="settings_table_setting_value">
+                                                                    <textarea class="adv-settings-textarea" id="OverrideTensor" name="OverrideTensor" rows="20" value="None"></textarea>
+                                                                </td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="gguf_details">
+                                                                <td class="settings_table_setting_name">GGUF Details</td>
+                                                                <!-- <td class="settings_table_setting_description">
+                                                                    This section contains the details of the GGUF file, including the model architecture and the weights.
+                                                                </td> -->
+                                                                <td class="settings_table_setting_value" colspan="2">
+                                                                    <textarea class="adv-settings-textarea" id="GgufDetails" name="GgufDetails" rows="10" disabled></textarea>
+                                                                </td>
+                                                            </tr>
+                                                        </table>
+                                                    </div>
+
+                                                    <br>
         
                                                     <button class="btn btn-primary" type="button" id="resetLlmAdvancedDefaults">Reset to Defaults</button>
-        
-                                                    <br>
-        
-                                                    <div class="settings-requiring-restart-container">
-        
-                                                        <div id="use_gpu" class="restart-settings-group">
-                                                            <input type="checkbox" id="UseGpu" name="UseGpu" style="margin-left: 7px;">
-                                                            <label for="UseGpu">Use GPU? [default: Disabled]</label>
-                                                        </div>
 
-                                                        <br>
-
-                                                        <div id="llm_numb_gpu_layers" class="restart-settings-group">
-                                                            <label for="NumbGpuLayers">Number of Model-layers to Offload to the GPU (--n-gpu-layers) [default: 0, 0 = no offloading]: </label>
-                                                            <input type="number" id="NumbGpuLayers" name="NumbGpuLayers" min="-1" class="settings-input-fields" value="0" disabled>
-                                                        </div>
-            
-                                                        <br>
-            
-                                                        <div id="llm_ctx_length" class="restart-settings-group">
-                                                            <label for="LlmCtxLgt">Context-Length (--ctx-size) [default: 4096, 0 = loaded from model]: </label>
-                                                            <input type="number" id="LlmCtxLgt" name="LlmCtxLgt" min="128" class="settings-input-fields" value="4096">
-                                                        </div>
-            
-                                                        <br>
-
-                                                        <div id="llama_cpp_batch_size" class="restart-settings-group">
-                                                            <label for="LlamaCppBatchSize">Batch Size (--batch-size) [default: 2048]: </label>
-                                                            <input type="number" id="LlamaCppBatchSize" name="LlamaCppBatchSize" min="1" class="settings-input-fields" value="2048">
-                                                        </div>
-
-                                                        <br>
-
-                                                        <div id="llama_cpp_ubatch_size" class="restart-settings-group">
-                                                            <label for="LlamaCppUbatchSize">UBatch Size (--ubatch-size) [default: 512]: </label>
-                                                            <input type="number" id="LlamaCppUbatchSize" name="LlamaCppUbatchSize" min="1" class="settings-input-fields" value="512">
-                                                        </div>
-
-                                                        <br>
-            
-                                                        <div id="llm_max_new_tokens" class="restart-settings-group">
-                                                            <label for="MaxNewToks">Maximum Tokens to Predict (--n-predict) [default: -1, -1 = infinity]: </label>
-                                                            <input type="number" id="MaxNewToks" name="MaxNewToks" min="-1" class="settings-input-fields" value="-1">
-                                                        </div>
-        
-                                                        <br>
-
-                                                        <div id="llm_unified_kv_buffer" class="restart-settings-group">
-                                                            <input type="checkbox" id="UnifiedKvBuffer" name="UnifiedKvBuffer" style="margin-left: 7px;">
-                                                            <label for="UnifiedKvBuffer">Unified KV Buffer (--kv-unified) [default: Disabled]</label>
-                                                        </div>
-        
-                                                        <br>
-
-                                                        <div id="llm_disable_kv_offloading" class="restart-settings-group">
-                                                            <input type="checkbox" id="DisableKvOffloading" name="DisableKvOffloading" style="margin-left: 7px;">
-                                                            <label for="DisableKvOffloading">Disable KV Offloading (--no-kv-offload) [default: Disabled]</label>
-                                                        </div>
-
-                                                        <br>
-
-                                                        <div id="llm_key_cache_data_type" class="restart-settings-group">
-                                                            <label for="KeyCacheDataType">Key Cache Data Type (--cache-type-k): </label>
-                                                             <select class="modal-selects" id="KeyCacheDataType">
-                                                                <option value="f32">f32</option>
-                                                                <option value="f16">f16 (Default)</option>
-                                                                <option value="bf16">bf16</option>
-                                                                <option value="q8_0">q8_0</option>
-                                                                <option value="q4_0">q4_0</option>
-                                                                <option value="q4_1">q4_1</option>
-                                                                <option value="iq4_nl">iq4_nl</option>
-                                                                <option value="q5_0">q5_0</option>
-                                                                <option value="q5_1">q5_1</option>
-                                                             </select>
-                                                        </div>
-                                                        
-                                                        <br>
-
-                                                        <div id="llm_value_cache_data_type" class="restart-settings-group">
-                                                            <label for="ValueCacheDataType">Value Cache Data Type (--cache-type-v): </label>
-                                                             <select class="modal-selects" id="ValueCacheDataType">
-                                                                <option value="f32">f32</option>
-                                                                <option value="f16">f16 (Default)</option>
-                                                                <option value="bf16">bf16</option>
-                                                                <option value="q8_0">q8_0</option>
-                                                                <option value="q4_0">q4_0</option>
-                                                                <option value="q4_1">q4_1</option>
-                                                                <option value="iq4_nl">iq4_nl</option>
-                                                                <option value="q5_0">q5_0</option>
-                                                                <option value="q5_1">q5_1</option>
-                                                             </select>
-                                                        </div>
-
-                                                        <br>
-
-                                                        <div id="llm_no_of_seqs_to_par_decode" class="restart-settings-group">
-                                                            <label for="NoOfSeqsToParDecode">Number of Sequences to Decode in Parallel (--parallel) [default: 1]: </label>
-                                                            <input type="number" id="NoOfSeqsToParDecode" name="NoOfSeqsToParDecode" min="1" class="settings-input-fields" value="1">
-                                                        </div>
-
-                                                        <br>
-
-                                                        <div id="llm_offload_to_devices" class="restart-settings-group">
-                                                            <label for="OffloadToDevices">Offload to Devices (--device) [default: none | none = no offloading | run `llama-server --list-devices` to see available devices]: </label>
-                                                            <input type="text" id="OffloadToDevices" name="OffloadToDevices" value="none">
-                                                        </div>
-
-                                                        <br>
-
-                                                        <div id="llm_cpu_only_moe" class="restart-settings-group">
-                                                            <input type="checkbox" id="CpuOnlyMoe" name="CpuOnlyMoe" style="margin-left: 7px;">
-                                                            <label for="CpuOnlyMoe">CPU-only MOE (--cpu-moe) [default: Disabled]</label>
-                                                        </div>
-
-                                                        <br>
-
-                                                        <div id="llama_cpp_num_cpu_moe" class="restart-settings-group">
-                                                            <label for="LlamaCppNumCpuMoe">Number of CPU MOE layers (--n-cpu-moe) [default: 0 | 0 = Disabled]: </label>
-                                                            <input type="number" id="LlamaCppNumCpuMoe" name="LlamaCppNumCpuMoe" min="0" class="settings-input-fields" value="0">
-                                                        </div>
-
-                                                        <br>
-
-                                                        <div id="llm_mlock" class="restart-settings-group">
-                                                            <input type="checkbox" id="Mlock" name="Mlock" style="margin-left: 7px;">
-                                                            <label for="Mlock">Mlock (--mlock) [default: Disabled]</label>
-                                                        </div>
-
-                                                        <br>
-
-                                                        <div id="llm_no_nmap" class="restart-settings-group">
-                                                            <input type="checkbox" id="NoNmap" name="NoNmap" style="margin-left: 7px;">
-                                                            <label for="NoNmap">No Mmap (--no-mmap) [default: Disabled]</label>
-                                                        </div>
-
-                                                        <br>
-
-                                                        <div id="llm_split_mode" class="restart-settings-group">
-                                                            <label for="SplitMode">Split Mode (--split-mode) [default: layer]: </label>
-                                                            <select class="modal-selects" id="SplitMode">
-                                                                <option value="layer">Layer (Default) [Split layers and KV across GPUs]</option>
-                                                                <option value="row">Row [Split rows across GPUs]</option>
-                                                                <option value="none">None [Use one GPU only]</option>
-                                                            </select>
-                                                        </div>
-
-                                                        <br>
-
-                                                        <div id="llm_tensor_split" class="restart-settings-group">
-                                                            <label for="TensorSplit">Tensor Split (--tensor-split) [default: None | comma-separated list of proportions, e.g. 3,1]: </label>
-                                                            <input type="text" id="TensorSplit" name="TensorSplit" value="None">
-                                                        </div>
-
-                                                        <br>
-
-                                                        <div id="llm_override_tensor" class="restart-settings-group">
-                                                            <label for="OverrideTensor">Override Tensor (--override-tensor) [default: None | Check 'GGUF Details' below to determine tensor names]: </label>
-                                                            <br>
-                                                            <textarea class="adv-settings-textarea" id="OverrideTensor" name="OverrideTensor" rows="1" cols="130" value="None"></textarea>
-                                                        </div>
-
-                                                        <br>
-
-                                                        <div id="gguf_details" class="restart-settings-group">
-                                                            <label for="GgufDetails" style="font-weight:700;">GGUF Details:</label>
-                                                            <br>
-                                                            <textarea class="adv-settings-textarea" id="GgufDetails" name="GgufDetails" rows="10" cols="130" disabled></textarea>
-                                                        </div>
-
-                                                        <br>
-        
-                                                        <div class="restart-warning">
-                                                            <i class="fa-solid fa-exclamation-triangle"></i> Changes trigger restart!
-                                                        </div>
-        
-                                                    </div>
-        
-                                                    <br>
-        
-                                                    <div id="temperature_value">
-                                                        <label for="tempSlider">Temperature (Randomness of generated text) [default: 0.8]: </label>
-                                                        <input type="range" id="tempSlider" name="tempSlider" min="0" max="2" step="0.1" value="0.8">
-                                                        <span id="tempSliderValue">0.8</span>
-                                                    </div>
-        
-                                                    <br>
-        
-                                                    <div id="topk_value">
-                                                        <label for="topkSlider">Limit to K most probable tokens (top_k) [default: 40]: </label>
-                                                        <input type="range" id="topkSlider" name="topkSlider" min="-1" max="100" step="1" value="40">
-                                                        <span id="topkSliderValue">40</span>
-                                                    </div>
-        
-                                                    <br>
-        
-                                                    <div id="topp_value">
-                                                        <label for="toppSlider">Limit to a subset of tokens with a cumulative probability above (top_p) [default: 0.9]: </label>
-                                                        <input type="range" id="toppSlider" name="toppSlider" min="0" max="1" step="0.01" value="0.9">
-                                                        <span id="toppSliderValue">0.9</span>
-                                                    </div>
-        
-                                                    <br>
-        
-                                                    <div id="minp_value">
-                                                        <label for="minpSlider">Minimum probability for considering a token, relative to most likely (min_p) [default: 0.1]: </label>
-                                                        <input type="range" id="minpSlider" name="minpSlider" min="0" max="1" step="0.01" value="0.1">
-                                                        <span id="minpSliderValue">0.1</span>
-                                                    </div>
-        
-                                                    <br>
-        
-                                                    <div id="nkeep_value">
-                                                        <label for="nkeepSlider">Prompt-tokens retained when context-size exceeded (n_keep) [Default: 0 | Retain All: -1]: </label>
-                                                        <input type="number" id="nkeepSlider" name="nkeepSlider" min="-1" class="settings-input-fields" value="0">
-                                                    </div>
-
-                                                    <br>
-                                                    
-                                                    <div id="repetition_penalty_value">
-                                                        <label for="repetitionPenaltySlider">Repetition Penalty (X-Repetition-Penalty) [Default: 1.1]: </label>
-                                                        <input type="range" id="repetitionPenaltySlider" name="repetitionPenaltySlider" min="0" max="2" step="0.01" value="1.1">
-                                                        <span id="repetitionPenaltySliderValue">1.1</span>
-                                                    </div>
-
-                                                    <br>
-
-                                                    <div id="presence_penalty_value">
-                                                        <label for="presencePenaltySlider">Presence Penalty (X-Presence-Penalty) [Default: 0.0]: </label>
-                                                        <input type="range" id="presencePenaltySlider" name="presencePenaltySlider" min="-2" max="2" step="0.01" value="0.0">
-                                                        <span id="presencePenaltySliderValue">0.0</span>
-                                                    </div>
-                                                    
-                                                    <br>
-
-                                                    <div id="frequency_penalty_value">
-                                                        <label for="frequencyPenaltySlider">Frequency Penalty (X-Frequency-Penalty) [Default: 0.0]: </label>
-                                                        <input type="range" id="frequencyPenaltySlider" name="frequencyPenaltySlider" min="-2" max="2" step="0.01" value="0.0">
-                                                        <span id="frequencyPenaltySliderValue">0.0</span>
-                                                    </div>
-                                                    
                                                 </div>
                                             </div>
 

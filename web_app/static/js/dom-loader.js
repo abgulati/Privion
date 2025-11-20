@@ -573,8 +573,9 @@ function initializeHfRadioButtons(all_values) {
     document.getElementById('hf_waitress_exl2_yes').checked = all_values.exl2;
     document.getElementById('hf_waitress_exl2_no').checked = !all_values.exl2;
 
-    document.getElementById('hf_waitress_exl2_no_flash_attn_yes').checked = all_values.exl2_no_flash_attn;
-    document.getElementById('hf_waitress_exl2_no_flash_attn_no').checked = !all_values.exl2_no_flash_attn;
+    // document.getElementById('hf_waitress_exl2_no_flash_attn_yes').checked = all_values.exl2_no_flash_attn;
+    // document.getElementById('hf_waitress_exl2_no_flash_attn_no').checked = !all_values.exl2_no_flash_attn;
+    document.getElementById('hf_use_exl2_no_flash_attn_checkbox').checked = all_values.exl2_no_flash_attn;
 
     document.getElementById('hf_waitress_exl3_yes').checked = all_values.exl3;
     document.getElementById('hf_waitress_exl3_no').checked = !all_values.exl3;
@@ -596,17 +597,21 @@ function initializeHfRadioButtons(all_values) {
     toggleHfwExl3Config();
     if (getExl2() === "true") disableNonExl2Settings();  // as it might be taggled by the Exl3 toggle method! 
 
-    document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').checked = all_values.flux_low_vram_optimizations;
-    document.getElementById('hf_waitress_diffusers_low_vram_optimizations_no').checked = !all_values.flux_low_vram_optimizations;
+    // document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').checked = all_values.flux_low_vram_optimizations;
+    // document.getElementById('hf_waitress_diffusers_low_vram_optimizations_no').checked = !all_values.flux_low_vram_optimizations;
+    document.getElementById('hf_waitress_diffusers_low_vram_optimizations_checkbox').checked = all_values.flux_low_vram_optimizations;
 
-    document.getElementById('hf_waitress_diffusers_fp8_yes').checked = all_values.load_quantized_flux;
-    document.getElementById('hf_waitress_diffusers_fp8_no').checked = !all_values.load_quantized_flux;
+    // document.getElementById('hf_waitress_diffusers_fp8_yes').checked = all_values.load_quantized_flux;
+    // document.getElementById('hf_waitress_diffusers_fp8_no').checked = !all_values.load_quantized_flux;
+    document.getElementById('hf_waitress_diffusers_fp8_checkbox').checked = all_values.load_quantized_flux;
 
-    document.getElementById('hf_waitress_use_flash_attention_2_yes').checked = all_values.use_flash_attention_2;
-    document.getElementById('hf_waitress_use_flash_attention_2_no').checked = !all_values.use_flash_attention_2;
+    // document.getElementById('hf_waitress_use_flash_attention_2_yes').checked = all_values.use_flash_attention_2;
+    // document.getElementById('hf_waitress_use_flash_attention_2_no').checked = !all_values.use_flash_attention_2;
+    document.getElementById('hf_waitress_use_flash_attention_2_checkbox').checked = all_values.use_flash_attention_2;
 
-    document.getElementById('hf_waitress_return_full_text_yes').checked = all_values.return_full_text;
-    document.getElementById('hf_waitress_return_full_text_no').checked = !all_values.return_full_text;
+    // document.getElementById('hf_waitress_return_full_text_yes').checked = all_values.return_full_text;
+    // document.getElementById('hf_waitress_return_full_text_no').checked = !all_values.return_full_text;
+    document.getElementById('hf_waitress_return_full_text_checkbox').checked = all_values.return_full_text;
 }
 
 
@@ -1079,10 +1084,10 @@ function initializeEventListenersForLLMTab() {
     document.getElementById('hf_waitress_exl3_no').addEventListener('change', toggleHfwExl3Config);
 
     // Event listener for toggle Flux Low Vram:
-    document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').addEventListener('change', disableFluxQuantization);
+    // document.getElementById('hf_waitress_diffusers_low_vram_optimizations_yes').addEventListener('change', disableFluxQuantization);
 
     // Event listener for toggle Flux Quantization:
-    document.getElementById('hf_waitress_diffusers_fp8_yes').addEventListener('change', disableFluxLowVram);
+    // document.getElementById('hf_waitress_diffusers_fp8_yes').addEventListener('change', disableFluxLowVram);
 
     // Event listener for Reset Defaults button:
     document.getElementById('resetLlmAdvancedDefaults').addEventListener('click', resetLlmAdvancedDefaults);    //aparently, adding parenthesis () here will cause resetLlmAdvancedDefaults to run immediately when the script executes, not on button click. Removing them allows the function to be passed as a reference correctly on click.
