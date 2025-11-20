@@ -987,8 +987,8 @@
                                                                     writing this requires inspecting the GGUF file itself to uncover the model architecture (see below for details of the selected GGUF file). <br>
                                                                     It's recommended to write the RegEx in a text editor with RegEx support, and copy-paste into the text area here. <br><br>
                                                                     Example RegEx: 'blk\.(0|2|4|6|8|10)\.ffn_(down|gate|up)_exps\.weight=CUDA0,blk\.(1|3|5|7|9|11)\.ffn_(down|gate|up)_exps\.weight=CUDA1,
-                                                                    blk\.([1][2-9]|[2-5][0-9]|6[01])\.ffn_(down|gate|up)_exps\.weight=CPU', <br><br>
-                                                                    which translates to an interleaved (even/odd) split of the first 12 expert Feed-Forward-Network (MoE FFN) layers between GPUs 1 & 2,
+                                                                    blk\.([1][2-9]|[2-5][0-9]|6[01])\.ffn_(down|gate|up)_exps\.weight=CPU' <br><br>
+                                                                    This translates to an interleaved (even/odd) split of the first 12 expert Feed-Forward-Network (MoE FFN) layers between GPUs 1 & 2,
                                                                     while the rest (12-19, 20-59, 60 & 61) are sent to the CPU. <br> Use this with --n-gpu-layer to 99 to ensure all non-MoE layers
                                                                     (output, token_embed, prompt processing etc) are kept on the GPU!</td>
                                                                 <td class="settings_table_setting_value">
@@ -997,9 +997,6 @@
                                                             </tr>
                                                             <tr class="settings-table-row" id="gguf_details">
                                                                 <td class="settings_table_setting_name">GGUF Details</td>
-                                                                <!-- <td class="settings_table_setting_description">
-                                                                    This section contains the details of the GGUF file, including the model architecture and the weights.
-                                                                </td> -->
                                                                 <td class="settings_table_setting_value" colspan="2">
                                                                     <textarea class="adv-settings-textarea" id="GgufDetails" name="GgufDetails" rows="10" disabled></textarea>
                                                                 </td>
