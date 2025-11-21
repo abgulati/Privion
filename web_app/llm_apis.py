@@ -76,17 +76,18 @@ def get_request_params_for_llm_api(messages_dict:dict, stream:bool=False) -> tup
         base_url = f"http://{read_return['hf_waitress_access_url']}:{read_return['hf_waitress_server_port']}"
 
         try:
-            read_hf_return = read_hf_config(['exl2'])
+            read_hf_return = read_hf_config(['exl2', 'exl3'])
             exl2 = str(read_hf_return['exl2']).lower() == 'true'
+            exl3 = str(read_hf_return['exl3']).lower() == 'true'
         except Exception as e:
             raise Exception(f"Could not read hf-waitress config, encountered error: {e}")
         
-        if not exl2:
+        if not exl2 and not exl3:
             headers['X-Return-Full-Text'] = 'False'
             endpoint_url = f"{base_url}/completions_stream" if stream else f"{base_url}/completions"
-        elif exl2 and stream:
+        elif (exl2 or exl3) and stream:
             headers['Connection'] = 'keep-alive'
-            endpoint_url = f"{base_url}/exl2_stream"
+            endpoint_url = f"{base_url}/exl2_stream" if exl2 else f"{base_url}/exl3_stream"
         else:
             raise Exception(f"Invalid local LLM server, expected 'hf-waitress' or 'llama-cpp', received: {local_llm_server}")
 
