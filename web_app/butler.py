@@ -261,7 +261,7 @@ def execute_butler_tasks(user_query:str) -> dict:
             print(f"Action result: {action_result}")
         else:
             action_result = execute_butler_tool(butler_tool_selection['service'])
-            print(f"Action result: {action_result}")
+            print(f"Action result after tool execution: {action_result}")
 
         action_analysis_prompt = prompt_formatting_module.request_action_analysis_prompt(user_query, action_result)
         print(f"Action analysis prompt: {action_analysis_prompt}")
@@ -272,7 +272,7 @@ def execute_butler_tasks(user_query:str) -> dict:
         action_result = {'success': False, 'message': f"Error executing butler tasks: {str(e)}"}
         try:
             action_analysis_prompt = prompt_formatting_module.request_action_analysis_prompt(user_query, action_result)
-            print(f"Action analysis prompt: {action_analysis_prompt}")
+            print(f"Action analysis prompt in exception handler: {action_analysis_prompt}")
             return {'action_result': action_result, 'action_analysis_prompt': action_analysis_prompt}
         except Exception as e:
             print(f"Both Butler Tool Execution and Action Analysis Prompt Creation Failed: {str(e)}")

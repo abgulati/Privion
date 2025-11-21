@@ -135,7 +135,7 @@ async def light_turn_on_handler():
         dev = await get_first_govee_device()
         if not dev:
             print("No Govee device found.")
-            return
+            return {"success": False, "message": "No Govee device found."}
         
         await dev.turn_on()
         print("Turned ON")
@@ -149,7 +149,7 @@ async def light_turn_off_handler():
         dev = await get_first_govee_device()
         if not dev:
             print("No Govee device found.")
-            return
+            return {"success": False, "message": "No Govee device found."}
         
         await dev.turn_off()
         print("Turned OFF")
