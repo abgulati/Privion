@@ -172,7 +172,7 @@ def execute_butler_tool(service_name:str) -> dict:
             return wol_turn_on_tv('a4:36:c7:58:3f:18', '192.168.1.142', 9)
         elif service_name == 'lg_webos_tv_turn_off':
             print("Executing LG WebOS TV turn-off tool...")
-            return lg_webos_tv_turn_off()
+            return lg_webos_tv_turn_off('192.168.1.142')
         elif service_name == 'lamp_turn_on':
             print("Executing lamp turn-on tool...")
             return turn_on_lamp()
