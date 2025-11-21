@@ -920,8 +920,8 @@ function toggleHfwExl3Config() {
         document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
         document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'none';
         document.getElementById('hf_waitress_exl2').style.display = 'none';
-        showExl3SamplingParams();
         disableNonExl2Settings();
+        showExl3SamplingParams();
     }
     else {
         document.getElementById('hf-waitress-exl3-configuration-div').style.display = 'none';
