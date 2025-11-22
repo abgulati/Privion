@@ -209,7 +209,7 @@ function getOcrConfig() {
     const azure_ocr_form = document.getElementById("azure_vision_api_form");
     const azure_doc_ai_form = document.getElementById("azure_doc_ai_api_form");
     const local_vision_form = document.getElementById("local_vision_api_form");
-    const kosmos_form = document.getElementById("kosmos_api_div");
+    const kosmos_div = document.getElementById("kosmos_api_div");
     const docling_div = document.getElementById("docling_div");
 
     const ocr_yes_radio_button = document.getElementById('ocr_yes_radio_button').checked;
@@ -244,7 +244,7 @@ function getOcrConfig() {
         if (update_local_vision_config) {
             config.local_vision_endpoint = document.getElementById("local_vision_api_url").value;
         }
-    } else if (window.getComputedStyle(kosmos_form).display != 'none') {
+    } else if (window.getComputedStyle(kosmos_div).display != 'none') {
         if (update_kosmos_url_config) {
             config.kosmos_local_url = document.getElementById("kosmos_api_url").value;
             config.kosmos_task = document.getElementById("kosmos_task").value;
