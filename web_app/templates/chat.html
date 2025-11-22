@@ -1992,7 +1992,7 @@
                                             <tr class="settings-table-row">     <!--Row IDs below are provided for JS (row hiding etc.!-->
                                                 <td class="settings_table_setting_name">ASR Wake Word</td>
                                                 <td class="settings_table_setting_description">The wake word to use for the ASR. This is the word that will trigger the ASR to pay attention.</td>
-                                                <td class="settings_table_setting_value"><input type="text" id="asr_wake_word" name="asr_wake_word" value="simon"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="text" id="asr_wake_word" name="asr_wake_word" value="simon"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Model</td>
@@ -2012,62 +2012,62 @@
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Waitress Access URL</td>
                                                 <td class="settings_table_setting_description">The Privion client will use this URL to access the ASR Waitress server.</td>
-                                                <td class="settings_table_setting_value"><input type="text" id="asr_waitress_access_url" name="asr_waitress_access_url" value="localhost"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="text" id="asr_waitress_access_url" name="asr_waitress_access_url" value="localhost"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Waitress Server Port</td>
                                                 <td class="settings_table_setting_description">The Privion client will use this port to access the ASR Waitress server.</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_waitress_server_port" name="asr_waitress_server_port" value="10087"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_waitress_server_port" name="asr_waitress_server_port" value="10087"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Torch Device</td>
                                                 <td class="settings_table_setting_description">The device to use for the ASR. This is the device that will be used to run the ASR model.</td>
-                                                <td class="settings_table_setting_value"><input type="text" id="asr_torch_device" name="asr_torch_device" value="cpu"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="text" id="asr_torch_device" name="asr_torch_device" value="cpu"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Temperature</td>
                                                 <td class="settings_table_setting_description">The temperature to use for the ASR model. Lower values make the model more focused, higher values make it more creative. [Default: 0.0]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_temperature" name="asr_temperature" value="0.0"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_temperature" name="asr_temperature" value="0.0"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Maximum New Tokens</td>
                                                 <td class="settings_table_setting_description">The maximum number of new tokens to generate during ASR transcription [Default: 1500]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_max_new_tokens" name="asr_max_new_tokens" value="1500"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_max_new_tokens" name="asr_max_new_tokens" value="1500"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Samplerate</td>
                                                 <td class="settings_table_setting_description">The samplerate in Hertz (Hz) to use for the ASR model. [Default: 16000]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_samplerate" name="asr_samplerate" value="16000"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_samplerate" name="asr_samplerate" value="16000"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Volume Threshold</td>
                                                 <td class="settings_table_setting_description">The minimum volume threshold in decibels (dB) to trigger ASR transcription. [UNUSED - Devs Only | Default: 0.04]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_volume_threshold" name="asr_volume_threshold" value="0.04"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_volume_threshold" name="asr_volume_threshold" value="0.04"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Silence Duration</td>
                                                 <td class="settings_table_setting_description">Minimum duration of silence in seconds before ASR transcription begins. [Default: 1.5]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_silence_duration_s" name="asr_silence_duration_s" value="1.5"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_silence_duration_s" name="asr_silence_duration_s" value="1.5"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Min Chunk Duration</td>
                                                 <td class="settings_table_setting_description">The minimum duration in seconds a chunk of speech must be before it can be considered for ASR transcription. [Default: 0.25]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_min_chunk_duration_s" name="asr_min_chunk_duration_s" value="0.25"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_min_chunk_duration_s" name="asr_min_chunk_duration_s" value="0.25"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Min Context</td>
                                                 <td class="settings_table_setting_description">Minimum context in seconds before padding is applied to aid Transformer models in generating accurate transcriptions. [Default: 11]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_min_context_s" name="asr_min_context_s" value="11"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_min_context_s" name="asr_min_context_s" value="11"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Stale Buffer Timeout</td>
                                                 <td class="settings_table_setting_description">Timeout in seconds before the transcription buffer is considered stale and ASR transcription is stopped. [UNUSED - Devs Only | Default: 20.0]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_stale_buffer_timeout_s" name="asr_stale_buffer_timeout_s" value="20.0"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_stale_buffer_timeout_s" name="asr_stale_buffer_timeout_s" value="20.0"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Min Meaningful Samples Factor</td>
                                                 <td class="settings_table_setting_description">Minimum length of samples in seconds required for Voice Activity Detection (VAD). [Default: 1.5]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_min_meaningful_samples_factor" name="asr_min_meaningful_samples_factor" value="1.5"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_min_meaningful_samples_factor" name="asr_min_meaningful_samples_factor" value="1.5"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR VAD Model</td>
@@ -2090,32 +2090,32 @@
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR VAD Threshold</td>
                                                 <td class="settings_table_setting_description">VAD threshold parameter for the `get_speech_timestamps()` function of silero_utils. [Default: 0.5]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_vad_threshold" name="asr_vad_threshold" value="0.5"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_vad_threshold" name="asr_vad_threshold" value="0.5"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR VAD Min Speech MSeconds</td>
                                                 <td class="settings_table_setting_description">VAD minimum speech duration in milliseconds parameter for the `get_speech_timestamps()` function of silero_utils. [Default: 250]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_vad_min_speech_ms" name="asr_vad_min_speech_ms" value="250"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_vad_min_speech_ms" name="asr_vad_min_speech_ms" value="250"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR VAD Min Silence MSeconds</td>
                                                 <td class="settings_table_setting_description">VAD minimum silence duration in milliseconds parameter for the `get_speech_timestamps()` function of silero_utils. [Default: 500]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_vad_min_silence_ms" name="asr_vad_min_silence_ms" value="500"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_vad_min_silence_ms" name="asr_vad_min_silence_ms" value="500"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR VAD Window Size Samples</td>
                                                 <td class="settings_table_setting_description">VAD window size in samples parameter for the `get_speech_timestamps()` function of silero_utils. [Default: 1536]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_vad_window_size_samples" name="asr_vad_window_size_samples" value="1536"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_vad_window_size_samples" name="asr_vad_window_size_samples" value="1536"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR VAD Max Buffer Seconds</td>
                                                 <td class="settings_table_setting_description">Maximum duration of audio buffer in seconds for VAD processing. [UNUSED - Devs Only | Default: 30]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_vad_max_buffer_s" name="asr_vad_max_buffer_s" value="30"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_vad_max_buffer_s" name="asr_vad_max_buffer_s" value="30"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR VAD Speech Pad MSeconds</td>
                                                 <td class="settings_table_setting_description">VAD speech padding duration in milliseconds parameter for the `get_speech_timestamps()` function of silero_utils. [Default: 30]</td>
-                                                <td class="settings_table_setting_value"><input type="number" id="asr_vad_speech_pad_ms" name="asr_vad_speech_pad_ms" value="30"></td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="number" id="asr_vad_speech_pad_ms" name="asr_vad_speech_pad_ms" value="30"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Apply Normalization</td>
