@@ -1631,59 +1631,39 @@ function addNewGraphSummarizerModel(model) {
 }
 
 
-function disableTransformersSettings() {
-    enableNonExl2Settings();    // because this is only called when enabling Diffusers!
-    document.getElementById('advancedHfLlmSettingsToggle').style.display = 'none';
-    document.getElementById('hf_waitress_is_awq').style.display = 'none';
-    document.getElementById('hf_waitress_trust_remote_code').style.display = 'none';
-    document.getElementById('hf_waitress_exl2').style.display = 'none';
-    document.getElementById('hf_waitress_exl3').style.display = 'none';
-    // document.getElementById('hf_waitress_vision').style.display = 'none';
+// Transformers-specific settings:
+function showTransformersSamplingParams() {
+    document.getElementById('hf_waitress_return_full_text').style.display = 'table-row';
+    document.getElementById('hf_waitress_minp_value').style.display = 'table-row';
 }
 
-
-function enableTransformersSettings() {
-    enableNonExl2Settings();
-    document.getElementById('advancedHfLlmSettingsToggle').style.display = 'inline-block';
-    document.getElementById('hf_waitress_is_awq').style.display = 'block';
-    document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
-    document.getElementById('hf_waitress_exl2').style.display = 'block';
-    document.getElementById('hf_waitress_exl3').style.display = 'block';
-    // document.getElementById('hf_waitress_vision').style.display = 'block';
-}
-
-
-function disableNonExl2Settings() {
-    document.getElementById('hf_waitress_is_awq').style.display = 'none';
-    document.getElementById('hf_waitress_trust_remote_code').style.display = 'none';
-    document.getElementById('hf_waitress_diffusers').style.display = 'none';
-    document.getElementById('hf_waitress_use_flash_attention_2').style.display = 'none';
-    document.getElementById('hf_waitress_torch_device_map').style.display = 'none';
-    document.getElementById('hf_waitress_torch_dtype').style.display = 'none';
-    document.getElementById('hf_waitress_pipeline_task').style.display = 'none';
-    document.getElementById('hf_waitress_quantization').style.display = 'none';
-    document.getElementById('hf_waitress_quantization_level').style.display = 'none';
-    document.getElementById('hf_waitress_hqq_group_size').style.display = 'none';
-    document.getElementById('hf_waitress_minp_value').style.display = 'none';
+function hideTransformersSamplingParams() {
     document.getElementById('hf_waitress_return_full_text').style.display = 'none';
+    document.getElementById('hf_waitress_minp_value').style.display = 'none';
 }
 
-function enableNonExl2Settings() {
-    document.getElementById('hf_waitress_is_awq').style.display = 'block';
-    document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
-    document.getElementById('hf_waitress_diffusers').style.display = 'block';
+function showAdvTransformersSettings() {
     document.getElementById('hf_waitress_use_flash_attention_2').style.display = 'table-row';
+    document.getElementById('hf_waitress_pipeline_task').style.display = 'table-row';
     document.getElementById('hf_waitress_torch_device_map').style.display = 'table-row';
     document.getElementById('hf_waitress_torch_dtype').style.display = 'table-row';
-    document.getElementById('hf_waitress_pipeline_task').style.display = 'table-row';
     document.getElementById('hf_waitress_quantization').style.display = 'table-row';
     document.getElementById('hf_waitress_quantization_level').style.display = 'table-row';
     document.getElementById('hf_waitress_hqq_group_size').style.display = 'table-row';
-    document.getElementById('hf_waitress_minp_value').style.display = 'table-row';
-    document.getElementById('hf_waitress_return_full_text').style.display = 'table-row';
+}
+
+function hideAdvTransformersSettings() {
+    document.getElementById('hf_waitress_use_flash_attention_2').style.display = 'none';
+    document.getElementById('hf_waitress_pipeline_task').style.display = 'none';
+    document.getElementById('hf_waitress_torch_device_map').style.display = 'none';
+    document.getElementById('hf_waitress_torch_dtype').style.display = 'none';
+    document.getElementById('hf_waitress_quantization').style.display = 'none';
+    document.getElementById('hf_waitress_quantization_level').style.display = 'none';
+    document.getElementById('hf_waitress_hqq_group_size').style.display = 'none';
 }
 
 
+// Exl3-specific settings:
 function hideExl3SamplingParams() {
     document.getElementById('hf_waitress_minp_value').style.display = 'none';
     document.getElementById('hf_waitress_repetition_penalty_value').style.display = 'none';
@@ -1691,12 +1671,119 @@ function hideExl3SamplingParams() {
     document.getElementById('hf_waitress_frequency_penalty_value').style.display = 'none';
 }
 
-
 function showExl3SamplingParams() {
     document.getElementById('hf_waitress_minp_value').style.display = 'table-row';
     document.getElementById('hf_waitress_repetition_penalty_value').style.display = 'table-row';
     document.getElementById('hf_waitress_presence_penalty_value').style.display = 'table-row';
     document.getElementById('hf_waitress_frequency_penalty_value').style.display = 'table-row';
+}
+
+function displayOnlyExl3Settings() {
+    // Manage config blocks
+    document.getElementById('hf-waitress-exl3-configuration-div').style.display = 'block';
+    document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
+    document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'none';
+
+    // Hide toggles
+    document.getElementById('hf_waitress_exl2').style.display = 'none';
+    document.getElementById('hf_waitress_trust_remote_code').style.display = 'none';
+    document.getElementById('hf_waitress_is_awq').style.display = 'none';
+    document.getElementById('hf_waitress_diffusers').style.display = 'none';
+
+    // Manage Advanced Settings and Sampling Params
+    hideAdvTransformersSettings();
+    hideTransformersSamplingParams();
+    showExl3SamplingParams();
+}
+
+function resetExl3OnlyView() {
+    // Hide config block
+    document.getElementById('hf-waitress-exl3-configuration-div').style.display = 'none';
+
+    // Hide Exl3 Sampling Params
+    hideExl3SamplingParams();
+
+    // Since toggling this switches the UI to Transformers mode, ensure none of the required advanced settings are hidden!
+    showAdvTransformersSettings();
+    showTransformersSamplingParams();
+
+    // Show toggles
+    document.getElementById('hf_waitress_exl2').style.display = 'block';
+    document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
+    document.getElementById('hf_waitress_is_awq').style.display = 'block';
+    document.getElementById('hf_waitress_diffusers').style.display = 'block';
+    document.getElementById('advancedHfLlmSettingsToggle').style.display = 'inline-block';
+}
+
+
+// Diffusers-specific settings:
+function displayOnlyDiffusersSettings() {
+    // Manage config blocks
+    collapseAdvancedSettings('advancedHfLlmSettings');
+    document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'block';
+    document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'none';
+    document.getElementById('hf-waitress-exl3-configuration-div').style.display = 'none';
+
+    // Hide toggles
+    document.getElementById('hf_waitress_exl2').style.display = 'none';
+    document.getElementById('hf_waitress_exl3').style.display = 'none';
+    document.getElementById('hf_waitress_trust_remote_code').style.display = 'none';
+    document.getElementById('hf_waitress_is_awq').style.display = 'none';
+    document.getElementById('hf_waitress_diffusers').style.display = 'block';
+    document.getElementById('advancedHfLlmSettingsToggle').style.display = 'none';  // since we're hiding this whole div, no need to explicitly hide Exl3 Sampling Params etc.!
+}
+
+function resetDiffusersOnlyView() {
+    // Hide config block
+    document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
+
+    // Since toggling this switches the UI to Transformers mode, ensure none of the required advanced settings are hidden!
+    showAdvTransformersSettings();
+    showTransformersSamplingParams();
+
+    // Show toggles
+    document.getElementById('hf_waitress_exl2').style.display = 'block';
+    document.getElementById('hf_waitress_exl3').style.display = 'block';
+    document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
+    document.getElementById('hf_waitress_is_awq').style.display = 'block';
+    document.getElementById('hf_waitress_diffusers').style.display = 'block';
+    document.getElementById('advancedHfLlmSettingsToggle').style.display = 'inline-block';
+}
+
+
+// Exl2-specific settings:
+function displayOnlyExl2Settings() {
+    // Manage config blocks
+    document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'block';
+    document.getElementById('hf-waitress-exl3-configuration-div').style.display = 'none';
+    document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
+
+    // Hide toggles
+    document.getElementById('hf_waitress_exl3').style.display = 'none';
+    document.getElementById('hf_waitress_trust_remote_code').style.display = 'none';
+    document.getElementById('hf_waitress_is_awq').style.display = 'none';
+    document.getElementById('hf_waitress_diffusers').style.display = 'none';
+
+    // Manage Advanced Settings and Sampling Params
+    hideAdvTransformersSettings();
+    hideTransformersSamplingParams();
+    hideExl3SamplingParams();
+}
+
+function resetExl2OnlyView() {
+    // Hide config block
+    document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'none';
+
+    // Since toggling this switches the UI to Transformers mode, ensure none of the required advanced settings are hidden!
+    showAdvTransformersSettings();
+    showTransformersSamplingParams();
+
+    // Show toggles
+    document.getElementById('hf_waitress_exl3').style.display = 'block';
+    document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
+    document.getElementById('hf_waitress_is_awq').style.display = 'block';
+    document.getElementById('hf_waitress_diffusers').style.display = 'block';
+    document.getElementById('advancedHfLlmSettingsToggle').style.display = 'inline-block';
 }
 
 

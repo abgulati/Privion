@@ -883,52 +883,19 @@ function toggleLlamaCppCpuMoE() {
 
 function toggleHfwDiffusersConfig() {
     var selection = document.querySelector('input[name="hf_use_diffusers"]:checked').value;
-    if (selection === 'y') {
-        document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'block';
-        document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'none';
-        document.getElementById('hf-waitress-exl3-configuration-div').style.display = 'none';
-        disableTransformersSettings();
-        collapseAdvancedSettings('advancedHfLlmSettings');
-    } else {
-        document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
-        enableTransformersSettings();
-    }
+    selection === 'y' ? displayOnlyDiffusersSettings() : resetDiffusersOnlyView();
 }
 
 
 function toggleHfwExl2Config() {
     var selection = document.querySelector('input[name="hf_use_exl2"]:checked').value;
-    if (selection === 'y') {
-        document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'block';
-        document.getElementById('hf-waitress-exl3-configuration-div').style.display = 'none';
-        document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
-        document.getElementById('hf_waitress_exl3').style.display = 'none';
-        hideExl3SamplingParams();
-        disableNonExl2Settings();
-    } else {
-        document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'none';
-        document.getElementById('hf_waitress_exl3').style.display = 'block';
-        enableNonExl2Settings();
-    }
+    selection === 'y' ? displayOnlyExl2Settings() : resetExl2OnlyView();
 }
 
 
 function toggleHfwExl3Config() {
     var selection = document.querySelector('input[name="hf_use_exl3"]:checked').value;
-    if (selection === 'y') {
-        document.getElementById('hf-waitress-exl3-configuration-div').style.display = 'block';
-        document.getElementById('hf-waitress-diffusers-configuration-div').style.display = 'none';
-        document.getElementById('hf-waitress-exl2-configuration-div').style.display = 'none';
-        document.getElementById('hf_waitress_exl2').style.display = 'none';
-        disableNonExl2Settings();
-        showExl3SamplingParams();
-    }
-    else {
-        document.getElementById('hf-waitress-exl3-configuration-div').style.display = 'none';
-        document.getElementById('hf_waitress_exl2').style.display = 'block';
-        enableNonExl2Settings();
-        hideExl3SamplingParams();
-    }
+    selection === 'y' ? displayOnlyExl3Settings() : resetExl3OnlyView();
 }
 
 
