@@ -1537,33 +1537,14 @@ function initializeGraphRAGTabComponents(values) {
 
 
 
-function initializeOCRTabRadios(force_ocr, ocr_service_choice, azure_cv_free_tier) {
-    var useOcr = document.getElementById('ocr_yes_radio_button');
-    var usePypdf = document.getElementById('ocr_no_radio_button');
-
-    if (force_ocr) {
-        useOcr.checked = true;
-
-        // select API service from dropwdown
-        var selectOcrApiForDropdown = document.getElementById('ocrApiDropdown');
-
-        for (var i = 0; i < selectOcrApiForDropdown.length; i++) {
-            if (selectOcrApiForDropdown.options[i].value === ocr_service_choice) {
-                selectOcrApiForDropdown.options[i].selected = true;
-                break;
-            }
-        }
-        
-        if (azure_cv_free_tier){
-            document.getElementById('is_azure_cv_free_tier').checked = true;
-        } else {
-            document.getElementById('is_azure_cv_free_tier').checked = false;
-        }
-
-        usePypdf.checked = false;
+function initializeOCRTabRadios(force_ocr, azure_cv_free_tier) {
+    document.getElementById('ocr_yes_radio_button').checked = force_ocr;
+    document.getElementById('ocr_no_radio_button').checked = !force_ocr;
+    
+    if (azure_cv_free_tier){
+        document.getElementById('is_azure_cv_free_tier').checked = true;
     } else {
-        useOcr.checked = false;
-        usePypdf.checked = true;
+        document.getElementById('is_azure_cv_free_tier').checked = false;
     }
 }
 
@@ -1576,7 +1557,16 @@ function toggleOcrSelection() { //Show or hide OCR-Service selection:
         document.getElementById('azure_vision_api_form').style.display = 'none'; 
         document.getElementById('azure_doc_ai_api_form').style.display = 'none';
         document.getElementById('local_vision_api_form').style.display = 'none';
-        document.getElementById('kosmos_api_form').style.display = 'none';
+        document.getElementById('kosmos_api_div').style.display = 'none';
+        document.getElementById('docling_div').style.display = 'none';
+
+        if (document.getElementById('backupOcrApiDropdown').value === 'Backup-Kosmos') {
+            document.getElementById('kosmos_api_div').style.display = 'block';
+        } 
+        
+        if (document.getElementById('backupOcrApiDropdown').value === 'Backup-Docling') {
+            document.getElementById('docling_div').style.display = 'block';
+        }
     } else {
         document.getElementById('backupOcrSelection').style.display = 'none';
         
@@ -1593,11 +1583,11 @@ function toggleOcrSelection() { //Show or hide OCR-Service selection:
         } 
         
         if (document.getElementById('ocrApiDropdown').value != 'Kosmos') {
-            document.getElementById('kosmos_api_form').style.display = 'none';
+            document.getElementById('kosmos_api_div').style.display = 'none';
         } 
         
         if (document.getElementById('ocrApiDropdown').value != 'Docling') {
-            document.getElementById('docling_form').style.display = 'none';
+            document.getElementById('docling_div').style.display = 'none';
         }
     }
 }
@@ -1608,35 +1598,35 @@ function toggleOcrApiForm() {   //Show or hide API form:
     document.getElementById('azure_vision_api_form').style.display = selection === 'AzureVision' ? 'block' : 'none';
     document.getElementById('azure_doc_ai_api_form').style.display = selection === 'AzureDocAi' ? 'block' : 'none';
     document.getElementById('local_vision_api_form').style.display = selection === 'LocalVisionLLM' ? 'block' : 'none';
-    document.getElementById('kosmos_api_form').style.display = selection === 'Kosmos' ? 'block' : 'none';
-    document.getElementById('docling_form').style.display = selection === 'Docling' ? 'block' : 'none';
+    document.getElementById('kosmos_api_div').style.display = selection === 'Kosmos' ? 'block' : 'none';
+    document.getElementById('docling_div').style.display = selection === 'Docling' ? 'block' : 'none';
     //Add more API form selectors here
 }
 
 
 function toggleBackupOcrForms() {
     var selection = document.getElementById('backupOcrApiDropdown').value;
-    document.getElementById('docling_form').style.display = selection === 'Backup-Docling' ? 'block' : 'none';
-    document.getElementById('kosmos_api_form').style.display = selection === 'Backup-Kosmos' ? 'block' : 'none';
+    document.getElementById('docling_div').style.display = selection === 'Backup-Docling' ? 'block' : 'none';
+    document.getElementById('kosmos_api_div').style.display = selection === 'Backup-Kosmos' ? 'block' : 'none';
 }
 
 
 function toggleDoclingPipelineForm() {
     var selection = document.getElementById('docling_pipeline').value;
-    document.getElementById('docling_vlm_options').style.display = selection === 'vlm' ? 'block' : 'none';
+    document.getElementById('docling_vlm_options').style.display = selection === 'vlm' ? 'table-row' : 'none';
     document.getElementById('docling_standard_options').style.display = selection === 'standard' ? 'block' : 'none';
 }
 
 
 function toggleDoclingOcrOptions() {
     var selection = document.getElementById('docling_enable_ocr').checked;
-    document.getElementById('docling_ocr_options').style.display = selection ? 'block' : 'none';
+    document.getElementById('docling_ocr_options').style.display = selection ? 'table-row' : 'none';
 }
 
 
 function toggleDoclingTableOptions() {
     var selection = document.getElementById('docling_do_table_structure').checked;
-    document.getElementById('docling_table_options').style.display = selection ? 'block' : 'none';
+    document.getElementById('docling_table_options').style.display = selection ? 'table-row' : 'none';
 }
 
 
@@ -1681,7 +1671,7 @@ function initializeOCRTabListeners() {
     document.getElementById('ocr_yes_radio_button').addEventListener('change', toggleOcrApiForm);
     document.getElementById('ocr_yes_radio_button').addEventListener('change', toggleOcrSelection);
 
-    document.getElementById('ocr_no_radio_button').addEventListener('change', toggleOcrApiForm);
+    document.getElementById('ocr_no_radio_button').addEventListener('change', toggleBackupOcrForms);
     document.getElementById('ocr_no_radio_button').addEventListener('change', toggleOcrSelection);
 
     document.getElementById('ocrApiDropdown').addEventListener('change', toggleOcrApiForm);
@@ -1694,8 +1684,8 @@ function initializeOCRTabListeners() {
 
     // Initial state check:
     toggleOcrSelection();
-    toggleOcrApiForm();
-    toggleBackupOcrForms();
+    if (document.getElementById('ocr_yes_radio_button').checked) { toggleOcrApiForm(); }
+    if (document.getElementById('ocr_no_radio_button').checked) { toggleBackupOcrForms(); }
     toggleDoclingPipelineForm();
     toggleDoclingOcrOptions();
     toggleDoclingTableOptions();
@@ -1708,6 +1698,7 @@ function initializeOCRFormValues(values) {
     if (values.kosmos_task) { document.getElementById('kosmos_task').value = values.kosmos_task; }
     if (values.kosmos_threshold) { document.getElementById('kosmos_threshold').value = values.kosmos_threshold; }
     if (values.vision_llm_local_url) { document.getElementById('local_vision_api_url').value = values.vision_llm_local_url; }
+    if (values.ocr_service_choice) { document.getElementById('ocrApiDropdown').value = values.ocr_service_choice; }
     if (values.backup_ocr_service_choice) { document.getElementById('backupOcrApiDropdown').value = values.backup_ocr_service_choice; }
     if (values.docling_pipeline) { document.getElementById('docling_pipeline').value = values.docling_pipeline; }
     if (values.docling_vlm_model) { document.getElementById('docling_vlm_model').value = values.docling_vlm_model; }
@@ -1727,7 +1718,7 @@ function initializeOCRFormValues(values) {
 
 
 function initializeOCRTabComponents(values) {
-    initializeOCRTabRadios(values.force_ocr, values.ocr_service_choice, values.azure_cv_free_tier);
+    initializeOCRTabRadios(values.force_ocr, values.azure_cv_free_tier);
     initializeOCRFormValues(values);
     initializeOCRTabListeners();
 }

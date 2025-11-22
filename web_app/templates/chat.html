@@ -1685,132 +1685,137 @@
                                     
                                     <br>
 
-                                    <form action="" class="api_form" id="docling_form" style="display: none;">
+                                    <div id="docling_div" style="display: none;">
                                         <div class="form-group">
                                             <input type="checkbox" id="update_docling_config" name="update_docling_config">
                                             <label for="update_docling_config"> Update Configuration</label>
                                         </div>
                                         <br>
-                                        
-                                        <div class="form-group">
-                                            <label for="docling_pipeline" style="margin-bottom: 3px;">Pipeline:</label>
-                                            <br>
-                                            <select id="docling_pipeline" name="docling_pipeline" class="modal-selects" style="width: 100%;" disabled>
-                                                <option value="standard" selected>Standard (Default)</option>
-                                                <option value="vlm">VLM</option>
-                                            </select>
-                                        </div>
-                                        <br>
-                            
-                                        <div id="docling_vlm_options" style="display: none;">
-                                            <div class="form-group">
-                                                <label for="docling_vlm_model" style="margin-bottom: 3px;">VLM Model:</label>
-                                                <br>
-                                                <select id="docling_vlm_model" name="docling_vlm_model" class="modal-selects" style="width: 100%;" disabled>
-                                                    <option value="smoldocling_mlx">SmolDocling MLX</option>
-                                                    <option value="smoldocling_transformers" selected>SmolDocling Transformers (Recommended)</option>
-                                                    <option value="granite_vision_transformers">Granite Vision Transformers</option>
-                                                    <option value="granite_vision_ollama">Granite Vision Ollama</option>
-                                                    <option value="pixtral_12b_transformers">Pixtral 12B Transformers</option>
-                                                    <option value="pixtral_12b_mlx">Pixtral 12B MLX</option>
-                                                    <option value="phi4_transformers">Phi4 Transformers</option>
-                                                    <option value="qwen25_vl_3b_mlx">Qwen2.5-VL-3B MLX</option>
-                                                    <option value="gemma3_12b_mlx">Gemma3 12B MLX</option>
-                                                    <option value="gemma3_27b_mlx">Gemma3 27B MLX</option>
-                                                </select>
-                                            </div>
-                                            <br>
-                                        </div>
-                            
-                                        <div id="docling_standard_options">
-                                            <div class="form-group">
-                                                <input type="checkbox" id="docling_enable_ocr" name="docling_enable_ocr" checked disabled>
-                                                <label for="docling_enable_ocr">Enable OCR (Default: Enabled)</label>
-                                            </div>
-                                            <br>
-                            
-                                            <div id="docling_ocr_options">
-                                                <div class="form-group" style="margin-left: 20px;">
-                                                    <input type="checkbox" id="docling_force_full_page_ocr" name="docling_force_full_page_ocr" disabled>
-                                                    <label for="docling_force_full_page_ocr">Force Full-Page OCR (Default: Disabled)</label>
-                                                </div>
-                                                <br>
-                                                <div class="form-group" style="margin-left: 20px;">
-                                                    <label for="docling_ocr_model" style="margin-bottom: 3px;">OCR Model:</label>
-                                                    <br>
-                                                    <select id="docling_ocr_model" name="docling_ocr_model" class="modal-selects" style="width: 100%;" disabled>
-                                                        <option value="easyocr" selected>EasyOCR (Default)</option>
-                                                        <option value="tesseract">Tesseract</option>
-                                                        <option value="tesseract_cli">Tesseract CLI</option>
-                                                        <option value="ocrmac">OCR-Mac (MacOS Only)</option>
-                                                        <option value="rapidocr">Rapid OCR</option>
-                                                    </select>
-                                                </div>
-                                                <br>
-                                            </div>
-                            
-                                            <div class="form-group">
-                                                <input type="checkbox" id="docling_do_code_enrichment" name="docling_do_code_enrichment" disabled>
-                                                <label for="docling_do_code_enrichment">Do Code Enrichment (Default: Disabled)</label>
-                                            </div>
-                                            <br>
-                            
-                                            <div class="form-group">
-                                                <input type="checkbox" id="docling_do_formula_enrichment" name="docling_do_formula_enrichment" disabled>
-                                                <label for="docling_do_formula_enrichment">Do Formula Enrichment (Default: Disabled)</label>
-                                            </div>
-                                            <br>
-                            
-                                            <div class="form-group">
-                                                <input type="checkbox" id="docling_do_table_structure" name="docling_do_table_structure" checked disabled>
-                                                <label for="docling_do_table_structure">Do Table Structure (Default: Enabled)</label>
-                                            </div>
-                                            <br>
-                                            
-                                            <div id="docling_table_options">
-                                                <div class="form-group" style="margin-left: 20px;">
-                                                    <label for="docling_table_structure_mode" style="margin-bottom: 3px;">Table Structure Mode:</label>
-                                                    <br>
-                                                    <select id="docling_table_structure_mode" name="docling_table_structure_mode" class="modal-selects" style="width: 100%;" disabled>
-                                                        <option value="accurate" selected>Accurate (Default)</option>
-                                                        <option value="fast">Fast</option>
-                                                    </select>
-                                                </div>
-                                                <br>
-                                            </div>
-                            
-                                            <div class="form-group">
-                                                <input type="checkbox" id="docling_do_picture_classification" name="docling_do_picture_classification" disabled>
-                                                <label for="docling_do_picture_classification">Do Picture Classification (Default: Disabled)</label>
-                                            </div>
-                                            <br>
-                            
-                                            <div class="form-group">
-                                                <input type="checkbox" id="docling_do_picture_description" name="docling_do_picture_description" disabled>
-                                                <label for="docling_do_picture_description">Do Picture Description (Default: Disabled)</label>
-                                            </div>
-                                            <br>
-                            
-                                            <div class="form-group">
-                                                <input type="checkbox" id="docling_do_cell_matching" name="docling_do_cell_matching" checked disabled>
-                                                <label for="docling_do_cell_matching">Do Cell Matching (Default: Enabled)</label>
-                                            </div>
-                                            <br>
-                            
-                                            <div class="form-group" style="display: none;">
-                                                <input type="checkbox" id="docling_cuda_use_flash_attention_2" name="docling_cuda_use_flash_attention_2" disabled>
-                                                <label for="docling_cuda_use_flash_attention_2">Use Flash Attention 2 (Default: Disabled)</label>
-                                            </div>
-                                            <!-- <br> -->
-                            
-                                            <div class="form-group">
-                                                <label for="docling_num_threads">Number of Threads (Default: 4)</label>
-                                                <input type="number" id="docling_num_threads" name="docling_num_threads" class="settings-input-fields" value="4" disabled>
-                                            </div>
-                                            <br>
+
+                                        <div class="settings-table-container">
+                                            <table class="settings-table">
+                                                <tr class="settings-table-header-row">
+                                                    <th style="width: 20%;">Pipeline Options</th>
+                                                    <th>Description</th>
+                                                    <th style="width: 20%;">Value</th>
+                                                </tr>
+                                                <tr class="settings-table-row">     <!--Row IDs below are provided for JS (row hiding etc.!-->
+                                                    <td class="settings_table_setting_name">Pipeline</td>
+                                                    <td class="settings_table_setting_description">Docling OCR Pipeline: [Standard | VLM]</td>
+                                                    <td class="settings_table_setting_value">
+                                                        <select id="docling_pipeline" name="docling_pipeline" class="modal-selects" disabled>
+                                                            <option value="standard" selected>Standard (Default)</option>
+                                                            <option value="vlm">VLM</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                                <tr class="settings-table-row" id="docling_vlm_options" style="display: none;">
+                                                    <td class="settings_table_setting_name">VLM Model</td>
+                                                    <td class="settings_table_setting_description">Docling VLM Model: [Default: openai/whisper-large-v3]</td>
+                                                    <td class="settings_table_setting_value">
+                                                        <select id="docling_vlm_model" name="docling_vlm_model" class="modal-selects" disabled>
+                                                            <option value="smoldocling_mlx">SmolDocling MLX</option>
+                                                            <option value="smoldocling_transformers" selected>SmolDocling Transformers (Recommended)</option>
+                                                            <option value="granite_vision_transformers">Granite Vision Transformers</option>
+                                                            <option value="granite_vision_ollama">Granite Vision Ollama</option>
+                                                            <option value="pixtral_12b_transformers">Pixtral 12B Transformers</option>
+                                                            <option value="pixtral_12b_mlx">Pixtral 12B MLX</option>
+                                                            <option value="phi4_transformers">Phi4 Transformers</option>
+                                                            <option value="qwen25_vl_3b_mlx">Qwen2.5-VL-3B MLX</option>
+                                                            <option value="gemma3_12b_mlx">Gemma3 12B MLX</option>
+                                                            <option value="gemma3_27b_mlx">Gemma3 27B MLX</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                            </table>
                                         </div>
 
-                                    </form>
+                                        <br>
+
+                                        <div class="settings-table-container" id="docling_standard_options">
+                                            <table class="settings-table">
+                                                <tr class="settings-table-header-row">
+                                                    <th style="width: 20%;">Standard Pipeline Options</th>
+                                                    <th>Description</th>
+                                                    <th style="width: 20%;">Value</th>
+                                                </tr>
+                                                <tr class="settings-table-row">
+                                                    <td class="settings_table_setting_name">Enable OCR</td>
+                                                    <td class="settings_table_setting_description">Enable OCR [Default: True]</td>
+                                                    <td class="settings_table_setting_value"><input type="checkbox" id="docling_enable_ocr" name="docling_enable_ocr" checked disabled></td>
+                                                </tr>
+                                                <tr class="settings-table-row">
+                                                    <td class="settings_table_setting_name">Force Full-Page OCR</td>
+                                                    <td class="settings_table_setting_description">Force Full-Page OCR [Default: False]</td>
+                                                    <td class="settings_table_setting_value"><input type="checkbox" id="docling_force_full_page_ocr" name="docling_force_full_page_ocr" disabled></td>
+                                                </tr>
+                                                <tr class="settings-table-row" id="docling_ocr_options">
+                                                    <td class="settings_table_setting_name">OCR Model</td>
+                                                    <td class="settings_table_setting_description">OCR Model [Default: EasyOCR]</td>
+                                                    <td class="settings_table_setting_value">
+                                                        <select id="docling_ocr_model" name="docling_ocr_model" class="modal-selects" disabled>
+                                                            <option value="easyocr" selected>EasyOCR (Default)</option>
+                                                            <option value="tesseract">Tesseract</option>
+                                                            <option value="tesseract_cli">Tesseract CLI</option>
+                                                            <option value="ocrmac">OCR-Mac (MacOS Only)</option>
+                                                            <option value="rapidocr">Rapid OCR</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                                <tr class="settings-table-row">
+                                                    <td class="settings_table_setting_name">Do Code Enrichment</td>
+                                                    <td class="settings_table_setting_description">Do Code Enrichment [Default: False]</td>
+                                                    <td class="settings_table_setting_value"><input type="checkbox" id="docling_do_code_enrichment" name="docling_do_code_enrichment" disabled></td>
+                                                </tr>
+                                                <tr class="settings-table-row">
+                                                    <td class="settings_table_setting_name">Do Formula Enrichment</td>
+                                                    <td class="settings_table_setting_description">Do Formula Enrichment [Default: False]</td>
+                                                    <td class="settings_table_setting_value"><input type="checkbox" id="docling_do_formula_enrichment" name="docling_do_formula_enrichment" disabled></td>
+                                                </tr>
+                                                <tr class="settings-table-row">
+                                                    <td class="settings_table_setting_name">Do Table Structure</td>
+                                                    <td class="settings_table_setting_description">Do Table Structure [Default: True]</td>
+                                                    <td class="settings_table_setting_value"><input type="checkbox" id="docling_do_table_structure" name="docling_do_table_structure" checked disabled></td>
+                                                </tr>
+                                                <tr class="settings-table-row" id="docling_table_options">
+                                                    <td class="settings_table_setting_name">Table Structure Mode</td>
+                                                    <td class="settings_table_setting_description">Table Structure Mode [Default: Accurate]</td>
+                                                    <td class="settings_table_setting_value">
+                                                        <select id="docling_table_structure_mode" name="docling_table_structure_mode" class="modal-selects" disabled>
+                                                            <option value="accurate" selected>Accurate (Default)</option>
+                                                            <option value="fast">Fast</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                                <tr class="settings-table-row">
+                                                    <td class="settings_table_setting_name">Do Picture Classification</td>
+                                                    <td class="settings_table_setting_description">Do Picture Classification [Default: False]</td>
+                                                    <td class="settings_table_setting_value"><input type="checkbox" id="docling_do_picture_classification" name="docling_do_picture_classification" disabled></td>
+                                                </tr>
+                                                <tr class="settings-table-row">
+                                                    <td class="settings_table_setting_name">Do Picture Description</td>
+                                                    <td class="settings_table_setting_description">Do Picture Description [Default: False]</td>
+                                                    <td class="settings_table_setting_value"><input type="checkbox" id="docling_do_picture_description" name="docling_do_picture_description" disabled></td>
+                                                </tr>
+                                                <tr class="settings-table-row">
+                                                    <td class="settings_table_setting_name">Do Cell Matching</td>
+                                                    <td class="settings_table_setting_description">Do Cell Matching [Default: True]</td>
+                                                    <td class="settings_table_setting_value"><input type="checkbox" id="docling_do_cell_matching" name="docling_do_cell_matching" checked disabled></td>
+                                                </tr>
+                                                <tr class="settings-table-row">
+                                                    <td class="settings_table_setting_name">Use Flash Attention 2</td>
+                                                    <td class="settings_table_setting_description">Use Flash Attention 2 [Default: False]</td>
+                                                    <td class="settings_table_setting_value"><input type="checkbox" id="docling_cuda_use_flash_attention_2" name="docling_cuda_use_flash_attention_2" disabled></td>
+                                                </tr>
+                                                <tr class="settings-table-row">
+                                                    <td class="settings_table_setting_name">Number of Threads</td>
+                                                    <td class="settings_table_setting_description">Number of Threads [Default: 4]</td>
+                                                    <td class="settings_table_setting_value"><input type="number" id="docling_num_threads" name="docling_num_threads" class="settings-input-fields" value="4" disabled></td>
+                                                </tr>
+                                            </table>
+                                        </div>
+
+                                    </div>
 
                                     <form action="" class="api_form" id="azure_vision_api_form" style="display: none;">
                                         <div class="form-group">
@@ -1866,31 +1871,45 @@
                                         <br>
                                     </form>
 
-                                    <form action="" class="api_form" id="kosmos_api_form" style="display: none;">
+                                    <div id="kosmos_api_div" style="display: none;">
+                                        
                                         <div class="form-group">
                                             <input type="checkbox" id="update_kosmos_url_config" name="update_kosmos_url_config">
                                             <label for="update_kosmos_url_config">Update Kosmos URL Configuration</label>
                                         </div>
+                                        
                                         <br>
-                                        <div class="form-group">
-                                            <label for="kosmos_api_url">Kosmos OCR Endpoint:</label>
-                                            <input type="text" id="kosmos_api_url" name="kosmos_api_url" disabled>
+
+                                        <div class="settings-table-container">
+                                            <table class="settings-table">
+                                                <tr class="settings-table-header-row">
+                                                    <th style="width: 20%;">Config Options</th>
+                                                    <th>Description</th>
+                                                    <th style="width: 20%;">Value</th>
+                                                </tr>
+                                                <tr class="settings-table-row">
+                                                    <td class="settings_table_setting_name">Kosmos OCR Endpoint</td>
+                                                    <td class="settings_table_setting_description">Kosmos OCR Endpoint [Default: http://localhost:25000]</td>
+                                                    <td class="settings_table_setting_value"><input type="text" id="kosmos_api_url" name="kosmos_api_url" disabled></td>
+                                                </tr>
+                                                <tr class="settings-table-row">
+                                                    <td class="settings_table_setting_name">Kosmos Task</td>
+                                                    <td class="settings_table_setting_description">Kosmos Task [Default: OCR]</td>
+                                                    <td class="settings_table_setting_value">
+                                                        <select id="kosmos_task" name="kosmos_task" class="modal-selects" disabled>
+                                                            <option value="ocr" selected>OCR (Default)</option>
+                                                            <option value="md">MD</option>
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                                <tr class="settings-table-row">
+                                                    <td class="settings_table_setting_name">Kosmos Threshold</td>
+                                                    <td class="settings_table_setting_description">Kosmos Threshold [Default: 20]</td>
+                                                    <td class="settings_table_setting_value"><input type="number" id="kosmos_threshold" class="settings-input-fields" min="0" max="100" value="20" disabled></td>
+                                                </tr>
+                                            </table>
                                         </div>
-                                        <br>
-                                        <div class="form-group">
-                                            <label for="kosmos_task">Task:</label>
-                                            <select id="kosmos_task" name="kosmos_task" class="modal-selects" disabled>
-                                                <option value="ocr" selected>OCR (Default)</option>
-                                                <option value="md">MD</option>
-                                            </select>
-                                        </div>
-                                        <br>
-                                        <div class="form-group">
-                                            <label for="kosmos_threshold" class="hf-select-settings-labels-group">Threshold:</label>
-                                            <input type="number" id="kosmos_threshold" class="settings-input-fields" min="0" max="100" value="20" disabled>
-                                        </div>
-                                        <br>
-                                    </form>
+                                    </div>
 
                                 </div>
 
