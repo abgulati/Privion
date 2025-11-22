@@ -1729,7 +1729,6 @@ function displayOnlyDiffusersSettings() {
     document.getElementById('hf_waitress_exl3').style.display = 'none';
     document.getElementById('hf_waitress_trust_remote_code').style.display = 'none';
     document.getElementById('hf_waitress_is_awq').style.display = 'none';
-    document.getElementById('hf_waitress_diffusers').style.display = 'block';
     document.getElementById('advancedHfLlmSettingsToggle').style.display = 'none';  // since we're hiding this whole div, no need to explicitly hide Exl3 Sampling Params etc.!
 }
 
@@ -1746,7 +1745,6 @@ function resetDiffusersOnlyView() {
     document.getElementById('hf_waitress_exl3').style.display = 'block';
     document.getElementById('hf_waitress_trust_remote_code').style.display = 'block';
     document.getElementById('hf_waitress_is_awq').style.display = 'block';
-    document.getElementById('hf_waitress_diffusers').style.display = 'block';
     document.getElementById('advancedHfLlmSettingsToggle').style.display = 'inline-block';
 }
 
