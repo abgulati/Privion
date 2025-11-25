@@ -400,6 +400,14 @@ function handleSetupResponse(data) {
 }
 
 
+function printErrorToChatArea(responseContentID, error_message) {
+    let userFriendlyErrorMessage = "An error occured when attempting to generate the response. Details follow, contact support if the issue persists. Error: <br><br>" + String(error_message);
+    appendStreamChunkAndRender(responseContentID, userFriendlyErrorMessage);
+    finalizeStreamRender(responseContentID);
+    return userFriendlyErrorMessage;
+}
+
+
 async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer) {
     const url = "http://localhost:8080/v1/chat/completions";
 
@@ -497,7 +505,8 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
         return totalContent;
 
     } catch (error) {
-        errorHandler("fetching llama.cpp event-streaming response", "localhost:8080/completions", String(error))
+        errorHandlerNoAlert("fetching llama.cpp event-streaming response", "localhost:8080/completions", String(error));
+        return printErrorToChatArea(responseContentID, String(error));
     }
 }
 
@@ -630,7 +639,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
     try {
 
         const request_body = vision === "true" ? formdata : rawBodyJSONStringified;
-        // console.log("request_body: ", request_body);
+        console.log("request_body: ", request_body);
 
         const hfwResponse = await fetch(url, {
             method: 'POST',
@@ -638,6 +647,11 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
             body: request_body,
             redirect: 'follow'
         }); // due to the async-await syntax, the fetch() call returns a promise, and we await its resolution here.
+
+        if (!hfwResponse.ok) {
+            const err = await hfwResponse.json();
+            throw new Error(err.error);
+        }
 
         if (file) {
             const downloadContainer = createDownloadContainerForFile(file.name);
@@ -705,7 +719,8 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         return hfwTotalContent;
 
     } catch (error) {
-        errorHandler("fetching event-streaming response", "HF-Waitress/completions_stream", String(error));
+        errorHandlerNoAlert("fetching event-streaming response", "fetchHfWaitressEventStream", String(error));
+        return printErrorToChatArea(responseContentID, String(error));
     }
 
 }
@@ -764,7 +779,8 @@ async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, 
             throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
         }
     } catch (error) {
-        errorHandler("fetching diffusers response", "HF-Waitress/completions", String(error));
+        errorHandlerNoAlert("fetching diffusers response", "HF-Waitress/completions", String(error));
+        return printErrorToChatArea(responseContentID, String(error));
     }
     
 }
@@ -883,7 +899,8 @@ async function getReferences(do_rag, params, responseContentID, masterWrapperID,
 
         handleFetchedReferences(do_rag, data, responseContentID, masterWrapperID, params.stream_session_id, user_message_html_unique_id, params.regeneration_request);
     } catch (error) {
-        errorHandler("fetching relevant reference material", "get-References()", String(error));
+        errorHandlerNoAlert("fetching relevant reference material", "get-References()", String(error));
+        // return printErrorToChatArea(responseContentID, String(error));
     }
 }
 
@@ -1031,7 +1048,7 @@ async function requestFormattedPrompt(regeneration_request=false, regenerate_wit
         if (traceManager) {
             traceManager.completeCurrentStep();
         }
-        errorHandler("chatting with the LLM", "request-FormattedPrompt()", String(error.message))
+        errorHandlerNoAlert("chatting with the LLM", "request-FormattedPrompt()", String(error.message))
     } finally {
         enableSendButton();
         displayProcessingStatus(false);
