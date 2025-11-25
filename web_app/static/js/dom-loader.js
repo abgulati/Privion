@@ -593,7 +593,7 @@ function initializeHfRadioButtons(all_values) {
     toggleHfwDiffusersConfig();
     toggleHfwExl2Config();
     toggleHfwExl3Config();
-    if (getExl2() === "true") disableNonExl2Settings();  // as it might be taggled by the Exl3 toggle method! 
+    if (getExl2() === "true") displayOnlyExl2Settings();  // as it might be taggled by the Exl3 toggle method! 
 
     document.getElementById('hf_waitress_diffusers_low_vram_optimizations_checkbox').checked = all_values.flux_low_vram_optimizations;
     document.getElementById('hf_waitress_diffusers_fp8_checkbox').checked = all_values.load_quantized_flux;
