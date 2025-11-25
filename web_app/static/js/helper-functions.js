@@ -427,6 +427,7 @@ function errorHandlerNoAlert(attempted_action, error_generator, error_message) {
 
 
 function errorHandler(attempted_action, error_generator, error_message) {
+    let error_alert_message = "There was an error when "  + attempted_action + " in the method " + error_generator + ", more details can be viewed in the browser's console. "
     errorHandlerNoAlert(attempted_action, error_generator, error_message);
     alert(error_alert_message);
 }
