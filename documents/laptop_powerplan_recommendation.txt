@@ -1,0 +1,21 @@
+- Windows 11 by default now only exposes a 'Balanced' powerplan, with no straight forward way to add a higher performance mode.
+
+- The issue with this is that when running an application like Privion with several background processes, responsiveness can suffer
+
+- However, an 'Ultimate Performance' powerplan can be enabled which really helps with overall system responsiveness, even when unplugged!
+
+- So it's highly recommended to follow the below steps:
+
+	From an Admin PowerShell:
+
+	Step 1: Run powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61
+
+	There'll be an output like: "Power Scheme GUID: ced6a11f-6240-47fd-a32a-7020739e7a2b (Ultimate Performance)"
+
+	Step 2: Use the GUID to activate the plan - Run:
+
+	powercfg -setactive ced6a11f-6240-47fd-a32a-7020739e7a2b
+
+- After a reboot, an 'Ultimate Performance' powerplan will show up in `Control Panel/Hardware and Sound/Power Options`
+
+- Installing 'Powerplan Switcher' from the MS Store is highly recommended too to easily switch between the two plans easily as required!
