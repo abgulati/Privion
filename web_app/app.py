@@ -3399,7 +3399,7 @@ def store_to_chat_history_db(
         current_datetime = datetime.datetime.now()
         formatted_datetime = current_datetime.strftime('%d %b %Y - %I:%M %p %Z')
     except Exception as e:
-        return handle_api_error("Could not obtain timestamp in store-local_llm_chat_history_to_db, encountered error: ", e)
+        handle_local_error("Could not obtain timestamp in store-local_llm_chat_history_to_db, encountered error: ", e)
 
     try:
         # Store conversation history into DB
@@ -4818,12 +4818,12 @@ def bulk_upload_files():
             try:
                 bulk_text_extract_from_staging_area(docs_to_upload, data_queue)
             except Exception as e:
-                return handle_api_error("Server-side error, could not perform bulk text extraction, encountered error: ", e)
+                handle_local_error("Server-side error, could not perform bulk text extraction, encountered error: ", e)
             
             try:
                 bulk_upload_files_to_rag_and_records_databases(docs_to_upload, data_queue)
             except Exception as e:
-                return handle_api_error("Server-side error, could not bulk upload files to RAG & Records databases, encountered error: ", e)
+                handle_local_error("Server-side error, could not bulk upload files to RAG & Records databases, encountered error: ", e)
         finally:
             data_queue.put(None)
             print("\n\nDocument upload stream done, breaking thread\n\n")
@@ -5074,7 +5074,7 @@ def store_user_rating():
         read_return = read_config(['sqlite_history_db'])
         sqlite_history_db = read_return['sqlite_history_db']
     except Exception as e:
-        handle_local_error("Missing sqlite_history_db in config.json for method store_user_rating. Error: ", e)
+        return handle_api_error("Missing sqlite_history_db in config.json for method store_user_rating. Error: ", e)
     
     try:
         user_rating = request.form['rating']
@@ -5226,7 +5226,7 @@ def asr_server_starter(hard_reboot_required: bool = False):
                     # Process died before the HTTP server came up
                     # Optional: on non‑Windows you already log to asr_waitress_output_log.txt
                     # so you can tell the user to check that file.
-                    return handle_api_error(
+                    handle_local_error(
                         "ASR-Waitress server process exited early before becoming available. "
                         f"Return code: {exit_code}. Check the ASR-Waitress server log for details. ",
                         RuntimeError(f"ASR-Waitress exited with code {exit_code}")
@@ -5507,7 +5507,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
     try:
         precheck_result = run_prechecks_for_llama_cpp_server_starter(exclusive_server_mode)
     except Exception as e:
-        return handle_api_error("Could not run prechecks for llama.cpp server starter, encountered error: ", e)
+        handle_local_error("Could not run prechecks for llama.cpp server starter, encountered error: ", e)
     
     if precheck_result['skip_fresh_start']:
         return precheck_result
@@ -5545,7 +5545,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
         llama_cpp_base_url = get_url_for_server('llama-cpp')
         cpp_model = str(pathlib.Path(rf"{read_return['model_dir']}").resolve() / read_return['model_choice'])
     except Exception as e:
-        return handle_api_error("Error with core configuration in config.json for llama.cpp server starter method: ", e)
+        handle_local_error("Error with core configuration in config.json for llama.cpp server starter method: ", e)
 
     if not read_return['llama_cpp_use_gpu']:
         read_return['llama_cpp_gpu_layers'] = 0
@@ -5628,7 +5628,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                 LLAMA_CPP_PROCESS = subprocess.Popen(llama_cpp_args, stdout=f, stderr=subprocess.STDOUT, text=True)    #stdout has already been redirected to the file, so simply direct stderr to stdout!
 
     except Exception as e:
-        return handle_api_error("Could not launch llama.cpp process, encountered error: ", e)
+        handle_local_error("Could not launch llama.cpp process, encountered error: ", e)
 
     try:
         for _ in range(read_return['llama_cpp_server_retry_attempts']):
@@ -5640,7 +5640,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                     # Process died before the HTTP server came up
                     # Optional: on non‑Windows you already log to llama_cpp_server_output_log.txt
                     # so you can tell the user to check that file.
-                    return handle_api_error(
+                    handle_local_error(
                         "llama.cpp server process exited early before becoming available. "
                         f"Return code: {exit_code}. Check the llama.cpp server log for details. ",
                         RuntimeError(f"llama.cpp exited with code {exit_code}")
@@ -5783,7 +5783,7 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
         lars_read_return = read_config(['hf_waitress_server_timeout_seconds', 'hf_waitress_server_retry_attempts'])
         hf_waitress_base_url = get_url_for_server('hf-waitress')
     except Exception as e:
-        return handle_api_error("Could not read hf_config.json, encountered error: ", e)
+        handle_local_error("Could not read hf_config.json, encountered error: ", e)
     
     print("\n\nProceeding to launch HF-Waitress server\n\n")
     
@@ -5840,7 +5840,7 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
                 hf_waitress_process = subprocess.Popen(command_list, stdout=f, stderr=subprocess.STDOUT, text=True)
 
     except Exception as e:
-        return handle_api_error(f"Could not launch HF-Waitress process in directory: {os.getcwd()}, encountered error: ", e)
+        handle_local_error(f"Could not launch HF-Waitress process in directory: {os.getcwd()}, encountered error: ", e)
 
     try:
         for _ in range(lars_read_return['hf_waitress_server_retry_attempts']):
@@ -5852,7 +5852,7 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
                     # Process died before the HTTP server came up
                     # Optional: on non‑Windows you already log to hf_waitress_output_log.txt
                     # so you can tell the user to check that file.
-                    return handle_api_error(
+                    handle_local_error(
                         "HF-Waitress server process exited early before becoming available. "
                         f"Return code: {exit_code}. Check the HF-Waitress server log for details. ",
                         RuntimeError(f"HF-Waitress exited with code {exit_code}")
@@ -6039,13 +6039,13 @@ def clean_up_docs_loaded_db(selected_embedding_model_choice:str, knowledge_domai
     try:
         conn, cursor = init_and_connect_to_docs_loaded_db()
     except Exception as e:
-        return handle_api_error("Could not initialize and connect to docs_loaded_db to clean up, encountered error: ", e)
+        handle_local_error("Could not initialize and connect to docs_loaded_db to clean up, encountered error: ", e)
 
     try:
         with conn:  # Handles commit/rollback automatically
             cursor.execute("DELETE FROM document_records WHERE embedding_model LIKE ? AND knowledge_domain LIKE ?", (selected_embedding_model_choice, knowledge_domain))
     except Exception as e:
-        return handle_api_error("Could not delete document records from docs_loaded_db, encountered error: ", e)
+        handle_local_error("Could not delete document records from docs_loaded_db, encountered error: ", e)
     finally:
         cursor.close()
 
@@ -6094,13 +6094,13 @@ def reset_vector_db_on_disk():
             path_to_knowledge_domain.mkdir(parents=True, exist_ok=True)
             print(f"\n\nCreated knowledge domain directory: {path_to_knowledge_domain}\n\n")
     except Exception as e:
-        handle_api_error("Could not determine path to knowledge domain, encountered error: ", e)
+        return handle_api_error("Could not determine path to knowledge domain, encountered error: ", e)
 
     try:
         vector_db_path = path_to_knowledge_domain / "vector_db_and_whoosh_index" / selected_embedding_model_choice
         whoosh_index_path = path_to_knowledge_domain / "vector_db_and_whoosh_index" / selected_embedding_model_choice / "whoosh_index"
     except Exception as e:
-        handle_api_error("Could not determine path to vector_db or whoosh_index, encountered error: ", e)
+        return handle_api_error("Could not determine path to vector_db or whoosh_index, encountered error: ", e)
     
     shell_delete_folder(vector_db_path, delete_vector_db=True)
     shell_delete_folder(whoosh_index_path, delete_vector_db=False)
@@ -6319,7 +6319,7 @@ def load_chat_history():
         read_return = read_config(['sqlite_history_db'])
         sqlite_history_db = read_return['sqlite_history_db']
     except Exception as e:
-        return("Missing sqlite_history_db in config.json in method load-chat_history. Error: ", e)
+        return handle_api_error("Missing sqlite_history_db in config.json in method load-chat_history. Error: ", e)
 
     try:
         chat_id = int(request.form['chat_id'])
@@ -6539,7 +6539,7 @@ def update_record_in_history_db(
         current_datetime = datetime.datetime.now()
         formatted_datetime = current_datetime.strftime('%d %b %Y - %I:%M %p %Z')
     except Exception as e:
-        return handle_api_error("Could not obtain timestamp in update-llm_response_in_history_db, encountered error: ", e)
+        handle_local_error("Could not obtain timestamp in update-llm_response_in_history_db, encountered error: ", e)
     
     # Update the LLM response in the chat history DB for the given stream_session_id:
     try:
@@ -6937,7 +6937,7 @@ def handle_force_disabled_rag(local_llm_server:str, full_prompt:str, user_query:
     try:
         formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, full_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
     except Exception as e:
-        return handle_api_error("Could not get formatted_updated_prompt in method setup_for_streaming_response, encountered error: ", e)
+        handle_local_error("Could not get formatted_updated_prompt in method setup_for_streaming_response, encountered error: ", e)
     if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1 # Increment the seqID only for regular requests (as seqID stays the same when regenerating a response), or if it's currently 0.
     return jsonify({"success": True, "stream_session_id": stream_session_id, "llm_set_rag_config": DISABLED_CONFIG, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
 
