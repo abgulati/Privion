@@ -2667,9 +2667,9 @@ def convert_non_pdf_to_pdf_with_unoconv(filename, filepath):
 
         return conv_filename, conv_filepath
     except subprocess.CalledProcessError as e:
-        return handle_api_error("Could not convert file to PDF, encountered error: ", e)
+        handle_local_error("Could not convert file to PDF, encountered error: ", e)
     except Exception as e:
-        return handle_api_error("Unexpected error when converting file to PDF, encountered error: ", e)
+        handle_local_error("Unexpected error when converting file to PDF, encountered error: ", e)
 
 
 def get_pil_image_objects_for_file(filename, filepath, dpi=300):
@@ -2682,7 +2682,7 @@ def get_pil_image_objects_for_file(filename, filepath, dpi=300):
         pil_image_object_list = convert_pdf_to_images_list(filepath, dpi)
         return pil_image_object_list
     except Exception as e:
-        return handle_api_error("Could not get PIL image objects for file, encountered error: ", e)
+        handle_local_error("Could not get PIL image objects for file, encountered error: ", e)
 
 
 def get_input_params_for_vision_model(request):
@@ -2735,12 +2735,12 @@ def get_input_params_for_vision_model(request):
             # Save the uploaded file to the specified path
             input_file.save(filepath)
         except Exception as e:
-            return handle_api_error("Failed to save document to app folder, encountered error: ", e)
+            handle_local_error("Failed to save document to app folder, encountered error: ", e)
 
         try:
             pil_image_object_list = get_pil_image_objects_for_file(filename, filepath, dpi)
         except Exception as e:
-            return handle_api_error("Could not get PIL image objects for file, encountered error: ", e)
+            handle_local_error("Could not get PIL image objects for file, encountered error: ", e)
 
     try:
         print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
@@ -2853,7 +2853,7 @@ def completions():
             flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
             vision = str(read_return['vision']).lower() == 'true'
         except Exception as e:
-            handle_local_error("Could not read values from hf_config.json when attempting /completions, encountered error: ", e)
+            return handle_api_error("Could not read values from hf_config.json when attempting /completions, encountered error: ", e)
 
         if flux_diffusers:
             try:
@@ -2895,15 +2895,13 @@ def completions():
             print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
             inputs = PIPE.tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_dict=True, return_tensors="pt")
         except Exception as e:
-            handle_local_error("Could not apply chat template, encountered error: ", e)
-            return False
+            return handle_api_error("Could not apply chat template, encountered error: ", e)
 
         try:
             print("\n\nLoading Input to Model\n\n")
             inputs.to(PIPE.model.device)
         except Exception as e:
-            handle_local_error("Could not load input to model, encountered error: ", e)
-            return False
+            return handle_api_error("Could not load input to model, encountered error: ", e)
 
         inference_output = ""
         try:
@@ -2917,8 +2915,7 @@ def completions():
             print(f"\n\ndecoded_output: {decoded_output}\n\n")
             inference_output += decoded_output
         except Exception as e:
-            handle_local_error("Could not generate output, encountered error: ", e)
-            return False
+            return handle_api_error("Could not generate output, encountered error: ", e)
 
         print("\n\nCompletions done - releasing LLM semaphore\n\n")
 
@@ -3442,22 +3439,22 @@ def transcribe():
     """
     try:
         if 'audio' not in request.files:
-            return handle_api_error("Missing audio file in request, encountered error: ", e)
+            raise Exception("Missing audio file in request")
         f = request.files['audio']
         data = f.read()
         if not data:
-            return handle_api_error("Empty audio file in request, encountered error: ", e)
-
+            raise Exception("Empty audio file in request")
+        
         try:
             final_asr_config = get_final_asr_config(request)
         except Exception as e:
-            return handle_api_error("Could not get final ASR config, encountered error: ", e)
-
+            raise Exception("Could not get final ASR config")
+        
         try:
             result = asr_transcribe(data, final_asr_config)
         except Exception as e:
-            return handle_api_error("Could not transcribe audio, encountered error: ", e)
-
+            raise Exception("Could not transcribe audio")
+        
         return jsonify(success=True, transcription=result)
     except Exception as e:
         return handle_api_error("Server-side error, could not transcribe audio, encountered error: ", e)
@@ -3776,6 +3773,9 @@ def completions_stream():
             generation_config["streamer"] = custom_streamer
             generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
             output = PIPE(decoded_inputs, **generation_config)
+        except Exception as e:
+            handle_error_no_return("Response generation failed, encountered error: ", e)
+            data_queue.put(f"Error: {str(e)}") # Pass error to client via queue
         finally:
             data_queue.put(None)
             print("\n\nLLM stream done, releasing semaphore\n\n")
@@ -3786,8 +3786,13 @@ def completions_stream():
         global STOP_GENERATION
         STOP_GENERATION = False
 
-        thread = threading.Thread(target=llm_task)
-        thread.start()
+        try:
+            thread = threading.Thread(target=llm_task)
+            thread.start()
+        except Exception as e:
+            handle_error_no_return("Error generating completions-stream, encountered error: ", e)
+            yield f"data: {json.dumps('Error in Transformers Response-Generation Pipeline: ' + str(e))}\n\n"
+            return
 
         while True:
             if STOP_GENERATION:
@@ -3844,7 +3849,7 @@ def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
             return False
     except Exception as e:
         handle_error_no_return(f"Could not check if exl2-prompt fits within max context length, enabling auto-truncation as a fallback. Encountered error: ", e)
-        return True
+        return True # Since the above check is simplistic, an error indicates something is amiss, so best to return True to avoid infinite loops and try auto-truncation
 
 
 def set_global_exl2_dynamic_generator():
@@ -3972,7 +3977,7 @@ def exl2_stream():
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
 
     if not exl2_prompt_fits_within_max_context_length(tokenized_messages):
-        return handle_api_error("Prompt does not fit within max context length, enabling auto-truncation as a fallback. Encountered error: ", e)
+        print("\n\nPrompt does not fit within Exl2 max context length, relying on auto-truncation as a fallback.\n\n")
 
     try:
         # print(f"AUTO_TOKENIZER.eos_token_id: {AUTO_TOKENIZER.eos_token_id}")
@@ -3987,7 +3992,7 @@ def exl2_stream():
         exl2_dynamic_generator.enqueue(job)
         print("\nExLlamaV2-DynamicJob Defined & Enqueued Successfully\n")
     except Exception as e:
-        return handle_api_error("Could not create ExLlamaV2-DynamicJob object for exl2-stream, encountered error: ", e)
+        return handle_api_error("Could not create ExLlamaV2-DynamicJob object. Error details follow. In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, and of course, allocate an adequate context-window! Error: ", e)
 
     stop_thread = threading.Event()
     output_queue = queue.Queue()
@@ -4007,7 +4012,8 @@ def exl2_stream():
                                 output_queue.put(job['text'])   
                 # output_queue.put(current_token[2]['text']) if current_token[0]['stage'] == 'started' else output_queue.put(current_token[0]['text'])
         except Exception as e:
-            return handle_error_no_return("Response generation failed, encountered error: ", e)
+            handle_error_no_return("Response generation failed, encountered error: ", e)
+            output_queue.put(f"Error: {str(e)}") # Pass error to client via queue
         finally:
             output_queue.put(None)
             print("\n\nExl2 stream done\n\n")
@@ -4018,8 +4024,13 @@ def exl2_stream():
         global STOP_GENERATION
         STOP_GENERATION = False
 
-        thread = threading.Thread(target=llm_task)
-        thread.start()
+        try:
+            thread = threading.Thread(target=llm_task)
+            thread.start()
+        except Exception as e:
+            handle_error_no_return("Error generating exl2-stream, encountered error: ", e)
+            yield f"data: {json.dumps('Exl2 Generation Error: ' + str(e))}\n\n"
+            return
 
         while True:
             if STOP_GENERATION:
@@ -4142,7 +4153,7 @@ def exl2_fim_stream():
         language = data.get('language', 'python')
 
         if not prefix and not suffix:
-            return handle_api_error("Prefix and suffix cannot be empty for FIM completion, encountered error: ", e)
+            raise Exception("Prefix and suffix cannot be empty for FIM completion")
 
         gen_settings, config_data  = get_exl2_gen_settings(request)
     
@@ -4172,7 +4183,7 @@ def exl2_fim_stream():
         exl2_dynamic_generator.enqueue(job)
         print("\nExLlamaV2-DynamicJob Defined & Enqueued Successfully\n")
     except Exception as e:
-        return handle_api_error("Could not create ExLlamaV2-DynamicJob object for exl2-fim-stream, encountered error: ", e)
+        return handle_api_error("Could not create ExLlamaV2-DynamicJob object. Error details follow. In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, and of course, allocate an adequate context-window! Error: ", e)
 
     stop_thread = threading.Event()
     output_queue = queue.Queue()
@@ -4198,7 +4209,8 @@ def exl2_fim_stream():
                                     output_queue.put(text)
         
         except Exception as e:
-            return handle_error_no_return("Response generation failed, encountered error: ", e)
+            handle_error_no_return("Response generation failed, encountered error: ", e)
+            output_queue.put(f"Error: {str(e)}") # Pass error to client via queue
         finally:
             output_queue.put(None)
             print("\n\nExl2-FIM stream done\n\n")
@@ -4209,8 +4221,13 @@ def exl2_fim_stream():
         global STOP_GENERATION
         STOP_GENERATION = False
 
-        thread = threading.Thread(target=llm_task)
-        thread.start()
+        try:
+            thread = threading.Thread(target=llm_task)
+            thread.start()
+        except Exception as e:
+            handle_error_no_return("Error generating exl2-fim-stream, encountered error: ", e)
+            yield f"data: {json.dumps('Exl2-FIM Completion Error: ' + str(e))}\n\n"
+            return
 
         while True:
             if STOP_GENERATION:
@@ -4330,9 +4347,6 @@ def exl3_stream():
         tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
     except Exception as e:
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
-    
-    # if not exl2_prompt_fits_within_max_context_length(tokenized_messages):
-    #     return handle_api_error("Prompt does not fit within max context length, enabling auto-truncation as a fallback. Encountered error: ", e)
 
     try:
         print("\nCreating ExLlamaV3 Job Object...\n")
@@ -4345,7 +4359,7 @@ def exl3_stream():
         exl3_generator.enqueue(job)
         print("\nExLlamaV3 Job Defined & Enqueued Successfully\n")
     except Exception as e:
-        return handle_api_error("Could not create ExLlamaV3 Job object for exl3-stream, encountered error: ", e)
+        return handle_api_error("Could not create ExLlamaV3 Job object for exl3-stream. Error details follow. In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, and of course, allocate an adequate context-window! Error: ", e)
 
     stop_thread = threading.Event()
     output_queue = queue.Queue()
@@ -4362,7 +4376,8 @@ def exl3_stream():
                         output_queue.put(result.get('text'))
                 
         except Exception as e:
-            return handle_error_no_return("Response generation failed, encountered error: ", e)
+            handle_error_no_return("Response generation failed, encountered error: ", e)
+            output_queue.put(f"Error: {str(e)}") # Pass error to client via queue
         finally:
             output_queue.put(None)
             print("\n\nExl3 stream done\n\n")
@@ -4373,8 +4388,13 @@ def exl3_stream():
         global STOP_GENERATION
         STOP_GENERATION = False
 
-        thread = threading.Thread(target=llm_task)
-        thread.start()
+        try:
+            thread = threading.Thread(target=llm_task)
+            thread.start()
+        except Exception as e:
+            handle_error_no_return("Error generating exl3-stream, encountered error: ", e)
+            yield f"data: {json.dumps('Exl3 Generation Error: ' + str(e))}\n\n"
+            return
 
         while True:
             if STOP_GENERATION:
@@ -4423,7 +4443,7 @@ def exl3_fim_stream():
         language = data.get('language', 'python')
 
         if not prefix and not suffix:
-            return handle_api_error("Prefix and suffix cannot be empty for FIM completion, encountered error: ", e)
+            raise Exception("Prefix and suffix cannot be empty for FIM completion")
 
         exl3_sampler, config_data  = get_exl3_sampler(request)
     
@@ -4454,7 +4474,7 @@ def exl3_fim_stream():
         exl3_generator.enqueue(job)
         print("\nExLlamaV3 Job Defined & Enqueued Successfully\n")
     except Exception as e:
-        return handle_api_error("Could not create ExLlamaV3 Job object for exl3-fim-stream, encountered error: ", e)
+        return handle_api_error("Could not create ExLlamaV3 Job object for exl3-fim-stream. Error details follow. In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, and of course, allocate an adequate context-window! Error: ", e)
 
     stop_thread = threading.Event()
     output_queue = queue.Queue()
@@ -4471,7 +4491,8 @@ def exl3_fim_stream():
                         output_queue.put(result.get('text'))
                 
         except Exception as e:
-            return handle_error_no_return("Response generation failed, encountered error: ", e)
+            handle_error_no_return("Response generation failed, encountered error: ", e)
+            output_queue.put(f"Error: {str(e)}") # Pass error to client via queue
         finally:
             output_queue.put(None)
             print("\n\nExl3-FIM stream done\n\n")
@@ -4482,8 +4503,13 @@ def exl3_fim_stream():
         global STOP_GENERATION
         STOP_GENERATION = False
 
-        thread = threading.Thread(target=llm_task)
-        thread.start()
+        try:
+            thread = threading.Thread(target=llm_task)
+            thread.start()
+        except Exception as e:
+            handle_error_no_return("Error generating exl3-fim-stream, encountered error: ", e)
+            yield f"data: {json.dumps('Exl3-FIM Completion Error: ' + str(e))}\n\n"
+            return
 
         while True:
             if STOP_GENERATION:
@@ -5417,31 +5443,28 @@ def health():
 
     print("\n\nHF-Waitress LLM health-check in-progress...\n\n")
 
-    with reader_semaphore:
+    try:
+        # Treat any backend being ready as healthy:
+        pipe_ready = PIPE is not None
+        exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, AUTO_TOKENIZER])
+        exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, STOP_TOKENS, AUTO_TOKENIZER])
+        asr_ready = all([MODEL, SILERO_VAD, SILERO_UTILS]) # MODEL & VAD components are the common denominator for all ASR backends
+        
+        print(f"\n\nhealth readiness → pipe={pipe_ready}, exl2={exl2_ready}, exl3={exl3_ready}, asr={asr_ready}\n\n")
 
-        try:
+        if not (pipe_ready or exl2_ready or exl3_ready or asr_ready):
+            return jsonify(status="error", message="None of the core backends (transformers, exl2, exl3, asr) are loaded"), 503 # Service Unavailable
 
-            # Treat any backend being ready as healthy:
-            pipe_ready = PIPE is not None
-            exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, AUTO_TOKENIZER])
-            exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, STOP_TOKENS, AUTO_TOKENIZER])
-            asr_ready = all([MODEL, SILERO_VAD, SILERO_UTILS]) # MODEL & VAD components are the common denominator for all ASR backends
-            
-            print(f"\n\nhealth readiness → pipe={pipe_ready}, exl2={exl2_ready}, exl3={exl3_ready}, asr={asr_ready}\n\n")
+        model_info = {}
 
-            if not (pipe_ready or exl2_ready or exl3_ready or asr_ready):
-                return jsonify(status="error", message="None of the core backends (transformers, exl2, exl3, asr) are loaded"), 503 # Service Unavailable
+        if pipe_ready and not exl2_ready and not exl3_ready and not asr_ready: # Implies only Transformers backend is loaded!
+            model_info = get_transformers_model_info()
+        
+        print(f"HF-Waitress LLM-server health-check completed successfully, returning.\n")
+        return jsonify(status="ok", model_info=model_info), 200
 
-            model_info = {}
-
-            if pipe_ready and not exl2_ready and not exl3_ready and not asr_ready: # Implies only Transformers backend is loaded!
-                model_info = get_transformers_model_info()
-            
-            print(f"HF-Waitress LLM-server health-check completed successfully, returning.\n")
-            return jsonify(status="ok", model_info=model_info), 200
-
-        except Exception as e:
-            handle_api_error("Error checking hf-server health, encountered error: ", e)
+    except Exception as e:
+        handle_api_error("Error checking hf-server health, encountered error: ", e)
 
 #############################################################-----End HF-Waitress Health-Check Methods-----#################################################
 
