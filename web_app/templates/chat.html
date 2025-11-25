@@ -294,13 +294,13 @@
                                             </div>
 
                                             <div id="hf_waitress_exl2" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">EXL2 Backend (--exl2):</label>
+                                                <label class="hf-select-settings-labels-group">Exl2 Backend (--exl2):</label>
                                                 <input type="radio" id="hf_waitress_exl2_yes" name="hf_use_exl2" value="y" style="margin-left: 7px;"> Yes
                                                 <input type="radio" id="hf_waitress_exl2_no" name="hf_use_exl2" value="n" style="margin-left: 7px;"> No (Default)
                                             </div>
 
                                             <div id="hf_waitress_exl3" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">EXL3 Backend (--exl3):</label>
+                                                <label class="hf-select-settings-labels-group">Exl3 Backend (--exl3):</label>
                                                 <input type="radio" id="hf_waitress_exl3_yes" name="hf_use_exl3" value="y" style="margin-left: 7px;"> Yes
                                                 <input type="radio" id="hf_waitress_exl3_no" name="hf_use_exl3" value="n" style="margin-left: 7px;"> No (Default)
                                             </div>
@@ -1308,91 +1308,95 @@
 
                                             <br>
 
-                                            <div>
-                                                <input type="checkbox" id="reuse_graph_extraction_cache_checkbox" name="reuse_graph_extraction_cache" checked>
-                                                <label for="reuse_graph_extraction_cache_checkbox">Reuse Cache</label>
-                                            </div>
-
-                                            <br>
-                
-                                            <div>
-                                                <input type="checkbox" id="validate_graph_extraction_cache_checkbox" name="validate_graph_extraction_cache" checked>
-                                                <label for="validate_graph_extraction_cache_checkbox">Validate Cache</label>
-                                            </div>
-
-                                            <br>
-                                            <br>
-
-                                            <h6>Quantization Settings:</h6>
-
-                                            <br>
-
-                                            <div id="graph_extractor_exl2" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">EXL2 Backend (--exl2):</label>
-                                                <input type="radio" id="graph_extractor_exl2_yes" name="graph_extractor_use_exl2" value="y" style="margin-left: 7px;" checked> Yes (Default)
-                                                <input type="radio" id="graph_extractor_exl2_no" name="graph_extractor_use_exl2" value="n" style="margin-left: 7px;" disabled> No
-                                            </div>
-
-                                            <div id="graph_extractor_exl2_bpw_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Exl2 Bits Per Word (--exl2_bpw):</label>
-                                                <input type="number" id="graph_extractor_exl2_bpw" name="graph_extractor_exl2_bpw" class="settings-input-fields" value="8.0" min="0" max="8" step="0.1">
-                                            </div>
-
-                                            <div id="graph_extractor_memory_required_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Memory Required (MB):</label>
-                                                <input type="number" id="graph_extractor_memory_required" name="graph_extractor_memory_required" class="settings-input-fields" value="7168" min="0" max="100000">
-                                            </div>
-
-                                            <br>
-
-                                            <h6>Generation Settings:</h6>
-
-                                            <br>
-
-                                            <div id="graph_extractor_max_new_tokens_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Max New Tokens:</label>
-                                                <input type="number" id="graph_extractor_max_new_tokens" name="graph_extractor_max_new_tokens" class="settings-input-fields" value="4096" min="0" max="100000">
-                                            </div>
-
-                                            <div id="graph_extractor_max_seq_len_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Max Sequence Length:</label>
-                                                <input type="number" id="graph_extractor_max_seq_len" name="graph_extractor_max_seq_len" class="settings-input-fields" value="15360" min="0" max="100000">
-                                            </div>
-
-                                            <div id="graph_extractor_temperature_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Temperature:</label>
-                                                <input type="number" id="graph_extractor_temperature" name="graph_extractor_temperature" class="settings-input-fields" value="0.1" min="0" max="10" step="0.01">
-                                            </div>
-
-                                            <div id="graph_extractor_top_k_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Top K:</label>
-                                                <input type="number" id="graph_extractor_top_k" name="graph_extractor_top_k" class="settings-input-fields" value="40" min="0" max="100">
-                                            </div>
-
-                                            <div id="graph_extractor_top_p_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Top P:</label>
-                                                <input type="number" id="graph_extractor_top_p" name="graph_extractor_top_p" class="settings-input-fields" value="0.95" min="0" max="10" step="0.01">
-                                            </div>
-
-                                            <div id="graph_extractor_min_p_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Min P:</label>
-                                                <input type="number" id="graph_extractor_min_p" name="graph_extractor_min_p" class="settings-input-fields" value="0.05" min="0" max="10" step="0.01">
+                                            <div class="settings-table-container">
+                                                <table class="settings-table">
+                                                    <tr class="settings-table-header-row">
+                                                        <th style="width: 20%;">Generation Settings</th>
+                                                        <th>Description</th>
+                                                        <th style="width: 20%;">Value</th>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Max New Tokens</td>
+                                                        <td class="settings_table_setting_description">The maximum number of new tokens to generate. (Default: 4096)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_extractor_max_new_tokens" name="graph_extractor_max_new_tokens" class="settings-input-fields" value="4096" min="0" max="100000"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Max Sequence Length</td>
+                                                        <td class="settings_table_setting_description">Maximum size of the KV Cache in tokens. Warning: Allocates VRAM! (Default: 15360)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_extractor_max_seq_len" name="graph_extractor_max_seq_len" class="settings-input-fields" value="15360" min="0" max="100000"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Temperature</td>
+                                                        <td class="settings_table_setting_description">Controls randomness of the model's output. Lower values make the model more focused and deterministic, higher values make it more creative. (Default: 0.1)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_extractor_temperature" name="graph_extractor_temperature" class="settings-input-fields" value="0.1" min="0" max="10" step="0.01"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Top K</td>
+                                                        <td class="settings_table_setting_description">Limits the number of tokens considered for each step. Higher values increase diversity but may reduce accuracy. (Default: 40)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_extractor_top_k" name="graph_extractor_top_k" class="settings-input-fields" value="40" min="0" max="100"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Top P</td>
+                                                        <td class="settings_table_setting_description">Limits the probability mass of the top tokens considered for each step. Higher values increase diversity but may reduce accuracy. (Default: 0.95)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_extractor_top_p" name="graph_extractor_top_p" class="settings-input-fields" value="0.95" min="0" max="10" step="0.01"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Min P</td>
+                                                        <td class="settings_table_setting_description">Minimum probability mass for the tokens considered for each step. Higher values reduce diversity but may increase accuracy. (Default: 0.05)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_extractor_min_p" name="graph_extractor_min_p" class="settings-input-fields" value="0.05" min="0" max="10" step="0.01"></td>
+                                                    </tr>  
+                                                </table>
                                             </div>
 
                                             <br>
 
-                                            <h6>Network Settings:</h6>
-
-                                            <br>
-
-                                            <div id="graph_extractor_access_url_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Access URL:</label>
-                                                <input type="text" id="graph_extractor_access_url" name="graph_extractor_access_url" class="settings-input-fields" value="localhost">
-                                            </div>
-
-                                            <div id="graph_extractor_server_port_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Port:</label>
-                                                <input type="number" id="graph_extractor_server_port" name="graph_extractor_server_port" class="settings-input-fields" value="9070" min="0" max="65535">
+                                            <div class="settings-table-container">
+                                                <table class="restart-settings-table">
+                                                    <tr class="settings-table-header-row">
+                                                        <th style="width: 20%;">Core Configuration</th>
+                                                        <th>Description</th>
+                                                        <th style="width: 20%;">Value</th>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Reuse Cache</td>
+                                                        <td class="settings_table_setting_description">Extracting Graph Entities & Relationships is computationally expensive. Reuse Cache When Available (Default: Enabled)</td>
+                                                        <td class="settings_table_setting_value"><input type="checkbox" id="reuse_graph_extraction_cache_checkbox" name="reuse_graph_extraction_cache" checked></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Validate Cache</td>
+                                                        <td class="settings_table_setting_description">When this is disabled, the graph-extractor LLM will not be launched, and any cached results will be used as is without validation. (Default: Enabled)</td>
+                                                        <td class="settings_table_setting_value"><input type="checkbox" id="validate_graph_extraction_cache_checkbox" name="validate_graph_extraction_cache" checked></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">--exl2</td>
+                                                        <td class="settings_table_setting_description">ExLlamaV2 is a quantization backend that can significantly reduce the memory requirements & throughput of LLMs, but requires GPUs. (Default: Enabled)</td>
+                                                        <td class="settings_table_setting_value">
+                                                            <input type="radio" id="graph_extractor_exl2_yes" name="graph_extractor_use_exl2" value="y" style="margin-left: 7px;" checked> Yes (Default)
+                                                            <input type="radio" id="graph_extractor_exl2_no" name="graph_extractor_use_exl2" value="n" style="margin-left: 7px;" disabled> No
+                                                        </td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">--exl2_bpw</td>
+                                                        <td class="settings_table_setting_description">Exl2 Bits Per Word quantization level(Default: 8.0)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_extractor_exl2_bpw" name="graph_extractor_exl2_bpw" class="settings-input-fields" value="8.0" min="0" max="8" step="0.1"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Memory Required</td>
+                                                        <td class="settings_table_setting_description">Privion will check and try to ensure that the model has at least this amount of free VRAM available. 
+                                                            WARNING: Might shut down the main LLM chat server if the model does not have enough free VRAM. (Default: 7168MB)</td> 
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_extractor_memory_required" name="graph_extractor_memory_required" class="settings-input-fields" value="7168" min="0" max="100000"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Access URL</td>
+                                                        <td class="settings_table_setting_description">The Privion client will use this URL to access the graph-extractor LLM. (Default: localhost)</td>
+                                                        <td class="settings_table_setting_value"><input type="text" id="graph_extractor_access_url" name="graph_extractor_access_url" class="settings-input-fields" value="localhost"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Port</td>
+                                                        <td class="settings_table_setting_description">The Privion client will use this port to access the graph-extractor LLM. (Default: 9070)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_extractor_server_port" name="graph_extractor_server_port" class="settings-input-fields" value="9070" min="0" max="65535"></td>
+                                                    </tr>
+                                                </table>
                                             </div>
 
                                         </div>
@@ -1438,93 +1442,97 @@
 
                                             <br>
 
-                                            <div>
-                                                <input type="checkbox" id="reuse_graph_summarization_cache_checkbox" name="reuse_graph_summarization_cache" checked>
-                                                <label for="reuse_graph_summarization_cache_checkbox">Reuse Cache</label>
-                                            </div>
-
-                                            <br>
-                
-                                            <div>
-                                                <input type="checkbox" id="validate_graph_summarization_cache_checkbox" name="validate_graph_summarization_cache" checked>
-                                                <label for="validate_graph_summarization_cache_checkbox">Validate Cache</label>
-                                            </div>
-
-                                            <br>
-                                            <br>
-
-                                            <h6>Quantization Settings:</h6>
-
-                                            <br>
-
-                                            <div id="graph_summarizer_exl2" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">EXL2 Backend (--exl2):</label>
-                                                <input type="radio" id="graph_summarizer_exl2_yes" name="graph_summarizer_use_exl2" value="y" style="margin-left: 7px;" checked> Yes (Default)
-                                                <input type="radio" id="graph_summarizer_exl2_no" name="graph_summarizer_use_exl2" value="n" style="margin-left: 7px;" disabled> No
-                                            </div>
-
-                                            <div id="graph_summarizer_exl2_bpw_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Exl2 Bits Per Word (--exl2_bpw):</label>
-                                                <input type="number" id="graph_summarizer_exl2_bpw" name="graph_summarizer_exl2_bpw" class="settings-input-fields" value="8.0" min="0" max="8" step="0.1">
-                                            </div>
-
-                                            <div id="graph_summarizer_memory_required_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Memory Required (MB):</label>
-                                                <input type="number" id="graph_summarizer_memory_required" name="graph_summarizer_memory_required" class="settings-input-fields" value="7168" min="0" max="100000">
-                                            </div>
-
-                                            <br>
-
-                                            <h6>Generation Settings:</h6>
-
-                                            <br>
-
-                                            <div id="graph_summarizer_max_new_tokens_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Max New Tokens:</label>
-                                                <input type="number" id="graph_summarizer_max_new_tokens" name="graph_summarizer_max_new_tokens" class="settings-input-fields" value="4096" min="0" max="10000">
-                                            </div>
-
-                                            <div id="graph_summarizer_max_seq_len_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Max Sequence Length:</label>
-                                                <input type="number" id="graph_summarizer_max_seq_len" name="graph_summarizer_max_seq_len" class="settings-input-fields" value="15360" min="0" max="100000">
-                                            </div>
-
-                                            <div id="graph_summarizer_temperature_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Temperature:</label>
-                                                <input type="number" id="graph_summarizer_temperature" name="graph_summarizer_temperature" class="settings-input-fields" value="0.1" min="0" max="10" step="0.01">
-                                            </div>
-
-                                            <div id="graph_summarizer_top_k_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Top K:</label>
-                                                <input type="number" id="graph_summarizer_top_k" name="graph_summarizer_top_k" class="settings-input-fields" value="40" min="0" max="100">
-                                            </div>
-
-                                            <div id="graph_summarizer_top_p_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Top P:</label>
-                                                <input type="number" id="graph_summarizer_top_p" name="graph_summarizer_top_p" class="settings-input-fields" value="0.95" min="0" max="10" step="0.01">
-                                            </div>
-
-                                            <div id="graph_summarizer_min_p_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Min P:</label>
-                                                <input type="number" id="graph_summarizer_min_p" name="graph_summarizer_min_p" class="settings-input-fields" value="0.05" min="0" max="10" step="0.01">
+                                            <div class="settings-table-container">
+                                                <table class="settings-table">
+                                                    <tr class="settings-table-header-row">
+                                                        <th style="width: 20%;">Generation Settings</th>
+                                                        <th>Description</th>
+                                                        <th style="width: 20%;">Value</th>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Max New Tokens</td>
+                                                        <td class="settings_table_setting_description">The maximum number of new tokens to generate. (Default: 4096)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_summarizer_max_new_tokens" name="graph_summarizer_max_new_tokens" class="settings-input-fields" value="4096" min="0" max="100000"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Max Sequence Length</td>
+                                                        <td class="settings_table_setting_description">Maximum size of the KV Cache in tokens. Warning: Allocates VRAM! (Default: 15360)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_summarizer_max_seq_len" name="graph_summarizer_max_seq_len" class="settings-input-fields" value="15360" min="0" max="100000"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Temperature</td>
+                                                        <td class="settings_table_setting_description">Controls randomness of the model's output. Lower values make the model more focused and deterministic, higher values make it more creative. (Default: 0.1)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_summarizer_temperature" name="graph_summarizer_temperature" class="settings-input-fields" value="0.1" min="0" max="10" step="0.01"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Top K</td>
+                                                        <td class="settings_table_setting_description">Limits the number of tokens considered for each step. Higher values increase diversity but may reduce accuracy. (Default: 40)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_summarizer_top_k" name="graph_summarizer_top_k" class="settings-input-fields" value="40" min="0" max="100"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Top P</td>
+                                                        <td class="settings_table_setting_description">Limits the probability mass of the top tokens considered for each step. Higher values increase diversity but may reduce accuracy. (Default: 0.95)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_summarizer_top_p" name="graph_summarizer_top_p" class="settings-input-fields" value="0.95" min="0" max="10" step="0.01"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Min P</td>
+                                                        <td class="settings_table_setting_description">Minimum probability mass for the tokens considered for each step. Higher values reduce diversity but may increase accuracy. (Default: 0.05)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_summarizer_min_p" name="graph_summarizer_min_p" class="settings-input-fields" value="0.05" min="0" max="10" step="0.01"></td>
+                                                    </tr>  
+                                                </table>
                                             </div>
 
                                             <br>
 
-                                            <h6>Network Settings:</h6>
-
-                                            <br>
-
-                                            <div id="graph_summarizer_access_url_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Access URL:</label>
-                                                <input type="text" id="graph_summarizer_access_url" name="graph_summarizer_access_url" class="settings-input-fields" value="localhost">
+                                            <div class="settings-table-container">
+                                                <table class="restart-settings-table">
+                                                    <tr class="settings-table-header-row">
+                                                        <th style="width: 20%;">Core Configuration</th>
+                                                        <th>Description</th>
+                                                        <th style="width: 20%;">Value</th>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Reuse Cache</td>
+                                                        <td class="settings_table_setting_description">Summarizing Graph Entities & Relationships is computationally expensive. Reuse Cache When Available (Default: Enabled)</td>
+                                                        <td class="settings_table_setting_value"><input type="checkbox" id="reuse_graph_summarization_cache_checkbox" name="reuse_graph_summarization_cache" checked></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Validate Cache</td>
+                                                        <td class="settings_table_setting_description">When this is disabled, the graph-summarizer LLM will not be launched, and any cached results will be used as is without validation. (Default: Enabled)</td>
+                                                        <td class="settings_table_setting_value"><input type="checkbox" id="validate_graph_summarization_cache_checkbox" name="validate_graph_summarization_cache" checked></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">--exl2</td>
+                                                        <td class="settings_table_setting_description">ExLlamaV2 is a quantization backend that can significantly reduce the memory requirements & throughput of LLMs, but requires GPUs. (Default: Enabled)</td>
+                                                        <td class="settings_table_setting_value">
+                                                            <input type="radio" id="graph_summarizer_exl2_yes" name="graph_summarizer_use_exl2" value="y" style="margin-left: 7px;" checked> Yes (Default)
+                                                            <input type="radio" id="graph_summarizer_exl2_no" name="graph_summarizer_use_exl2" value="n" style="margin-left: 7px;" disabled> No
+                                                        </td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">--exl2_bpw</td>
+                                                        <td class="settings_table_setting_description">Exl2 Bits Per Word quantization level (Default: 8.0)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_summarizer_exl2_bpw" name="graph_summarizer_exl2_bpw" class="settings-input-fields" value="8.0" min="0" max="8" step="0.1"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Memory Required</td>
+                                                        <td class="settings_table_setting_description">Privion will check and try to ensure that the model has at least this amount of free VRAM available. 
+                                                            WARNING: Might shut down the main LLM chat server if the model does not have enough free VRAM. (Default: 7168MB)</td> 
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_summarizer_memory_required" name="graph_summarizer_memory_required" class="settings-input-fields" value="7168" min="0" max="100000"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Access URL</td>
+                                                        <td class="settings_table_setting_description">The Privion client will use this URL to access the graph-summarizer LLM. (Default: localhost)</td>
+                                                        <td class="settings_table_setting_value"><input type="text" id="graph_summarizer_access_url" name="graph_summarizer_access_url" class="settings-input-fields" value="localhost"></td>
+                                                    </tr>
+                                                    <tr class="settings-table-row">
+                                                        <td class="settings_table_setting_name">Port</td>
+                                                        <td class="settings_table_setting_description">The Privion client will use this port to access the graph-summarizer LLM. (Default: 9071)</td>
+                                                        <td class="settings_table_setting_value"><input type="number" id="graph_summarizer_server_port" name="graph_summarizer_server_port" class="settings-input-fields" value="9071" min="0" max="65535"></td>
+                                                    </tr>
+                                                </table>
                                             </div>
-
-                                            <div id="graph_summarizer_server_port_div" class="llm-settings-standard-styling">
-                                                <label class="hf-select-settings-labels-group">Port:</label>
-                                                <input type="number" id="graph_summarizer_server_port" name="graph_summarizer_server_port" class="settings-input-fields" value="9071" min="0" max="65535">
-                                            </div>
-
+                                            
                                         </div>
                                     </div>
 
