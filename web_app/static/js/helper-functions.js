@@ -253,6 +253,8 @@ function readGGUF(model) {
     })
     .catch(error => {
         document.getElementById('GgufDetails').value = "Error reading GGUF details: " + String(error.message);
+    }).finally(() => {
+        return true;    // Return promise to resolve the fetch() call!
     });
 }
 
@@ -412,17 +414,23 @@ function toggleStreamInfo() {
 }
 
 
-function errorHandler(attempted_action, error_generator, error_message) {
+function errorHandlerNoAlert(attempted_action, error_generator, error_message) {
     let error_alert_message = "There was an error when "  + attempted_action + " in the method " + error_generator + ", more details can be viewed in the browser's console. "
     let full_error_message =  error_alert_message + error_message;
     console.error(full_error_message);
-    alert(error_alert_message);
     document.getElementById('ModelAndDBLoading').style.display = 'none';
     document.getElementById('SavingHfWaitressSettings').style.display = 'none';
     hideLoader();
     hideStreamSpinner();
     removeLoadingAnimation();
 }
+
+
+function errorHandler(attempted_action, error_generator, error_message) {
+    errorHandlerNoAlert(attempted_action, error_generator, error_message);
+    alert(error_alert_message);
+}
+
 
 const forceEnableRagCheckbox = document.getElementById('force_enable_rag_checkbox');
 const forceDisableRagCheckbox = document.getElementById('force_disable_rag_checkbox');
