@@ -760,6 +760,8 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 2. Create and use a Python virtual environment:
 
+    - NOTE: THIS IS NOT ADVISABLE FOR NOW AS A NUMBER OF PROCESS ARE LAUNCHED BY PRIVION WHICH WILL FAIL AS THEY MIGHT START IN THE GLOBAL NAMESPACE! RETAINING THIS SECTION FOR REF BUT DO NOT DO THIS FOR NOW!
+
     - It's advisable to use a virtual environment to avoid conflicts with other Python projects
 
     - Windows:
