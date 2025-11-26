@@ -525,8 +525,6 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - **NOTE: ASR & TTS are not enabled by default, and must be enabled manually via the Settings menu!**
 
-[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
-
 
 ### Laptop Powerplan Recommendation
 
@@ -556,6 +554,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - Installing 'Powerplan Switcher' from the MS Store is highly recommended to easily switch powerplans as required!
 
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
 ## Optional Dependencies
 
