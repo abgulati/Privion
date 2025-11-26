@@ -715,6 +715,15 @@ body {
     /* margin: 0 auto; /* Additional centering insurance! */
 }
 
+.chat-area-error-message {
+    color: #ff6e5f;
+    font-weight: 500;
+    font-size: 16px;
+    font-family: "Open Sans", sans-serif;
+    font-optical-sizing: auto;
+    font-style: normal;
+}
+
 .scroll-down-btn {
     position: absolute;
     bottom: 101px;

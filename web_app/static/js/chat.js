@@ -401,10 +401,19 @@ function handleSetupResponse(data) {
 
 
 function printErrorToChatArea(responseContentID, error_message) {
-    let userFriendlyErrorMessage = "An error occured when attempting to generate the response. Details follow, contact support if the issue persists. Error: <br><br>" + String(error_message);
-    appendStreamChunkAndRender(responseContentID, userFriendlyErrorMessage);
+    // Escape HTML characters to prevent the browser from interpreting parts of the error as tags
+    const safeErrorMessage = String(error_message)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    let userFriendlyErrorMessage = `An error occured when attempting to generate the response. Details follow, contact support if the issue persists. Error: <br><br>${safeErrorMessage}`;
+    console.error(userFriendlyErrorMessage);
+    // Use div instead of span. span is an inline element and markdown-it breaks it when it encounters newlines/blocks in the error message.
+    let spannedErrorMessage = `<div class='chat-area-error-message'>${userFriendlyErrorMessage}</div>`;
+    appendStreamChunkAndRender(responseContentID, spannedErrorMessage);
     finalizeStreamRender(responseContentID);
-    return userFriendlyErrorMessage;
+    return spannedErrorMessage;
 }
 
 
