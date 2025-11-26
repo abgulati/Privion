@@ -66,9 +66,11 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     - [7. PyTorch](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#7-pytorch)
     - [8. Flash-Attention 2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#8-flash-attention-2)
     - [9. ExLlamaV2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#9-exllamav2)
-    - [10. Speech Features - ASR & TTS ](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#10-speech-features---asr--tts)
-    - [11. Docker Desktop](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#11-docker)
+    - [10. ExLlamaV3](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#9-exllamav3)
+    - [11. Speech Features - ASR & TTS ](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#10-speech-features---asr--tts)
+    - [12. Docker Desktop](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#11-docker)
 3. [Usage - First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#usage---first-run)
+    - [Laptop Powerplan Recommendation](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#laptop-powerplan-recommendation)
 4. [Optional Dependencies](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#optional-dependencies)
     - [llama.cpp](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#llamacpp)
     - [LibreOffice](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#libreoffice)
@@ -343,15 +345,13 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - ExLlama is a highly optimized LLM inference library specifically for consumer GPUs.
 
-- It attempts to utilize Flash-Attention (v2.5.7+) by default so do install that before ExLlama (see above). MAKE SURE TO INSTALL IT AFTER INSTALLING FLASH ATTENTION 2!
+- ENSURE YOU'RE DOING THIS AFTER INSTALLING FLASH ATTENTION 2!
 
-- Since HF-Waitress includes full management of ExLlama, including the downloading and quantization of models and saving of measurements for each model processed, it's required to clone the ExLlamav2 repo into the LARS `web_app` dir:
-    ```
-    cd LARS-Enterprise/web_app
-    git clone -b 0.3.2 https://github.com/turboderp-org/exllamav2.git
-    cd exllamav2
-    pip install .
-    ```
+- Since HF-Waitress includes full management of ExLlama, including the downloading and quantization of models and saving of measurements for each model processed, it will auto-clone the ExLlamaV2 repo onload 
+
+- The clone repo is used to facilitate conversion of model SafeTensors to the Exl2 format.
+
+- To faciliate all this, simply `pip install exllamav2==0.3.2 --no_deps` beforehand!
 
 - There's no need to `pip install` the dependencies in the requirements.txt within the ExLlamaV2 dir as these are included in LARS's requirements.txt already.
 
@@ -365,7 +365,27 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
     3. If all else fails, try uninstalling and re-installing via an `Admin` shell: run `pip uninstall exllamav2 -y` from within the `exllamav2` dir, delete the entire directory, re-clone and re-install, and retry quantization via `python hf_waitress.py --exl2` from within the `LARS-Enterprise/web_app` dir.
 
-### 10. Speech Features - ASR & TTS 
+### 10. ExLlamaV3
+
+- The latest version of ExLlama leverages a new State-of-the-Art (SOTA) quantization technique called [QTIP.](https://github.com/turboderp-org/exllamav3/blob/master/doc/exl3.md)
+
+- Additionally, it's built from the ground-up to support modern LLM architectures and Tensor Parallelism.
+
+- Recent LLMs have increasingly diverged away from the foundational LLaMa architecure, including a rise of hybrid-architecture based LLMs (Transformers + Mamaba) and cutting-edge advances in efficiency (multi token prediction etc).
+
+- Supporting these by retrofitting the heavily LLaMa-based ExLlamaV2 became increasingly difficult with time, and with the rise in popularity of Tensor Parallelism for multiple-GPUs inferencing, ExLlama had to rebuilt from the ground-up to serve modern requirements.
+
+- Thus we have the latest ExLlamaV3, which is still in its infancy and early development cycle so keep an eye on the [official repo!](https://github.com/turboderp-org/exllamav3)
+
+- Once again as with ExLlamaV2 above, the HF-Waitress Server will auto-clone ExLlamaV3 onload to facilate conversion of model SafeTensors to the Exl3 format.
+
+- And so once again, make sure to `pip install exllamav3==0.0.15 --no_deps` beforehand!
+
+- ENSURE YOU'RE DOING THIS AFTER INSTALLING FLASH ATTENTION 2!
+
+- All Exl3 dependencies are in the requirements.txt file so no need to worry about those!
+
+### 11. Speech Features - ASR & TTS 
 
 - Privion, via HF-Waitress, can leverage various Automatic Speech Recogniton (ASR) models for Speech Transcription, so you can interact using your voice.
 
@@ -455,7 +475,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)    
 
-### 11. Docker
+### 12. Docker
 
 - Privion uses Docker to pull & run the latest FalkorDB Graph Database container - without Docker, GraphRAG features will NOT work! 
 
@@ -506,6 +526,35 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 - **NOTE: ASR & TTS are not enabled by default, and must be enabled manually via the Settings menu!**
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
+
+
+### Laptop Powerplan Recommendation
+
+- Windows 11 by default now only exposes a 'Balanced' powerplan, with no straight forward way to add a higher performance mode.
+
+- The issue with this is that when running an application like Privion with several background processes, responsiveness can suffer on laptops even when plugged in.
+
+- However, an 'Ultimate Performance' powerplan can be enabled which really helps with overall system responsiveness, even when unplugged!
+
+- So it's highly recommended to follow the below steps:
+
+	1. From an Admin PowerShell, run:
+        ```
+        powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61
+        ```
+
+	    There'll be an output like: `Power Scheme GUID: ced6a11f-6240-47fd-a32a-7020739e7a2b (Ultimate Performance)`
+
+	2. Use the GUID (changes everytime!) to activate the plan - Run:
+        ```
+	    powercfg -setactive ced6a11f-6240-47fd-a32a-7020739e7a2b
+        ```
+
+- Now, an 'Ultimate Performance' powerplan will show up in `Control Panel/Hardware and Sound/Power Options`
+
+- However, this will vanish after a reboot or anytime you manually switch back to the Balanced powerplan, necessitating a re-do of both the above steps.
+
+- Installing 'Powerplan Switcher' from the MS Store is highly recommended to easily switch powerplans as required!
 
 
 ## Optional Dependencies
