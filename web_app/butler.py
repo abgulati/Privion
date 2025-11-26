@@ -130,7 +130,7 @@ def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port:int = 
         return {"success": True, "message": "Device turn-on request successfully transmitted."}
     except Exception as e:
         print(f"Error sending magic packet: {str(e)}")
-        return {"success": False, "message": f"Error sending magic packet: {str(e)}"}
+        return {"success": False, "message": f"Error sending Wake on LAN magic packet: {str(e)}"}
 
 
 def lg_webos_tv_turn_off(ip_address: Optional[str] = None):
@@ -181,10 +181,10 @@ def execute_butler_tool(service_name:str) -> dict:
             return turn_off_lamp()
         else:
             print(f"Service not found: {service_name}")
-            return {'success': False, 'message': "Service not found."}
+            return {'success': False, 'message': f"Service not found: {service_name}"}
     except Exception as e:
         print(f"Error executing butler tool: {str(e)}")
-        return {'success': False, 'message': f"Error executing butler tool: {str(e)}"}
+        return {'success': False, 'message': f"Error executing butler tool for {service_name} service: {str(e)}"}
 
 
 ### LLM RESPONSE PARSER:
@@ -212,7 +212,7 @@ def parse_butler_tool_response(llm_response:str) -> dict:
             print(f"\nAdditional text present, trimming response...\n")
             cleaned_response = prompt_formatting_module.trim_response(
                 llm_response,
-                '"service":', '}',
+                '"service_list":', '}',
                 include_start_substring=True,
                 include_end_substring=False
             )
@@ -251,20 +251,41 @@ def execute_butler_tasks(user_query:str) -> dict:
     try:
         llm_prompt_for_butler_request = prompt_formatting_module.get_core_prompt_for_butler_tools_config(user_query, get_all_service_names_from_butler_tools_config())
         print(f"LLM prompt for butler request: {llm_prompt_for_butler_request}")
+        
         llm_response_for_butler_request = make_butler_request(llm_prompt_for_butler_request)
         print(f"LLM response for butler request: {llm_response_for_butler_request}")
+        
         butler_tool_selection = parse_butler_tool_response(llm_response_for_butler_request)
         print(f"Butler tool selection: {butler_tool_selection}")
 
-        if butler_tool_selection['service'] is None:
+        action_result = {}
+        if butler_tool_selection['service_list'] is None:
             action_result = {'success': False, 'message': "AI-service determination failed."}
             print(f"Action result: {action_result}")
+        
         else:
-            action_result = execute_butler_tool(butler_tool_selection['service'])
-            print(f"Action result after tool execution: {action_result}")
+
+            if isinstance(butler_tool_selection['service_list'], list):
+
+                butler_tool_selection['service_list'] = list(set(butler_tool_selection['service_list']))
+                
+                for service_name in butler_tool_selection['service_list']:
+                    action_result[service_name] = execute_butler_tool(service_name)
+                    print(f"Action result after tool execution {service_name}: {action_result[service_name]}")
+
+                print(f"Action results list: {action_result}")
+            
+            elif isinstance(butler_tool_selection['service_list'], str):
+                action_result = execute_butler_tool(butler_tool_selection['service_list'])
+                print(f"Action result after tool execution: {action_result}")
+            
+            else:
+                action_result = {'success': False, 'message': f"Invalid service list format: {butler_tool_selection['service_list']}"}
+                print(f"Action result after tool execution: {action_result}")
 
         action_analysis_prompt = prompt_formatting_module.request_action_analysis_prompt(user_query, action_result)
         print(f"Action analysis prompt: {action_analysis_prompt}")
+        
         return {'action_result': action_result, 'action_analysis_prompt': action_analysis_prompt}
 
     except Exception as e:

@@ -7770,11 +7770,9 @@ def invoke_tools_for_query():
         return handle_api_error("Could not get full prompt from history db in method invoke-tools_for_query, encountered error: ", e)
 
     try:
-        butler_action_status = None
         if llm_set_rag_config.get('butler_mode', False):
             butler_response = butler_module.execute_butler_tasks(user_query)
             print(f"Butler response: {butler_response}")
-            butler_action_status =butler_response['action_result']['success']
             user_query = butler_response['action_analysis_prompt']
     except Exception as e:
         return handle_api_error("Error handling butler mode in method invoke-tools_for_query, encountered error: ", e)
@@ -7801,7 +7799,7 @@ def invoke_tools_for_query():
         return handle_api_error("Could not get formatted_updated_prompt in method invoke-tools_for_query, encountered error: ", e)
 
     if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1
-    return jsonify({"success": butler_action_status or True, "reused_stream_session_id": stream_session_id, "tool_formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "reconfirmed_server_type":config['local_llm_server']})
+    return jsonify({"success": True, "reused_stream_session_id": stream_session_id, "tool_formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "reconfirmed_server_type":config['local_llm_server']})
     
 
 def construct_citation_html(pdf_tab_buttons_set: set[str], pdf_tab_content_set: set[str], stream_session_id: str) -> str:

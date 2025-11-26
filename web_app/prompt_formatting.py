@@ -493,11 +493,13 @@ def get_core_prompt_for_butler_tools_config(user_query:str, all_services_with_de
 
     Do keep in mind that the user may use common slang terms when referring to appliances, such as "idiot box" for a TV or "jbl" or "flip" for bluetooth speakers, etc.
 
-    You will be given a user query, and you will need to determine the best service to perform the task basis the tool's description and the user's query.
+    You will be given a user query, and you will need to determine the best service(s) to perform the task(s) basis the tool(s) descriptions and the user's query.
 
     Pay attention to negation in the user query, for example, if told "not the idiot box", elect to turn off the TV!
 
-    IMPORTANT: There may be multiple services associated with a single device, such as dedciated "on" and "off" services for a TV, etc.
+    IMPORTANT: There may be multiple services associated with a single device, such as dedicated "on" and "off" services for a TV, etc.
+
+    Some requests may require multiple services to be performed in sequence, such as turning on the TV and then turning on the soundbar, etc.
     
     ### Service List:
     {all_services_with_descriptions}
@@ -510,10 +512,10 @@ def get_core_prompt_for_butler_tools_config(user_query:str, all_services_with_de
     ### Output Format (Strict JSON):
     ```json
     {{
-        "service": "service name here"
+        "service_list": ["service name 1", "service name 2", "service name 3"]
     }}
     ```
-    NOTE: STATE SERVICE NAME EXACTLY AS IT IS IN THE SERVICE LIST.
+    NOTE: ONLY SELECT SERVICE NAMES FROM THE LIST, AND STATE THEM EXACTLY AS THEY APPEAR IN THE LIST. NO OTHER TEXT OR FORMATTING.
     """
 
 def request_action_analysis_prompt(user_query:str, action_result:dict) -> str:

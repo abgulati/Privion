@@ -3,6 +3,7 @@ import asyncio
 import socket
 from contextlib import suppress
 
+from privion_config_concierge import read_config
 from govee_local_api import GoveeController
 
 # Windows fixes
@@ -44,6 +45,7 @@ BROADCAST_ADDR = "239.255.255.250"
 TARGET_PORT = 4001
 LISTENING_PORT = 4002
 DISCOVERY_TIMEOUT = 5
+GOVEE_CONTROLLER = None
 
 
 def get_local_ip() -> str:
@@ -59,23 +61,28 @@ def get_local_ip() -> str:
 
 async def discover_controller(local_ip: str) -> GoveeController:
     loop = asyncio.get_running_loop()
-    ctrl = GoveeController(
-        loop=loop,
-        listening_address=local_ip,
-        broadcast_address=BROADCAST_ADDR,
-        broadcast_port=TARGET_PORT,
-        listening_port=LISTENING_PORT,
-        discovery_enabled=True,
-        discovery_interval=1,
-        update_enabled=False,
-    )
-    await ctrl.start()
+
+    global GOVEE_CONTROLLER
+
+    if GOVEE_CONTROLLER is None:
+        GOVEE_CONTROLLER = GoveeController(
+            loop=loop,
+            listening_address=local_ip,
+            broadcast_address=BROADCAST_ADDR,
+            broadcast_port=TARGET_PORT,
+            listening_port=LISTENING_PORT,
+            discovery_enabled=True,
+            discovery_interval=1,
+            update_enabled=False,
+        )
+        await GOVEE_CONTROLLER.start()
+    
     # Wait up to DISCOVERY_TIMEOUT seconds for at least one device
     for _ in range(DISCOVERY_TIMEOUT * 2):
-        if ctrl.devices:
+        if GOVEE_CONTROLLER.devices:
             break
         await asyncio.sleep(0.5)
-    return ctrl
+    return GOVEE_CONTROLLER
 
 
 def pick_device(ctrl: GoveeController, ident: str | None):
@@ -130,32 +137,53 @@ async def get_first_govee_device():
     
     return dev
 
+
 async def light_turn_on_handler():
     try:
-        dev = await get_first_govee_device()
-        if not dev:
-            print("No Govee device found.")
-            return {"success": False, "message": "No Govee device found."}
-        
+        config = read_config(['govee_device_search_max_attempts'])
+        max_attempts = config.get('govee_device_search_max_attempts', 3)
+
+        for attempt in range(1, max_attempts + 1):
+            if dev := await get_first_govee_device():
+                # The `:=` operator is a Python 3.8+ feature that assigns and checks dev in a single line, reducing nesting and boilerplate
+                break
+
+            print(f"No Govee device found. Retrying - Attempt {attempt} of {max_attempts}")
+            if attempt < max_attempts:
+                await asyncio.sleep(1)
+        else:
+            # The `for...else` loop is a Pythonic construct that eliminates the need for a manual loop counter and conditional check!
+            return {"success": False, "message": "No Govee device found after multiple attempts."}
+
         await dev.turn_on()
         print("Turned ON")
-        return {"success": True, "message": "Light turn-on command sent."}
+        return {"success": True, "message": "Light turn-on command sent to Govee device."}
     except Exception as e:
-        return {"success": False, "message": f"Error turning on light: {e}"}
+        return {"success": False, "message": f"Error turning on Govee light: {e}"}
 
 
 async def light_turn_off_handler():
     try:
-        dev = await get_first_govee_device()
-        if not dev:
-            print("No Govee device found.")
-            return {"success": False, "message": "No Govee device found."}
+        config = read_config(['govee_device_search_max_attempts'])
+        max_attempts = config.get('govee_device_search_max_attempts', 3)
+
+        for attempt in range(1, max_attempts + 1):
+            if dev := await get_first_govee_device():
+                # "Walrus" operator - see above!
+                break
+            
+            print(f"No Govee device found. Retrying - Attempt {attempt} of {max_attempts}")
+            if attempt < max_attempts:
+                await asyncio.sleep(1)
+        else:
+            # `for...else` loop - see above!
+            return {"success": False, "message": "No Govee device found after multiple attempts."}
         
         await dev.turn_off()
         print("Turned OFF")
-        return {"success": True, "message": "Light turn-off command sent."}
+        return {"success": True, "message": "Light turn-off command sent to Govee device."}
     except Exception as e:
-        return {"success": False, "message": f"Error turning off light: {e}"}
+        return {"success": False, "message": f"Error turning off Govee light: {e}"}
 
 
 # async def main():

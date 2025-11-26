@@ -195,8 +195,8 @@ async def webos_pair_connect_and_power_off_async(host: str) -> dict:
             _save_client_key(host, client.client_key)
 
         await client.power_off()
-        return {"success": True, "message": "Power-off command sent."}
+        return {"success": True, "message": "Power-off command sent to LG WebOS TV."}
     except Exception as e:
-        return {"success": False, "message": f"Error: {e}"}
+        return {"success": False, "message": f"Error sending power-off command to LG WebOS TV: {e}"}
     finally:
         await client.disconnect()

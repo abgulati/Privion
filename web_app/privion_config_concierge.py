@@ -266,6 +266,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                 'llama_cpp_server_retry_attempts':200,
                 'hf_waitress_server_timeout_seconds':3,
                 'hf_waitress_server_retry_attempts':200,
+                'govee_device_search_max_attempts':5,
                 'enable_asr':False,
                 'asr_wake_word':'simon',
                 'asr_model':'openai/whisper-large-v3',
