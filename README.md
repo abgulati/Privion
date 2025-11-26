@@ -385,6 +385,8 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - All Exl3 dependencies are in the requirements.txt file so no need to worry about those!
 
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
+
 ### 11. Speech Features - ASR & TTS 
 
 - Privion, via HF-Waitress, can leverage various Automatic Speech Recogniton (ASR) models for Speech Transcription, so you can interact using your voice.
@@ -470,10 +472,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
             - From: `<full-path>\ffmpeg-7.1.1-full_build-shared\bin`
             - To: `C:\Users\<username>\AppData\Local\Programs\Python\Python311\Lib\site-packages\torchcodec\`
 
-        - This is why we downloaded the *shared* version of FFmpeg earlier: The other versions only have the FFmpeg executables but not the DLLs!
-
-
-[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)    
+        - This is why we downloaded the *shared* version of FFmpeg earlier: The other versions only have the FFmpeg executables but not the DLLs!  
 
 ### 12. Docker
 
