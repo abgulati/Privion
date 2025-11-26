@@ -969,7 +969,7 @@ function toggleHfwQuantizationLevel() {
     }
 
     // Show or hide HQQ Group Size input based on quantization method:
-    document.getElementById('hf_waitress_hqq_group_size').style.display = quantMethod === 'hqq' ? 'block' : 'none';
+    document.getElementById('hf_waitress_hqq_group_size').style.display = quantMethod === 'hqq' ? 'table-row' : 'none';
 
     // Disable the Selection of No Quantization methos is selected
     quantLevelSelection.disabled = quantMethod === 'n';
