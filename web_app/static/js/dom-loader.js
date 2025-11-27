@@ -756,7 +756,7 @@ function initializeModelDropdown(model_choice) {
                 if (typeof model !== 'undefined' && typeof model_choice !== 'undefined') {
                     if (model.toLowerCase() == model_choice.toLowerCase()) {
                         option.selected = true;
-                        readGGUF(model);
+                        //readGGUF(model);
                     }
                 }
                 dropdown.appendChild(option);
