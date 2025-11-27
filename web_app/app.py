@@ -1190,7 +1190,7 @@ def start_kosmos_container() -> bool:
     except Exception as e:
         handle_local_error("Docker Engine is not running, encountered error: ", e)
 
-    print("\nDocker Engine is running, proceeding with FalkorDB Docker container launch...\n")
+    print("\nDocker Engine is running, proceeding with Kosmos Docker container launch...\n")
 
     if check_if_container_is_running(kosmos_container_name):
         print("\nKosmos Docker container is already running, skipping launch...\n")
