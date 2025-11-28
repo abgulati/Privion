@@ -289,6 +289,9 @@ function loadCoreHfConfig() {
         'exl3',
         'exl3_bpw',
         'exl3_device',
+        'exl3_cache_type',
+        'exl3_k_bits',
+        'exl3_v_bits',
         'exl3_resume_quant_job',
         'exl3_total_context',
         'exl3_tensor_parallel',
@@ -509,63 +512,34 @@ function initializeGraphSummarizerCustomDropdown(model_list, model_id) {
 }
 
 
+function toggleHfwExl3CacheType() {
+    const exl3CacheType = document.getElementById('hf_waitress_exl3_cache_type_choice').value;
+    document.getElementById('hf_waitress_exl3_k_bits').style.display = exl3CacheType == 'CacheLayer_quant' ? 'table-row' : 'none';
+    document.getElementById('hf_waitress_exl3_v_bits').style.display = exl3CacheType == 'CacheLayer_quant' ? 'table-row' : 'none';
+    document.getElementById('HfwExl3KBits').disabled = exl3CacheType == 'CacheLayer_fp16';
+    document.getElementById('HfwExl3VBits').disabled = exl3CacheType == 'CacheLayer_fp16';
+}
+
 
 function initializeHfSettingsDropdowns(all_values) {
-    const hfTorchDeviceMap = document.getElementById('hf_waitress_torch_device_map_choice');
+    document.getElementById('hf_waitress_torch_device_map_choice').value = all_values.torch_device_map;
+    document.getElementById('hf_waitress_torch_dtype_choice').value = all_values.torch_dtype;
+    document.getElementById('hf_waitress_pipeline_task_choice').value = all_values.pipeline_task;
 
-    for (let option of hfTorchDeviceMap.options) {
-        if (option.value == all_values.torch_device_map) {
-            option.selected = true;
-            break;
-        }
-    }
+    // Set quantization method first, then trigger the update for level options
+    document.getElementById('hf_waitress_quantization_choice').value = all_values.quantize;
+    toggleHfwQuantizationLevel(); 
+    
+    // Now set the quantization level (after options have been populated)
+    document.getElementById('hf_waitress_quantization_level_choice').value = all_values.quant_level;
 
-    const hfTorchDataType = document.getElementById('hf_waitress_torch_dtype_choice');
+    document.getElementById('hf_waitress_exl2_cache_type_choice').value = all_values.exl2_cache_type;
+    document.getElementById('hf_waitress_exl3_cache_type_choice').value = all_values.exl3_cache_type;
 
-    for (let option of hfTorchDataType.options) {
-        if (option.value == all_values.torch_dtype) {
-            option.selected = true;
-            break;
-        }
-    }
+    document.getElementById('HfwExl3KBits').value = all_values.exl3_k_bits;
+    document.getElementById('HfwExl3VBits').value = all_values.exl3_v_bits;
 
-    const hfPipelineTask = document.getElementById('hf_waitress_pipeline_task_choice');
-
-    for (let option of hfPipelineTask.options) {
-        if (option.value == all_values.pipeline_task) {
-            option.selected = true;
-            break;
-        }
-    }
-
-    const hfQuantMethod = document.getElementById('hf_waitress_quantization_choice');
-
-    for (let option of hfQuantMethod.options) {
-        if (option.value == all_values.quantize) {
-            option.selected = true;
-            break;
-        }
-    }
-
-    toggleHfwQuantizationLevel();   // This is necessary to ensure the quantization level options are updated based on the selected quantization method.
-
-    const hfQuantLevel = document.getElementById('hf_waitress_quantization_level_choice');
-
-    for (let option of hfQuantLevel.options) {
-        if (option.value == all_values.quant_level) {
-            option.selected = true;
-            break;
-        }
-    }
-
-    const hfExl2CacheType = document.getElementById('hf_waitress_exl2_cache_type_choice');
-
-    for (let option of hfExl2CacheType.options) {
-        if (option.value == all_values.exl2_cache_type) {
-            option.selected = true;
-            break;
-        }
-    }
+    toggleHfwExl3CacheType();
 }
 
 

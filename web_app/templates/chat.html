@@ -547,6 +547,26 @@
                                                                     <td class="settings_table_setting_description">If specified, load to single device, e.g. "cuda:0"</td>
                                                                     <td class="settings_table_setting_value"><input type="text" id="HfwExl3Device" class="settings-input-fields" value="cuda:0"></td>
                                                                 </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl3_cache_type">
+                                                                    <td class="settings_table_setting_name">--exl3_cache_type</td>
+                                                                    <td class="settings_table_setting_description">Cache Type for ExLlamaV3 backend.</td>
+                                                                    <td class="settings_table_setting_value">
+                                                                        <select class="modal-selects" id="hf_waitress_exl3_cache_type_choice" style="width: 100%; max-width: 20vh;" onchange="toggleHfwExl3CacheType()">
+                                                                            <option value="CacheLayer_fp16">Full CacheLayer_fp16 (default)</option>
+                                                                            <option value="CacheLayer_quant">CacheLayer_quant</option>
+                                                                        </select>
+                                                                    </td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl3_k_bits" style="display: none;">
+                                                                    <td class="settings_table_setting_name">--exl3_k_bits</td>
+                                                                    <td class="settings_table_setting_description">Quantize Exl3 Key-Cache to Int Bits (2-8). [Default: 8]</td>
+                                                                    <td class="settings_table_setting_value"><input type="number" id="HfwExl3KBits" min="2" max="8" step="1" class="settings-input-fields" value="8" disabled></td>
+                                                                </tr>
+                                                                <tr class="settings-table-row" id="hf_waitress_exl3_v_bits" style="display: none;">
+                                                                    <td class="settings_table_setting_name">--exl3_v_bits</td>
+                                                                    <td class="settings_table_setting_description">Quantize Exl3 Value-Cache to Int Bits (2-8). [Default: 8]</td>
+                                                                    <td class="settings_table_setting_value"><input type="number" id="HfwExl3VBits" min="2" max="8" step="1" class="settings-input-fields" value="8" disabled></td>
+                                                                </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl3_resume_quant_job">
                                                                     <td class="settings_table_setting_name">--exl3_resume_quant_job</td>
                                                                     <td class="settings_table_setting_description">Resume Quantization Job for ExLlamaV3 backend.</td>

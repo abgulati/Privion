@@ -11,7 +11,7 @@ except ImportError:
     print("exllamav2 is not installed. Skipping import.")
 
 try:
-    from exllamav3 import Model, Config, Cache, Tokenizer, Generator, Job
+    from exllamav3 import Model, Config, Cache, Tokenizer, Generator, Job, CacheLayer_fp16, CacheLayer_quant
     from exllamav3.generator.sampler import ComboSampler
 except ImportError:
     print("exllamav3 is not installed. Skipping import.")
@@ -373,6 +373,9 @@ def write_config(config_updates:dict, filename:str=None) -> dict:
             'exl3',
             'exl3_bpw',
             'exl3_device',
+            'exl3_cache_type',
+            'exl3_k_bits',
+            'exl3_v_bits',
             'exl3_total_context',
             'exl3_tensor_parallel',
             'exl3_tp_output_device',
@@ -391,6 +394,9 @@ def write_config(config_updates:dict, filename:str=None) -> dict:
             'exl3',
             'exl3_bpw',
             'exl3_device',
+            'exl3_cache_type',
+            'exl3_k_bits',
+            'exl3_v_bits',
             'exl3_total_context',
             'exl3_tensor_parallel',
             'exl3_tp_output_device',
@@ -495,6 +501,9 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'exl3':False,
                     'exl3_bpw':3.0,
                     'exl3_device':'cuda:0',
+                    'exl3_cache_type':'CacheLayer_fp16',
+                    'exl3_k_bits':8,
+                    'exl3_v_bits':8,
                     'exl3_resume_quant_job':False,
                     'exl3_total_context':2048,
                     'exl3_tensor_parallel':False,
@@ -1202,6 +1211,9 @@ def parse_arguments():
                 'exl3',
                 'exl3_bpw',
                 'exl3_device',
+                'exl3_cache_type',
+                'exl3_k_bits',
+                'exl3_v_bits',
                 'exl3_resume_quant_job',
                 'exl3_total_context',
                 'exl3_tensor_parallel',
@@ -1300,6 +1312,9 @@ def parse_arguments():
         parser.add_argument("--exl3", action="store_true", default=False, help="Add this flag when loading models via ExLlamaV3. Defaults to False.")
         parser.add_argument("--exl3_bpw", type=float, default=read_return['exl3_bpw'], help="Specify the bpw to be used when quantizing ExLlamaV3 models. Remembers previously set value and falls-back to 3.0 as the default.")
         parser.add_argument("--exl3_device", type=str, default=read_return['exl3_device'], help="Specify the device to be used when loading ExLlamaV3 models. Remembers previously set value and falls-back to cuda:0 as the default.")
+        parser.add_argument("--exl3_cache_type", type=str, default=read_return['exl3_cache_type'], help="Specify the cache type to be used when loading ExLlamaV3 models. Remembers previously set value and falls-back to CacheLayer_fp16 as the default.")
+        parser.add_argument("--exl3_k_bits", type=int, default=read_return['exl3_k_bits'], help="Specify the k bits to be used when quantizing ExLlamaV3 models. Remembers previously set value and falls-back to 8 as the default.")
+        parser.add_argument("--exl3_v_bits", type=int, default=read_return['exl3_v_bits'], help="Specify the v bits to be used when quantizing ExLlamaV3 models. Remembers previously set value and falls-back to 8 as the default.")
         parser.add_argument("--exl3_resume_quant_job", action="store_true", default=False, help="Add this flag to resume a previous quantization job. Defaults to False.")
         parser.add_argument("--exl3_total_context", type=int, default=read_return['exl3_total_context'], help="Specify the total context size to be used when loading ExLlamaV3 models. Remembers previously set value and falls-back to 2048 as the default.")
         parser.add_argument("--exl3_tensor_parallel", action="store_true", default=read_return['exl3_tensor_parallel'], help="Specify whether to load the model in tensor parallel mode. Remembers previously set value and falls-back to False as the default.")
@@ -1335,6 +1350,9 @@ def parse_arguments():
                     'exl3',
                     'exl3_bpw',
                     'exl3_device',
+                    'exl3_cache_type',
+                    'exl3_k_bits',
+                    'exl3_v_bits',
                     'exl3_resume_quant_job',
                     'exl3_total_context',
                     'exl3_tensor_parallel',
@@ -1439,6 +1457,9 @@ def parse_arguments():
                     'exl3':args.exl3,
                     'exl3_bpw':args.exl3_bpw,
                     'exl3_device':args.exl3_device,
+                    'exl3_cache_type':args.exl3_cache_type,
+                    'exl3_k_bits':args.exl3_k_bits,
+                    'exl3_v_bits':args.exl3_v_bits,
                     'exl3_resume_quant_job':args.exl3_resume_quant_job,
                     'exl3_total_context':args.exl3_total_context,
                     'exl3_tensor_parallel':args.exl3_tensor_parallel,
@@ -2256,16 +2277,20 @@ def define_exllamav3_generator_components(quantized_model_path: os.PathLike):
         handle_local_error("Could not define ExLlamaV3 model, encountered error: ", e)
     
     try:
-        exl3_config = read_config(['exl3_device', 'exl3_total_context', 'exl3_tensor_parallel', 'exl3_tp_output_device', 'exl3_use_per_device', 'exl3_max_chunk_size'])
+        exl3_config = read_config(['exl3_device', 'exl3_total_context', 'exl3_tensor_parallel', 'exl3_tp_output_device', 'exl3_use_per_device', 'exl3_max_chunk_size', 'exl3_cache_type', 'exl3_k_bits', 'exl3_v_bits'])
     except Exception as e:
         handle_local_error("Could not read exl3-total_context from hf_config.json, encountered error: ", e)
 
     try:
         global EXL3_CACHE
-        EXL3_CACHE = Cache(EXL3_MODEL, max_num_tokens = exl3_config['exl3_total_context'])
-        print(f"\nCache defined successfully with max_num_tokens: {exl3_config['exl3_total_context']}\n")
+        if exl3_config['exl3_cache_type'] == 'CacheLayer_fp16':
+            EXL3_CACHE = Cache(EXL3_MODEL, max_num_tokens = exl3_config['exl3_total_context'], layer_type = CacheLayer_fp16)
+            print(f"\nExl3 Cache defined successfully with max_num_tokens: {exl3_config['exl3_total_context']}, layer_type: {exl3_config['exl3_cache_type']}\n")
+        elif exl3_config['exl3_cache_type'] == 'CacheLayer_quant':
+            EXL3_CACHE = Cache(EXL3_MODEL, max_num_tokens = exl3_config['exl3_total_context'], layer_type = CacheLayer_quant, k_bits = exl3_config['exl3_k_bits'], v_bits = exl3_config['exl3_v_bits'])
+            print(f"\nExl3 Cache defined successfully with max_num_tokens: {exl3_config['exl3_total_context']}, layer_type: {exl3_config['exl3_cache_type']}, k_bits: {exl3_config['exl3_k_bits']}, v_bits: {exl3_config['exl3_v_bits']}\n")
     except Exception as e:
-        handle_local_error("Could not define ExLlamaV3 cache, encountered error: ", e)
+        handle_local_error("Could not define ExLlamaV3 Cache, encountered error: ", e)
 
     try:
         print(f"\nLoading model...\n")
