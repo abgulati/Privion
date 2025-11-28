@@ -2369,6 +2369,7 @@ def define_exllamav3_generator(max_batch_size: int, max_chunk_size: int, show_vi
     
     return True
 
+
 def load_exllamav3_pipeline():
     print("\n\nLoading ExLlamaV3 Pipeline\n\n")
 
@@ -3786,6 +3787,7 @@ def exl2_stream():
 
     except Exception as e:
         return handle_api_error("Could not generate exl2-stream, encountered error: ", e)
+
 
 def create_fim_content(prefix: str, suffix: str, middle: str, language: str = 'python') -> str:
     '''Prepare chat template with FIM tokens'''
