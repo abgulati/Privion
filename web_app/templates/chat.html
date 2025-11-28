@@ -503,7 +503,7 @@
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl2_max_seq_len">
                                                                     <td class="settings_table_setting_name">--exl2_max_seq_len</td>
-                                                                    <td class="settings_table_setting_description">Max Sequence Length for ExLlamaV2 backend.</td>
+                                                                    <td class="settings_table_setting_description">Max Sequence Length for ExLlamaV2 backend. Must be a multiple of 256: 1024, 2048, 4096, 8192, 16384, 32768, 44800, 49152, 65536, etc.[Default: 2048]</td>
                                                                     <td class="settings_table_setting_value"><input type="number" id="HfwExl2MaxSeqLen" min="1024" step="1" class="settings-input-fields" value="2048"></td>
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl2_cache_type">
@@ -554,7 +554,7 @@
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl3_total_context">
                                                                     <td class="settings_table_setting_name">--exl3_total_context</td>
-                                                                    <td class="settings_table_setting_description">Total Context for ExLlamaV3 backend.</td>
+                                                                    <td class="settings_table_setting_description">Total Context for ExLlamaV3 backend. Must be a multiple of 256: 1024, 2048, 4096, 8192, 16384, 32768, 44800, 49152, 65536, etc.[Default: 2048]</td>
                                                                     <td class="settings_table_setting_value"><input type="number" id="HfwExl3TotalContext" min="1024" step="1" class="settings-input-fields" value="2048"></td>
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl3_tensor_parallel">
