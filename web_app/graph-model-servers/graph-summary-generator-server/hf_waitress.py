@@ -1100,28 +1100,6 @@ def shutdown_all():
 ############################-----------------------------------------------###############################
 
 
-def safe_int(value, default):
-    if value is None:
-        handle_error_no_return("Null value, cannot convert to integer type. Proceeding with default value.")
-        return default
-    try:
-        return int(value)
-    except(ValueError, TypeError) as e:
-        handle_error_no_return(f"Could not convert {value} to an integer, proceeding with default value {default}. Encountered error: ", e)
-        return default
-
-
-def safe_float(value, default):
-    if value is None:
-        handle_error_no_return("Null value, cannot convert to float type. Proceeding with default value.")
-        return default
-    try:
-        return float(value)
-    except(ValueError, TypeError) as e:
-        handle_error_no_return(f"Could not convert {value} to a float, proceeding with default value {default}. Encountered error: ", e)
-        return default
-
-
 def os_sanitize_path(path):
     normalized_path = os.path.normpath(path)    # Normalize the path to handle any platform-specific separators
     expanded_path = os.path.expanduser(normalized_path) # Expand any tilde (~) to the user's home directory
@@ -1539,96 +1517,69 @@ def str_to_torch_dtype(dtype_str):
 def get_model_params():
 
     print("\n\ninitializing model parameters\n\n")
-
     global PIPE
 
     try:
-        read_return = read_config([
-            'gguf',
-            'awq',
-            'gguf_model_id',
-            'gguf_filename',
-            'quantize',
-            'quant_level',
-            'hqq_group_size',
-            'torch_device_map',
-            'torch_dtype',
-            'trust_remote_code',
-            'use_flash_attention_2',
-            'pipeline_task',
-            'vision'
+        config = read_config([
+            'awq', 'gguf', 'gguf_model_id', 'gguf_filename',
+            'quantize', 'quant_level', 'hqq_group_size',
+            'torch_device_map', 'torch_dtype', 'pipeline_task',
+            'trust_remote_code', 'use_flash_attention_2', 'vision'
         ])
-        gguf = str(read_return['gguf']).lower() == 'true'
-        awq = str(read_return['awq']).lower() == 'true'
-        gguf_model_id = str(read_return['gguf_model_id'])
-        gguf_filename = str(read_return['gguf_filename'])
-        quantize = str(read_return['quantize'])
-        quant_level = str(read_return['quant_level'])
-        hqq_group_size = int(read_return['hqq_group_size'])
-        torch_device_map = str(read_return['torch_device_map'])
-        torch_dtype = str(read_return['torch_dtype'])
-        trust_remote_code = str(read_return['trust_remote_code']).lower() == 'true'
-        use_flash_attention_2 = str(read_return['use_flash_attention_2']).lower() == 'true'
-        pipeline_task = str(read_return['pipeline_task'])
-        vision = str(read_return['vision']).lower() == 'true'
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to get model_params, encountered error: ", e)
 
-    if gguf:
-        print(gguf)
+    if config['gguf']:
         print("\n\nLoading GGUF\n\n")
         try:
-            model = AutoModelForCausalLM.from_pretrained(gguf_model_id, gguf_file=gguf_filename)
+            model = AutoModelForCausalLM.from_pretrained(config['gguf_model_id'], gguf_file=config['gguf_filename'])
         except Exception as e:
             handle_local_error("Could not create AutoModelForCausalLM, encountered error: ", e)
         try:
-            tokenizer = AutoTokenizer.from_pretrained(gguf_model_id, gguf_file=gguf_filename)
+            tokenizer = AutoTokenizer.from_pretrained(config['gguf_model_id'], gguf_file=config['gguf_filename'])
         except Exception as e:
             handle_local_error("Could not set AutoTokenizer, encountered error: ", e)
         try:
-            PIPE = pipeline(
-                pipeline_task,
-                model=model,
-                tokenizer=tokenizer,
-            )
+            PIPE = pipeline(config['pipeline_task'], model=model, tokenizer=tokenizer)
         except Exception as e:
             handle_local_error("Could not create model PIPELINE, encountered error: ", e)
 
         return True
 
-    if awq:
+    if config['awq']:
         print("Proceed to load AWQ-quantized model from the HF-Hub, setting torch_dtype=torch.float16 and quantize=n and proceeding.")
         torch_dtype_obj = torch.float16
         quantize = "n"
     else:
         try:
-            torch_dtype_obj = str_to_torch_dtype(torch_dtype)
+            torch_dtype_obj = str_to_torch_dtype(config['torch_dtype'])
         except Exception as e:
             handle_error_no_return("Error determining torch data-type, setting to auto and proceeding: ", e)
             torch_dtype_obj = "auto"
+        
         if torch_dtype_obj is None:
             handle_error_no_return("Could not obtain torch dtype object, check if the value passed is correct. Setting to auto and proceeding.")
             torch_dtype_obj = "auto"
 
-    if vision:
+    if config['vision']:
         print("Vision model detected, setting torch_dtype=torch.bfloat16")
         torch_dtype_obj = torch.bfloat16
 
     model_params = {
-        "device_map": torch_device_map,
+        "device_map": config['torch_device_map'],
         "torch_dtype": torch_dtype_obj,
-        "trust_remote_code": trust_remote_code,
+        "trust_remote_code": config['trust_remote_code'],
     }
 
-    if use_flash_attention_2 and not vision:
+    if config['use_flash_attention_2'] and not config['vision']:
         model_params["attn_implementation"] = "flash_attention_2"
 
-    quantize = quantize.lower().strip()
+    quantize = config['quantize'].lower().strip()
     if quantize != "n":
         try:
             if quantize == "bitsandbytes":
                 print("Quantizing with BitsAndBytes")
-                quant_level = quant_level.lower().strip()
+                quant_level = config['quant_level'].lower().strip()
 
                 if quant_level == "int8":
                     print("Proceeding with BitsAndBytes-Int8 Quant")
@@ -1645,7 +1596,7 @@ def get_model_params():
                     model_params["quantization_config"] = quantization_config
             elif quantize == "quanto":
                 print("Quanto-Quantizing")
-                quant_level = quant_level.lower().strip()
+                quant_level = config['quant_level'].lower().strip()
 
                 if quant_level == "int8":
                     print("Proceeding with Quanto-Int8 Weights")
@@ -1670,31 +1621,31 @@ def get_model_params():
             elif quantize == "hqq":
                 print("HQQ-Quantizing - Force-setting torch_dtype to torch.bfloat16")
                 model_params["torch_dtype"] = torch.bfloat16
-                quant_level = quant_level.lower().strip()
+                quant_level = config['quant_level'].lower().strip()
 
                 if quant_level == "int8":
                     print("Proceeding with HQQ-Int8 Weights")
-                    quantization_config  = HqqConfig(nbits=8, group_size=hqq_group_size)
+                    quantization_config  = HqqConfig(nbits=8, group_size=config['hqq_group_size'])
                     model_params["quantization_config"] = quantization_config
                 elif quant_level == "int4":
                     print("Proceeding with HQQ-Int4 Weights")
-                    quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size)
+                    quantization_config  = HqqConfig(nbits=4, group_size=config['hqq_group_size'])
                     model_params["quantization_config"] = quantization_config
                 elif quant_level == "int3":
                     print("Proceeding with HQQ-Int3 Weights")
-                    quantization_config  = HqqConfig(nbits=3, group_size=hqq_group_size)
+                    quantization_config  = HqqConfig(nbits=3, group_size=config['hqq_group_size'])
                     model_params["quantization_config"] = quantization_config
                 elif quant_level == "int2":
                     print("Proceeding with HQQ-Int2 Weights")
-                    quantization_config  = HqqConfig(nbits=2, group_size=hqq_group_size)
+                    quantization_config  = HqqConfig(nbits=2, group_size=config['hqq_group_size'])
                     model_params["quantization_config"] = quantization_config
                 elif quant_level == "int1":
                     print("Proceeding with HQQ-Int1 Weights")
-                    quantization_config  = HqqConfig(nbits=1, group_size=hqq_group_size)
+                    quantization_config  = HqqConfig(nbits=1, group_size=config['hqq_group_size'])
                     model_params["quantization_config"] = quantization_config
                 else:
                     print(f"Invalid quant_level setting, HQQ supports int8, int4, int3, int2 & int1 quants but you set {quant_level}; proceeding with HQQ-Int4 Quant")
-                    quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size)
+                    quantization_config  = HqqConfig(nbits=4, group_size=config['hqq_group_size'])
                     model_params["quantization_config"] = quantization_config
         except Exception as e:
             handle_local_error("Could not create quantization_config when attempting to get model_params, encountered error: ", e)
@@ -1708,22 +1659,19 @@ def load_flux_pipeline(pipeline):
     os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python' # Sets Protocol Buffers to use the pure Python implementation instead of the default C++ implementation. This is significantly slower but must be done for FLUX to work. That's why this environment variable is deleted whenever other models are loaded.
 
     try:
-        read_return = read_config(['model_id', 'flux_low_vram_optimizations', 'load_quantized_flux'])
-        model_id = str(read_return['model_id'])
-        flux_low_vram_optimizations = str(read_return['flux_low_vram_optimizations']).lower() == 'true'
-        load_quantized_flux = str(read_return['load_quantized_flux']).lower() == 'true'
+        config = read_config(['model_id', 'flux_low_vram_optimizations', 'load_quantized_flux'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to load_flux_pipeline(), encountered error: ", e)
 
-    if load_quantized_flux:
+    if config['load_quantized_flux']:
         print("Loading quantized Flux Pipeline")
-        bfl_repo = model_id
+        bfl_repo = config['model_id']
         dtype = torch.bfloat16
 
         quantized_checkpoint = ""
-        if "schnell" in model_id.lower():
+        if "schnell" in config['model_id'].lower():
             quantized_checkpoint = "https://huggingface.co/Kijai/flux-fp8/blob/main/flux1-schnell-fp8-e4m3fn.safetensors"
-        elif "dev" in model_id.lower():
+        elif "dev" in config['model_id'].lower():
             quantized_checkpoint = "https://huggingface.co/Kijai/flux-fp8/blob/main/flux1-dev-fp8.safetensors"
         
         print(f"\n\nLoading FLUX FP8 Quantized Checkpoint from: {quantized_checkpoint}\n\n")
@@ -1751,8 +1699,8 @@ def load_flux_pipeline(pipeline):
             return False
     else:    
         try:
-            pipeline = FluxPipeline.from_pretrained(model_id, torch_dtype=torch.bfloat16)
-            if flux_low_vram_optimizations:
+            pipeline = FluxPipeline.from_pretrained(config['model_id'], torch_dtype=torch.bfloat16)
+            if config['flux_low_vram_optimizations']:
                 pipeline.enable_sequential_cpu_offload()
                 pipeline.vae.enable_slicing()
                 pipeline.vae.enable_tiling()
@@ -1761,7 +1709,7 @@ def load_flux_pipeline(pipeline):
             handle_model_loading_error("Could not load Flux Pipeline, encountered error: ", e)
             return False
     
-    print(f"\n{model_id} loaded successfully!\n")
+    print(f"\n{config['model_id']} loaded successfully!\n")
     return pipeline
 
 
@@ -1770,25 +1718,23 @@ def load_vision_pipeline(pipeline, model_params):
     global VISION_MODEL
 
     try:
-        read_return = read_config(['model_id', 'torch_device_map'])
-        model_id = str(read_return['model_id'])
-        torch_device_map = str(read_return['torch_device_map'])
+        config = read_config(['model_id', 'torch_device_map'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to load vision-pipeline, encountered error: ", e)
 
     model_params.pop('trust_remote_code', None)
 
     try:
-        print(f"\nInitializing vision model: {model_id} with device_map: {torch_device_map}\n")
-        VISION_MODEL = MllamaForConditionalGeneration.from_pretrained(model_id, **model_params)
+        print(f"\nInitializing vision model: {config['model_id']} with device_map: {config['torch_device_map']}\n")
+        VISION_MODEL = MllamaForConditionalGeneration.from_pretrained(config['model_id'], **model_params)
        
         try:
             print(f"Your vision-model's memory footprint is: {VISION_MODEL.get_memory_footprint()}")
         except Exception as e:
             handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
 
-        print(f"\nInitializing processor for vision model: {model_id}\n")
-        pipeline = AutoProcessor.from_pretrained(model_id)  # Using 'pipeline' instead of 'processor' to maintain consistency with the server code. AutoProcessor is used to process images and text inputs for the vision model.
+        print(f"\nInitializing processor for vision model: {config['model_id']}\n")
+        pipeline = AutoProcessor.from_pretrained(config['model_id'])  # Using 'pipeline' instead of 'processor' to maintain consistency with the server code. AutoProcessor is used to process images and text inputs for the vision model.
         
         print(f"\nVision Model & Processor Loaded Successfully!\n")
         return pipeline
@@ -1823,8 +1769,7 @@ def load_openai_whisper_v3_asr_pipeline(model_id: str, torch_device: str):
             model=MODEL,
             tokenizer=PROCESSOR.tokenizer,
             feature_extractor=PROCESSOR.feature_extractor,
-            torch_dtype=torch_dtype,
-            device=torch_device,
+            torch_dtype=torch_dtype, device=torch_device
         )
     except Exception as e:
         handle_model_loading_error("Could not load pipeline for OpenAI Whisper V3 ASR Model, encountered error: ", e)
@@ -1974,9 +1919,7 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
     print(f"\n\nAttempting to generate measurement file for model {model_id}...\n\n")
 
     try:
-        read_return = read_config(['transformer_models_folder', 'exl2_force_regenerate_measurement'])
-        transformer_models_folder = str(read_return['transformer_models_folder'])
-        exl2_force_regenerate_measurement = str(read_return['exl2_force_regenerate_measurement']).lower() == 'true'
+        config = read_config(['transformer_models_folder', 'exl2_force_regenerate_measurement'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to generate-exllama_measurement_file_for_model(), encountered error: ", e)
 
@@ -1984,12 +1927,12 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
         temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
         os.makedirs(temp_dir, exist_ok=True)
 
-        measurement_file_path = os.path.join(transformer_models_folder, model_id, "exllama-measurements-file", "measurement.json")
+        measurement_file_path = os.path.join(config['transformer_models_folder'], model_id, "exllama-measurements-file", "measurement.json")
         os.makedirs(os.path.dirname(measurement_file_path), exist_ok=True)
     except Exception as e:
         handle_local_error("Could not create measurement file directory when attempting to generate-exllama_measurement_file_for_model(), encountered error: ", e)
     
-    if os.path.exists(measurement_file_path) and not exl2_force_regenerate_measurement:
+    if os.path.exists(measurement_file_path) and not config['exl2_force_regenerate_measurement']:
         print(f"\nMeasurement file for {model_id} already exists. Skipping measurement file generation.\n")
         return measurement_file_path
     
@@ -2018,8 +1961,7 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
     print(f"\n\nAttempting to quantize model {model_id} to {exl2_bpw}bpw...\n\n")
     
     try:
-        read_return = read_config(['transformer_models_folder'])
-        transformer_models_folder = str(read_return['transformer_models_folder'])
+        config = read_config(['transformer_models_folder'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to exllama-bpw_quantize_model(), encountered error: ", e)
 
@@ -2027,7 +1969,7 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
         temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
         os.makedirs(temp_dir, exist_ok=True)
 
-        quantized_model_path = os.path.join(transformer_models_folder, model_id, "exl2-qaunts", f"{exl2_bpw}bpw")
+        quantized_model_path = os.path.join(config['transformer_models_folder'], model_id, "exl2-qaunts", f"{exl2_bpw}bpw")
         os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)   # Create parent directory structure - final `{exl2_bpw}bpw` directory will be created by ExLlamaV2 converter
     except Exception as e:
         handle_local_error("Could not create directory to store quantized model when attempting to exllama-bpw_quantize_model(), encountered error: ", e)
@@ -2052,11 +1994,10 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
         print(f"\nRunning ExLlamaV2 bpw quantizer for {model_id}...\n")
         subprocess.run(command, check=True) # check=True ensures that the command will raise an exception if it fails
         print(f"\nExLlamaV2 Conversion of {model_id} to {exl2_bpw}bpw completed successfully!\n")
-        safe_remove_folder_from_filepath(temp_dir)  # conversion completed, deleting temp dir to free space
     except Exception as e:
-        safe_remove_folder_from_filepath(temp_dir)  # Since conversion errored out, restarting afresh by clearing the temp dir is safer
         handle_local_error("Could not run ExLlamaV2 bpw quantizer, encountered error: ", e)
-
+    
+    safe_remove_folder_from_filepath(temp_dir)
     return quantized_model_path
 
 
@@ -2160,39 +2101,36 @@ def load_exllama_pipeline():
     print("\n\nLoading ExLlamaV2 Pipeline\n\n")
     
     try:
-        read_return = read_config(['model_id', 'exl2_bpw', 'exl2_no_flash_attn'])
-        model_id = str(read_return['model_id'])
-        exl2_bpw = float(read_return['exl2_bpw'])
-        exl2_no_flash_attn = str(read_return['exl2_no_flash_attn']).lower() == 'true'
+        config = read_config(['model_id', 'exl2_bpw', 'exl2_no_flash_attn'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to load the ExLlamaV2 pipeline, encountered error: ", e)
 
     latest_snapshot_path = None
     try:
-        latest_snapshot_path = download_model_from_hf_hub(model_id)
+        latest_snapshot_path = download_model_from_hf_hub(config['model_id'])
     except Exception as e:
-        handle_error_no_return(f"Could not download {model_id} from HF-Hub. Attempting to scan for pre-existing local snapshots. Encountered error: ", e)
+        handle_error_no_return(f"Could not download {config['model_id']} from HF-Hub. Attempting to scan for pre-existing local snapshots. Encountered error: ", e)
         try:
-            latest_revision = get_latest_revision_for_model(model_id)
+            latest_revision = get_latest_revision_for_model(config['model_id'])
             latest_snapshot_path = os_sanitize_path(latest_revision.snapshot_path)
         except Exception as e:
-            handle_local_error(f"Error attempting to work with local snapshot for {model_id}. Encountered error: ", e)
+            handle_local_error(f"Error attempting to work with local snapshot for {config['model_id']}. Encountered error: ", e)
     
     if latest_snapshot_path is None:
-        handle_local_error(f"Could not find a local snapshot for {model_id}. Please check your connection and access token if you're using a private model.")
+        handle_local_error(f"Could not find a local snapshot for {config['model_id']}. Please check your connection and access token if you're using a private model.")
     
     try:
-        measurement_file_path = generate_exllama_measurement_file_for_model(model_id, latest_snapshot_path)
+        measurement_file_path = generate_exllama_measurement_file_for_model(config['model_id'], latest_snapshot_path)
     except Exception as e:
-        handle_local_error(f"Error generating ExLlamaV2 measurement file for {model_id}. Encountered error: ", e)
+        handle_local_error(f"Error generating ExLlamaV2 measurement file for {config['model_id']}. Encountered error: ", e)
 
     try:
-        quantized_model_path = exllama_bpw_quantize_model(model_id, measurement_file_path, latest_snapshot_path, exl2_bpw)
+        quantized_model_path = exllama_bpw_quantize_model(config['model_id'], measurement_file_path, latest_snapshot_path, float(config['exl2_bpw']))
     except Exception as e:
-        handle_local_error(f"Error ExLlamaV2 quantizing {model_id} to {exl2_bpw} bits per word. Encountered error: ", e)
+        handle_local_error(f"Error ExLlamaV2 quantizing {config['model_id']} to {config['exl2_bpw']} bits per word. Encountered error: ", e)
 
     try:
-        define_exllama_generator_components(quantized_model_path, exl2_no_flash_attn)
+        define_exllama_generator_components(quantized_model_path, config['exl2_no_flash_attn'])
     except Exception as e:
         handle_local_error(f"Error loading ExLlamaV2 quantized model from {quantized_model_path}. Encountered error: ", e)
 
@@ -2203,10 +2141,10 @@ def load_exllama_pipeline():
 
     try:
         global AUTO_TOKENIZER
-        AUTO_TOKENIZER = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)    # Using Transformers' AutoTokenizer as ExLlamaV2's ExLlamaV2Tokenizer does not contain an equivalent apply_chat_template() method!
+        AUTO_TOKENIZER = AutoTokenizer.from_pretrained(config['model_id'], trust_remote_code=True)    # Using Transformers' AutoTokenizer as ExLlamaV2's ExLlamaV2Tokenizer does not contain an equivalent apply_chat_template() method!
         print("\nTransformers-AutoTokenizer configured successfully for automated prompt-formatting\n")
     except Exception as e:
-        handle_local_error(f"Error loading AutoTokenizer for {model_id}. Encountered error: ", e)
+        handle_local_error(f"Error loading AutoTokenizer for {config['model_id']}. Encountered error: ", e)
 
     try:
         print(f"Model's context-length (max_seq_len) is: {EXL2_MODEL.config.max_seq_len}")
@@ -2254,8 +2192,7 @@ def exllama3_bpw_quantize_model(model_id: str, model_snapshot_path: os.PathLike,
     print(f"\n\nAttempting to quantize model {model_id} to {exl3_bpw}bpw...\n\n")
     
     try:
-        read_return = read_config(['transformer_models_folder', 'exl3_resume_quant_job'])
-        transformer_models_folder = str(read_return['transformer_models_folder'])
+        config = read_config(['transformer_models_folder', 'exl3_resume_quant_job'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to exllama3-bpw_quantize_model(), encountered error: ", e)
 
@@ -2263,7 +2200,7 @@ def exllama3_bpw_quantize_model(model_id: str, model_snapshot_path: os.PathLike,
         temp_dir = os.path.join(os.getcwd(), "exllamav3", "temp-converter-files")
         os.makedirs(temp_dir, exist_ok=True)
 
-        quantized_model_path = os.path.join(transformer_models_folder, model_id, "exl3-qaunts", f"{exl3_bpw}bpw")
+        quantized_model_path = os.path.join(config['transformer_models_folder'], model_id, "exl3-qaunts", f"{exl3_bpw}bpw")
         os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)   # Create parent directory structure - final `{exl3_bpw}bpw` directory will be created by ExLlamaV3 converter
     except Exception as e:
         handle_local_error("Could not create directory to store quantized model when attempting to exllama3-bpw_quantize_model(), encountered error: ", e)
@@ -2432,6 +2369,7 @@ def define_exllamav3_generator(max_batch_size: int, max_chunk_size: int, show_vi
     
     return True
 
+
 def load_exllamav3_pipeline():
     print("\n\nLoading ExLlamaV3 Pipeline\n\n")
 
@@ -2521,13 +2459,9 @@ class ThreadSafeStream(io.StringIO):
 def restart_server_stream():
 
     llm_semaphore.acquire()
-    print("\n\nrestart-server-stream acquired llm_semaphore, proceeding...\n\n")
     config_writer_semaphore.acquire()
-    print("\n\nrestart-server-stream acquired config_writer_semaphore, proceeding...\n\n")
     error_logging_semaphore.acquire()
-    print("\n\nrestart-server-stream acquired error_logging_semaphore, proceeding...\n\n")
-
-    print("\n\nrestarting server with stream\n\n")
+    print("\n\nrestart-server-stream acquired all semaphores, proceeding with reboot...\n\n")
 
     shutdown_all()
     safe_empty_cuda_cache()
@@ -2669,11 +2603,7 @@ def initialize_model():
                 model = AutoModelForCausalLM.from_pretrained(read_return['model_id'], **model_params)
                 tokenizer = AutoTokenizer.from_pretrained(read_return['model_id'])
                 print("\nInitializing inference pipeline...")
-                PIPE = pipeline(
-                    read_return['pipeline_task'],
-                    model=model,
-                    tokenizer=tokenizer,
-                )
+                PIPE = pipeline(read_return['pipeline_task'], model=model, tokenizer=tokenizer)
         
             try:
                 print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
@@ -2807,8 +2737,7 @@ def get_input_params_for_vision_model(request):
         return False
 
     try:
-        read_return = read_config(['max_new_tokens'])
-        max_new_tokens = int(read_return['max_new_tokens'])
+        config = read_config(['max_new_tokens'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to get input_params for vision-model, encountered error: ", e)
 
@@ -2816,7 +2745,7 @@ def get_input_params_for_vision_model(request):
         dpi = int(request.headers.get('X-DPI', 300))
         try:
             generation_config = {
-                "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
+                "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', str(config['max_new_tokens']))),
                 "use_cache": True
             }
         except Exception as e:
@@ -2900,7 +2829,7 @@ def inference_with_vision_model(request):
     inference_output = ""
     for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
 
-        if vision_file_present: 
+        if vision_file_present:
             print(f"\n\nProcessing Page: {page_number} from file: {filename}\n\n")
         
         try:
@@ -2939,35 +2868,22 @@ def inference_with_vision_model(request):
 @app.route('/completions', methods=['POST'])
 def completions():
 
-    print("\n\ncompletions route triggered - attempting to acquire LLM semaphore\n\n")
-
     with llm_semaphore:
-
         print("\n\nLLM semaphore acquired by /completions\n\n")
 
         try:
-            read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'flux_diffusers', 'vision'])
-            max_new_tokens = int(read_return['max_new_tokens'])
-            return_full_text = str(read_return['return_full_text']).lower() == 'true'
-            temperature = float(read_return['temperature'])
-            do_sample = str(read_return['do_sample']).lower() == 'true'
-            top_k = int(read_return['top_k'])
-            top_p = float(read_return['top_p'])
-            min_p = float(read_return['min_p'])
-            n_keep = int(read_return['n_keep'])
-            flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
-            vision = str(read_return['vision']).lower() == 'true'
+            config = read_config(['max_new_tokens', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'flux_diffusers', 'vision'])
         except Exception as e:
             return handle_api_error("Could not read values from hf_config.json when attempting /completions, encountered error: ", e)
 
-        if flux_diffusers:
+        if config['flux_diffusers']:
             try:
                 image_str, image_name = generate_flux_image(request)
                 return jsonify({"success": True, "response": image_str, "image_name": image_name})
             except Exception as e:
                 return handle_api_error("Could not generate image with FLUX Diffusers. Encountered error: ", e)
 
-        if vision:
+        if config['vision']:
             try:
                 response = inference_with_vision_model(request)
                 return jsonify({"success": True, "response": response})
@@ -2982,19 +2898,19 @@ def completions():
 
         try:
             generation_config = GenerationConfig(
-                max_new_tokens=int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
-                temperature=float(request.headers.get('X-Temperature', str(temperature))),
-                do_sample=request.headers.get('X-Do-Sample', str(do_sample)).lower() == 'true',
-                top_k=int(request.headers.get('X-Top-K', str(top_k))),
-                top_p=float(request.headers.get('X-Top-P', str(top_p))),
-                min_p=float(request.headers.get('X-Min-P', str(min_p))),
+                max_new_tokens=int(request.headers.get('X-Max-New-Tokens', str(config['max_new_tokens']))),
+                temperature=float(request.headers.get('X-Temperature', str(config['temperature']))),
+                do_sample=request.headers.get('X-Do-Sample', str(config['do_sample'])).lower() == 'true',
+                top_k=int(request.headers.get('X-Top-K', str(config['top_k']))),
+                top_p=float(request.headers.get('X-Top-P', str(config['top_p']))),
+                min_p=float(request.headers.get('X-Min-P', str(config['min_p']))),
                 use_cache=True
             )
             # use_cache=True by default, setting explictily to True for clarity. Intra-call optimization: tells the generator, "During this single generation call, please be efficient.
             # As you process the prompt and generate new tokens, create and use a KV cache internally so you don't have to re-calculate everything for every single new token." 
         except Exception as e:
             handle_error_no_return("Could not set generation-arguments for /completions, proceeding without them. Encountered error: ", e)
-            generation_config = GenerationConfig(max_new_tokens=max_new_tokens, use_cache=True)
+            generation_config = GenerationConfig(max_new_tokens=config['max_new_tokens'], use_cache=True)
 
         try:
             print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
@@ -3023,7 +2939,6 @@ def completions():
             return handle_api_error("Could not generate output, encountered error: ", e)
 
         print("\n\nCompletions done - releasing LLM semaphore\n\n")
-
         return jsonify({"success": True, "response": inference_output})
 
 
@@ -3046,10 +2961,8 @@ class StopOnEvent(StoppingCriteria):    # custom StoppingCriteria to stop genera
 
 @app.route('/vision_stream', methods=['POST'])
 def vision_stream():
-    print("\n\nvision_stream route triggered - attempting to acquire LLM semaphore\n\n")
 
     llm_semaphore.acquire()
-
     print("\n\nLLM semaphore acquired by /vision_stream\n\n")
 
     try:
@@ -3063,7 +2976,6 @@ def vision_stream():
 
     stop_event = threading.Event()
     generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
-
     data_queue = queue.Queue()
 
     def llm_task():
@@ -3227,8 +3139,7 @@ def get_pipe(torch_device: str):
         model=MODEL,
         tokenizer=PROCESSOR.tokenizer,
         feature_extractor=PROCESSOR.feature_extractor,
-        torch_dtype=torch_dtype,
-        device=torch_device,
+        torch_dtype=torch_dtype, device=torch_device
     )
 
 
@@ -3583,10 +3494,7 @@ class CustomTextStreamer(TextStreamer):
 @app.route('/completions_stream', methods=['POST'])
 def completions_stream():
 
-    print("\n\ncompletions_stream route triggered - attempting to acquire LLM semaphore\n\n")
-
     llm_semaphore.acquire()
-
     print("\n\nLLM semaphore acquired by /completions_stream\n\n")
 
     try:
@@ -3733,21 +3641,6 @@ def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
         return True # Since the above check is simplistic, an error indicates something is amiss, so best to return True to avoid infinite loops and try auto-truncation
 
 
-def set_global_exl2_dynamic_generator():
-    """
-    Defines and returns an ExLlamaV2DynamicGenerator object.
-    The generator object's cache builds up over time which is why it's best to create a new generator object for new chat requests as they may be from different users.
-    """
-
-    try:
-        print("\nDefining ExLlamaV2DynamicGenerator...\n")
-        exl2_dynamic_generator = ExLlamaV2DynamicGenerator(model = EXL2_MODEL, cache = EXL2_CACHE, tokenizer = EXL2_TOKENIZER)
-        print("\nGenerator defined successfully\n")
-        return exl2_dynamic_generator
-    except Exception as e:
-        handle_local_error("Could not define ExLlamaV2DynamicGenerator, encountered error: ", e)
-
-
 def get_exl2_gen_settings(request):
 
     try:
@@ -3847,8 +3740,7 @@ def exl2_stream():
     
     try:
         tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
-        if not exl2_prompt_fits_within_max_context_length(tokenized_messages):
-            print("\n\nPrompt does not fit within Exl2 max context length, relying on auto-truncation as a fallback.\n\n")
+        if not exl2_prompt_fits_within_max_context_length(tokenized_messages): print("\n\nPrompt doesn't fit within Exl2 context window, will auto-truncate.\n\n")
     except Exception as e:
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
 
@@ -3896,6 +3788,7 @@ def exl2_stream():
     except Exception as e:
         return handle_api_error("Could not generate exl2-stream, encountered error: ", e)
 
+
 def create_fim_content(prefix: str, suffix: str, middle: str, language: str = 'python') -> str:
     '''Prepare chat template with FIM tokens'''
 
@@ -3942,14 +3835,9 @@ def truncate_fim_content(prefix: str, suffix: str, middle: str, language: str, m
     middle_chars = max_chars - prefix_chars - suffix_chars - 200 # Reserve for formatting
 
     # Truncate prefix from start, suffix from end
-    if len(prefix) > prefix_chars:
-        prefix = prefix[-prefix_chars:]
-
-    if len(suffix) > suffix_chars:
-        suffix = suffix[:suffix_chars]
-
-    if len(middle) > middle_chars:
-        middle = middle[:middle_chars]
+    if len(prefix) > prefix_chars: prefix = prefix[-prefix_chars:]
+    if len(suffix) > suffix_chars: suffix = suffix[:suffix_chars]
+    if len(middle) > middle_chars: middle = middle[:middle_chars]
 
     return assemble_fim_messages(prefix, suffix, middle, language)
 
@@ -4056,35 +3944,6 @@ def exl2_fim_stream():
 
 
 ###################################-------------Exl3 Logic Begins-------------###################################
-
-def set_global_exl3_dynamic_generator():
-    """
-    Defines and returns an ExLlamaV3 Generator object.
-    The generator object's cache builds up over time which is why it's best to create a new generator object for new chat requests as they may be from different users.
-
-    Args:
-        batch_mode: Whether to use batch mode. Default is False - which internally sets to Auto batch size determination basis available cache space.
-
-    Returns:
-        The ExLlamaV2DynamicGenerator object.
-    """
-
-    try:
-        exl3_generator_config = read_config(['exl3_max_batch_size', 'exl3_max_chunk_size', 'exl3_show_gen_visualizer'])
-        exl3_generator = Generator(
-            model = EXL3_MODEL,
-            cache = EXL3_CACHE,
-            tokenizer = EXL3_TOKENIZER,
-            max_batch_size = exl3_generator_config['exl3_max_batch_size'],
-            max_chunk_size = exl3_generator_config['exl3_max_chunk_size'],
-            show_visualizer = exl3_generator_config['exl3_show_gen_visualizer']
-        )
-        
-        print("\nGenerator defined successfully\n")
-        return exl3_generator
-    except Exception as e:
-        handle_local_error("Could not define ExLlamaV2 generator, encountered error: ", e)
-
 
 def get_exl3_sampler(request):
 
@@ -4615,11 +4474,11 @@ def handle_exl3_streaming_openai(messages, max_tokens, temperature, top_p, top_k
         config_data['max_new_tokens'] = max_tokens or int(config_data['max_new_tokens'])
     
         exl3_sampler = ComboSampler(
-            rep_p = config_data['repetition_penalty'],
-            pres_p = presence_penalty or config_data['presence_penalty'],
-            freq_p = frequency_penalty or config_data['frequency_penalty'],
-            rep_sustain_range = config_data['penalty_range'],
-            rep_decay_range = config_data['penalty_range'],
+            rep_p = config_data['rep_p'],
+            pres_p = presence_penalty or config_data['pres_p'],
+            freq_p = frequency_penalty or config_data['freq_p'],
+            rep_sustain_range = config_data['rep_sustain_range'],
+            rep_decay_range = config_data['rep_decay_range'],
             temperature = temperature or config_data['temperature'],
             min_p = config_data['min_p'],
             top_k = top_k or config_data['top_k'],
@@ -4631,8 +4490,9 @@ def handle_exl3_streaming_openai(messages, max_tokens, temperature, top_p, top_k
         if stop:
             if isinstance(stop, str): stop = [stop]
             for stop_string in stop:
-                stop_ids = EXL3_TOKENIZER.encode(stop_string).flatten().tolist()    # Encode to Tensor, then flatten to List of Ints
-                if len(stop_ids) > 0: stop_token_list.append(stop_ids)  # Append the *sequence* (the list itself) to conditions - append because lists should be added as is, not flattened
+                # ExLlamaV3 supports stop strings natively, so we append the string directly
+                # passing a list of token IDs (sequence) would raise a ValueError in ExLlamaV3's Job class
+                stop_token_list.append(stop_string)
 
         # 4. Create Job
         tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
@@ -4707,11 +4567,11 @@ def handle_exl3_non_streaming_openai(messages, max_tokens, temperature, top_p, t
         config_data['max_new_tokens'] = max_tokens or int(config_data['max_new_tokens'])
     
         exl3_sampler = ComboSampler(
-            rep_p = config_data['repetition_penalty'],
-            pres_p = presence_penalty or config_data['presence_penalty'],
-            freq_p = frequency_penalty or config_data['frequency_penalty'],
-            rep_sustain_range = config_data['penalty_range'],
-            rep_decay_range = config_data['penalty_range'],
+            rep_p = config_data['rep_p'],
+            pres_p = presence_penalty or config_data['pres_p'],
+            freq_p = frequency_penalty or config_data['freq_p'],
+            rep_sustain_range = config_data['rep_sustain_range'],
+            rep_decay_range = config_data['rep_decay_range'],
             temperature = temperature or config_data['temperature'],
             min_p = config_data['min_p'],
             top_k = top_k or config_data['top_k'],
@@ -4723,8 +4583,9 @@ def handle_exl3_non_streaming_openai(messages, max_tokens, temperature, top_p, t
         if stop:
             if isinstance(stop, str):stop = [stop]
             for stop_string in stop:
-                stop_ids = EXL3_TOKENIZER.encode(stop_string).flatten().tolist()    # Encode to Tensor, then flatten to List of Ints
-                if len(stop_ids) > 0: stop_token_list.append(stop_ids)  # Append the *sequence* (the list itself) to conditions - append because lists should be added as is, not flattened
+                # ExLlamaV3 supports stop strings natively, so we append the string directly
+                # passing a list of token IDs (sequence) would raise a ValueError in ExLlamaV3's Job class
+                stop_token_list.append(stop_string)
 
         # 4. Create Job
         tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
@@ -4778,24 +4639,16 @@ def handle_exl3_non_streaming_openai(messages, max_tokens, temperature, top_p, t
 
 def handle_openai_streaming(backend, messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
     """Handle streaming OpenAI-compatible responses"""
-    
-    if backend == 'transformers':
-        return handle_transformers_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
-    elif backend == 'exl2':
-        return handle_exl2_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
-    elif backend == 'exl3':
-        return handle_exl3_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+    if backend == 'transformers': return handle_transformers_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
+    elif backend == 'exl2': return handle_exl2_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
+    elif backend == 'exl3': return handle_exl3_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
 
 
 def handle_openai_non_streaming(backend, messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
     """Handle non-streaming OpenAI-compatible responses"""
-    
-    if backend == 'transformers':
-        return handle_transformers_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
-    elif backend == 'exl2':
-        return handle_exl2_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
-    elif backend == 'exl3':
-        return handle_exl3_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+    if backend == 'transformers': return handle_transformers_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
+    elif backend == 'exl2': return handle_exl2_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
+    elif backend == 'exl3': return handle_exl3_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
 
 
 @app.route('/v1/chat/completions', methods=['POST'])
@@ -4837,12 +4690,12 @@ def openai_compatible_api():
         model = data.get('model', 'auto').lower().strip()  # Can be used to force specific backend
         stream = data.get('stream', False)
         max_tokens = data.get('max_tokens', None)
-        temperature = data.get('temperature', 0.7)
-        top_p = data.get('top_p', 1.0)
+        temperature = data.get('temperature', None)
+        top_p = data.get('top_p', None)
         top_k = data.get('top_k', None)
         stop = data.get('stop', None)
-        presence_penalty = data.get('presence_penalty', 0.0)
-        frequency_penalty = data.get('frequency_penalty', 0.0)
+        presence_penalty = data.get('presence_penalty', None)
+        frequency_penalty = data.get('frequency_penalty', None)
         
     except Exception as e:
         return jsonify(
@@ -4861,14 +4714,10 @@ def openai_compatible_api():
     if exl2_ready: backend_priority.append('exl2')
     
     # Allow the `model` param to override the backend priority
-    if model == 'exl3' and exl3_ready:
-        selected_backend = 'exl3'
-    elif model == 'exl2' and exl2_ready:
-        selected_backend = 'exl2'
-    elif model == 'transformers' and pipe_ready:
-        selected_backend = 'transformers'
-    else:
-        selected_backend = backend_priority[0] if backend_priority else None
+    if model == 'exl3' and exl3_ready: selected_backend = 'exl3'
+    elif model == 'exl2' and exl2_ready: selected_backend = 'exl2'
+    elif model == 'transformers' and pipe_ready: selected_backend = 'transformers'
+    else: selected_backend = backend_priority[0] if backend_priority else None
 
     print(f"\nSelected backend: {selected_backend}\n")
 
@@ -4900,8 +4749,6 @@ def list_models():
         current_model_id = "default-model"
 
     # 2. Define the available "Virtual" models
-    # We list the actual model ID, plus the backend names so you can select them 
-    # in Perplexica to force a specific backend logic.
     models_data = [
         # The actual loaded model
         # {
@@ -5016,10 +4863,8 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
             gen_settings = gen_settings
         )
 
-        # 3. Attach Queue
+        # 3. Attach Queue & 4. Enqueue to Global Generator
         job.response_queue = user_queue
-
-        # 4. Enqueue to Global Generator
         EXL2_GENERATOR.enqueue(job)
 
         # 5. Consume Queue Synchronously (Accumulate Response)
