@@ -62,6 +62,7 @@ import platform
 import datetime
 import logging
 import pathlib
+import random
 import base64
 import shutil   # Shell Utilities is part of Python's standard library and is used for file operations
 import queue
@@ -126,22 +127,29 @@ MODEL = None
 TOKENIZER = None
 PROCESSOR = None
 VISION_MODEL = None
-EXL2_MODEL = None
-EXL2_TOKENIZER = None
-EXL2_CACHE = None
-EXL3_MODEL = None
-EXL3_TOKENIZER = None
-EXL3_CACHE = None
-AUTO_TOKENIZER = None
-STOP_TOKENS = None
-SILERO_VAD = None
-SILERO_UTILS = None
 
+EXL2_MODEL = None   # for cache-fit checking
+EXL2_CACHE = None   # for global generator
+EXL2_TOKENIZER = None
+EXL2_GENERATOR = None
+EXL2_WORKER_THREAD = None
+EXL2_WORKER_STOP_EVENT = threading.Event()
+
+EXL3_MODEL = None   # for global generator
+EXL3_CACHE = None   # for global generator
+EXL3_TOKENIZER = None
+EXL3_GENERATOR = None
+EXL3_WORKER_THREAD = None
+EXL3_WORKER_STOP_EVENT = threading.Event()
+
+STOP_TOKENS = None
+AUTO_TOKENIZER = None
 STOP_GENERATION = False
+
 llm_semaphore = threading.Semaphore(1)
+reader_semaphore = threading.Semaphore(3)
 config_writer_semaphore = threading.Semaphore(1)
 error_logging_semaphore = threading.Semaphore(1)
-reader_semaphore = threading.Semaphore(3)
 
 ###---Complete List of HF-Transformers Environment Variables: https://huggingface.co/docs/huggingface_hub/en/package_reference/environment_variables
 
@@ -1080,6 +1088,14 @@ def shutdown_all():
     for var_name in global_vars:
         globals()[var_name] = None
 
+    if EXL2_WORKER_THREAD:
+        EXL2_WORKER_STOP_EVENT.set()
+        EXL2_WORKER_THREAD.join(timeout=1)
+
+    if EXL3_WORKER_THREAD:
+        EXL3_WORKER_STOP_EVENT.set()
+        EXL3_WORKER_THREAD.join(timeout=1)
+
     # Clean up memory
     import gc
     gc.collect()
@@ -1087,28 +1103,6 @@ def shutdown_all():
     return True
 
 ############################-----------------------------------------------###############################
-
-
-def safe_int(value, default):
-    if value is None:
-        handle_error_no_return("Null value, cannot convert to integer type. Proceeding with default value.")
-        return default
-    try:
-        return int(value)
-    except(ValueError, TypeError) as e:
-        handle_error_no_return(f"Could not convert {value} to an integer, proceeding with default value {default}. Encountered error: ", e)
-        return default
-
-
-def safe_float(value, default):
-    if value is None:
-        handle_error_no_return("Null value, cannot convert to float type. Proceeding with default value.")
-        return default
-    try:
-        return float(value)
-    except(ValueError, TypeError) as e:
-        handle_error_no_return(f"Could not convert {value} to a float, proceeding with default value {default}. Encountered error: ", e)
-        return default
 
 
 def os_sanitize_path(path):
@@ -1528,96 +1522,69 @@ def str_to_torch_dtype(dtype_str):
 def get_model_params():
 
     print("\n\ninitializing model parameters\n\n")
-
     global PIPE
 
     try:
-        read_return = read_config([
-            'gguf',
-            'awq',
-            'gguf_model_id',
-            'gguf_filename',
-            'quantize',
-            'quant_level',
-            'hqq_group_size',
-            'torch_device_map',
-            'torch_dtype',
-            'trust_remote_code',
-            'use_flash_attention_2',
-            'pipeline_task',
-            'vision'
+        config = read_config([
+            'awq', 'gguf', 'gguf_model_id', 'gguf_filename',
+            'quantize', 'quant_level', 'hqq_group_size',
+            'torch_device_map', 'torch_dtype', 'pipeline_task',
+            'trust_remote_code', 'use_flash_attention_2', 'vision'
         ])
-        gguf = str(read_return['gguf']).lower() == 'true'
-        awq = str(read_return['awq']).lower() == 'true'
-        gguf_model_id = str(read_return['gguf_model_id'])
-        gguf_filename = str(read_return['gguf_filename'])
-        quantize = str(read_return['quantize'])
-        quant_level = str(read_return['quant_level'])
-        hqq_group_size = int(read_return['hqq_group_size'])
-        torch_device_map = str(read_return['torch_device_map'])
-        torch_dtype = str(read_return['torch_dtype'])
-        trust_remote_code = str(read_return['trust_remote_code']).lower() == 'true'
-        use_flash_attention_2 = str(read_return['use_flash_attention_2']).lower() == 'true'
-        pipeline_task = str(read_return['pipeline_task'])
-        vision = str(read_return['vision']).lower() == 'true'
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to get model_params, encountered error: ", e)
 
-    if gguf:
-        print(gguf)
+    if config['gguf']:
         print("\n\nLoading GGUF\n\n")
         try:
-            model = AutoModelForCausalLM.from_pretrained(gguf_model_id, gguf_file=gguf_filename)
+            model = AutoModelForCausalLM.from_pretrained(config['gguf_model_id'], gguf_file=config['gguf_filename'])
         except Exception as e:
             handle_local_error("Could not create AutoModelForCausalLM, encountered error: ", e)
         try:
-            tokenizer = AutoTokenizer.from_pretrained(gguf_model_id, gguf_file=gguf_filename)
+            tokenizer = AutoTokenizer.from_pretrained(config['gguf_model_id'], gguf_file=config['gguf_filename'])
         except Exception as e:
             handle_local_error("Could not set AutoTokenizer, encountered error: ", e)
         try:
-            PIPE = pipeline(
-                pipeline_task,
-                model=model,
-                tokenizer=tokenizer,
-            )
+            PIPE = pipeline(config['pipeline_task'], model=model, tokenizer=tokenizer)
         except Exception as e:
             handle_local_error("Could not create model PIPELINE, encountered error: ", e)
 
         return True
 
-    if awq:
+    if config['awq']:
         print("Proceed to load AWQ-quantized model from the HF-Hub, setting torch_dtype=torch.float16 and quantize=n and proceeding.")
         torch_dtype_obj = torch.float16
         quantize = "n"
     else:
         try:
-            torch_dtype_obj = str_to_torch_dtype(torch_dtype)
+            torch_dtype_obj = str_to_torch_dtype(config['torch_dtype'])
         except Exception as e:
             handle_error_no_return("Error determining torch data-type, setting to auto and proceeding: ", e)
             torch_dtype_obj = "auto"
+        
         if torch_dtype_obj is None:
             handle_error_no_return("Could not obtain torch dtype object, check if the value passed is correct. Setting to auto and proceeding.")
             torch_dtype_obj = "auto"
 
-    if vision:
+    if config['vision']:
         print("Vision model detected, setting torch_dtype=torch.bfloat16")
         torch_dtype_obj = torch.bfloat16
 
     model_params = {
-        "device_map": torch_device_map,
+        "device_map": config['torch_device_map'],
         "torch_dtype": torch_dtype_obj,
-        "trust_remote_code": trust_remote_code,
+        "trust_remote_code": config['trust_remote_code'],
     }
 
-    if use_flash_attention_2 and not vision:
+    if config['use_flash_attention_2'] and not config['vision']:
         model_params["attn_implementation"] = "flash_attention_2"
 
-    quantize = quantize.lower().strip()
+    quantize = config['quantize'].lower().strip()
     if quantize != "n":
         try:
             if quantize == "bitsandbytes":
                 print("Quantizing with BitsAndBytes")
-                quant_level = quant_level.lower().strip()
+                quant_level = config['quant_level'].lower().strip()
 
                 if quant_level == "int8":
                     print("Proceeding with BitsAndBytes-Int8 Quant")
@@ -1634,7 +1601,7 @@ def get_model_params():
                     model_params["quantization_config"] = quantization_config
             elif quantize == "quanto":
                 print("Quanto-Quantizing")
-                quant_level = quant_level.lower().strip()
+                quant_level = config['quant_level'].lower().strip()
 
                 if quant_level == "int8":
                     print("Proceeding with Quanto-Int8 Weights")
@@ -1659,31 +1626,31 @@ def get_model_params():
             elif quantize == "hqq":
                 print("HQQ-Quantizing - Force-setting torch_dtype to torch.bfloat16")
                 model_params["torch_dtype"] = torch.bfloat16
-                quant_level = quant_level.lower().strip()
+                quant_level = config['quant_level'].lower().strip()
 
                 if quant_level == "int8":
                     print("Proceeding with HQQ-Int8 Weights")
-                    quantization_config  = HqqConfig(nbits=8, group_size=hqq_group_size)
+                    quantization_config  = HqqConfig(nbits=8, group_size=config['hqq_group_size'])
                     model_params["quantization_config"] = quantization_config
                 elif quant_level == "int4":
                     print("Proceeding with HQQ-Int4 Weights")
-                    quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size)
+                    quantization_config  = HqqConfig(nbits=4, group_size=config['hqq_group_size'])
                     model_params["quantization_config"] = quantization_config
                 elif quant_level == "int3":
                     print("Proceeding with HQQ-Int3 Weights")
-                    quantization_config  = HqqConfig(nbits=3, group_size=hqq_group_size)
+                    quantization_config  = HqqConfig(nbits=3, group_size=config['hqq_group_size'])
                     model_params["quantization_config"] = quantization_config
                 elif quant_level == "int2":
                     print("Proceeding with HQQ-Int2 Weights")
-                    quantization_config  = HqqConfig(nbits=2, group_size=hqq_group_size)
+                    quantization_config  = HqqConfig(nbits=2, group_size=config['hqq_group_size'])
                     model_params["quantization_config"] = quantization_config
                 elif quant_level == "int1":
                     print("Proceeding with HQQ-Int1 Weights")
-                    quantization_config  = HqqConfig(nbits=1, group_size=hqq_group_size)
+                    quantization_config  = HqqConfig(nbits=1, group_size=config['hqq_group_size'])
                     model_params["quantization_config"] = quantization_config
                 else:
                     print(f"Invalid quant_level setting, HQQ supports int8, int4, int3, int2 & int1 quants but you set {quant_level}; proceeding with HQQ-Int4 Quant")
-                    quantization_config  = HqqConfig(nbits=4, group_size=hqq_group_size)
+                    quantization_config  = HqqConfig(nbits=4, group_size=config['hqq_group_size'])
                     model_params["quantization_config"] = quantization_config
         except Exception as e:
             handle_local_error("Could not create quantization_config when attempting to get model_params, encountered error: ", e)
@@ -1697,24 +1664,21 @@ def load_flux_pipeline(pipeline):
     os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python' # Sets Protocol Buffers to use the pure Python implementation instead of the default C++ implementation. This is significantly slower but must be done for FLUX to work. That's why this environment variable is deleted whenever other models are loaded.
 
     try:
-        read_return = read_config(['model_id', 'flux_low_vram_optimizations', 'load_quantized_flux'])
-        model_id = str(read_return['model_id'])
-        flux_low_vram_optimizations = str(read_return['flux_low_vram_optimizations']).lower() == 'true'
-        load_quantized_flux = str(read_return['load_quantized_flux']).lower() == 'true'
+        config = read_config(['model_id', 'flux_low_vram_optimizations', 'load_quantized_flux'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to load_flux_pipeline(), encountered error: ", e)
 
-    if load_quantized_flux:
+    if config['load_quantized_flux']:
         print("Loading quantized Flux Pipeline")
-        bfl_repo = model_id
+        bfl_repo = config['model_id']
         dtype = torch.bfloat16
 
         quantized_checkpoint = ""
-        if "schnell" in model_id.lower():
+        if "schnell" in config['model_id'].lower():
             quantized_checkpoint = "https://huggingface.co/Kijai/flux-fp8/blob/main/flux1-schnell-fp8-e4m3fn.safetensors"
-        elif "dev" in model_id.lower():
+        elif "dev" in config['model_id'].lower():
             quantized_checkpoint = "https://huggingface.co/Kijai/flux-fp8/blob/main/flux1-dev-fp8.safetensors"
-
+        
         print(f"\n\nLoading FLUX FP8 Quantized Checkpoint from: {quantized_checkpoint}\n\n")
 
         try:
@@ -1740,8 +1704,8 @@ def load_flux_pipeline(pipeline):
             return False
     else:    
         try:
-            pipeline = FluxPipeline.from_pretrained(model_id, torch_dtype=torch.bfloat16)
-            if flux_low_vram_optimizations:
+            pipeline = FluxPipeline.from_pretrained(config['model_id'], torch_dtype=torch.bfloat16)
+            if config['flux_low_vram_optimizations']:
                 pipeline.enable_sequential_cpu_offload()
                 pipeline.vae.enable_slicing()
                 pipeline.vae.enable_tiling()
@@ -1749,8 +1713,8 @@ def load_flux_pipeline(pipeline):
         except Exception as e:
             handle_model_loading_error("Could not load Flux Pipeline, encountered error: ", e)
             return False
-
-    print(f"\n{model_id} loaded successfully!\n")
+    
+    print(f"\n{config['model_id']} loaded successfully!\n")
     return pipeline
 
 
@@ -1759,26 +1723,24 @@ def load_vision_pipeline(pipeline, model_params):
     global VISION_MODEL
 
     try:
-        read_return = read_config(['model_id', 'torch_device_map'])
-        model_id = str(read_return['model_id'])
-        torch_device_map = str(read_return['torch_device_map'])
+        config = read_config(['model_id', 'torch_device_map'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to load vision-pipeline, encountered error: ", e)
 
     model_params.pop('trust_remote_code', None)
 
     try:
-        print(f"\nInitializing vision model: {model_id} with device_map: {torch_device_map}\n")
-        VISION_MODEL = MllamaForConditionalGeneration.from_pretrained(model_id, **model_params)
-
+        print(f"\nInitializing vision model: {config['model_id']} with device_map: {config['torch_device_map']}\n")
+        VISION_MODEL = MllamaForConditionalGeneration.from_pretrained(config['model_id'], **model_params)
+       
         try:
             print(f"Your vision-model's memory footprint is: {VISION_MODEL.get_memory_footprint()}")
         except Exception as e:
             handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
 
-        print(f"\nInitializing processor for vision model: {model_id}\n")
-        pipeline = AutoProcessor.from_pretrained(model_id)  # Using 'pipeline' instead of 'processor' to maintain consistency with the server code. AutoProcessor is used to process images and text inputs for the vision model.
-
+        print(f"\nInitializing processor for vision model: {config['model_id']}\n")
+        pipeline = AutoProcessor.from_pretrained(config['model_id'])  # Using 'pipeline' instead of 'processor' to maintain consistency with the server code. AutoProcessor is used to process images and text inputs for the vision model.
+        
         print(f"\nVision Model & Processor Loaded Successfully!\n")
         return pipeline
     except Exception as e:
@@ -1812,8 +1774,7 @@ def load_openai_whisper_v3_asr_pipeline(model_id: str, torch_device: str):
             model=MODEL,
             tokenizer=PROCESSOR.tokenizer,
             feature_extractor=PROCESSOR.feature_extractor,
-            torch_dtype=torch_dtype,
-            device=torch_device,
+            torch_dtype=torch_dtype, device=torch_device
         )
     except Exception as e:
         handle_model_loading_error("Could not load pipeline for OpenAI Whisper V3 ASR Model, encountered error: ", e)
@@ -1953,13 +1914,42 @@ def load_asr_pipeline():
     return True
 
 
+def exl2_background_worker():
+    '''Continuous loop to drive ExLlamaV2 batching'''
+    print("\n >>> ExLlamaV2 Background Worker Started\n")
+    
+    while not EXL2_WORKER_STOP_EVENT.is_set():
+        if EXL2_GENERATOR and EXL2_GENERATOR.num_remaining_jobs() > 0:
+            try:
+                # This single call advances ALL active requests by one step
+                results = EXL2_GENERATOR.iterate()  # results is a LIST of dictionaries, effectively meaning "Here is everything that happened on the GPU during this clock cycle."
+
+                for result in results:  # 'result' is a dictionary for a specific job
+                    job = result['job']
+                    text = result.get('text', '')
+                    eos = result.get('eos', False)
+                    # We don't care about 'stage': if 'text' is populated, we want it and if 'eos' is True, we want to signal end.
+
+                    if hasattr(job, 'response_queue'):  # job is a ExLlamaV2DynamicJob object, and it has a response_queue attribute! It's NOT a dict key!
+                        if text:
+                            job.response_queue.put(text)
+                        if eos:
+                            job.response_queue.put(None)
+
+            except Exception as e:
+                handle_error_no_return("Error in ExL2 worker: ", e)
+                # Optional: Signal error to all active queues
+        else:
+            time.sleep(0.05)    # Prevent CPU spin
+    
+    print("\n >>> ExLlamaV2 Background Worker Stopped\n")
+
+
 def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_path: os.PathLike) -> os.PathLike:
     print(f"\n\nAttempting to generate measurement file for model {model_id}...\n\n")
 
     try:
-        read_return = read_config(['transformer_models_folder', 'exl2_force_regenerate_measurement'])
-        transformer_models_folder = str(read_return['transformer_models_folder'])
-        exl2_force_regenerate_measurement = str(read_return['exl2_force_regenerate_measurement']).lower() == 'true'
+        config = read_config(['transformer_models_folder', 'exl2_force_regenerate_measurement'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to generate-exllama_measurement_file_for_model(), encountered error: ", e)
 
@@ -1967,12 +1957,12 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
         temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
         os.makedirs(temp_dir, exist_ok=True)
 
-        measurement_file_path = os.path.join(transformer_models_folder, model_id, "exllama-measurements-file", "measurement.json")
+        measurement_file_path = os.path.join(config['transformer_models_folder'], model_id, "exllama-measurements-file", "measurement.json")
         os.makedirs(os.path.dirname(measurement_file_path), exist_ok=True)
     except Exception as e:
         handle_local_error("Could not create measurement file directory when attempting to generate-exllama_measurement_file_for_model(), encountered error: ", e)
 
-    if os.path.exists(measurement_file_path) and not exl2_force_regenerate_measurement:
+    if os.path.exists(measurement_file_path) and not config['exl2_force_regenerate_measurement']:
         print(f"\nMeasurement file for {model_id} already exists. Skipping measurement file generation.\n")
         return measurement_file_path
 
@@ -1999,10 +1989,9 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
 
 def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike, model_snapshot_path: os.PathLike, exl2_bpw: float) -> os.PathLike:
     print(f"\n\nAttempting to quantize model {model_id} to {exl2_bpw}bpw...\n\n")
-
+    
     try:
-        read_return = read_config(['transformer_models_folder'])
-        transformer_models_folder = str(read_return['transformer_models_folder'])
+        config = read_config(['transformer_models_folder'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to exllama-bpw_quantize_model(), encountered error: ", e)
 
@@ -2010,7 +1999,7 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
         temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
         os.makedirs(temp_dir, exist_ok=True)
 
-        quantized_model_path = os.path.join(transformer_models_folder, model_id, "exl2-qaunts", f"{exl2_bpw}bpw")
+        quantized_model_path = os.path.join(config['transformer_models_folder'], model_id, "exl2-qaunts", f"{exl2_bpw}bpw")
         os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)   # Create parent directory structure - final `{exl2_bpw}bpw` directory will be created by ExLlamaV2 converter
     except Exception as e:
         handle_local_error("Could not create directory to store quantized model when attempting to exllama-bpw_quantize_model(), encountered error: ", e)
@@ -2018,7 +2007,7 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
     if os.path.exists(quantized_model_path):
         print(f"\nQuantized model for {model_id} already exists. Skipping quantization.\n")
         return quantized_model_path
-
+    
     convert_script_path = os.path.normpath(os.path.join(os.getcwd(), "exllamav2", "convert.py"))
     command = [
         'python' if platform.system() == 'Windows' else 'python3',
@@ -2035,11 +2024,10 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
         print(f"\nRunning ExLlamaV2 bpw quantizer for {model_id}...\n")
         subprocess.run(command, check=True) # check=True ensures that the command will raise an exception if it fails
         print(f"\nExLlamaV2 Conversion of {model_id} to {exl2_bpw}bpw completed successfully!\n")
-        safe_remove_folder_from_filepath(temp_dir)  # conversion completed, deleting temp dir to free space
     except Exception as e:
-        safe_remove_folder_from_filepath(temp_dir)  # Since conversion errored out, restarting afresh by clearing the temp dir is safer
         handle_local_error("Could not run ExLlamaV2 bpw quantizer, encountered error: ", e)
-
+    
+    safe_remove_folder_from_filepath(temp_dir)
     return quantized_model_path
 
 
@@ -2117,58 +2105,82 @@ def define_exllama_generator_components(quantized_model_path: os.PathLike, exl2_
     return True
 
 
-def load_exllama_pipeline():
-    print("\n\nLoading ExLlamaV2 Pipeline\n\n")
+def define_exllama_generator():
+    print("\nInitializing Global ExLlamaV2 Generator...")
+
+    global EXL2_GENERATOR, EXL2_WORKER_THREAD, EXL2_WORKER_STOP_EVENT
 
     try:
-        read_return = read_config(['model_id', 'exl2_bpw', 'exl2_no_flash_attn'])
-        model_id = str(read_return['model_id'])
-        exl2_bpw = float(read_return['exl2_bpw'])
-        exl2_no_flash_attn = str(read_return['exl2_no_flash_attn']).lower() == 'true'
+        EXL2_GENERATOR = ExLlamaV2DynamicGenerator(EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER)
+        print("\nExLlamaV2 generator defined successfully\n")
+    except Exception as e:
+        handle_local_error("Could not define ExLlamaV2 generator, encountered error: ", e)
+
+    try:
+        EXL2_WORKER_STOP_EVENT.clear()
+        EXL2_WORKER_THREAD = threading.Thread(target=exl2_background_worker)
+        EXL2_WORKER_THREAD.start()
+        print("\nExLlamaV2 background worker thread started\n")
+    except Exception as e:
+        handle_local_error("Could not start ExLlamaV2 background worker thread, encountered error: ", e)
+
+    return True
+
+
+def load_exllama_pipeline():
+    print("\n\nLoading ExLlamaV2 Pipeline\n\n")
+    
+    try:
+        config = read_config(['model_id', 'exl2_bpw', 'exl2_no_flash_attn'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to load the ExLlamaV2 pipeline, encountered error: ", e)
 
     latest_snapshot_path = None
     try:
-        latest_snapshot_path = download_model_from_hf_hub(model_id)
+        latest_snapshot_path = download_model_from_hf_hub(config['model_id'])
     except Exception as e:
-        handle_error_no_return(f"Could not download {model_id} from HF-Hub. Attempting to scan for pre-existing local snapshots. Encountered error: ", e)
+        handle_error_no_return(f"Could not download {config['model_id']} from HF-Hub. Attempting to scan for pre-existing local snapshots. Encountered error: ", e)
         try:
-            latest_revision = get_latest_revision_for_model(model_id)
+            latest_revision = get_latest_revision_for_model(config['model_id'])
             latest_snapshot_path = os_sanitize_path(latest_revision.snapshot_path)
         except Exception as e:
-            handle_local_error(f"Error attempting to work with local snapshot for {model_id}. Encountered error: ", e)
-
+            handle_local_error(f"Error attempting to work with local snapshot for {config['model_id']}. Encountered error: ", e)
+    
     if latest_snapshot_path is None:
-        handle_local_error(f"Could not find a local snapshot for {model_id}. Please check your connection and access token if you're using a private model.")
-
+        handle_local_error(f"Could not find a local snapshot for {config['model_id']}. Please check your connection and access token if you're using a private model.")
+    
     try:
-        measurement_file_path = generate_exllama_measurement_file_for_model(model_id, latest_snapshot_path)
+        measurement_file_path = generate_exllama_measurement_file_for_model(config['model_id'], latest_snapshot_path)
     except Exception as e:
-        handle_local_error(f"Error generating ExLlamaV2 measurement file for {model_id}. Encountered error: ", e)
+        handle_local_error(f"Error generating ExLlamaV2 measurement file for {config['model_id']}. Encountered error: ", e)
 
     try:
-        quantized_model_path = exllama_bpw_quantize_model(model_id, measurement_file_path, latest_snapshot_path, exl2_bpw)
+        quantized_model_path = exllama_bpw_quantize_model(config['model_id'], measurement_file_path, latest_snapshot_path, float(config['exl2_bpw']))
     except Exception as e:
-        handle_local_error(f"Error ExLlamaV2 quantizing {model_id} to {exl2_bpw} bits per word. Encountered error: ", e)
+        handle_local_error(f"Error ExLlamaV2 quantizing {config['model_id']} to {config['exl2_bpw']} bits per word. Encountered error: ", e)
 
     try:
-        define_exllama_generator_components(quantized_model_path, exl2_no_flash_attn)
+        define_exllama_generator_components(quantized_model_path, config['exl2_no_flash_attn'])
     except Exception as e:
         handle_local_error(f"Error loading ExLlamaV2 quantized model from {quantized_model_path}. Encountered error: ", e)
 
     try:
+        define_exllama_generator()
+    except Exception as e:
+        handle_local_error(f"Error defining ExLlamaV2 generator components. Encountered error: ", e)
+
+    try:
         global AUTO_TOKENIZER
-        AUTO_TOKENIZER = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)    # Using Transformers' AutoTokenizer as ExLlamaV2's ExLlamaV2Tokenizer does not contain an equivalent apply_chat_template() method!
+        AUTO_TOKENIZER = AutoTokenizer.from_pretrained(config['model_id'], trust_remote_code=True)    # Using Transformers' AutoTokenizer as ExLlamaV2's ExLlamaV2Tokenizer does not contain an equivalent apply_chat_template() method!
         print("\nTransformers-AutoTokenizer configured successfully for automated prompt-formatting\n")
     except Exception as e:
-        handle_local_error(f"Error loading AutoTokenizer for {model_id}. Encountered error: ", e)
+        handle_local_error(f"Error loading AutoTokenizer for {config['model_id']}. Encountered error: ", e)
 
     try:
         print(f"Model's context-length (max_seq_len) is: {EXL2_MODEL.config.max_seq_len}")
     except Exception as e:
         handle_error_no_return("Could not determine the model's context-length (max_seq_len), encountered error: ", e)
-
+    
     try:
         print(f"Model's context-length (max_input_len per forward-pass) is: {EXL2_MODEL.config.max_input_len}")
     except Exception as e:
@@ -2178,12 +2190,39 @@ def load_exllama_pipeline():
     return True
 
 
+def exl3_background_worker():
+    '''Continuous loop to drive ExLlamaV3 batching'''
+    print("\n >>> ExLlamaV3 Background Worker Started\n")
+    
+    while not EXL3_WORKER_STOP_EVENT.is_set():
+        if EXL3_GENERATOR and EXL3_GENERATOR.num_remaining_jobs() > 0:
+            try:
+                results = EXL3_GENERATOR.iterate()
+
+                for result in results:
+                    job = result['job']
+                    text = result.get('text', '')
+                    eos = result.get('eos', False)
+
+                    if hasattr(job, 'response_queue'):  # job is a ExLlamaV3Job object, and it has a response_queue attribute! It's NOT a dict key!
+                        if text:
+                            job.response_queue.put(text)
+                        if eos:
+                            job.response_queue.put(None)
+            except Exception as e:
+                handle_error_no_return("Error in ExL3 worker: ", e)
+                # Optional: Signal error to all active queues
+        else:
+            time.sleep(0.05)    # Prevent CPU spin
+    
+    print("\n >>> ExLlamaV3 Background Worker Stopped\n")
+
+
 def exllama3_bpw_quantize_model(model_id: str, model_snapshot_path: os.PathLike, exl3_bpw: float) -> os.PathLike:
     print(f"\n\nAttempting to quantize model {model_id} to {exl3_bpw}bpw...\n\n")
     
     try:
-        read_return = read_config(['transformer_models_folder', 'exl3_resume_quant_job'])
-        transformer_models_folder = str(read_return['transformer_models_folder'])
+        config = read_config(['transformer_models_folder', 'exl3_resume_quant_job'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to exllama3-bpw_quantize_model(), encountered error: ", e)
 
@@ -2191,7 +2230,7 @@ def exllama3_bpw_quantize_model(model_id: str, model_snapshot_path: os.PathLike,
         temp_dir = os.path.join(os.getcwd(), "exllamav3", "temp-converter-files")
         os.makedirs(temp_dir, exist_ok=True)
 
-        quantized_model_path = os.path.join(transformer_models_folder, model_id, "exl3-qaunts", f"{exl3_bpw}bpw")
+        quantized_model_path = os.path.join(config['transformer_models_folder'], model_id, "exl3-qaunts", f"{exl3_bpw}bpw")
         os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)   # Create parent directory structure - final `{exl3_bpw}bpw` directory will be created by ExLlamaV3 converter
     except Exception as e:
         handle_local_error("Could not create directory to store quantized model when attempting to exllama3-bpw_quantize_model(), encountered error: ", e)
@@ -2332,11 +2371,40 @@ def set_full_exl3_model_stop_token_list(raw_stop_token_ids: list | int):
         handle_local_error("Could not set full model stop token list, encountered error: ", e)
 
 
+def define_exllamav3_generator(max_batch_size: int, max_chunk_size: int, show_visualizer: bool):
+    print("\nInitializing Global ExLlamaV3 Generator...")
+
+    global EXL3_GENERATOR, EXL3_WORKER_THREAD, EXL3_WORKER_STOP_EVENT
+
+    try:
+        EXL3_GENERATOR = Generator(
+            model = EXL3_MODEL,
+            cache = EXL3_CACHE,
+            tokenizer = EXL3_TOKENIZER,
+            max_batch_size = max_batch_size,
+            max_chunk_size = max_chunk_size,
+            show_visualizer = show_visualizer
+        )
+        print("\nExLlamaV3 generator defined successfully\n")
+    except Exception as e:
+        handle_local_error("Could not define ExLlamaV3 generator, encountered error: ", e)
+
+    try:
+        EXL3_WORKER_STOP_EVENT.clear()
+        EXL3_WORKER_THREAD = threading.Thread(target=exl3_background_worker)
+        EXL3_WORKER_THREAD.start()
+        print("\nExLlamaV3 background worker thread started\n")
+    except Exception as e:
+        handle_local_error("Could not start ExLlamaV3 background worker thread, encountered error: ", e)
+    
+    return True
+
+
 def load_exllamav3_pipeline():
     print("\n\nLoading ExLlamaV3 Pipeline\n\n")
 
     try:
-        read_return = read_config(['model_id', 'exl3_bpw', 'exl3_total_context'])
+        read_return = read_config(['model_id', 'exl3_bpw', 'exl3_total_context', 'exl3_max_batch_size', 'exl3_max_chunk_size', 'exl3_show_gen_visualizer'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to load the ExLlamaV3 pipeline, encountered error: ", e)
 
@@ -2363,6 +2431,11 @@ def load_exllamav3_pipeline():
         define_exllamav3_generator_components(quantized_model_path)
     except Exception as e:
         handle_local_error(f"Error loading ExLlamaV3 quantized model from {quantized_model_path}. Encountered error: ", e)
+
+    try:
+        define_exllamav3_generator(read_return['exl3_max_batch_size'], read_return['exl3_max_chunk_size'], read_return['exl3_show_gen_visualizer'])
+    except Exception as e:
+        handle_local_error(f"Error defining ExLlamaV3 generator components. Encountered error: ", e)
 
     try:
         global AUTO_TOKENIZER
@@ -2416,13 +2489,9 @@ class ThreadSafeStream(io.StringIO):
 def restart_server_stream():
 
     llm_semaphore.acquire()
-    print("\n\nrestart-server-stream acquired llm_semaphore, proceeding...\n\n")
     config_writer_semaphore.acquire()
-    print("\n\nrestart-server-stream acquired config_writer_semaphore, proceeding...\n\n")
     error_logging_semaphore.acquire()
-    print("\n\nrestart-server-stream acquired error_logging_semaphore, proceeding...\n\n")
-
-    print("\n\nrestarting server with stream\n\n")
+    print("\n\nrestart-server-stream acquired all semaphores, proceeding with reboot...\n\n")
 
     shutdown_all()
     safe_empty_cuda_cache()
@@ -2564,11 +2633,7 @@ def initialize_model():
                 model = AutoModelForCausalLM.from_pretrained(read_return['model_id'], **model_params)
                 tokenizer = AutoTokenizer.from_pretrained(read_return['model_id'])
                 print("\nInitializing inference pipeline...")
-                PIPE = pipeline(
-                    read_return['pipeline_task'],
-                    model=model,
-                    tokenizer=tokenizer,
-                )
+                PIPE = pipeline(read_return['pipeline_task'], model=model, tokenizer=tokenizer)
 
             try:
                 print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
@@ -2702,8 +2767,7 @@ def get_input_params_for_vision_model(request):
         return False
 
     try:
-        read_return = read_config(['max_new_tokens'])
-        max_new_tokens = int(read_return['max_new_tokens'])
+        config = read_config(['max_new_tokens'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to get input_params for vision-model, encountered error: ", e)
 
@@ -2711,7 +2775,7 @@ def get_input_params_for_vision_model(request):
         dpi = int(request.headers.get('X-DPI', 300))
         try:
             generation_config = {
-                "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
+                "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', str(config['max_new_tokens']))),
                 "use_cache": True
             }
         except Exception as e:
@@ -2795,7 +2859,7 @@ def inference_with_vision_model(request):
     inference_output = ""
     for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
 
-        if vision_file_present: 
+        if vision_file_present:
             print(f"\n\nProcessing Page: {page_number} from file: {filename}\n\n")
 
         try:
@@ -2834,35 +2898,22 @@ def inference_with_vision_model(request):
 @app.route('/completions', methods=['POST'])
 def completions():
 
-    print("\n\ncompletions route triggered - attempting to acquire LLM semaphore\n\n")
-
     with llm_semaphore:
-
         print("\n\nLLM semaphore acquired by /completions\n\n")
 
         try:
-            read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep', 'flux_diffusers', 'vision'])
-            max_new_tokens = int(read_return['max_new_tokens'])
-            return_full_text = str(read_return['return_full_text']).lower() == 'true'
-            temperature = float(read_return['temperature'])
-            do_sample = str(read_return['do_sample']).lower() == 'true'
-            top_k = int(read_return['top_k'])
-            top_p = float(read_return['top_p'])
-            min_p = float(read_return['min_p'])
-            n_keep = int(read_return['n_keep'])
-            flux_diffusers = str(read_return['flux_diffusers']).lower() == 'true'
-            vision = str(read_return['vision']).lower() == 'true'
+            config = read_config(['max_new_tokens', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'flux_diffusers', 'vision'])
         except Exception as e:
             return handle_api_error("Could not read values from hf_config.json when attempting /completions, encountered error: ", e)
 
-        if flux_diffusers:
+        if config['flux_diffusers']:
             try:
                 image_str, image_name = generate_flux_image(request)
                 return jsonify({"success": True, "response": image_str, "image_name": image_name})
             except Exception as e:
                 return handle_api_error("Could not generate image with FLUX Diffusers. Encountered error: ", e)
 
-        if vision:
+        if config['vision']:
             try:
                 response = inference_with_vision_model(request)
                 return jsonify({"success": True, "response": response})
@@ -2877,19 +2928,19 @@ def completions():
 
         try:
             generation_config = GenerationConfig(
-                max_new_tokens=int(request.headers.get('X-Max-New-Tokens', str(max_new_tokens))),
-                temperature=float(request.headers.get('X-Temperature', str(temperature))),
-                do_sample=request.headers.get('X-Do-Sample', str(do_sample)).lower() == 'true',
-                top_k=int(request.headers.get('X-Top-K', str(top_k))),
-                top_p=float(request.headers.get('X-Top-P', str(top_p))),
-                min_p=float(request.headers.get('X-Min-P', str(min_p))),
+                max_new_tokens=int(request.headers.get('X-Max-New-Tokens', str(config['max_new_tokens']))),
+                temperature=float(request.headers.get('X-Temperature', str(config['temperature']))),
+                do_sample=request.headers.get('X-Do-Sample', str(config['do_sample'])).lower() == 'true',
+                top_k=int(request.headers.get('X-Top-K', str(config['top_k']))),
+                top_p=float(request.headers.get('X-Top-P', str(config['top_p']))),
+                min_p=float(request.headers.get('X-Min-P', str(config['min_p']))),
                 use_cache=True
             )
             # use_cache=True by default, setting explictily to True for clarity. Intra-call optimization: tells the generator, "During this single generation call, please be efficient.
             # As you process the prompt and generate new tokens, create and use a KV cache internally so you don't have to re-calculate everything for every single new token." 
         except Exception as e:
             handle_error_no_return("Could not set generation-arguments for /completions, proceeding without them. Encountered error: ", e)
-            generation_config = GenerationConfig(max_new_tokens=max_new_tokens, use_cache=True)
+            generation_config = GenerationConfig(max_new_tokens=config['max_new_tokens'], use_cache=True)
 
         try:
             print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
@@ -2908,7 +2959,7 @@ def completions():
             print("\n\nGenerating Output\n\n")
             output = PIPE.model.generate(**inputs, generation_config=generation_config)
             input_length = inputs.input_ids.shape[1]   # Check inference_with_vision_model(request) for detailed explanation!
-
+            
             # Slice the tensor and decode only the output!
             decoded_output = PIPE.tokenizer.decode(output[0][input_length:], skip_special_tokens=True)    # Setting skip_special_tokens=True to remove: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
 
@@ -2918,7 +2969,6 @@ def completions():
             return handle_api_error("Could not generate output, encountered error: ", e)
 
         print("\n\nCompletions done - releasing LLM semaphore\n\n")
-
         return jsonify({"success": True, "response": inference_output})
 
 
@@ -2941,10 +2991,8 @@ class StopOnEvent(StoppingCriteria):    # custom StoppingCriteria to stop genera
 
 @app.route('/vision_stream', methods=['POST'])
 def vision_stream():
-    print("\n\nvision_stream route triggered - attempting to acquire LLM semaphore\n\n")
 
     llm_semaphore.acquire()
-
     print("\n\nLLM semaphore acquired by /vision_stream\n\n")
 
     try:
@@ -2958,7 +3006,6 @@ def vision_stream():
 
     stop_event = threading.Event()
     generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
-
     data_queue = queue.Queue()
 
     def llm_task():
@@ -3122,8 +3169,7 @@ def get_pipe(torch_device: str):
         model=MODEL,
         tokenizer=PROCESSOR.tokenizer,
         feature_extractor=PROCESSOR.feature_extractor,
-        torch_dtype=torch_dtype,
-        device=torch_device,
+        torch_dtype=torch_dtype, device=torch_device
     )
 
 
@@ -3702,10 +3748,7 @@ class CustomTextStreamer(TextStreamer):
 @app.route('/completions_stream', methods=['POST'])
 def completions_stream():
 
-    print("\n\ncompletions_stream route triggered - attempting to acquire LLM semaphore\n\n")
-
     llm_semaphore.acquire()
-
     print("\n\nLLM semaphore acquired by /completions_stream\n\n")
 
     try:
@@ -3852,25 +3895,10 @@ def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
         return True # Since the above check is simplistic, an error indicates something is amiss, so best to return True to avoid infinite loops and try auto-truncation
 
 
-def set_global_exl2_dynamic_generator():
-    """
-    Defines and returns an ExLlamaV2DynamicGenerator object.
-    The generator object's cache builds up over time which is why it's best to create a new generator object for new chat requests as they may be from different users.
-    """
-
-    try:
-        print("\nDefining ExLlamaV2DynamicGenerator...\n")
-        exl2_dynamic_generator = ExLlamaV2DynamicGenerator(model = EXL2_MODEL, cache = EXL2_CACHE, tokenizer = EXL2_TOKENIZER)
-        print("\nGenerator defined successfully\n")
-        return exl2_dynamic_generator
-    except Exception as e:
-        handle_local_error("Could not define ExLlamaV2DynamicGenerator, encountered error: ", e)
-
-
 def get_exl2_gen_settings(request):
 
     try:
-        config_data = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'knowledge_graph_cache_dir', 'exl2_max_seq_len'])
+        config_data = read_config(['model_id', 'max_new_tokens', 'temperature', 'top_k', 'top_p', 'knowledge_graph_cache_dir', 'exl2_max_seq_len'])
     except Exception as e:  # Not using `handle_local_error` as the necessary params may be in the request headers so why error out here?
         handle_error_no_return("Could not read values from hf_config.json when attempting exl2-grapher, relying on request headers instead. Encountered error: ", e)
         config_data = {}
@@ -3960,98 +3988,59 @@ def exl2_stream():
             data = json.loads(data)
         messages = data.get('messages', [])
         gen_settings, config_data  = get_exl2_gen_settings(request)
-        # print(f"\nRead request - message received: {messages}\n")
+        user_queue = queue.Queue()
     except Exception as e:
-        return handle_api_error("Could not read POST-request messages for exl2-stream, encountered error: ", e)
-
-    try:
-        exl2_dynamic_generator = set_global_exl2_dynamic_generator()
-    except Exception as e:
-        return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
-
+        return handle_api_error("Could not setup for exl2-stream, encountered error: ", e)
+    
     try:
         tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
-        # print(f"\nTokenized messages: {tokenized_messages}\n")
-        # exl2_test_encoding_logic(tokenized_messages)
+        if not exl2_prompt_fits_within_max_context_length(tokenized_messages): print("\n\nPrompt doesn't fit within Exl2 context window, will auto-truncate.\n\n")
     except Exception as e:
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
 
-    if not exl2_prompt_fits_within_max_context_length(tokenized_messages):
-        print("\n\nPrompt does not fit within Exl2 max context length, relying on auto-truncation as a fallback.\n\n")
-
     try:
-        # print(f"AUTO_TOKENIZER.eos_token_id: {AUTO_TOKENIZER.eos_token_id}")
-        # print(f"EXL2_TOKENIZER.eos_token_id: {EXL2_TOKENIZER.eos_token_id}")
-        print("\nCreating ExLlamaV2-DynamicJob Object...\n")
         job = ExLlamaV2DynamicJob(
             input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
             max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens')))),
             stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id],
             gen_settings = gen_settings
         )
-        exl2_dynamic_generator.enqueue(job)
-        print("\nExLlamaV2-DynamicJob Defined & Enqueued Successfully\n")
+        job.response_queue = user_queue
+        EXL2_GENERATOR.enqueue(job)
     except Exception as e:
         return handle_api_error("Could not create ExLlamaV2-DynamicJob object. Error details follow. In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, and of course, allocate an adequate context-window! Error: ", e)
 
-    stop_thread = threading.Event()
-    output_queue = queue.Queue()
+    try:
+        def generate():
 
-    def llm_task():
+            global STOP_GENERATION
+            STOP_GENERATION = False
 
-        try:            
-            while exl2_dynamic_generator.num_remaining_jobs():
-                # output_queue.put(exl2_dynamic_generator.iterate()[0])  # Will print dict with keys: dict_keys(['job', 'stage', 'eos', 'serial', 'text', 'token_ids']) ### USE: yield f"data: {(line)}\n\n"
-                current_token = exl2_dynamic_generator.iterate()   # directly trying to access the 'text' key here will result in a KeyError as iteration may not have completed yet!
-                if len(current_token) == 1 and 'text' in current_token[0]:
-                    output_queue.put(current_token[0]['text'])  # thus best to capture the current iteration's output and then access the 'text' key!
-                elif len(current_token) > 1:
-                    for job in current_token:
-                        if 'stage' in job and job['stage'] == 'streaming':
-                            if 'text' in job: 
-                                output_queue.put(job['text'])   
-                # output_queue.put(current_token[2]['text']) if current_token[0]['stage'] == 'started' else output_queue.put(current_token[0]['text'])
-        except Exception as e:
-            handle_error_no_return("Response generation failed, encountered error: ", e)
-            output_queue.put(f"Error: {str(e)}") # Pass error to client via queue
-        finally:
-            output_queue.put(None)
-            print("\n\nExl2 stream done\n\n")
-            stop_thread.set()
+            while True:
+                if STOP_GENERATION: # Handle Manual Stop Signal
+                    print("\n\nStopping generation with stop_event\n\n")
+                    try:
+                        EXL2_GENERATOR.cancel(job)
+                    except:
+                        pass
+                    STOP_GENERATION = False
+                    break
+                
+                token = user_queue.get()
+                if token is None:
+                    break
+                
+                yield f"data: {json.dumps(token)}\n\n"
+            
+            yield f"event: END\ndata: \"null\"\n\n"
 
-    def generate():
+            print("\nexl2-stream done\n")
 
-        global STOP_GENERATION
-        STOP_GENERATION = False
+        print("\n\nInferencing Begins!\n\n")
+        return Response(generate(), content_type='text/event-stream')
 
-        try:
-            thread = threading.Thread(target=llm_task)
-            thread.start()
-        except Exception as e:
-            handle_error_no_return("Error generating exl2-stream, encountered error: ", e)
-            yield f"data: {json.dumps('Exl2 Generation Error: ' + str(e))}\n\n"
-            return
-
-        while True:
-            if STOP_GENERATION:
-                print("\n\nStopping generation with stop_event\n\n")
-                output_queue.put(None)
-                STOP_GENERATION = False
-                thread.join()
-
-            line = output_queue.get()
-            if line is None:
-                print("\nNone read, breaking and stopping thread\n")
-                thread.join()
-                break
-            yield f"data: {json.dumps(line)}\n\n"
-
-        yield f"event: END\ndata: \"null\"\n\n"
-
-        print("\nexl2-stream done\n")
-
-    print("\n\nInferencing Begins!\n\n")
-    return Response(generate(), content_type='text/event-stream')
+    except Exception as e:
+        return handle_api_error("Could not generate exl2-stream, encountered error: ", e)
 
 
 def create_fim_content(prefix: str, suffix: str, middle: str, language: str = 'python') -> str:
@@ -4100,14 +4089,9 @@ def truncate_fim_content(prefix: str, suffix: str, middle: str, language: str, m
     middle_chars = max_chars - prefix_chars - suffix_chars - 200 # Reserve for formatting
 
     # Truncate prefix from start, suffix from end
-    if len(prefix) > prefix_chars:
-        prefix = prefix[-prefix_chars:]
-
-    if len(suffix) > suffix_chars:
-        suffix = suffix[:suffix_chars]
-
-    if len(middle) > middle_chars:
-        middle = middle[:middle_chars]
+    if len(prefix) > prefix_chars: prefix = prefix[-prefix_chars:]
+    if len(suffix) > suffix_chars: suffix = suffix[:suffix_chars]
+    if len(middle) > middle_chars: middle = middle[:middle_chars]
 
     return assemble_fim_messages(prefix, suffix, middle, language)
 
@@ -4156,135 +4140,64 @@ def exl2_fim_stream():
             raise Exception("Prefix and suffix cannot be empty for FIM completion")
 
         gen_settings, config_data  = get_exl2_gen_settings(request)
-    
+        user_queue = queue.Queue()
     except Exception as e:
-        return handle_api_error("Could not read POST-request messages for exl2-fim-stream, encountered error: ", e)
+        return handle_api_error("Could not setup for exl2-fim-stream, encountered error: ", e)
     
     try:
-        exl2_dynamic_generator = set_global_exl2_dynamic_generator()
-    except Exception as e:
-        return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
-    
-    # Create FIM prompt based on language and content
-    try:
-        # exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL2_TOKENIZER, prefix, suffix, middle, language, (int(config_data['exl3_total_context']) - 50))
         exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL2_TOKENIZER, prefix, suffix, middle, language, 8192) # max 8k tokens
     except Exception as e:
         return handle_api_error("Could not create FIM prompt with chat template, encountered error: ", e)
 
     try:
-        print("\nCreating ExLlamaV2-DynamicJob Object for FIM...\n")
         job = ExLlamaV2DynamicJob(
             input_ids= exl_encoded_fim_input_ids,
             max_new_tokens = config_data['max_new_tokens'],
             stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id],
             gen_settings = gen_settings
         )
-        exl2_dynamic_generator.enqueue(job)
-        print("\nExLlamaV2-DynamicJob Defined & Enqueued Successfully\n")
+        job.response_queue = user_queue
+        EXL2_GENERATOR.enqueue(job)
     except Exception as e:
         return handle_api_error("Could not create ExLlamaV2-DynamicJob object. Error details follow. In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, and of course, allocate an adequate context-window! Error: ", e)
 
-    stop_thread = threading.Event()
-    output_queue = queue.Queue()
+    try:
+        def generate():
 
-    def llm_task():
+            global STOP_GENERATION
+            STOP_GENERATION = False
 
-        try:            
-            while exl2_dynamic_generator.num_remaining_jobs():
-                # output_queue.put(exl2_dynamic_generator.iterate()[0])  # Will print dict with keys: dict_keys(['job', 'stage', 'eos', 'serial', 'text', 'token_ids']) ### USE: yield f"data: {(line)}\n\n"
-                current_token = exl2_dynamic_generator.iterate()   # directly trying to access the 'text' key here will result in a KeyError as iteration may not have completed yet!
+            while True:
+                if STOP_GENERATION: # Handle Manual Stop Signal
+                    print("\n\nStopping generation with stop_event\n\n")
+                    try:
+                        EXL2_GENERATOR.cancel(job)
+                    except:
+                        pass
+                    STOP_GENERATION = False
+                    break
                 
-                if len(current_token) == 1 and 'text' in current_token[0]:
-                    text = current_token[0]['text']  # thus best to capture the current iteration's output and then access the 'text' key!
-                    if text:
-                        output_queue.put(text)
+                token = user_queue.get()
+                if token is None:
+                    break
                 
-                elif len(current_token) > 1:
-                    for job in current_token:
-                        if 'stage' in job and job['stage'] == 'streaming':
-                            if 'text' in job: 
-                                text = job['text']
-                                if text:
-                                    output_queue.put(text)
-        
-        except Exception as e:
-            handle_error_no_return("Response generation failed, encountered error: ", e)
-            output_queue.put(f"Error: {str(e)}") # Pass error to client via queue
-        finally:
-            output_queue.put(None)
-            print("\n\nExl2-FIM stream done\n\n")
-            stop_thread.set()
-
-    def generate():
-
-        global STOP_GENERATION
-        STOP_GENERATION = False
-
-        try:
-            thread = threading.Thread(target=llm_task)
-            thread.start()
-        except Exception as e:
-            handle_error_no_return("Error generating exl2-fim-stream, encountered error: ", e)
-            yield f"data: {json.dumps('Exl2-FIM Completion Error: ' + str(e))}\n\n"
-            return
-
-        while True:
-            if STOP_GENERATION:
-                print("\n\nStopping generation with stop_event\n\n")
-                output_queue.put(None)
-                STOP_GENERATION = False
-                thread.join()
+                yield f"data: {json.dumps(token)}\n\n"
             
-            line = output_queue.get()
-            if line is None:
-                print("\nNone read, breaking and stopping thread\n")
-                thread.join()
-                break
+            yield f"event: END\ndata: \"null\"\n\n"
             
-            # send clean code completion
-            yield f"data: {json.dumps(line)}\n\n"
-        
-        yield f"event: END\ndata: \"null\"\n\n"
-        print("\nexl2-fim-stream done\n")
+            print("\nexl2-fim-stream done\n")
 
-    print("\n\nInferencing Begins!\n\n")
-    return Response(generate(), content_type='text/event-stream')
+        print("\n\nInferencing Begins!\n\n")
+        return Response(generate(), content_type='text/event-stream')
+    
+    except Exception as e:
+        return handle_api_error("Could not generate exl2-fim-stream, encountered error: ", e)
 
 
 ###################################-------------Exl2 Logic Ends-------------###################################
 
 
 ###################################-------------Exl3 Logic Begins-------------###################################
-
-def set_global_exl3_dynamic_generator():
-    """
-    Defines and returns an ExLlamaV3 Generator object.
-    The generator object's cache builds up over time which is why it's best to create a new generator object for new chat requests as they may be from different users.
-
-    Args:
-        batch_mode: Whether to use batch mode. Default is False - which internally sets to Auto batch size determination basis available cache space.
-
-    Returns:
-        The ExLlamaV2DynamicGenerator object.
-    """
-
-    try:
-        exl3_generator_config = read_config(['exl3_max_batch_size', 'exl3_max_chunk_size', 'exl3_show_gen_visualizer'])
-        exl3_generator = Generator(
-            model = EXL3_MODEL,
-            cache = EXL3_CACHE,
-            tokenizer = EXL3_TOKENIZER,
-            max_batch_size = exl3_generator_config['exl3_max_batch_size'],
-            max_chunk_size = exl3_generator_config['exl3_max_chunk_size'],
-            show_visualizer = exl3_generator_config['exl3_show_gen_visualizer']
-        )
-        
-        print("\nGenerator defined successfully\n")
-        return exl3_generator
-    except Exception as e:
-        handle_local_error("Could not define ExLlamaV2 generator, encountered error: ", e)
-
 
 def get_exl3_sampler(request):
 
@@ -4334,14 +4247,9 @@ def exl3_stream():
             data = json.loads(data)
         messages = data.get('messages', [])
         exl3_sampler, config_data  = get_exl3_sampler(request)
-        # print(f"\nRead request - message received: {messages}\n")
+        user_queue = queue.Queue()
     except Exception as e:
-        return handle_api_error("Could not read POST-request messages for exl2-stream, encountered error: ", e)
-    
-    try:
-        exl3_generator = set_global_exl3_dynamic_generator()
-    except Exception as e:
-        return handle_api_error("Could not set global ExLlamaV2DynamicGenerator, encountered error: ", e)
+        return handle_api_error("Could not setup for exl3-stream, encountered error: ", e)
     
     try:
         tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
@@ -4349,73 +4257,48 @@ def exl3_stream():
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
 
     try:
-        print("\nCreating ExLlamaV3 Job Object...\n")
         job = Job(
             input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
             max_new_tokens = config_data['max_new_tokens'],
             stop_conditions = STOP_TOKENS,
             sampler = exl3_sampler
         )
-        exl3_generator.enqueue(job)
-        print("\nExLlamaV3 Job Defined & Enqueued Successfully\n")
+        job.response_queue = user_queue
+        EXL3_GENERATOR.enqueue(job)
     except Exception as e:
         return handle_api_error("Could not create ExLlamaV3 Job object for exl3-stream. Error details follow. In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, and of course, allocate an adequate context-window! Error: ", e)
 
-    stop_thread = threading.Event()
-    output_queue = queue.Queue()
+    try:
+        def generate():
 
-    def llm_task():
+            global STOP_GENERATION
+            STOP_GENERATION = False
 
-        try:            
-            while exl3_generator.num_remaining_jobs():
-                results = exl3_generator.iterate()
+            while True:
+                if STOP_GENERATION: # Handle Manual Stop Signal
+                    print("\n\nStopping generation with stop_event\n\n")
+                    try:
+                        EXL3_GENERATOR.cancel(job)
+                    except:
+                        pass
+                    STOP_GENERATION = False
+                    break
                 
-                # Each iteration returns a list of results, each of which may contain output tokens for a running job. We only care about the "text" field here.
-                for result in results:
-                    if 'text' in result:
-                        output_queue.put(result.get('text'))
+                token = user_queue.get()
+                if token is None:
+                    break
                 
-        except Exception as e:
-            handle_error_no_return("Response generation failed, encountered error: ", e)
-            output_queue.put(f"Error: {str(e)}") # Pass error to client via queue
-        finally:
-            output_queue.put(None)
-            print("\n\nExl3 stream done\n\n")
-            stop_thread.set()
-
-    def generate():
-
-        global STOP_GENERATION
-        STOP_GENERATION = False
-
-        try:
-            thread = threading.Thread(target=llm_task)
-            thread.start()
-        except Exception as e:
-            handle_error_no_return("Error generating exl3-stream, encountered error: ", e)
-            yield f"data: {json.dumps('Exl3 Generation Error: ' + str(e))}\n\n"
-            return
-
-        while True:
-            if STOP_GENERATION:
-                print("\n\nStopping generation with stop_event\n\n")
-                output_queue.put(None)
-                STOP_GENERATION = False
-                thread.join()
+                yield f"data: {json.dumps(token)}\n\n"
             
-            line = output_queue.get()
-            if line is None:
-                print("\nNone read, breaking and stopping thread\n")
-                thread.join()
-                break
-            yield f"data: {json.dumps(line)}\n\n"
-        
-        yield f"event: END\ndata: \"null\"\n\n"
+            yield f"event: END\ndata: \"null\"\n\n"
 
-        print("\nexl3-stream done\n")
+            print("\nexl3-stream done\n")
 
-    print("\n\nInferencing Begins!\n\n")
-    return Response(generate(), content_type='text/event-stream')
+        print("\n\nInferencing Begins!\n\n")
+        return Response(generate(), content_type='text/event-stream')
+    
+    except Exception as e:
+        return handle_api_error("Could not generate exl3-stream, encountered error: ", e)
 
 
 @app.route('/exl3_fim_stream', methods=['POST'])
@@ -4446,60 +4329,114 @@ def exl3_fim_stream():
             raise Exception("Prefix and suffix cannot be empty for FIM completion")
 
         exl3_sampler, config_data  = get_exl3_sampler(request)
-    
+        user_queue = queue.Queue()
     except Exception as e:
         return handle_api_error("Could not read POST-request messages for exl3-fim-stream, encountered error: ", e)
-    
-    try:
-        exl3_generator = set_global_exl3_dynamic_generator()
-    except Exception as e:
-        return handle_api_error("Could not set global Exl3 Generator, encountered error: ", e)
-    
-    # Create FIM prompt based on language and content
-    try:
-        # exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL3_TOKENIZER, prefix, suffix, middle, language, (int(config_data['exl3_total_context']) - 50))
-        exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL3_TOKENIZER, prefix, suffix, middle, language, 8192) # max 8k tokens
 
+    try:
+        exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL3_TOKENIZER, prefix, suffix, middle, language, 8192) # max 8k tokens
     except Exception as e:
         return handle_api_error("Could not get final ExLlama encoded FIM input IDs, encountered error: ", e)
     
     try:
-        print("\nCreating ExLlamaV3 Job Object...\n")
         job = Job(
             input_ids= exl_encoded_fim_input_ids,
             max_new_tokens = config_data['max_new_tokens'],
             stop_conditions = STOP_TOKENS,
             sampler = exl3_sampler
         )
-        exl3_generator.enqueue(job)
-        print("\nExLlamaV3 Job Defined & Enqueued Successfully\n")
+        job.response_queue = user_queue
+        EXL3_GENERATOR.enqueue(job)
     except Exception as e:
         return handle_api_error("Could not create ExLlamaV3 Job object for exl3-fim-stream. Error details follow. In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, and of course, allocate an adequate context-window! Error: ", e)
 
-    stop_thread = threading.Event()
-    output_queue = queue.Queue()
+    try:
+        def generate():
+
+            global STOP_GENERATION
+            STOP_GENERATION = False
+
+            while True:
+                if STOP_GENERATION: # Handle Manual Stop Signal
+                    print("\n\nStopping generation with stop_event\n\n")
+                    try:
+                        EXL3_GENERATOR.cancel(job)
+                    except:
+                        pass
+                    STOP_GENERATION = False
+                    break
+                
+                token = user_queue.get()
+                if token is None:
+                    break
+                
+                # send clean code completion
+                yield f"data: {json.dumps(token)}\n\n"
+            
+            yield f"event: END\ndata: \"null\"\n\n"
+            
+            print("\nexl3-fim-stream done\n")
+
+        print("\n\nInferencing Begins!\n\n")
+        return Response(generate(), content_type='text/event-stream')
+    
+    except Exception as e:
+        return handle_api_error("Could not generate exl3-fim-stream, encountered error: ", e)
+
+
+
+###################################-------------OpenAI Compatible API-------------###################################
+
+def handle_transformers_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop):
+    """Handle streaming OpenAI-compatible responses using Transformers"""
+    
+    llm_semaphore.acquire()
+
+    print("\n\nLLM semaphore acquired by OpenAI/completions_stream\n\n")
+
+    try:
+        read_return = read_config(['model_id', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep'])
+        generation_config = {
+            "max_new_tokens": max_tokens or int(read_return['max_new_tokens']),
+            "return_full_text": False,
+            "temperature": temperature,
+            "do_sample": temperature > 0,
+            "top_k": top_k or int(read_return['top_k']),
+            "top_p": top_p,
+            "use_cache": True
+        }
+
+        inputs = PIPE.tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_dict=True, return_tensors="pt")
+        decoded_inputs = PIPE.tokenizer.decode(inputs['input_ids'][0].tolist(), skip_special_tokens=False)    # Setting skip_special_tokens=False to keep: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
+    except Exception as e:
+        llm_semaphore.release()
+        return jsonify(error={"message": str(e), "type": "server_error"}), 500
+
+    stop_event = threading.Event()
+    data_queue = queue.Queue()
+
+    def callback(data):
+        data_queue.put(data)
+
+    custom_streamer = CustomTextStreamer(PIPE.tokenizer, skip_special_tokens=True, skip_prompt=True)    # special tokens need not be streamed though!
+    custom_streamer.callback = callback
 
     def llm_task():
 
+        global PIPE
+
         try:
-            while exl3_generator.num_remaining_jobs():
-                results = exl3_generator.iterate()
-                
-                # Each iteration returns a list of results, each of which may contain output tokens for a running job. We only care about the "text" field here.
-                for result in results:
-                    if 'text' in result:
-                        output_queue.put(result.get('text'))
-                
+            generation_config["streamer"] = custom_streamer
+            generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
+            output = PIPE(decoded_inputs, **generation_config)
         except Exception as e:
-            handle_error_no_return("Response generation failed, encountered error: ", e)
-            output_queue.put(f"Error: {str(e)}") # Pass error to client via queue
+            data_queue.put(f"Error: {str(e)}") # Pass error to client via queue
         finally:
-            output_queue.put(None)
-            print("\n\nExl3-FIM stream done\n\n")
-            stop_thread.set()
+            data_queue.put(None)
+            llm_semaphore.release()
 
-    def generate():
-
+    def generate():        
+        
         global STOP_GENERATION
         STOP_GENERATION = False
 
@@ -4507,31 +4444,602 @@ def exl3_fim_stream():
             thread = threading.Thread(target=llm_task)
             thread.start()
         except Exception as e:
-            handle_error_no_return("Error generating exl3-fim-stream, encountered error: ", e)
-            yield f"data: {json.dumps('Exl3-FIM Completion Error: ' + str(e))}\n\n"
+            yield f"data: {json.dumps({'error': {'message': str(e), 'type': 'server_error'}})}\n\n"
             return
+        
+        # OpenAI streaming format
+        created = int(time.time())
+        chunk_id = f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}"
+
+        # Send First Chunk - Role Chunk - Expected by strict OpenAI clients in streaming mode!
+        role_chunk = {
+            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+            "model": f"Transformers-{read_return['model_id']}",
+            "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]
+        }
+        yield f"data: {json.dumps(role_chunk)}\n\n"
 
         while True:
             if STOP_GENERATION:
-                print("\n\nStopping generation with stop_event\n\n")
-                output_queue.put(None)
-                STOP_GENERATION = False
-                thread.join()
-            
-            line = output_queue.get()
-            if line is None:
-                print("\nNone read, breaking and stopping thread\n")
+                stop_event.set()
                 thread.join()
                 break
             
-            # send clean code completion
-            yield f"data: {json.dumps(line)}\n\n"
+            line = data_queue.get()
+            if line is None:
+                thread.join()
+                break
+            
+             # OpenAI chunk format
+            chunk = {
+                "id": chunk_id,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": f"Transformers-{read_return['model_id']}",
+                "choices": [{
+                    "index": 0,
+                    "delta": {"content": line},
+                    "finish_reason": None
+                }]
+            }
+            yield f"data: {json.dumps(chunk)}\n\n"
         
-        yield f"event: END\ndata: \"null\"\n\n"
-        print("\nexl3-fim-stream done\n")
+        # Final chunk
+        final_chunk = {
+            "id": chunk_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": f"Transformers-{read_return['model_id']}",
+            "choices": [{
+                "index": 0,
+                "delta": {},
+                "finish_reason": "stop"
+            }]
+        }
+        yield f"data: {json.dumps(final_chunk)}\n\n"
+        yield "data: [DONE]\n\n"
 
+        STOP_GENERATION = False
+
+        print("\nOpenAI/completions_stream done\n")
+            
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
+
+
+def handle_transformers_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop):
+    """Handle non-streaming OpenAI-compatible responses using Transformers"""
+
+    with llm_semaphore:
+
+        print("\n\nLLM semaphore acquired by OpenAI/completions\n\n")
+
+        try:
+            read_return = read_config(['model_id', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep'])
+            generation_config = GenerationConfig(
+                max_new_tokens=max_tokens or int(read_return['max_new_tokens']),
+                return_full_text=False,
+                temperature=temperature,
+                do_sample=temperature > 0,
+                top_k=top_k or int(read_return['top_k']),
+                top_p=top_p,
+                use_cache=True
+            )
+
+            inputs = PIPE.tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_dict=True, return_tensors="pt")
+            inputs.to(PIPE.model.device)
+
+            output = PIPE.model.generate(**inputs, generation_config=generation_config)
+            input_length = inputs.input_ids.shape[1]
+            decoded_output = PIPE.tokenizer.decode(output[0][input_length:], skip_special_tokens=True)
+            inference_output = decoded_output
+            print("\nOpenAI/completions done\n")
+
+            return jsonify({
+                "id": f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": f"Transformers-{read_return['model_id']}",
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": inference_output
+                    },
+                    "finish_reason": "stop"
+                }],
+                "usage": {
+                    "prompt_tokens": len(inputs['input_ids'][0]),
+                    "completion_tokens": len(PIPE.tokenizer.encode(inference_output)),
+                    "total_tokens": len(inputs['input_ids'][0]) + len(PIPE.tokenizer.encode(inference_output))
+                }
+            })
+        
+        except Exception as e:
+            return jsonify(error={"message": str(e), "type": "server_error"}), 500
+
+
+def handle_exl2_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop):
+    """Handle streaming OpenAI-compatible responses using ExLlamaV2"""
+    print("\n\nOpenAI/exl2-stream route triggered\n\n")
+
+    try:
+        # 1. Setup response queue for this specific request
+        user_queue = queue.Queue()
+
+        # 2. Get generator & other config settings
+        gen_settings, config_data  = get_exl2_gen_settings(request)
+        if max_tokens: config_data['max_new_tokens'] = max_tokens
+        if temperature is not None: gen_settings.temperature = temperature
+        if top_p is not None: gen_settings.top_p = top_p
+        if top_k is not None: gen_settings.top_k = top_k
+        
+        # 3. Setup stop conditions
+        stop_tokens = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id]
+        if stop:
+            if isinstance(stop, str):stop = [stop]
+            for stop_string in stop:
+                stop_ids = EXL2_TOKENIZER.encode(stop_string).flatten().tolist()    # Encode to Tensor, then flatten to List of Ints
+                if len(stop_ids) > 0: stop_tokens.append(stop_ids)  # Append the *sequence* (the list itself) to conditions - append because lists should be added as is, not flattened
+
+        # 4. Create Job
+        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+        
+        job = ExLlamaV2DynamicJob(
+            input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
+            max_new_tokens = config_data['max_new_tokens'],
+            stop_conditions = stop_tokens,
+            gen_settings = gen_settings
+        )
+        
+        # 5. Attach Queue & Enqueue to Global Generator (running in background thread)
+        job.response_queue = user_queue
+        EXL2_GENERATOR.enqueue(job)
+    
+        # 6. Streaming Response Generator
+        def generate():
+            
+            # OpenAI streaming format - Send Role Chunk First - Expected by strict OpenAI clients in streaming mode!
+            created = int(time.time())
+            chunk_id = f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}"
+
+            role_chunk = {
+                "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                "model": f"ExLlamaV2-{config_data['model_id']}",
+                "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]
+            }
+            yield f"data: {json.dumps(role_chunk)}\n\n"
+
+            while True:
+                # Block until background worker puts a token here
+                token = user_queue.get()
+
+                if token is None:   # EOS Signal
+                    break
+
+                chunk = {
+                    "id": chunk_id, "object": "chat.completion.chunk", "created": created, 
+                    "model": f"ExLlamaV2-{config_data['model_id']}",
+                    "choices": [{"index": 0, "delta": {"content": token},"finish_reason": None}]
+                }
+                yield f"data: {json.dumps(chunk)}\n\n"
+            
+            final_chunk = {
+                "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                "model": f"ExLlamaV2-{config_data['model_id']}",
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
+            }
+            yield f"data: {json.dumps(final_chunk)}\n\n"
+            
+            yield "data: [DONE]\n\n"
+            
+            print("\nOpenAI/exl2-stream done\n")
+
+        print("\n\nInferencing Begins!\n\n")
+        return Response(generate(), content_type='text/event-stream')
+
+    except Exception as e:
+        return jsonify(error={"message": str(e), "type": "server_error"}), 500
+
+
+def handle_exl2_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop):
+    """Handle non-streaming OpenAI-compatible responses using ExLlamaV2"""
+    print("\n\nOpenAI/exl2-stream route triggered\n\n")
+
+    try:
+        # 1. Setup response queue for this specific request
+        user_queue = queue.Queue()
+
+        # 2. Get generator & other config settings
+        gen_settings, config_data  = get_exl2_gen_settings(request)
+        if max_tokens: config_data['max_new_tokens'] = max_tokens
+        if temperature is not None: gen_settings.temperature = temperature
+        if top_p is not None: gen_settings.top_p = top_p
+        if top_k is not None: gen_settings.top_k = top_k
+
+        # 3. Setup stop conditions
+        stop_token_list = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id]
+        if stop:
+            if isinstance(stop, str):stop = [stop]
+            for stop_string in stop:
+                stop_ids = EXL2_TOKENIZER.encode(stop_string).flatten().tolist()    # Encode to Tensor, then flatten to List of Ints
+                if len(stop_ids) > 0: stop_token_list.append(stop_ids)  # Append the *sequence* (the list itself) to conditions - append because lists should be added as is, not flattened
+        
+        # 4. Create Job
+        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+        
+        job = ExLlamaV2DynamicJob(
+            input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
+            max_new_tokens = config_data['max_new_tokens'],
+            stop_conditions = stop_token_list,
+            gen_settings = gen_settings
+        )
+
+        # 5. Attach Queue & Enqueue to Global Generator (running in background thread)
+        job.response_queue = user_queue
+        EXL2_GENERATOR.enqueue(job)
+
+        # 6. Consume Queue Synchronously (Accumulate Response)
+        full_response = ""
+        while True:
+            token = user_queue.get()
+            if token is None:   # EOS Signal
+                break
+            full_response += token
+        
+        print("\nOpenAI/exl2-non-streaming done\n")
+        prompt_tokens = len(EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True))
+        completion_tokens = len(EXL2_TOKENIZER.encode(full_response, encode_special_tokens=True))
+        
+        return jsonify({
+            "id": f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": f"ExLlamaV2-{config_data['model_id']}",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": full_response
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens
+            }
+        })
+
+    except Exception as e:
+        return jsonify(error={"message": str(e), "type": "server_error"}), 500
+
+
+def handle_exl3_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
+    """Handle streaming OpenAI-compatible responses using ExLlamaV3"""
+    print("\n\nOpenAI/exl3-stream route triggered\n\n")
+
+    try:
+        #1. Setup response queue for this specific request
+        user_queue = queue.Queue()
+
+        # 2. Get generator & other config settings
+        config_data = read_config(['model_id', 'max_new_tokens', 'temperature', 'top_k', 'top_p', 'min_p', 'rep_p', 'pres_p', 'freq_p', 'rep_sustain_range', 'rep_decay_range', 'exl3_total_context'])
+        config_data['max_new_tokens'] = max_tokens or int(config_data['max_new_tokens'])
+    
+        exl3_sampler = ComboSampler(
+            rep_p = config_data['rep_p'],
+            pres_p = presence_penalty or config_data['pres_p'],
+            freq_p = frequency_penalty or config_data['freq_p'],
+            rep_sustain_range = config_data['rep_sustain_range'],
+            rep_decay_range = config_data['rep_decay_range'],
+            temperature = temperature or config_data['temperature'],
+            min_p = config_data['min_p'],
+            top_k = top_k or config_data['top_k'],
+            top_p = top_p or config_data['top_p']
+        )
+
+        # 3. Setup stop conditions
+        stop_token_list = list(STOP_TOKENS) # casting done to create a shallow copy of the list, not a reference to and incorrect modification of the original list
+        if stop:
+            if isinstance(stop, str): stop = [stop]
+            for stop_string in stop:
+                # ExLlamaV3 supports stop strings natively, so we append the string directly
+                # passing a list of token IDs (sequence) would raise a ValueError in ExLlamaV3's Job class
+                stop_token_list.append(stop_string)
+
+        # 4. Create Job
+        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+
+        job = Job(
+            input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
+            max_new_tokens = config_data['max_new_tokens'],
+            stop_conditions = stop_token_list,
+            sampler = exl3_sampler
+        )
+        
+        # 5. Attach Queue & Enqueue to Global Generator (running in background thread)
+        job.response_queue = user_queue
+        EXL3_GENERATOR.enqueue(job)
+
+        # 6. Streaming Response Generator
+        def generate():
+            
+            # OpenAI streaming format - Send Role Chunk First - Expected by strict OpenAI clients in streaming mode!
+            created = int(time.time())
+            chunk_id = f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}"
+
+            role_chunk = {
+                "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                "model": f"ExLlamaV3-{config_data['model_id']}",
+                "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]
+            }
+            yield f"data: {json.dumps(role_chunk)}\n\n"
+
+            while True:
+                # Block until background worker puts a token here
+                token = user_queue.get()
+
+                if token is None:   # EOS Signal
+                    break
+                
+                chunk = {
+                    "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                    "model": f"ExLlamaV3-{config_data['model_id']}",
+                    "choices": [{"index": 0, "delta": {"content": token}, "finish_reason": None}]
+                }
+                yield f"data: {json.dumps(chunk)}\n\n"
+            
+            final_chunk = {
+                "id": chunk_id, "object": "chat.completion.chunk","created": created,
+                "model": f"ExLlamaV3-{config_data['model_id']}",
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
+            }
+            yield f"data: {json.dumps(final_chunk)}\n\n"
+            
+            yield "data: [DONE]\n\n"
+            
+            print("\nexl3-stream done\n")
+
+        print("\n\nInferencing Begins!\n\n")
+        return Response(generate(), content_type='text/event-stream')
+    
+    except Exception as e:
+        return jsonify(error={"message": str(e), "type": "server_error"}), 500
+
+
+def handle_exl3_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
+    """Handle non-streaming OpenAI-compatible responses using ExLlamaV3"""
+    print("\n\nOpenAI/exl3-stream route triggered\n\n")
+
+    try:
+        # 1. Setup response queue for this specific request
+        user_queue = queue.Queue()
+
+        # 2. Get generator & other config settings
+        config_data = read_config(['model_id', 'max_new_tokens', 'temperature', 'top_k', 'top_p', 'min_p', 'rep_p', 'pres_p', 'freq_p', 'rep_sustain_range', 'rep_decay_range', 'exl3_total_context'])
+        config_data['max_new_tokens'] = max_tokens or int(config_data['max_new_tokens'])
+    
+        exl3_sampler = ComboSampler(
+            rep_p = config_data['rep_p'],
+            pres_p = presence_penalty or config_data['pres_p'],
+            freq_p = frequency_penalty or config_data['freq_p'],
+            rep_sustain_range = config_data['rep_sustain_range'],
+            rep_decay_range = config_data['rep_decay_range'],
+            temperature = temperature or config_data['temperature'],
+            min_p = config_data['min_p'],
+            top_k = top_k or config_data['top_k'],
+            top_p = top_p or config_data['top_p']
+        )
+
+        # 3. Setup stop conditions
+        stop_token_list = list(STOP_TOKENS)
+        if stop:
+            if isinstance(stop, str):stop = [stop]
+            for stop_string in stop:
+                # ExLlamaV3 supports stop strings natively, so we append the string directly
+                # passing a list of token IDs (sequence) would raise a ValueError in ExLlamaV3's Job class
+                stop_token_list.append(stop_string)
+
+        # 4. Create Job
+        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+
+        job = Job(
+            input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
+            max_new_tokens = config_data['max_new_tokens'],
+            stop_conditions = stop_token_list,
+            sampler = exl3_sampler
+        )
+
+        # 5. Attach Queue & Enqueue to Global Generator (running in background thread)
+        job.response_queue = user_queue
+        EXL3_GENERATOR.enqueue(job)
+
+        # 6. Consume Queue Synchronously (Accumulate Response)
+        full_response = ""
+        while True:
+            token = user_queue.get()
+            if token is None:   # EOS Signal
+                break
+            full_response += token
+
+        print("\nOpenAI/exl3-non-streaming done\n")
+        prompt_tokens = len(EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True))
+        completion_tokens = len(EXL3_TOKENIZER.encode(full_response, encode_special_tokens=True))
+
+        return jsonify({
+            "id": f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": f"ExLlamaV3-{config_data['model_id']}",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": full_response
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens
+            }
+        })
+        
+    except Exception as e:
+        return jsonify(error={"message": str(e), "type": "server_error"}), 500
+
+
+def handle_openai_streaming(backend, messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
+    """Handle streaming OpenAI-compatible responses"""
+    if backend == 'transformers': return handle_transformers_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
+    elif backend == 'exl2': return handle_exl2_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
+    elif backend == 'exl3': return handle_exl3_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+
+
+def handle_openai_non_streaming(backend, messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
+    """Handle non-streaming OpenAI-compatible responses"""
+    if backend == 'transformers': return handle_transformers_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
+    elif backend == 'exl2': return handle_exl2_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
+    elif backend == 'exl3': return handle_exl3_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+
+
+@app.route('/v1/chat/completions', methods=['POST'])
+def openai_compatible_api():
+    """
+    OpenAI-compatible chat completions endpoint that routes to available backends.
+    
+    Supports both streaming and non-streaming responses based on the 'stream' parameter.
+    Routes to available backends in priority order: ExLlamaV3, ExLlamaV2, Transformers.
+    
+    OpenAPI 3.0.0 Specification follows OpenAI format.
+    """
+
+    print("\n\nOpenAI v1/chat/completions route triggered\n\n")
+    
+    # Check which backends are available
+    pipe_ready = PIPE is not None
+    exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, EXL2_GENERATOR, AUTO_TOKENIZER])
+    exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, EXL3_GENERATOR, STOP_TOKENS, AUTO_TOKENIZER])
+    
+    if not (pipe_ready or exl2_ready or exl3_ready):
+        return jsonify(
+            error={
+                "message": "No LLM backend is currently loaded",
+                "type": "server_error",
+                "param": None,
+                "code": None
+            }
+        ), 503 # Service Unavailable
+    
+    try:
+        data = request.json
+        if isinstance(data, str):
+            data = json.loads(data)
+        
+        # OpenAI-compatible parameters
+        messages = data.get('messages', [])
+        print(f"\nOpenAI Messages: {json.dumps(messages, indent=4)}\n")
+        model = data.get('model', 'auto').lower().strip()  # Can be used to force specific backend
+        stream = data.get('stream', False)
+        max_tokens = data.get('max_tokens', None)
+        temperature = data.get('temperature', None)
+        top_p = data.get('top_p', None)
+        top_k = data.get('top_k', None)
+        stop = data.get('stop', None)
+        presence_penalty = data.get('presence_penalty', None)
+        frequency_penalty = data.get('frequency_penalty', None)
+        
+    except Exception as e:
+        return jsonify(
+            error={
+                "message": f"Invalid request format: {str(e)}",
+                "type": "invalid_request_error",
+                "param": None,
+                "code": None
+            }
+        ), 400
+    
+    # Determine which backend to use
+    backend_priority = []
+    if pipe_ready: backend_priority.append('transformers')
+    if exl3_ready: backend_priority.append('exl3')
+    if exl2_ready: backend_priority.append('exl2')
+    
+    # Allow the `model` param to override the backend priority
+    if model == 'exl3' and exl3_ready: selected_backend = 'exl3'
+    elif model == 'exl2' and exl2_ready: selected_backend = 'exl2'
+    elif model == 'transformers' and pipe_ready: selected_backend = 'transformers'
+    else: selected_backend = backend_priority[0] if backend_priority else None
+
+    print(f"\nSelected backend: {selected_backend}\n")
+
+    if not selected_backend:
+        return jsonify(
+            error={
+                "message": "No LLM backend is currently loaded",
+                "type": "server_error",
+                "param": None,
+                "code": None
+            }
+        ), 503
+    
+    if stream:
+        return handle_openai_streaming(selected_backend, messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+    else:
+        return handle_openai_non_streaming(selected_backend, messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+
+
+@app.route('/v1/models', methods=['GET'])
+def list_models():
+    print("\n\nOpenAI /v1/models route triggered\n\n")
+    
+    # 1. Get the currently loaded model name
+    try:
+        config = read_config(['model_id'])
+        current_model_id = config.get('model_id', 'unknown')
+    except:
+        current_model_id = "default-model"
+
+    # 2. Define the available "Virtual" models
+    models_data = [
+        # The actual loaded model
+        # {
+        #     "id": current_model_id,
+        #     "object": "model",
+        #     "created": int(time.time()),
+        #     "owned_by": "hf-waitress"
+        # },
+        # Virtual backend selectors
+        {
+            "id": "exl2", 
+            "object": "model", 
+            "created": int(time.time()), 
+            "owned_by": "hf-waitress"
+        },
+        {
+            "id": "exl3", 
+            "object": "model", 
+            "created": int(time.time()), 
+            "owned_by": "hf-waitress"
+        },
+        {
+            "id": "transformers", 
+            "object": "model", 
+            "created": int(time.time()), 
+            "owned_by": "hf-waitress"
+        }
+    ]
+
+    return jsonify({
+        "object": "list",
+        "data": models_data
+    })
+
+
+###################################-------------OpenAI Compatible API End-------------###################################
+
 
 
 ###################################-------------Exl2 Graph Functions Begin-------------###################################
@@ -4592,39 +5100,40 @@ def get_minimal_query_for_summary(chunk):
 
 
 def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
-    try:    # Step 1: Create Exl2 Generator & Job
-        exl2_dynamic_generator = set_global_exl2_dynamic_generator()
+    """
+    Batched-safe synchronous execution.
+    Submits to the global worker queue and blocks until completion.
+    """
+
+    try:
+        # Step 1: Setup Queue
+        user_queue = queue.Queue()
+        
+        # Step 2: Create Job
         job = ExLlamaV2DynamicJob(
             input_ids= EXL2_TOKENIZER.encode(payload, encode_special_tokens=True),
             max_new_tokens = max_new_tokens,
             stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id],
             gen_settings = gen_settings
         )
-        exl2_dynamic_generator.enqueue(job)
-    except AssertionError as e:
-        handle_local_error(f"Could not create ExLlamaV2-DynamicJob object for payload {payload} - likely due to insufficient cache. Ensure the `max_seq_len` is set to a value that allows for the entire payload to be processed. Encountered error: ", e)
-    except Exception as e:
-        handle_local_error(f"Could not create ExLlamaV2-DynamicJob object for payload {payload}, encountered error: ", e)
 
-    try:    # Step 2: Iterate Over Jobs & Generate Response(s)
-        print("\nProcessing Exl2 Job...\n")
+        # 3. Attach Queue & 4. Enqueue to Global Generator
+        job.response_queue = user_queue
+        EXL2_GENERATOR.enqueue(job)
+
+        # 5. Consume Queue Synchronously (Accumulate Response)
         full_response = ""
-        while exl2_dynamic_generator.num_remaining_jobs():
-            current_token = exl2_dynamic_generator.iterate()
+        while True:
+            token = user_queue.get()
+            if token is None:   # EOS Signal
+                break
+            full_response += token
 
-            if len(current_token) == 1 and 'text' in current_token[0]:
-                full_response += current_token[0]['text']
-
-            elif len(current_token) > 1:
-                for job in current_token:
-                    if 'stage' in job and job['stage'] == 'streaming':
-                        if 'text' in job: 
-                            full_response += job['text']
-
-        exl2_dynamic_generator = None    # release reference to the generator to help with garbage collection
         return full_response
+    
     except Exception as e:
-        handle_local_error(f"Could not generate response for payload {payload}, encountered error: ", e)
+        handle_error_no_return(f"Error in batched execution for payload\n\n{payload[:50]}\n...\n\n(truncated for brevity).\nEncountered error: ", e)
+        return ""
 
 
 def get_request_payload_for_graph_entity_extraction(chunk_text: str):
@@ -5446,8 +5955,8 @@ def health():
     try:
         # Treat any backend being ready as healthy:
         pipe_ready = PIPE is not None
-        exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, AUTO_TOKENIZER])
-        exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, STOP_TOKENS, AUTO_TOKENIZER])
+        exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, EXL2_GENERATOR, AUTO_TOKENIZER])
+        exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, EXL3_GENERATOR, STOP_TOKENS, AUTO_TOKENIZER])
         asr_ready = all([MODEL, SILERO_VAD, SILERO_UTILS]) # MODEL & VAD components are the common denominator for all ASR backends
         
         print(f"\n\nhealth readiness → pipe={pipe_ready}, exl2={exl2_ready}, exl3={exl3_ready}, asr={asr_ready}\n\n")
