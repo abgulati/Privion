@@ -2125,7 +2125,7 @@ def load_exllama_pipeline():
         handle_local_error(f"Error generating ExLlamaV2 measurement file for {config['model_id']}. Encountered error: ", e)
 
     try:
-        quantized_model_path = exllama_bpw_quantize_model(config['model_id'], measurement_file_path, latest_snapshot_path, config['exl2_bpw'])
+        quantized_model_path = exllama_bpw_quantize_model(config['model_id'], measurement_file_path, latest_snapshot_path, float(config['exl2_bpw']))
     except Exception as e:
         handle_local_error(f"Error ExLlamaV2 quantizing {config['model_id']} to {config['exl2_bpw']} bits per word. Encountered error: ", e)
 
@@ -4472,11 +4472,11 @@ def handle_exl3_streaming_openai(messages, max_tokens, temperature, top_p, top_k
         config_data['max_new_tokens'] = max_tokens or int(config_data['max_new_tokens'])
     
         exl3_sampler = ComboSampler(
-            rep_p = config_data['repetition_penalty'],
-            pres_p = presence_penalty or config_data['presence_penalty'],
-            freq_p = frequency_penalty or config_data['frequency_penalty'],
-            rep_sustain_range = config_data['penalty_range'],
-            rep_decay_range = config_data['penalty_range'],
+            rep_p = config_data['rep_p'],
+            pres_p = presence_penalty or config_data['pres_p'],
+            freq_p = frequency_penalty or config_data['freq_p'],
+            rep_sustain_range = config_data['rep_sustain_range'],
+            rep_decay_range = config_data['rep_decay_range'],
             temperature = temperature or config_data['temperature'],
             min_p = config_data['min_p'],
             top_k = top_k or config_data['top_k'],
@@ -4488,8 +4488,9 @@ def handle_exl3_streaming_openai(messages, max_tokens, temperature, top_p, top_k
         if stop:
             if isinstance(stop, str): stop = [stop]
             for stop_string in stop:
-                stop_ids = EXL3_TOKENIZER.encode(stop_string).flatten().tolist()    # Encode to Tensor, then flatten to List of Ints
-                if len(stop_ids) > 0: stop_token_list.append(stop_ids)  # Append the *sequence* (the list itself) to conditions - append because lists should be added as is, not flattened
+                # ExLlamaV3 supports stop strings natively, so we append the string directly
+                # passing a list of token IDs (sequence) would raise a ValueError in ExLlamaV3's Job class
+                stop_token_list.append(stop_string)
 
         # 4. Create Job
         tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
@@ -4564,11 +4565,11 @@ def handle_exl3_non_streaming_openai(messages, max_tokens, temperature, top_p, t
         config_data['max_new_tokens'] = max_tokens or int(config_data['max_new_tokens'])
     
         exl3_sampler = ComboSampler(
-            rep_p = config_data['repetition_penalty'],
-            pres_p = presence_penalty or config_data['presence_penalty'],
-            freq_p = frequency_penalty or config_data['frequency_penalty'],
-            rep_sustain_range = config_data['penalty_range'],
-            rep_decay_range = config_data['penalty_range'],
+            rep_p = config_data['rep_p'],
+            pres_p = presence_penalty or config_data['pres_p'],
+            freq_p = frequency_penalty or config_data['freq_p'],
+            rep_sustain_range = config_data['rep_sustain_range'],
+            rep_decay_range = config_data['rep_decay_range'],
             temperature = temperature or config_data['temperature'],
             min_p = config_data['min_p'],
             top_k = top_k or config_data['top_k'],
@@ -4580,8 +4581,9 @@ def handle_exl3_non_streaming_openai(messages, max_tokens, temperature, top_p, t
         if stop:
             if isinstance(stop, str):stop = [stop]
             for stop_string in stop:
-                stop_ids = EXL3_TOKENIZER.encode(stop_string).flatten().tolist()    # Encode to Tensor, then flatten to List of Ints
-                if len(stop_ids) > 0: stop_token_list.append(stop_ids)  # Append the *sequence* (the list itself) to conditions - append because lists should be added as is, not flattened
+                # ExLlamaV3 supports stop strings natively, so we append the string directly
+                # passing a list of token IDs (sequence) would raise a ValueError in ExLlamaV3's Job class
+                stop_token_list.append(stop_string)
 
         # 4. Create Job
         tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
@@ -4686,12 +4688,12 @@ def openai_compatible_api():
         model = data.get('model', 'auto').lower().strip()  # Can be used to force specific backend
         stream = data.get('stream', False)
         max_tokens = data.get('max_tokens', None)
-        temperature = data.get('temperature', 0.7)
-        top_p = data.get('top_p', 1.0)
+        temperature = data.get('temperature', None)
+        top_p = data.get('top_p', None)
         top_k = data.get('top_k', None)
         stop = data.get('stop', None)
-        presence_penalty = data.get('presence_penalty', 0.0)
-        frequency_penalty = data.get('frequency_penalty', 0.0)
+        presence_penalty = data.get('presence_penalty', None)
+        frequency_penalty = data.get('frequency_penalty', None)
         
     except Exception as e:
         return jsonify(
