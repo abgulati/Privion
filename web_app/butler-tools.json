@@ -7,13 +7,16 @@
             "fields": {
                 "mac_address": {
                     "required": true,
-                    "example": "aa:bb:cc:dd:ee:ff"
+                    "default": "a4:36:c7:58:3f:18",
+                    "type": "string"
                 },
                 "target_ip": {
-                    "default": "255.255.255.255"
+                    "default": "192.168.1.142",
+                    "type": "string"
                 },
                 "port": {
-                    "default": 9
+                    "default": 9,
+                    "type": "integer"
                 }
             }
         },
@@ -24,13 +27,16 @@
             "fields": {
                 "mac_address": {
                     "required": true,
-                    "example": "aa:bb:cc:dd:ee:ff"
+                    "default": "a4:36:c7:58:3f:18",
+                    "type": "string"
                 },
                 "target_ip": {
-                    "default": "255.255.255.255"
+                    "default": "192.168.1.142",
+                    "type": "string"
                 },
                 "port": {
-                    "default": 9
+                    "default": 9,
+                    "type": "integer"
                 }
             }
         },
@@ -40,7 +46,8 @@
             "description": "Turns off an LG WebOS TV.",
             "fields": {
                 "ip_address": {
-                    "default": "None"
+                    "default": "192.168.1.142",
+                    "type": "string"
                 }
             }
         },
@@ -56,6 +63,76 @@
             "name": "Lamp Turn Off",
             "description": "Turns off a Govee lamp.",
             "fields": {
+            }
+        },
+
+        "set_lamp_brightness": {
+            "name": "Set Lamp Brightness",
+            "description": "Sets the brightness of a Govee lamp.",
+            "fields": {
+                "brightness": {
+                    "required": true,
+                    "default": 100,
+                    "type": "integer"
+                }
+            }
+        },
+
+        "set_lamp_color": {
+            "name": "Set Lamp Color",
+            "description": "Sets the color of a Govee lamp.",
+            "fields": {
+                "red": {
+                    "required": true,
+                    "example": 255,
+                    "type": "integer"
+                },
+                "green": {
+                    "required": true,
+                    "example": 255,
+                    "type": "integer"
+                },
+                "blue": {
+                    "required": true,
+                    "example": 255,
+                    "type": "integer"
+                }
+            }
+        },
+
+        "set_lamp_temperature": {
+            "name": "Set Lamp Temperature",
+            "description": "Sets the temperature of a Govee lamp.",
+            "fields": {
+                "temperature": {
+                    "required": true,
+                    "default": 2700,
+                    "type": "integer"
+                }
+            }
+        },
+
+        "set_lamp_scene": {
+            "name": "Set Lamp Scene",
+            "description": "Sets the scene of a Govee lamp.",
+            "fields": {
+                "scene": {
+                    "required": true,
+                    "type": "string",
+                    "enum": [
+                        "sunrise",
+                        "sunset",
+                        "movie",
+                        "dating",
+                        "romantic",
+                        "twinkle",
+                        "candlelight",
+                        "snowflake",
+                        "energetic",
+                        "breathe",
+                        "crossing"
+                    ]
+                }
             }
         }
     }
