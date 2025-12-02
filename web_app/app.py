@@ -5591,7 +5591,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             elif int(read_return['llama_cpp_num_cpu_moe']) > 0:
                 llama_cpp_args.extend(['--n-cpu-moe', str(read_return['llama_cpp_num_cpu_moe'])])
 
-        print(f"\n\nLaunching llama.cpp server with args: {llama_cpp_args}\n\n")
+        print(f"\n\nLaunching llama.cpp server with command: {' '.join(llama_cpp_args)}\n\n")
         # full_command = ' '.join(llama_cpp_args)
         # print(f"Full command: {full_command}\n\n")
 
@@ -7772,12 +7772,12 @@ def invoke_tools_for_query():
     try:
         if llm_set_rag_config.get('butler_mode', False):
             butler_response = butler_module.execute_butler_tasks(user_query)
-            print(f"Butler response: {butler_response}")
+            # print(f"Butler response: {butler_response}")
             user_query = butler_response['action_analysis_prompt']
     except Exception as e:
         return handle_api_error("Error handling butler mode in method invoke-tools_for_query, encountered error: ", e)
     
-    print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n")
+    # print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n")
             
     try:
         docs, do_rag, graph_rag_context = execute_search_tools_on_query(user_query, config['selected_embedding_model'], llm_set_rag_config, int(config['filter_top_k_results_by_reranking']), int(config['fetch_top_k_results_from_vectordb']))
