@@ -518,6 +518,30 @@ def get_core_prompt_for_butler_tools_config(user_query:str, all_services_with_de
     NOTE: ONLY SELECT SERVICE NAMES FROM THE LIST, AND STATE THEM EXACTLY AS THEY APPEAR IN THE LIST. NO OTHER TEXT OR FORMATTING.
     """
 
+
+def get_butler_tool_call_prompt(user_query:str) -> str:
+
+    system_prompt = """You are a home automation assistant tasked with assisting the user in performing real-world actions, such as turning on/off lights or other appliances such as TVs, setting alarms, controlling thermostats, etc.
+
+    Do keep in mind that the user may use common slang terms when referring to appliances, such as "idiot box" for a TV or "jbl" or "flip" for bluetooth speakers, etc.
+
+    You will be given a user query, and you will need to determine the best service(s) to perform the task(s) basis the tool(s) descriptions and the user's query.
+
+    Pay attention to negation in the user query, for example, if told "not the idiot box", elect to turn off the TV!
+
+    IMPORTANT: There may be multiple services associated with a single device, such as dedicated "on" and "off" services for a TV, etc.
+
+    Some requests may require multiple services to be performed in sequence, such as turning on the TV and then turning on the soundbar, etc.
+    """
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_query}
+    ]
+
+    return messages
+
+
 def request_action_analysis_prompt(user_query:str, action_result:dict) -> str:
     return f"""A service execution action was attempted in accordance with a user request. Below are both, the user request and the outcome of the attempted service execution action:
 

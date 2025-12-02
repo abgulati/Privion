@@ -38,7 +38,7 @@ def _full_read_butler_tools_config() -> dict:
     try:
         with open(butler_tools_config_path, 'r') as file:
             butler_tools_config = json.load(file)
-            print(f"Butler tools config: {butler_tools_config}")
+            # print(f"Butler tools config: {butler_tools_config}")
     except Exception as e:
         print(f"Error reading butler-tools.json: {str(e)}")
 
@@ -108,8 +108,60 @@ def get_all_services_with_descriptions_from_butler_tools_config() -> dict:
     return services_with_descriptions
 
 
+def generate_tools_schema(services_config: dict) -> list[dict]:
+    '''
+    Generates a tools schema from the services config.
+    '''
+    tools_schema = []
+    
+    for service_name, service_details in services_config.items():
+        tool = {
+            "type": "function",
+            "function": {
+                "name": service_name,
+                "description": service_details.get('description', ''),
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                    "additionalProperties": False   # Tells the LLM: "Do not hallucinate extra arguments that I didn't define"!
+                }
+            }
+        }
+
+        fields = service_details.get('fields', {})
+        for field_name, field_details in fields.items():
+
+            prop_type = field_details.get('type', 'string')
+            prop_desc = field_details.get('description', '')
+
+            has_default = 'default' in field_details
+            default_val = field_details.get('default')
+
+            if has_default: # CRITICAL: Tell the LLM about the default behavior in plain English
+                prop_desc += f" Optional. Defaults to '{default_val}' if not specified. Do not guess."
+            
+            property_def = {
+                "type": prop_type,
+                "description": prop_desc.strip()
+            }
+
+            if 'enum' in field_details:
+                property_def['enum'] = field_details.get('enum', [])
+
+            tool['function']['parameters']['properties'][field_name] = property_def
+            
+            is_explicitly_required = field_details.get('required', False)
+            if is_explicitly_required and not has_default:
+                tool['function']['parameters']['required'].append(field_name)
+
+        tools_schema.append(tool)
+    
+    return tools_schema
+
+
 ### TOOL DEFS:
-def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port:int = 9):
+def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9'):
     '''
     Uses Wake-On-LAN (WOL) to turn on a TV.
     Args:
@@ -125,12 +177,16 @@ def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port:int = 
         return {"success": False, "message": "MAC address is required."}
     
     try:
-        send_magic_packet(mac_address, ip_address=target_ip, port=port)
+        send_magic_packet(mac_address, ip_address=target_ip, port=int(port))
         print("Magic packet sent.")
         return {"success": True, "message": "Device turn-on request successfully transmitted."}
     except Exception as e:
         print(f"Error sending magic packet: {str(e)}")
         return {"success": False, "message": f"Error sending Wake on LAN magic packet: {str(e)}"}
+
+
+def lg_webos_tv_turn_on(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9'):
+    return wol_turn_on_tv(mac_address, target_ip, port)
 
 
 def lg_webos_tv_turn_off(ip_address: Optional[str] = None):
@@ -146,90 +202,93 @@ def lg_webos_tv_turn_off(ip_address: Optional[str] = None):
     return asyncio.run(lg_webos_tv_module.webos_pair_connect_and_power_off_async(ip_address))
 
 
-def turn_on_lamp():
+def lamp_turn_on():
     '''
     Turns on a lamp.
     '''
     return asyncio.run(govee_lights_module.light_turn_on_handler())
 
 
-def turn_off_lamp():
+def lamp_turn_off():
     '''
     Turns off a lamp.
     '''
     return asyncio.run(govee_lights_module.light_turn_off_handler())
 
 
-def execute_butler_tool(service_name:str) -> dict:
+def set_lamp_brightness(brightness: str | int):
     '''
-    Executes a butler tool.
+    Sets the brightness of a lamp.
     '''
-    # butler_tool_details = get_service_details_from_butler_tools_config(service_name)
-    # butler_tool_execution_result = butler_tool_details['function'](**butler_tool_details['fields'])
-    try:
-        if service_name == 'wol_turn_on_tv' or service_name == 'lg_webos_tv_turn_on':
-            print("Executing WOL turn-on TV tool...")
-            return wol_turn_on_tv('a4:36:c7:58:3f:18', '192.168.1.142', 9)
-        elif service_name == 'lg_webos_tv_turn_off':
-            print("Executing LG WebOS TV turn-off tool...")
-            return lg_webos_tv_turn_off('192.168.1.142')
-        elif service_name == 'lamp_turn_on':
-            print("Executing lamp turn-on tool...")
-            return turn_on_lamp()
-        elif service_name == 'lamp_turn_off':
-            print("Executing lamp turn-off tool...")
-            return turn_off_lamp()
-        else:
-            print(f"Service not found: {service_name}")
-            return {'success': False, 'message': f"Service not found: {service_name}"}
-    except Exception as e:
-        print(f"Error executing butler tool: {str(e)}")
-        return {'success': False, 'message': f"Error executing butler tool for {service_name} service: {str(e)}"}
+    return asyncio.run(govee_lights_module.light_set_brightness_handler(int(brightness)))
 
 
-### LLM RESPONSE PARSER:
-def parse_butler_tool_response(llm_response:str) -> dict:
-    """
-    Helper function to parse and clean the service response.
+def set_lamp_color(red: str | int, green: str | int, blue: str | int):
+    '''
+    Sets the color of a lamp.
+    '''
+    return asyncio.run(govee_lights_module.light_set_color_handler(int(red), int(green), int(blue)))
+
+
+def set_lamp_temperature(temperature: str | int):
+    '''
+    Sets the temperature of a lamp.
+    '''
+    return asyncio.run(govee_lights_module.light_set_temperature_handler(int(temperature)))
+
+
+def set_lamp_scene(scene: str):
+    '''
+    Sets the scene of a lamp.
+    '''
+    return asyncio.run(govee_lights_module.light_set_scene_handler(scene))
+
+
+def execute_tool_call(tool_name, llm_args, services_config: dict) -> dict:
+    '''
+    1. Looks up the function in Python.
+    2. Looks up the default values in your JSON config.
+    3. Merges them and runs the code.
+    '''
+
+    # Look up the function in globals
+    func_to_call = globals().get(tool_name)
+
+    if not func_to_call:
+        return {'success': False, 'message': f"Service not found: {tool_name}"}
     
-    Args:
-        response: Raw response string from HF-Waitress
-        
-    Returns:
-        dict: Parsed service selection or default RAG service
-    """
     try:
-        json_parsed_response = json.loads(llm_response)
-        return json_parsed_response
-    except Exception as e:
-        print(f"\nFailed to parse service response, attempting to literal-eval and maybe even trim. Encountered error: {e}\n")
+        # Get config definitions for defaults (e.g., target_ip, mac_address)
+        service_def = services_config.get(tool_name, {})
+        fields_def = service_def.get('fields', {})
 
-    try:
-        return ast.literal_eval(llm_response)
-    except (ValueError, SyntaxError):
-        # Sometimes additional text may be present so we need to strip it:
-        try:
-            print(f"\nAdditional text present, trimming response...\n")
-            cleaned_response = prompt_formatting_module.trim_response(
-                llm_response,
-                '"service_list":', '}',
-                include_start_substring=True,
-                include_end_substring=False
-            )
-            cleaned_response = "{" + cleaned_response.strip() + "}"
-            print(f"\nTrimmed response to dictionary: {cleaned_response}\n")
-            return ast.literal_eval(cleaned_response)
-        except (ValueError, SyntaxError) as e:
-            print(f"Failed to identify selected service even after trimming, encountered error: {e}")
-            return {'service': None}
+        # MERGE: Start with defaults, overwrite with LLM-provided args
+        final_args = {}
+        
+        # 1. Load defaults from config (handles hardcoded IPs)
+        for field_name, field_info in fields_def.items():
+            if "default" in field_info:
+                final_args[field_name] = field_info["default"]
+
+        # 2. Update with args the LLM actually sent
+        # (e.g. LLM sends 'brightness': 50, but ignores 'mac_address')
+        if llm_args:
+            final_args.update(llm_args)
+
+        print(f"Executing {tool_name} with args: {final_args}")
+        return func_to_call(**final_args)   # **final_args unpacks the dictionary into keyword arguments
+    
+    except Exception as e:
+        print(f"Error executing {tool_name} with args: {final_args}, encountered error: {e}")
+        return {'success': False, 'message': f"Error executing {tool_name} with args: {final_args}, encountered error: {e}"}
 
 
 ### LLM REQUEST/RESPONSE HANDLERS - FIGURE RE-USE FROM CORE APP.PY
-def make_butler_request(llm_prompt:str) -> str:
+def make_butler_request(llm_prompt:str, tools_schema:list = None) -> str:
     '''
     Makes a request to the LLM.
     '''
-    return llm_apis_module.make_request_to_llm_server(llm_prompt)
+    return llm_apis_module.make_tool_request_to_llm_server(llm_prompt, tools_schema)
 
 
 ### CORE CONTROLLER METHOD:
@@ -246,54 +305,59 @@ def execute_butler_tasks(user_query:str) -> dict:
     '''
 
     global BUTLER_TOOLS_CONFIG_PATH, FULL_BUTLER_TOOLS_CONFIG
-    BUTLER_TOOLS_CONFIG_PATH, FULL_BUTLER_TOOLS_CONFIG = _full_read_butler_tools_config()
+    
 
     try:
-        llm_prompt_for_butler_request = prompt_formatting_module.get_core_prompt_for_butler_tools_config(user_query, get_all_service_names_from_butler_tools_config())
-        print(f"LLM prompt for butler request: {llm_prompt_for_butler_request}")
-        
-        llm_response_for_butler_request = make_butler_request(llm_prompt_for_butler_request)
-        print(f"LLM response for butler request: {llm_response_for_butler_request}")
-        
-        butler_tool_selection = parse_butler_tool_response(llm_response_for_butler_request)
-        print(f"Butler tool selection: {butler_tool_selection}")
+        BUTLER_TOOLS_CONFIG_PATH, FULL_BUTLER_TOOLS_CONFIG = _full_read_butler_tools_config()
 
+        # 1. Get Tools
+        tools_schema = generate_tools_schema(FULL_BUTLER_TOOLS_CONFIG.get('services', {}))
+        print(f"\n\nTools schema: {tools_schema}\n\n")
+
+        # 2. Get Prompt
+        llm_prompt_for_butler_request = prompt_formatting_module.get_butler_tool_call_prompt(user_query)
+        print(f"\n\nLLM prompt for butler request: {llm_prompt_for_butler_request}\n\n")
+        
+        # 3. Make Request (Returns a DICT!)
+        llm_response_obj = make_butler_request(llm_prompt_for_butler_request, tools_schema)
+        
+        print(f"Butler raw response: {llm_response_obj}")
         action_result = {}
-        if butler_tool_selection['service_list'] is None:
-            action_result = {'success': False, 'message': "AI-service determination failed."}
-            print(f"Action result: {action_result}")
+
+        # 4. Check for Native Tool Calls (Standard Dictionary Access)
+        if llm_response_obj.get('tool_calls', None):
+            print(f"LLM decided to call {len(llm_response_obj['tool_calls'])} tool(s).")
+
+            for tool_call in llm_response_obj['tool_calls']:
+                 # OpenAI format: 'function' is a dict, 'arguments' is a JSON STRING
+                fn_name = tool_call['function']['name']
+                raw_args = tool_call['function']['arguments']
+                
+                # Safe Parsing
+                if isinstance(raw_args, str):
+                    fn_args = json.loads(raw_args)
+                else:
+                    fn_args = raw_args # In case the custom backend already made it a dict!
+
+                # Execute
+                result = execute_tool_call(fn_name, fn_args, FULL_BUTLER_TOOLS_CONFIG.get('services', {}))
+                action_result[fn_name] = result
+                print(f"Action result after tool execution {fn_name}: {result}")
+
+            # 5. Analysis
+            action_analysis_prompt = prompt_formatting_module.request_action_analysis_prompt(user_query, action_result)
+            # print(f"Action analysis prompt: {action_analysis_prompt}")
+            return {'action_result': action_result, 'action_analysis_prompt': action_analysis_prompt}
         
         else:
-
-            if isinstance(butler_tool_selection['service_list'], list):
-
-                butler_tool_selection['service_list'] = list(set(butler_tool_selection['service_list']))
-                
-                for service_name in butler_tool_selection['service_list']:
-                    action_result[service_name] = execute_butler_tool(service_name)
-                    print(f"Action result after tool execution {service_name}: {action_result[service_name]}")
-
-                print(f"Action results list: {action_result}")
-            
-            elif isinstance(butler_tool_selection['service_list'], str):
-                action_result = execute_butler_tool(butler_tool_selection['service_list'])
-                print(f"Action result after tool execution: {action_result}")
-            
-            else:
-                action_result = {'success': False, 'message': f"Invalid service list format: {butler_tool_selection['service_list']}"}
-                print(f"Action result after tool execution: {action_result}")
-
-        action_analysis_prompt = prompt_formatting_module.request_action_analysis_prompt(user_query, action_result)
-        print(f"Action analysis prompt: {action_analysis_prompt}")
-        
-        return {'action_result': action_result, 'action_analysis_prompt': action_analysis_prompt}
+            raise Exception("No tool calls found in LLM response.")
 
     except Exception as e:
         print(f"Error executing butler tasks: {str(e)}")
         action_result = {'success': False, 'message': f"Error executing butler tasks: {str(e)}"}
         try:
             action_analysis_prompt = prompt_formatting_module.request_action_analysis_prompt(user_query, action_result)
-            print(f"Action analysis prompt in exception handler: {action_analysis_prompt}")
+            # print(f"Action analysis prompt in exception handler: {action_analysis_prompt}")
             return {'action_result': action_result, 'action_analysis_prompt': action_analysis_prompt}
         except Exception as e:
             print(f"Both Butler Tool Execution and Action Analysis Prompt Creation Failed: {str(e)}")
