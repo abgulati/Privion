@@ -2264,7 +2264,7 @@ def exllama3_bpw_quantize_model(model_id: str, model_snapshot_path: os.PathLike,
         return quantized_model_path
     
     convert_script_path = os.path.normpath(os.path.join(os.getcwd(), "exllamav3", "convert.py"))
-    if read_return['exl3_resume_quant_job']:
+    if config['exl3_resume_quant_job']:
         command = [
             'python' if platform.system() == 'Windows' else 'python3',
             convert_script_path,
