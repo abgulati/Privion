@@ -138,7 +138,8 @@ async def get_first_govee_device():
     return dev
 
 
-async def light_turn_on_handler():
+async def get_govee_device():
+    '''For now just gets the first device, can be expanded to get a specific device by name or ID'''
     try:
         config = read_config(['govee_device_search_max_attempts'])
         max_attempts = config.get('govee_device_search_max_attempts', 3)
@@ -146,15 +147,23 @@ async def light_turn_on_handler():
         for attempt in range(1, max_attempts + 1):
             if dev := await get_first_govee_device():
                 # The `:=` operator is a Python 3.8+ feature that assigns and checks dev in a single line, reducing nesting and boilerplate
-                break
+                return dev
 
             print(f"No Govee device found. Retrying - Attempt {attempt} of {max_attempts}")
             if attempt < max_attempts:
                 await asyncio.sleep(1)
         else:
             # The `for...else` loop is a Pythonic construct that eliminates the need for a manual loop counter and conditional check!
-            return {"success": False, "message": "No Govee device found after multiple attempts."}
+            raise Exception("No Govee device found after multiple attempts.")
+    
+    except Exception as e:
+        raise Exception(f"Error getting Govee device: {e}")
 
+
+
+async def light_turn_on_handler():
+    try:
+        dev = await get_govee_device()
         await dev.turn_on()
         print("Turned ON")
         return {"success": True, "message": "Light turn-on command sent to Govee device."}
@@ -164,26 +173,52 @@ async def light_turn_on_handler():
 
 async def light_turn_off_handler():
     try:
-        config = read_config(['govee_device_search_max_attempts'])
-        max_attempts = config.get('govee_device_search_max_attempts', 3)
-
-        for attempt in range(1, max_attempts + 1):
-            if dev := await get_first_govee_device():
-                # "Walrus" operator - see above!
-                break
-            
-            print(f"No Govee device found. Retrying - Attempt {attempt} of {max_attempts}")
-            if attempt < max_attempts:
-                await asyncio.sleep(1)
-        else:
-            # `for...else` loop - see above!
-            return {"success": False, "message": "No Govee device found after multiple attempts."}
-        
+        dev = await get_govee_device()
         await dev.turn_off()
         print("Turned OFF")
         return {"success": True, "message": "Light turn-off command sent to Govee device."}
     except Exception as e:
         return {"success": False, "message": f"Error turning off Govee light: {e}"}
+    
+
+async def light_set_brightness_handler(brightness: int):
+    try:
+        dev = await get_govee_device()
+        await dev.set_brightness(brightness)
+        print(f"Set brightness to {brightness}")
+        return {"success": True, "message": f"Light brightness set to {brightness}."}
+    except Exception as e:
+        return {"success": False, "message": f"Error setting brightness: {e}"}
+
+   
+async def light_set_color_handler(red: int, green: int, blue: int):
+    try:
+        dev = await get_govee_device()
+        await dev.set_color(red, green, blue)
+        print(f"Set color to {red}, {green}, {blue}")
+        return {"success": True, "message": f"Light color set to {red}, {green}, {blue}."}
+    except Exception as e:
+        return {"success": False, "message": f"Error setting color: {e}"}
+    
+
+async def light_set_temperature_handler(temperature: int):
+    try:
+        dev = await get_govee_device()
+        await dev.set_temperature(temperature)
+        print(f"Set temperature to {temperature}")
+        return {"success": True, "message": f"Light temperature set to {temperature}."}
+    except Exception as e:
+        return {"success": False, "message": f"Error setting temperature: {e}"}
+
+
+async def light_set_scene_handler(scene: str):
+    try:
+        dev = await get_govee_device()
+        await dev.set_scene(scene)
+        print(f"Set scene to {scene}")
+        return {"success": True, "message": f"Light scene set to {scene}."}
+    except Exception as e:
+        return {"success": False, "message": f"Error setting scene: {e}"}
 
 
 # async def main():
