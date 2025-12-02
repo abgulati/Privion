@@ -6087,3 +6087,159 @@ def build_asgi_app():
                 </div> -->
                 <div class="app-title-playfair"><span>Privion</span></div>
             </div>
+
+
+
+
+### LLM RESPONSE PARSER:
+def parse_butler_tool_response(llm_response:str) -> dict:
+    """
+    Helper function to parse and clean the service response.
+    
+    Args:
+        response: Raw response string from HF-Waitress
+        
+    Returns:
+        dict: Parsed service selection or default RAG service
+    """
+    try:
+        json_parsed_response = json.loads(llm_response)
+        return json_parsed_response
+    except Exception as e:
+        print(f"\nFailed to parse service response, attempting to literal-eval and maybe even trim. Encountered error: {e}\n")
+
+    try:
+        return ast.literal_eval(llm_response)
+    except (ValueError, SyntaxError):
+        # Sometimes additional text may be present so we need to strip it:
+        try:
+            print(f"\nAdditional text present, trimming response...\n")
+            cleaned_response = prompt_formatting_module.trim_response(
+                llm_response,
+                '"service_list":', '}',
+                include_start_substring=True,
+                include_end_substring=False
+            )
+            cleaned_response = "{" + cleaned_response.strip() + "}"
+            print(f"\nTrimmed response to dictionary: {cleaned_response}\n")
+            return ast.literal_eval(cleaned_response)
+        except (ValueError, SyntaxError) as e:
+            print(f"Failed to identify selected service even after trimming, encountered error: {e}")
+            return {'service': None}
+
+
+
+### CORE CONTROLLER METHOD:
+def execute_butler_tasks(user_query:str) -> dict:
+    '''
+    Receives user-query, then invokes in-order:
+    1. Services Menu Creation: TOOLS.JSON PARSERS
+    2. Prompt Crafting: CORE PROMPT
+    3. LLM REQUEST/RESPONSE HANDLERS
+    4. Selected Service Determination: LLM RESPONSE PARSER
+    5. Service Execution: TOOL DEFS
+    6. Return Prep: Format User-Query With Selected Tool, Success/Failure Status
+    7. Return: Final Response to Front-End, wherein the selected tool will be printed out to the user, along with a success/failure message.
+    '''
+
+    global BUTLER_TOOLS_CONFIG_PATH, FULL_BUTLER_TOOLS_CONFIG
+    BUTLER_TOOLS_CONFIG_PATH, FULL_BUTLER_TOOLS_CONFIG = _full_read_butler_tools_config()
+
+    try:
+        llm_prompt_for_butler_request = prompt_formatting_module.get_core_prompt_for_butler_tools_config(user_query, get_all_service_names_from_butler_tools_config())
+        print(f"LLM prompt for butler request: {llm_prompt_for_butler_request}")
+        
+        llm_response_for_butler_request = make_butler_request(llm_prompt_for_butler_request)
+        print(f"LLM response for butler request: {llm_response_for_butler_request}")
+        
+        butler_tool_selection = parse_butler_tool_response(llm_response_for_butler_request)
+        print(f"Butler tool selection: {butler_tool_selection}")
+
+        action_result = {}
+        if butler_tool_selection['service_list'] is None:
+            action_result = {'success': False, 'message': "AI-service determination failed."}
+            print(f"Action result: {action_result}")
+        
+        else:
+
+            if isinstance(butler_tool_selection['service_list'], list):
+
+                butler_tool_selection['service_list'] = list(set(butler_tool_selection['service_list']))
+                
+                for service_name in butler_tool_selection['service_list']:
+                    action_result[service_name] = execute_butler_tool(service_name)
+                    print(f"Action result after tool execution {service_name}: {action_result[service_name]}")
+
+                print(f"Action results list: {action_result}")
+            
+            elif isinstance(butler_tool_selection['service_list'], str):
+                action_result = execute_butler_tool(butler_tool_selection['service_list'])
+                print(f"Action result after tool execution: {action_result}")
+            
+            else:
+                action_result = {'success': False, 'message': f"Invalid service list format: {butler_tool_selection['service_list']}"}
+                print(f"Action result after tool execution: {action_result}")
+
+        action_analysis_prompt = prompt_formatting_module.request_action_analysis_prompt(user_query, action_result)
+        print(f"Action analysis prompt: {action_analysis_prompt}")
+        
+        return {'action_result': action_result, 'action_analysis_prompt': action_analysis_prompt}
+
+    except Exception as e:
+        print(f"Error executing butler tasks: {str(e)}")
+        action_result = {'success': False, 'message': f"Error executing butler tasks: {str(e)}"}
+        try:
+            action_analysis_prompt = prompt_formatting_module.request_action_analysis_prompt(user_query, action_result)
+            print(f"Action analysis prompt in exception handler: {action_analysis_prompt}")
+            return {'action_result': action_result, 'action_analysis_prompt': action_analysis_prompt}
+        except Exception as e:
+            print(f"Both Butler Tool Execution and Action Analysis Prompt Creation Failed: {str(e)}")
+            return {'success': False, 'message': f"Both Butler Tool Execution and Action Analysis Prompt Creation Failed: {str(e)}", 'action_analysis_prompt': None}
+
+def execute_butler_tool(service_name:str, **kwargs) -> dict:
+    '''
+    Executes a butler tool.
+    '''
+    # butler_tool_details = get_service_details_from_butler_tools_config(service_name)
+    # butler_tool_execution_result = butler_tool_details['function'](**butler_tool_details['fields'])
+    try:
+        
+        if service_name == 'wol_turn_on_tv' or service_name == 'lg_webos_tv_turn_on':
+            print("Executing WOL turn-on TV tool...")
+            return wol_turn_on_tv('a4:36:c7:58:3f:18', '192.168.1.142', 9)
+        
+        elif service_name == 'lg_webos_tv_turn_off':
+            print("Executing LG WebOS TV turn-off tool...")
+            return lg_webos_tv_turn_off('192.168.1.142')
+        
+        elif service_name == 'lamp_turn_on':
+            print("Executing lamp turn-on tool...")
+            return turn_on_lamp()
+        
+        elif service_name == 'lamp_turn_off':
+            print("Executing lamp turn-off tool...")
+            return turn_off_lamp()
+        
+        elif service_name == 'set_lamp_brightness':
+            print("Executing lamp brightness set tool...")
+            return set_lamp_brightness(kwargs['brightness'])
+        
+        elif service_name == 'set_lamp_color':
+            print("Executing lamp color set tool...")
+            return set_lamp_color(kwargs['red'], kwargs['green'], kwargs['blue'])
+        
+        elif service_name == 'set_lamp_temperature':
+            print("Executing lamp temperature set tool...")
+            return set_lamp_temperature(kwargs['temperature'])
+        
+        elif service_name == 'set_lamp_scene':
+            print("Executing lamp scene set tool...")
+            return set_lamp_scene(kwargs['scene'])
+        
+        else:
+            print(f"Service not found: {service_name}")
+            return {'success': False, 'message': f"Service not found: {service_name}"}
+    
+    except Exception as e:
+        print(f"Error executing butler tool: {str(e)}")
+        return {'success': False, 'message': f"Error executing butler tool for {service_name} service: {str(e)}"}
