@@ -1,5 +1,6 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel, CLIPTextModel, AutoProcessor, GenerationConfig
 from transformers import StoppingCriteria, StoppingCriteriaList
+from transformers.utils import TensorType
 from huggingface_hub import login, snapshot_download, scan_cache_dir
 import torch
 
@@ -52,6 +53,8 @@ except ImportError:
 from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
 from PIL import Image, ImageDraw, ImageFont
+
+from typing import Optional, Union, Callable
 
 import multiprocessing
 import subprocess
@@ -2162,7 +2165,7 @@ def load_exllama_pipeline():
 
     try:
         global AUTO_TOKENIZER
-        AUTO_TOKENIZER = AutoTokenizer.from_pretrained(config['model_id'], trust_remote_code=True)    # Using Transformers' AutoTokenizer as ExLlamaV2's ExLlamaV2Tokenizer does not contain an equivalent apply_chat_template() method!
+        AUTO_TOKENIZER = AutoTokenizer.from_pretrained(config['model_id'], trust_remote_code=True)    # Using Transformers' AutoTokenizer as ExLlamaV2's ExLlamaV2Tokenizer does not contain an equivalent apply-chat_template() method!
         print("\nTransformers-AutoTokenizer configured successfully for automated prompt-formatting\n")
     except Exception as e:
         handle_local_error(f"Error loading AutoTokenizer for {config['model_id']}. Encountered error: ", e)
@@ -2434,7 +2437,7 @@ def load_exllamav3_pipeline():
 
     try:
         global AUTO_TOKENIZER
-        AUTO_TOKENIZER = AutoTokenizer.from_pretrained(read_return['model_id'], trust_remote_code=True)    # Using Transformers' AutoTokenizer as ExLlamaV3's Tokenizer does not contain an equivalent apply_chat_template() method!
+        AUTO_TOKENIZER = AutoTokenizer.from_pretrained(read_return['model_id'], trust_remote_code=True)    # Using Transformers' AutoTokenizer as ExLlamaV3's Tokenizer does not contain an equivalent apply-chat_template() method!
         print("\nTransformers-AutoTokenizer configured successfully for automated prompt-formatting\n")
     except Exception as e:
         handle_local_error(f"Error loading AutoTokenizer for {read_return['model_id']}. Encountered error: ", e)
@@ -2492,7 +2495,7 @@ def restart_server_stream():
     safe_empty_cuda_cache()
 
     try:
-        read_return = read_config(['model_id', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'exl2', 'exl3'])
+        read_return = read_config(['model_id', 'trust_remote_code', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'exl2', 'exl3'])
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not read values from hf_config.json when attempting restart-server-stream, encountered error: ", e)
@@ -2543,12 +2546,13 @@ def restart_server_stream():
                     load_asr_pipeline() # Not all ASR models define a pipeline, those that do will set the global PIPE via appropriate helper functions!
                 else:
                     model = AutoModelForCausalLM.from_pretrained(read_return['model_id'], **model_params)
-                    tokenizer = AutoTokenizer.from_pretrained(read_return['model_id'])
+                    global AUTO_TOKENIZER
+                    AUTO_TOKENIZER = AutoTokenizer.from_pretrained(read_return['model_id'], trust_remote_code=read_return['trust_remote_code'])
                     print("\nInitializing inference pipeline...")
                     PIPE = pipeline(
                         read_return['pipeline_task'],
                         model=model,
-                        tokenizer=tokenizer,
+                        tokenizer=AUTO_TOKENIZER,
                     )
 
                     try:
@@ -2592,7 +2596,7 @@ def initialize_model():
     global PIPE
 
     try:
-        read_return = read_config(['model_id', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'exl2', 'exl3'])
+        read_return = read_config(['model_id', 'trust_remote_code', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'exl2', 'exl3'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
     
@@ -2626,9 +2630,10 @@ def initialize_model():
                 load_asr_pipeline() # Not all ASR models define a pipeline, those that do will set the global PIPE via appropriate helper functions!
             else:
                 model = AutoModelForCausalLM.from_pretrained(read_return['model_id'], **model_params)
-                tokenizer = AutoTokenizer.from_pretrained(read_return['model_id'])
+                global AUTO_TOKENIZER
+                AUTO_TOKENIZER = AutoTokenizer.from_pretrained(read_return['model_id'], trust_remote_code=read_return['trust_remote_code'])
                 print("\nInitializing inference pipeline...")
-                PIPE = pipeline(read_return['pipeline_task'], model=model, tokenizer=tokenizer)
+                PIPE = pipeline(read_return['pipeline_task'], model=model, tokenizer=AUTO_TOKENIZER)
         
             try:
                 print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
@@ -2803,7 +2808,7 @@ def get_input_params_for_vision_model(request):
 
     try:
         print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
-        input_text = PIPE.apply_chat_template(messages, add_generation_prompt=True)
+        input_text = PIPE.apply_chat_template(messages, add_generation_prompt=True) # Not using central auto-tokenizer method as this one is based on Processor-AutoProcessor, not AutoTokenizer!
     except Exception as e:
         handle_local_error("Could not apply chat template, encountered error: ", e)
         return False
@@ -2890,6 +2895,61 @@ def inference_with_vision_model(request):
     return inference_output
 
 
+def auto_tokenizer_apply_chat_template(
+        conversation: Union[list[dict[str, str]], list[list[dict[str, str]]]],
+        tools: Optional[list[Union[dict, Callable]]] = None,
+        add_generation_prompt: bool = False,
+        tokenize: bool = True,
+        return_tensors: Optional[Union[str, TensorType]] = None,
+        return_dict: bool = False
+    ) -> dict:
+    '''
+    Acts as a wrapper around the Transformers apply-chat_template() method, which converts a list of dictionaries 
+    with `"role"` and `"content"` keys to a list of token ids. This method is intended for use with chat models, 
+    and will read the tokenizer's chat_template attribute to determine the format and control tokens to use when converting.
+
+    Args:
+        conversation (Union[list[dict[str, str]], list[list[dict[str, str]]]]): A list of dicts
+            with "role" and "content" keys, representing the chat history so far.
+        tools (`list[Union[Dict, Callable]]`, *optional*):
+            A list of tools (callable functions) that will be accessible to the model. If the template does not
+            support function calling, this argument will have no effect. Each tool should be passed as a JSON Schema,
+            giving the name, description and argument types for the tool. See our
+            [chat templating guide](https://huggingface.co/docs/transformers/main/en/chat_templating#automated-function-conversion-for-tool-use)
+            for more information.
+        add_generation_prompt (bool, *optional*):
+            If this is set, a prompt with the token(s) that indicate
+            the start of an assistant message will be appended to the formatted output. This is useful when you want to generate a response from the model.
+            Note that this argument will be passed to the chat template, and so it must be supported in the
+            template for this argument to have any effect.
+        tokenize (`bool`, defaults to `True`):
+            Whether to tokenize the output. If `False`, the output will be a string.
+        return_tensors (`str` or [`~utils.TensorType`], *optional*):
+            If set, will return tensors of a particular framework. Has no effect if tokenize is `False`. Acceptable
+            values are:
+            - `'tf'`: Return TensorFlow `tf.Tensor` objects.
+            - `'pt'`: Return PyTorch `torch.Tensor` objects.
+            - `'np'`: Return NumPy `np.ndarray` objects.
+            - `'jax'`: Return JAX `jnp.ndarray` objects.
+        return_dict (`bool`, defaults to `False`):
+            Whether to return a dictionary with named outputs. Has no effect if tokenize is `False`.
+
+    For full details, check the full definition in `tokenization_utils_base.py`, which can be found by inspecting the AutoTokenizer class to open 
+    `tokenization_auto.py` and from there, navigate to the above module via the `from ...tokenization_utils_base` import.
+    '''
+    try:
+        return AUTO_TOKENIZER.apply_chat_template(
+            conversation=conversation,
+            tools=tools,
+            add_generation_prompt=add_generation_prompt,
+            return_dict=return_dict,
+            return_tensors=return_tensors,
+            tokenize=tokenize
+        )
+    except Exception as e:
+        handle_local_error("Error invoking Transformers-AutoTokenizer's apply-chat_template() method, encountered error: ", e)
+
+
 @app.route('/completions', methods=['POST'])
 def completions():
 
@@ -2918,6 +2978,7 @@ def completions():
         try:
             data = request.json
             messages = data.get('messages', [])
+            tools = data.get('tools', None)
         except Exception as e:
             return handle_api_error("Could not read POST-request messages for /completions, encountered error: ", e)
 
@@ -2939,7 +3000,7 @@ def completions():
 
         try:
             print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
-            inputs = PIPE.tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_dict=True, return_tensors="pt")
+            inputs = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, return_dict=True, return_tensors="pt")
         except Exception as e:
             return handle_api_error("Could not apply chat template, encountered error: ", e)
 
@@ -2956,7 +3017,7 @@ def completions():
             input_length = inputs.input_ids.shape[1]   # Check inference_with_vision_model(request) for detailed explanation!
             
             # Slice the tensor and decode only the output!
-            decoded_output = PIPE.tokenizer.decode(output[0][input_length:], skip_special_tokens=True)    # Setting skip_special_tokens=True to remove: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
+            decoded_output = AUTO_TOKENIZER.decode(output[0][input_length:], skip_special_tokens=True)    # Setting skip_special_tokens=True to remove: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
 
             print(f"\n\ndecoded_output: {decoded_output}\n\n")
             inference_output += decoded_output
@@ -3293,7 +3354,7 @@ def transcribe_with_ibm_granite_speech_3_3(audio_data: np.ndarray, asr_config: d
             dict(role="system", content=system_prompt),
             dict(role="user", content=user_prompt),
         ]
-        prompt = TOKENIZER.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
+        prompt = TOKENIZER.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)    # Not using central auto-tokenizer method as this one is based on Processor-AutoProcessor, not AutoTokenizer!
         model_inputs = PROCESSOR(prompt, wav, device=asr_config['torch_device_map'], return_tensors="pt").to(asr_config['torch_device_map'])
         model_outputs = MODEL.generate(**model_inputs, max_new_tokens=asr_config['asr_max_new_tokens'], do_sample=False, num_beams=1)
 
@@ -3527,6 +3588,7 @@ def completions_stream():
         if isinstance(data, str):   # should be a list
             data = json.loads(data)
         messages = data.get('messages', [])
+        tools = data.get('tools', None)
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not read POST-request messages for /completions_stream, encountered error: ", e)
@@ -3554,17 +3616,14 @@ def completions_stream():
 
     try:
         print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
-        inputs = PIPE.tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_dict=True, return_tensors="pt")    
-        # `PIPE.tokenizer.apply_chat_template` outputs a dict to `inputs` with keys: input_ids, attention_mask, labels, token_type_ids
-        # type(inputs): <class 'transformers.tokenization_utils_base.BatchEncoding'>
-        # type(inputs['input_ids']): <class 'torch.Tensor'>
+        inputs = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, return_dict=True, return_tensors="pt")
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not apply chat template, encountered error: ", e)
 
     try:
         # Slice the tensor and decode only the input!
-        decoded_inputs = PIPE.tokenizer.decode(inputs['input_ids'][0].tolist(), skip_special_tokens=False)    # Setting skip_special_tokens=False to keep: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
+        decoded_inputs = AUTO_TOKENIZER.decode(inputs['input_ids'][0].tolist(), skip_special_tokens=False)    # Setting skip_special_tokens=False to keep: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
         print(f"\n\ndecoded_inputs: {decoded_inputs}\n\n")
     except Exception as e:
         llm_semaphore.release()
@@ -3576,7 +3635,7 @@ def completions_stream():
     def callback(data):
         data_queue.put(data)
 
-    custom_streamer = CustomTextStreamer(PIPE.tokenizer, skip_special_tokens=True, skip_prompt=True)    # special tokens need not be streamed though!
+    custom_streamer = CustomTextStreamer(AUTO_TOKENIZER, skip_special_tokens=True, skip_prompt=True)    # special tokens need not be streamed though!
     custom_streamer.callback = callback
 
     def llm_task():
@@ -3758,13 +3817,14 @@ def exl2_stream():
         if isinstance(data, str):   # must convert to a list
             data = json.loads(data)
         messages = data.get('messages', [])
+        tools = data.get('tools', None)
         gen_settings, config_data  = get_exl2_gen_settings(request)
         user_queue = queue.Queue()
     except Exception as e:
         return handle_api_error("Could not setup for exl2-stream, encountered error: ", e)
     
     try:
-        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+        tokenized_messages = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, tokenize=False)
         if not exl2_prompt_fits_within_max_context_length(tokenized_messages): print("\n\nPrompt doesn't fit within Exl2 context window, will auto-truncate.\n\n")
     except Exception as e:
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
@@ -3841,7 +3901,7 @@ def assemble_fim_messages(prefix: str, suffix: str, middle: str, language: str) 
 
 def auto_tokenize_and_encode_fim_messages(exl_tokenizer, fim_messages: list) -> list:
     try:
-        templated_messages = AUTO_TOKENIZER.apply_chat_template(fim_messages, add_generation_prompt=True, tokenize=False)
+        templated_messages = auto_tokenizer_apply_chat_template(conversation=fim_messages, add_generation_prompt=True, tokenize=False)
         return exl_tokenizer.encode(templated_messages, encode_special_tokens=True)
     except Exception as e:
         handle_local_error("Could not get templated and encoded FIM messages, encountered error: ", e)
@@ -4017,13 +4077,14 @@ def exl3_stream():
         if isinstance(data, str):   # must convert to a list
             data = json.loads(data)
         messages = data.get('messages', [])
+        tools = data.get('tools', None)
         exl3_sampler, config_data  = get_exl3_sampler(request)
         user_queue = queue.Queue()
     except Exception as e:
         return handle_api_error("Could not setup for exl3-stream, encountered error: ", e)
     
     try:
-        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+        tokenized_messages = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, tokenize=False)
     except Exception as e:
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
 
@@ -4158,7 +4219,7 @@ def exl3_fim_stream():
 
 ###################################-------------OpenAI Compatible API-------------###################################
 
-def handle_transformers_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop):
+def handle_transformers_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop):
     """Handle streaming OpenAI-compatible responses using Transformers"""
     
     llm_semaphore.acquire()
@@ -4177,8 +4238,8 @@ def handle_transformers_streaming_openai(messages, max_tokens, temperature, top_
             "use_cache": True
         }
 
-        inputs = PIPE.tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_dict=True, return_tensors="pt")
-        decoded_inputs = PIPE.tokenizer.decode(inputs['input_ids'][0].tolist(), skip_special_tokens=False)    # Setting skip_special_tokens=False to keep: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
+        inputs = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, return_dict=True, return_tensors="pt")
+        decoded_inputs = AUTO_TOKENIZER.decode(inputs['input_ids'][0].tolist(), skip_special_tokens=False)    # Setting skip_special_tokens=False to keep: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
     except Exception as e:
         llm_semaphore.release()
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
@@ -4189,7 +4250,7 @@ def handle_transformers_streaming_openai(messages, max_tokens, temperature, top_
     def callback(data):
         data_queue.put(data)
 
-    custom_streamer = CustomTextStreamer(PIPE.tokenizer, skip_special_tokens=True, skip_prompt=True)    # special tokens need not be streamed though!
+    custom_streamer = CustomTextStreamer(AUTO_TOKENIZER, skip_special_tokens=True, skip_prompt=True)    # special tokens need not be streamed though!
     custom_streamer.callback = callback
 
     def llm_task():
@@ -4278,7 +4339,7 @@ def handle_transformers_streaming_openai(messages, max_tokens, temperature, top_
     return Response(generate(), content_type='text/event-stream')
 
 
-def handle_transformers_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop):
+def handle_transformers_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop):
     """Handle non-streaming OpenAI-compatible responses using Transformers"""
 
     with llm_semaphore:
@@ -4297,12 +4358,12 @@ def handle_transformers_non_streaming_openai(messages, max_tokens, temperature, 
                 use_cache=True
             )
 
-            inputs = PIPE.tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_dict=True, return_tensors="pt")
+            inputs = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, return_dict=True, return_tensors="pt")
             inputs.to(PIPE.model.device)
 
             output = PIPE.model.generate(**inputs, generation_config=generation_config)
             input_length = inputs.input_ids.shape[1]
-            decoded_output = PIPE.tokenizer.decode(output[0][input_length:], skip_special_tokens=True)
+            decoded_output = AUTO_TOKENIZER.decode(output[0][input_length:], skip_special_tokens=True)
             inference_output = decoded_output
             print("\nOpenAI/completions done\n")
 
@@ -4321,8 +4382,8 @@ def handle_transformers_non_streaming_openai(messages, max_tokens, temperature, 
                 }],
                 "usage": {
                     "prompt_tokens": len(inputs['input_ids'][0]),
-                    "completion_tokens": len(PIPE.tokenizer.encode(inference_output)),
-                    "total_tokens": len(inputs['input_ids'][0]) + len(PIPE.tokenizer.encode(inference_output))
+                    "completion_tokens": len(AUTO_TOKENIZER.encode(inference_output)),
+                    "total_tokens": len(inputs['input_ids'][0]) + len(AUTO_TOKENIZER.encode(inference_output))
                 }
             })
         
@@ -4330,7 +4391,7 @@ def handle_transformers_non_streaming_openai(messages, max_tokens, temperature, 
             return jsonify(error={"message": str(e), "type": "server_error"}), 500
 
 
-def handle_exl2_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop):
+def handle_exl2_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop):
     """Handle streaming OpenAI-compatible responses using ExLlamaV2"""
     print("\n\nOpenAI/exl2-stream route triggered\n\n")
 
@@ -4354,7 +4415,7 @@ def handle_exl2_streaming_openai(messages, max_tokens, temperature, top_p, top_k
                 if len(stop_ids) > 0: stop_tokens.append(stop_ids)  # Append the *sequence* (the list itself) to conditions - append because lists should be added as is, not flattened
 
         # 4. Create Job
-        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+        tokenized_messages = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, tokenize=False)
         
         job = ExLlamaV2DynamicJob(
             input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
@@ -4413,7 +4474,7 @@ def handle_exl2_streaming_openai(messages, max_tokens, temperature, top_p, top_k
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
 
 
-def handle_exl2_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop):
+def handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop):
     """Handle non-streaming OpenAI-compatible responses using ExLlamaV2"""
     print("\n\nOpenAI/exl2-stream route triggered\n\n")
 
@@ -4437,7 +4498,7 @@ def handle_exl2_non_streaming_openai(messages, max_tokens, temperature, top_p, t
                 if len(stop_ids) > 0: stop_token_list.append(stop_ids)  # Append the *sequence* (the list itself) to conditions - append because lists should be added as is, not flattened
         
         # 4. Create Job
-        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+        tokenized_messages = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, tokenize=False)
         
         job = ExLlamaV2DynamicJob(
             input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
@@ -4486,7 +4547,7 @@ def handle_exl2_non_streaming_openai(messages, max_tokens, temperature, top_p, t
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
 
 
-def handle_exl3_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
+def handle_exl3_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
     """Handle streaming OpenAI-compatible responses using ExLlamaV3"""
     print("\n\nOpenAI/exl3-stream route triggered\n\n")
 
@@ -4520,7 +4581,7 @@ def handle_exl3_streaming_openai(messages, max_tokens, temperature, top_p, top_k
                 stop_token_list.append(stop_string)
 
         # 4. Create Job
-        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+        tokenized_messages = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, tokenize=False)
 
         job = Job(
             input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
@@ -4579,7 +4640,7 @@ def handle_exl3_streaming_openai(messages, max_tokens, temperature, top_p, top_k
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
 
 
-def handle_exl3_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
+def handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
     """Handle non-streaming OpenAI-compatible responses using ExLlamaV3"""
     print("\n\nOpenAI/exl3-stream route triggered\n\n")
 
@@ -4613,7 +4674,7 @@ def handle_exl3_non_streaming_openai(messages, max_tokens, temperature, top_p, t
                 stop_token_list.append(stop_string)
 
         # 4. Create Job
-        tokenized_messages = AUTO_TOKENIZER.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+        tokenized_messages = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, tokenize=False)
 
         job = Job(
             input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
@@ -4662,18 +4723,18 @@ def handle_exl3_non_streaming_openai(messages, max_tokens, temperature, top_p, t
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
 
 
-def handle_openai_streaming(backend, messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
+def handle_openai_streaming(backend, messages, tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
     """Handle streaming OpenAI-compatible responses"""
-    if backend == 'transformers': return handle_transformers_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
-    elif backend == 'exl2': return handle_exl2_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
-    elif backend == 'exl3': return handle_exl3_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+    if backend == 'transformers': return handle_transformers_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop)
+    elif backend == 'exl2': return handle_exl2_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop)
+    elif backend == 'exl3': return handle_exl3_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
 
 
-def handle_openai_non_streaming(backend, messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
+def handle_openai_non_streaming(backend, messages, tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
     """Handle non-streaming OpenAI-compatible responses"""
-    if backend == 'transformers': return handle_transformers_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
-    elif backend == 'exl2': return handle_exl2_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop)
-    elif backend == 'exl3': return handle_exl3_non_streaming_openai(messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+    if backend == 'transformers': return handle_transformers_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop)
+    elif backend == 'exl2': return handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop)
+    elif backend == 'exl3': return handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
 
 
 @app.route('/v1/chat/completions', methods=['POST'])
@@ -4711,7 +4772,10 @@ def openai_compatible_api():
         
         # OpenAI-compatible parameters
         messages = data.get('messages', [])
+        tools = data.get('tools', None)
+        tool_choice = data.get('tool_choice', 'auto')
         print(f"\nOpenAI Messages: {json.dumps(messages, indent=4)}\n")
+        print(f"\nOpenAI Tools: {json.dumps(tools, indent=4)}\n")
         model = data.get('model', 'auto').lower().strip()  # Can be used to force specific backend
         stream = data.get('stream', False)
         max_tokens = data.get('max_tokens', None)
@@ -4756,10 +4820,27 @@ def openai_compatible_api():
             }
         ), 503
     
+    # Handle tool choice: The user may wish to force a specific tool or forbid tools altogether, but auto-tokenizer's apply_chat_template() method does not 
+    # support tool_choice! So we need to handle this manually.
+    final_tools = tools
+    if tools and tool_choice:
+        if tool_choice == 'none':
+            # Client explicitly forbids tools, pass none so the system prompt does not mention them!
+            final_tools = None
+        
+        elif isinstance(tool_choice, dict):
+            # Client wants to FORCE a specific tool (e.g., {"type": "function", "function": {"name": "wol_turn_on_tv"}})
+            # The best 'local model' way to do this is to HIDE all other tools.
+            target_name = tool_choice.get('function', {}).get('name')
+            if target_name:
+                final_tools = [t for t in tools if t['function']['name'] == target_name]
+
+        # 'auto' is the default, so we leave final_tools as-is.
+    
     if stream:
-        return handle_openai_streaming(selected_backend, messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+        return handle_openai_streaming(selected_backend, messages, final_tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
     else:
-        return handle_openai_non_streaming(selected_backend, messages, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+        return handle_openai_non_streaming(selected_backend, messages, final_tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
 
 
 @app.route('/v1/models', methods=['GET'])
@@ -4910,7 +4991,7 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
 def get_request_payload_for_graph_entity_extraction(chunk_text: str):
     try:
         chunk_payload = "Extract nodes and relationships from the following text:\n" + chunk_text + "\n<knowledge_graph>"
-        full_payload = AUTO_TOKENIZER.apply_chat_template([{"role": "user", "content": chunk_payload}], add_generation_prompt=True, tokenize=False)
+        full_payload = auto_tokenizer_apply_chat_template(conversation=[{"role": "user", "content": chunk_payload}], add_generation_prompt=True, tokenize=False)
         return full_payload
     except Exception as e:
         handle_local_error(f"Could not get request payload for graph entity extraction, encountered error: ", e)
@@ -5042,13 +5123,13 @@ def process_nodes_and_relationships(
     '''
     try:
         comprehensive_summary_request_prompt = get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
-        formatted_prompt = AUTO_TOKENIZER.apply_chat_template([{"role": "user", "content": comprehensive_summary_request_prompt}], add_generation_prompt=True, tokenize=False)
+        formatted_prompt = auto_tokenizer_apply_chat_template(conversation=[{"role": "user", "content": comprehensive_summary_request_prompt}], add_generation_prompt=True, tokenize=False)
         
         if exl2_prompt_fits_within_max_context_length(formatted_prompt):
             full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
         else:   # No errors are raised if the prompt is larger than the max context length because it'll be auto-truncated which we don't want so best to handle manually!
             minimal_summary_request_prompt = get_minimal_query_for_summary(chunk_text)
-            formatted_prompt = AUTO_TOKENIZER.apply_chat_template([{"role": "user", "content": minimal_summary_request_prompt}], add_generation_prompt=True, tokenize=False)
+            formatted_prompt = auto_tokenizer_apply_chat_template(conversation=[{"role": "user", "content": minimal_summary_request_prompt}], add_generation_prompt=True, tokenize=False)
             
             if exl2_prompt_fits_within_max_context_length(formatted_prompt):
                 full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
@@ -5658,12 +5739,12 @@ def get_transformers_model_info():
     except Exception as e:
         throw_health_check_error("model_vocab_size", e)
         try:
-            model_info["tokenizer_vocab_length"] = len(PIPE.tokenizer)
+            model_info["tokenizer_vocab_length"] = len(AUTO_TOKENIZER)
         except Exception as e:
             throw_health_check_error("tokenizer_vocab_length", e)
 
     try:
-        model_info["tokenizer_vocab_size"] = str(PIPE.tokenizer.vocab_size)
+        model_info["tokenizer_vocab_size"] = str(AUTO_TOKENIZER.vocab_size)
     except Exception as e:
         throw_health_check_error("tokenizer_vocab_size", e)
 
@@ -5708,12 +5789,12 @@ def get_transformers_model_info():
         throw_health_check_error("max_position_embeddings", e)
 
     try:
-        model_info["tokenizer"] = str(PIPE.tokenizer.name_or_path)
+        model_info["tokenizer"] = str(AUTO_TOKENIZER.name_or_path)
     except Exception as e:
         throw_health_check_error("tokenizer", e)
 
     try:
-        model_info["max_seq_length"] = str(PIPE.tokenizer.model_max_length)
+        model_info["max_seq_length"] = str(AUTO_TOKENIZER.model_max_length)
     except Exception as e:
         throw_health_check_error("max_seq_length", e)
 
