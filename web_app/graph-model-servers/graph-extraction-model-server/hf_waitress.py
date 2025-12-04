@@ -68,6 +68,7 @@ import pathlib
 import random
 import base64
 import shutil   # Shell Utilities is part of Python's standard library and is used for file operations
+import signal
 import queue
 import time
 import json
@@ -2635,10 +2636,10 @@ def initialize_model():
                 print("\nInitializing inference pipeline...")
                 PIPE = pipeline(read_return['pipeline_task'], model=model, tokenizer=AUTO_TOKENIZER)
         
-            try:
-                print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
-            except Exception as e:
-                handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
+                try:
+                    print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
+                except Exception as e:
+                    handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
     
     print(f"\n{read_return['model_id']} loaded successfully!\n")
 
@@ -5870,7 +5871,32 @@ def get_host_and_port():
         handle_error_no_return("Could not get host and port from hf_config.json, encountered error: ", e)
 
 
+def signal_handler(sig, frame):
+    '''
+    Signal handler for the main process.
+    It will shut down the server gracefully by intercepting the interrupt "SIGINT" signal (Ctrl+C).
+    We skip semaphores because if the app is hung holding a lock, waiting for it here ensures the shutdown will also hang!
+    Args:
+        sig: Integer representing the specific signal that triggered the handler. Eg: CTRL+C -> 2
+        frame: Represents the "current execution point" of your code at the exact millisecond of the signal. Primarily used for debugging.
+            Eg: line 452 inside function `generate_tokens`
+    '''
+    print("\n\n⚠️  CTRL+C Detected! Force stopping workers...\n")
+    
+    # 1. Tell background workers to stop (Non-blocking)
+    # We don't join/wait for them. We just signal intent.
+    if EXL2_WORKER_STOP_EVENT: EXL2_WORKER_STOP_EVENT.set()
+    if EXL3_WORKER_STOP_EVENT: EXL3_WORKER_STOP_EVENT.set()
+    
+    # 2. Hard exit
+    # os._exit(0) is better than sys.exit(0) for signal handlers 
+    # because it skips Python's cleanup handlers (except finally blocks)
+    # and immediately terminates the process.
+    print("👋 Exiting immediately.")
+    os._exit(0)
+
 if __name__ == '__main__':
+    signal.signal(signal.SIGINT, signal_handler)
     _ = parse_arguments()
     initialize_model()
     host, port = get_host_and_port()
