@@ -453,9 +453,25 @@ Privion is a versatile AI application focused on privacy and offline inferencing
             pip install -r reqs_speech.txt
             ```
 
-        - NOTE: If encountering Nvidia/Nemo-Toolkit errors when installing on system without Nvidia GPUs and CUDA, edit the `reqs_speech.txt` file to remove `nemo_toolkit` and `nemo_toolkit[asr]` from it and re-try.
+        - NOTE: If encountering Nvidia/Nemo-Toolkit errors when installing on system without Nvidia GPUs and CUDA, edit the `reqs_speech.txt` file to remove `nemo_toolkit` and re-try.
 
-    4. Copy FFmpeg `bin` dir contents to the `TorchCodec` dir:
+        - Install nemo-asr dependencies (may not work without an Nvidia GPU!):
+            ```
+            pip install nemo_toolkit['asr']
+            ```
+
+        - This might change your NumPy version to one incompatible with other dependencies, so lastly:
+            ```
+            pip install numpy==2.2.6
+            ```
+
+    4. Recommended ASR Settings in Privion:
+        ```
+        ASR Model: Nvidia/Parakeet-tdt-0.6B-v2 (v3 for multi-lingual)
+        ASR Torch Device: cuda:0
+        ```
+
+    5. Copy FFmpeg `bin` dir contents to the `TorchCodec` dir:
     
         - This is a brute-force method that technically shouldn't be required as FFmpeg has been added to path, but was the only way to resolve a nasty error encountered when running ASR models:
             ```
@@ -472,7 +488,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
             - From: `<full-path>\ffmpeg-7.1.1-full_build-shared\bin`
             - To: `C:\Users\<username>\AppData\Local\Programs\Python\Python311\Lib\site-packages\torchcodec\`
 
-        - This is why we downloaded the *shared* version of FFmpeg earlier: The other versions only have the FFmpeg executables but not the DLLs!  
+        - This is why we downloaded the *shared* version of FFmpeg earlier: The other versions only have the FFmpeg executables but not the DLLs!
 
 ### 12. Docker
 
