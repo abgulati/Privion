@@ -49,3 +49,4 @@ kbnf>=0.4.2
 marisa_trie
 pydantic==2.11.0
 formatron>=0.5.0
+fastparquet>=2024.11.0
