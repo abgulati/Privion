@@ -36,6 +36,7 @@ import pathlib
 import sqlite3
 import PyPDF2
 import shutil   # Shell Utilities is part of Python's standard library and is used for file operations
+import signal
 import queue
 import uuid
 import json
@@ -8200,7 +8201,28 @@ def get_host_and_port():
         handle_error_no_return("Could not get host and port from config.json, encountered error: ", e)
 
 
+def signal_handler(sig, frame):
+    '''
+    Signal handler for the main process.
+    It will shut down the server gracefully by intercepting the interrupt "SIGINT" signal (Ctrl+C).
+    We skip semaphores because if the app is hung holding a lock, waiting for it here ensures the shutdown will also hang!
+    Args:
+        sig: Integer representing the specific signal that triggered the handler. Eg: CTRL+C -> 2
+        frame: Represents the "current execution point" of your code at the exact millisecond of the signal. Primarily used for debugging.
+            Eg: line 452 inside function `generate_tokens`
+    '''
+    print("\n\n⚠️  CTRL+C Detected! Force stopping workers...\n")
+    
+    # Hard exit:
+    # os._exit(0) is better than sys.exit(0) for signal handlers 
+    # because it skips Python's cleanup handlers (except finally blocks)
+    # and immediately terminates the process.
+    print("👋 Exiting immediately.")
+    os._exit(0)
+
+
 if __name__ == '__main__':
+    signal.signal(signal.SIGINT, signal_handler)
     _ = parse_arguments()
     lars_host, lars_port = get_host_and_port()
     print(f"\n\nServing LARS-Enterprise on {lars_host} port {lars_port}\n\n")
