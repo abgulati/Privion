@@ -134,6 +134,20 @@
                     ]
                 }
             }
+        },
+
+        "plug_turn_on": {
+            "name": "Plug Turn On",
+            "description": "Turns on a Kasa plug.",
+            "fields": {
+            }
+        },
+        
+        "plug_turn_off": {
+            "name": "Plug Turn Off",
+            "description": "Turns off a Kasa plug.",
+            "fields": {
+            }
         }
     }
 }

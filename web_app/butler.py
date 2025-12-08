@@ -4,6 +4,7 @@ import llm_apis as llm_apis_module
 from wakeonlan import send_magic_packet
 import ha_device_modules.lg_webos_tv as lg_webos_tv_module
 import ha_device_modules.govee_lights as govee_lights_module
+import ha_device_modules.kasa_plug as kasa_plug_module
 
 from typing import Optional
 from pathlib import Path
@@ -243,6 +244,17 @@ def set_lamp_scene(scene: str):
     '''
     return asyncio.run(govee_lights_module.light_set_scene_handler(scene))
 
+def plug_turn_on():
+    '''
+    Turns on a smart plug.
+    '''
+    return asyncio.run(kasa_plug_module.plug_turn_on_handler())
+
+def plug_turn_off():
+    '''
+    Turns off a smart plug.
+    '''
+    return asyncio.run(kasa_plug_module.plug_turn_off_handler())
 
 def execute_tool_call(tool_name, llm_args, services_config: dict) -> dict:
     '''
