@@ -484,23 +484,23 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - The latest `exllamav3` leverages a new State-of-the-Art (SOTA) quantization technique called [QTIP](https://github.com/turboderp-org/exllamav3/blob/master/doc/exl3.md)
 
-- Additionally, it's built from the ground-up to support modern LLM architectures as recent LLMs which have increasingly diverged away from the basic LLaMa architecure, including a rise of hybrid-architecture based LLMs (Transformers + Mamaba) coupled with cutting-edge advances in inferencing efficiency (via multi-token prediction etc).
+- Additionally, it's built from the ground-up to support modern LLM architectures as recent LLMs have increasingly diverged away from the basic LLaMa architecure, including a rise of hybrid Transformer-Mamba architecture LLMs coupled with cutting-edge advances in inferencing efficiency (via multi-token prediction etc).
 
-- Supporting these by retrofitting the heavily LLaMa-based ExLlamaV2 became increasingly difficult with time, and with the rise in popularity of Tensor Parallelism for multiple-GPU inferencing, ExLlama had to rebuilt from the ground-up to serve modern requirements.
+- Supporting these by retrofitting the heavily LLaMa-based ExLlamaV2 became increasingly difficult with time, and with the rise in popularity of Tensor Parallelism for multiple-GPU inferencing, ExLlama had to be rebuilt from the ground-up to serve modern requirements.
 
 - Thus we have the latest ExLlamaV3, which is still in its infancy and early development cycle so keep an eye on the [official repo!](https://github.com/turboderp-org/exllamav3)
 
 #### Note on OneDrive & Other Cloud Sync Services
 
-- **Do NOT set this up in a location that's synced by a cloud-backup service, such as OneDrive! This is because a lot of files are created & updated during quantizing and deleted during or thereafter, and cloud-syncing services will hold permissions hostage as the attempt to upload backups. If unavoidable, make sure to disable the cloud-backup service temporarily when quantizing models.**
+- **Do NOT set this up in a location that's synced by a cloud-backup service, such as OneDrive! This is because a lot of files are created & updated during quantizing and deleted during or thereafter, and cloud-syncing services will hold permissions hostage as they attempt to upload backups. If unavoidable, make sure to disable the cloud-backup service temporarily when quantizing models.**
 
-- **Special Note On Windows/OS Reinstalls: If this application was setup in a location synced by OneDrive, all files may appear to present after an OS re-install. However, when disabling OneDrive as per the note above before attepting quantization on the fresh machine, many errors may be encountered. This is because while all files show up in Explorer, they aren't actually downloaded from the OneDrive cloud unless required, whcih then loeads to an error when OneDrive isn't running! Terrilbe UX from MS, but resolving this is simple: delete the `exllamav2` and `exllamav3` dirs as HF-Waitress will reclone them on load.**
+- **Special Note On Windows/OS Reinstalls: If this application was setup in a location synced by OneDrive, all files may appear to be present after an OS re-install. However, when disabling OneDrive as per the note above for quantizing models, errors may be encountered. This is because while all files show up in Explorer, they aren't actually downloaded by OneDrive unless required, which then leads to an error as OneDrive isn't running! Terrible UX from MS, but resolving this is simple: delete the `exllamav2` and `exllamav3` dirs as HF-Waitress will reclone them on load.**
 
 #### Proper Installation Procedure
 
-- ENSURE YOU'RE DOING THIS AFTER INSTALLING FLASH ATTENTION 2!
+- ENSURE YOU'RE DOING THIS AFTER INSTALLING FLASH ATTENTION 2 AND POST FIRST-RUN! SEE BELOW FOR FULL DETAILS:
 
-- Since the bundled HF-Waitress LLM server includes full management of ExLlama, including the downloading and quantization of models and saving of measurements for each model processed, it will auto-clone the ExLlamaV2 and ExLlamaV3 repos on load
+- Since the bundled HF-Waitress LLM server includes full management of ExLlama, both repos with be auto-cloned by HF-Waitress when it loads up.
 
 - **It's very important to run the pip installation from within these cloned dirs! See below for details.**
 
@@ -529,31 +529,31 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - Specifically, the error will be along the lines of `subprocess.CalledProcessError: Command '['ninja', '-v']' returned non-zero exit status 1104.`
 
-- LLMs, even the likes of Gemini-3 and GPT5 etc will be unable to assist in resolving this - they'll fixate on the error code as `LNK1104: cannot open file` points to a Windows-Linker error caused by file permissions or other issues and they'll insist it's a hung Python process or other issues with Ninja, CUDA, and Visual Studio / CMake on Windows that are the root cause.
+- LLMs, even the likes of Gemini-3 and GPT5 etc will be unable to assist in resolving this - they'll fixate on the error code as `LNK1104: cannot open file` points to a Windows-Linker error caused by file permissions or other issues and they'll insist it's a hung Python process or other issues with Ninja, CUDA, and Visual Studio / CMake on Windows.
 
-- **However the error has nothing to do with Ninja, VS, CUDA or anything of the like and is simply a mismatch between the pip installed and git cloned versions of ExLlama! So if this error is encountered, the solution is to simply pip uninstall -y exllamav2 exllamav3,  followed by `pip install .` from with the `exllamav2` and `exllamav3` dirs as detailed above!**
+- **However the error has nothing to do with Ninja, VS, CUDA or anything of the like and is simply a mismatch between the pip installed and git cloned versions of ExLlama! So, if this error is encountered, the solution is to simply `pip uninstall -y exllamav2 exllamav3`,  followed by `pip install .` from with the `exllamav2` and `exllamav3` dirs as detailed above!**
 
 - If you do encounter the above error, it is however a good idea to validate that Ninja is correctly installed - via Git Bash:
     ```
     ninja --version
-    echo $?     # should returne exit-code 0
+    echo $?     # should return exit-code 0
     ```
 
 - If the exit-code from the above is anything other than `0`, then `pip uninstall -y ninja` and `pip install ninja` and retry, however this is unlikely to be an issue!
 
-- Lastly of note, `pip install exllamav2 exllamav3` installs the Just-In-Time (JIT) compile versions of these packages, which leads to very slow startup times for HF-Waitress as the backends must be compiled on load, while performing `pip install .` from within the cloned repos builds the entire package and allows for near-instant startup of the HF-Waitress server.
+- Lastly of note, `pip install exllamav2 exllamav3` will install the Just-In-Time (JIT) compile versions of these packages, which leads to very slow startup times for HF-Waitress as the backends must be compiled on load, while performing `pip install .` from within the cloned repos builds the entire package and allows for near-instant startup of the HF-Waitress server.
 
 #### Permission Errors 
 
-- In case you encounter `Permission` Errors when quantizing models with ExLlamaV2, try the following:
+- In case you encounter `Permission` Errors when quantizing models with ExLlama, try the following:
 
-    0. FIRSTLY, see the sections on OneDrive & the proper installation procedure!!
+    0. FIRSTLY, see the above sections on OneDrive & the proper installation procedures!!
 
-    1. OneDrive is the most likely culprit if on a synced folder so make sure to disable or at least temporarily shut it.
+    1. OneDrive is the most likely culprit if on a synced folder so make sure to disable it, even if temporarily.
 
-    2. If that doesn't work/apply, try running `python hf_waitress.py --exl2` via an Admin shell from within the `LARS-Enterprise/web_app` dir.
+    2. If that doesn't work/apply, try running `python hf_waitress.py --exl2` (or `--exl3` depending on which backend you were trying to run) via an Admin shell from within the `LARS-Enterprise/web_app` dir.
 
-    3. If all else fails, try uninstalling and re-installing via an `Admin` shell: run `pip uninstall exllamav2 -y`, delete the entire `exllamav2` directory, re-clone and re-install, and retry quantization via `python hf_waitress.py --exl2` from within the `LARS-Enterprise/web_app` dir.
+    3. If all else fails, try uninstalling and re-installing via an `Admin` shell: run `pip uninstall exllamav2 -y`, delete the entire `exllamav2` directory, re-clone and re-install, and retry quantization via `python hf_waitress.py --exl2` from within the `LARS-Enterprise/web_app` dir. Again, swap for exl3 depending on what you were trying to run.
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
