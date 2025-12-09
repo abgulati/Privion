@@ -65,18 +65,22 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     - [6. Core Python Libs](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#6-core-python-libs)
     - [7. PyTorch](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#7-pytorch)
     - [8. Flash-Attention 2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#8-flash-attention-2)
-    - [9. ExLlamaV2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#9-exllamav2)
-    - [10. ExLlamaV3](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#10-exllamav3)
-    - [11. Speech Features - ASR & TTS ](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#11-speech-features---asr--tts)
-    - [12. Docker Desktop](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#12-docker)
+    - [9. Speech Features - ASR & TTS ](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#11-speech-features---asr--tts)
+    - [10. Docker Desktop](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#12-docker)
+    - [11. ExLlamaV2 and ExLlamaV3](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#10-exllamav3)
+        - [Note on OneDrive & Other Cloud Sync Services](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#note-on-onedrive-&-other-cloud-sync-services)
+        - [Proper Installation Procedure](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#proper-installation-procedure)
+        - [Permission Errors ](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#permission-errors)
 3. [Usage - First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#usage---first-run)
     - [Laptop Powerplan Recommendation](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#laptop-powerplan-recommendation)
 4. [Optional Dependencies](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#optional-dependencies)
+    - [Transformers Dev Versions](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#transformers-dev-versions)
     - [llama.cpp](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#llamacpp)
     - [LibreOffice](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#libreoffice)
     - [Poppler](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#poppler)
     - [PyTesseract (optional)](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#pytesseract-optional)
 5. [Troubleshooting Installation Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting-installation-issues)
+    - [Ninja Build Errors](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#ninja-build-errors)
     - [Python Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#python-issues)
     - [Other Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#other-issues)
 6. [First Run with llama.cpp](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#first-run-with-llamacpp)
@@ -337,57 +341,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
-### 9. ExLlamaV2
-
-- **NOTE: Do NOT set this up in a location that's synced by a cloud-backup service, such as OneDrive! This is because a lot of files are created by ExLlamaV2 during quantizing and deleted thereafter, and OneDrive especially likes to hold permissions hostage. If unavoidable, make sure to disable the cloud-backup service temporarily at the least.**
-
-- **ANOTHER NOTE: Disabling cloud-sync such as OneDrive can cause errors during quantization IF using a previously synced repo after reinstalling Windows, as OneDrive might display the entire ExLlamaV2 dir the files haven't been locally synced though they may appear to be present in Explorer! In such cases, simply delete and re-run HF-Waitress, as it'll re-clone the ExLlamaV2 repo afresh.**
-
-- ExLlama is a highly optimized LLM inference library specifically for consumer GPUs.
-
-- ENSURE YOU'RE DOING THIS AFTER INSTALLING FLASH ATTENTION 2!
-
-- Since HF-Waitress includes full management of ExLlama, including the downloading and quantization of models and saving of measurements for each model processed, it will auto-clone the ExLlamaV2 repo onload 
-
-- The clone repo is used to facilitate conversion of model SafeTensors to the Exl2 format.
-
-- To faciliate all this, simply `pip install exllamav2==0.3.2 --no_deps` beforehand!
-
-- There's no need to `pip install` the dependencies in the requirements.txt within the ExLlamaV2 dir as these are included in LARS's requirements.txt already.
-
-- In case you encounter `Permission` Errors when quantizing models with ExLlamaV2, try the following:
-
-    0. FIRSTLY, see notes at the start of this section!!
-
-    1. OneDrive is the most likely culprit if on a synced folder so make sure to disable or at least temporarily shut it.
-
-    2. If that doesn't work/apply, try running `python hf_waitress.py --exl2` via an Admin shell from within the `LARS-Enterprise/web_app` dir.
-
-    3. If all else fails, try uninstalling and re-installing via an `Admin` shell: run `pip uninstall exllamav2 -y` from within the `exllamav2` dir, delete the entire directory, re-clone and re-install, and retry quantization via `python hf_waitress.py --exl2` from within the `LARS-Enterprise/web_app` dir.
-
-### 10. ExLlamaV3
-
-- The latest version of ExLlama leverages a new State-of-the-Art (SOTA) quantization technique called [QTIP.](https://github.com/turboderp-org/exllamav3/blob/master/doc/exl3.md)
-
-- Additionally, it's built from the ground-up to support modern LLM architectures and Tensor Parallelism.
-
-- Recent LLMs have increasingly diverged away from the foundational LLaMa architecure, including a rise of hybrid-architecture based LLMs (Transformers + Mamaba) and cutting-edge advances in efficiency (multi token prediction etc).
-
-- Supporting these by retrofitting the heavily LLaMa-based ExLlamaV2 became increasingly difficult with time, and with the rise in popularity of Tensor Parallelism for multiple-GPUs inferencing, ExLlama had to rebuilt from the ground-up to serve modern requirements.
-
-- Thus we have the latest ExLlamaV3, which is still in its infancy and early development cycle so keep an eye on the [official repo!](https://github.com/turboderp-org/exllamav3)
-
-- Once again as with ExLlamaV2 above, the HF-Waitress Server will auto-clone ExLlamaV3 onload to facilate conversion of model SafeTensors to the Exl3 format.
-
-- And so once again, make sure to `pip install exllamav3==0.0.15 --no_deps` beforehand!
-
-- ENSURE YOU'RE DOING THIS AFTER INSTALLING FLASH ATTENTION 2!
-
-- All Exl3 dependencies are in the requirements.txt file so no need to worry about those!
-
-[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
-
-### 11. Speech Features - ASR & TTS 
+### 9. Speech Features - ASR & TTS 
 
 - Privion, via HF-Waitress, can leverage various Automatic Speech Recogniton (ASR) models for Speech Transcription, so you can interact using your voice.
 
@@ -410,7 +364,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
         - Either download the installer via the [official releases on GitHub](https://github.com/espeak-ng/espeak-ng/releases), or via an admin PowerShell, run the below and enter *Y* when prompted:
             ```
-            winget install --id=eSpeak-NG.eSpeak-NG -e
+            winget install --id=eSpeak-NG.eSpeak-NG -e
             ```
 
         - **Tested with v1.52 as of Nov-2025**
@@ -419,7 +373,9 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
         - The specific version is related to TochCodec (specified in `reqs_speech.txt`, but more on this in a bit), which states that, ["TorchCodec with CUDA should work with FFmpeg versions in [4, 7] on all platforms, and FFmpeg version 8 is supported on Linux."](https://github.com/meta-pytorch/torchcodec?tab=readme-ov-file#installing-cuda-enabled-torchcodec), and ["TorchCodec for CPU supports major FFmpeg versions in [4, 7] on all platforms, and FFmpeg version 8 is supported on Mac and Linux."](https://github.com/meta-pytorch/torchcodec?tab=readme-ov-file#installing-cpu-only-torchcodec)
 
-        - That said, I had no issues with the latest FFmpeg v8 build on Windows, but no hard sticking to the recommendation above!
+        - Also, a Torchcodec-Torch-Python version compatibility table can be found on the pages linked above.
+
+        - That said, I had no issues with the latest FFmpeg v8 build on Windows, but no harm sticking to the recommendation above!
 
         - Having determined the version, Download the **SHARED (V.IMP!)** version of FFmpeg from this [link](https://www.gyan.dev/ffmpeg/builds/), for example `ffmpeg-7.1.1-full_build-shared.7z` or for v8, `ffmpeg-release-full-shared.7z`
 
@@ -490,7 +446,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
         - This is why we downloaded the *shared* version of FFmpeg earlier: The other versions only have the FFmpeg executables but not the DLLs!
 
-### 12. Docker
+### 10. Docker
 
 - Privion uses Docker to pull & run the latest FalkorDB Graph Database container - without Docker, GraphRAG features will NOT work! 
 
@@ -520,6 +476,85 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
+### 11. ExLlamaV2 and ExLlamaV3
+
+- ExLlama is a highly optimized LLM inference library specifically for consumer GPUs.
+
+- LARS-Enterprise/Privion supports ExLlamaV2 and ExLlamaV3 natively via the bundled HF-Waitress LLM Server, which includes full management of both backends: The entire process of downloading and quantizing LLMs, including persistent storage of the `measurements.json` for `exl2` and the automatic application of the necessary prompt-template format for any LLM served via either backend is completely managed by HF-Waitress - simply paste in the model's ID from [HuggingFace.co](https://huggingface.co/models)!
+
+- The latest `exllamav3` leverages a new State-of-the-Art (SOTA) quantization technique called [QTIP](https://github.com/turboderp-org/exllamav3/blob/master/doc/exl3.md)
+
+- Additionally, it's built from the ground-up to support modern LLM architectures as recent LLMs which have increasingly diverged away from the basic LLaMa architecure, including a rise of hybrid-architecture based LLMs (Transformers + Mamaba) coupled with cutting-edge advances in inferencing efficiency (via multi-token prediction etc).
+
+- Supporting these by retrofitting the heavily LLaMa-based ExLlamaV2 became increasingly difficult with time, and with the rise in popularity of Tensor Parallelism for multiple-GPU inferencing, ExLlama had to rebuilt from the ground-up to serve modern requirements.
+
+- Thus we have the latest ExLlamaV3, which is still in its infancy and early development cycle so keep an eye on the [official repo!](https://github.com/turboderp-org/exllamav3)
+
+#### Note on OneDrive & Other Cloud Sync Services
+
+- **Do NOT set this up in a location that's synced by a cloud-backup service, such as OneDrive! This is because a lot of files are created & updated during quantizing and deleted during or thereafter, and cloud-syncing services will hold permissions hostage as the attempt to upload backups. If unavoidable, make sure to disable the cloud-backup service temporarily when quantizing models.**
+
+- **Special Note On Windows/OS Reinstalls: If this application was setup in a location synced by OneDrive, all files may appear to present after an OS re-install. However, when disabling OneDrive as per the note above before attepting quantization on the fresh machine, many errors may be encountered. This is because while all files show up in Explorer, they aren't actually downloaded from the OneDrive cloud unless required, whcih then loeads to an error when OneDrive isn't running! Terrilbe UX from MS, but resolving this is simple: delete the `exllamav2` and `exllamav3` dirs as HF-Waitress will reclone them on load.**
+
+#### Proper Installation Procedure
+
+- ENSURE YOU'RE DOING THIS AFTER INSTALLING FLASH ATTENTION 2!
+
+- Since the bundled HF-Waitress LLM server includes full management of ExLlama, including the downloading and quantization of models and saving of measurements for each model processed, it will auto-clone the ExLlamaV2 and ExLlamaV3 repos on load
+
+- **It's very important to run the pip installation from within these cloned dirs! See below for details.**
+
+- The `requirements.txt` file does not contain `exllamav2` and `exllamav3` for a reason: installing via `pip install exllamav2 exllamav3` while quantizing models via the scripts in the cloned repos will result in errors! Simply put, for some reason, the pip installs of exllama are not compatible with the cloned repos of exllama that we use for quantization!
+
+- So the correct procedure for installation of the `exl` backends is to work through the below steps:
+
+    1. Launch LARS-Enterprise/Privion after completing all previous installation steps, proceed to `localhost:5000` via the browser and complete first load
+    2. At this point, HF-Waitress will have launched with a starter LLM and minimal quantization via BitsAndBytes/Quanto
+    3. Most importantly, the `exllamav2` and `exllamav3` repos would have been cloned from GitHub and dirs of those names will be found in `LARS-Enterprise\web_app`
+    4. Installation can now be carried out:
+        ```
+        cd LARS-Enterprise\web_app\exllamav2
+        pip install . --no-deps
+
+        # After completion, repeat for v3:
+
+        cd LARS-Enterprise\web_app\exllamav3
+        pip install . --no-deps
+        ```
+    5. We use the `--no-deps` flags above as dependencies for both exllama backends are maintained in the LARS-Enterprise/Privion `requirements.txt` file
+    6. While ExLlamaV2 is compatible with a host of GPUs, ExLlamaV3 presently only supports Nvidia GPUs. Check the official repos and install either/both accordingly!
+    7. On a system with Nvidia GPUs, if you wish to install only one of these backends, go with `exllamav3`. However, it's recommended to install both as `v2` is more mature and can serve as a fallback for `v3`, which is in early stages and better supports modern LLM archictectures.  
+
+- **Ignoring the above steps will result in a cryptic error pertaining to Ninja when attempting quantization, with a collosal and completely useless traceback!**
+
+- Specifically, the error will be along the lines of `subprocess.CalledProcessError: Command '['ninja', '-v']' returned non-zero exit status 1104.`
+
+- LLMs, even the likes of Gemini-3 and GPT5 etc will be unable to assist in resolving this - they'll fixate on the error code as `LNK1104: cannot open file` points to a Windows-Linker error caused by file permissions or other issues and they'll insist it's a hung Python process or other issues with Ninja, CUDA, and Visual Studio / CMake on Windows that are the root cause.
+
+- **However the error has nothing to do with Ninja, VS, CUDA or anything of the like and is simply a mismatch between the pip installed and git cloned versions of ExLlama! So if this error is encountered, the solution is to simply pip uninstall -y exllamav2 exllamav3,  followed by `pip install .` from with the `exllamav2` and `exllamav3` dirs as detailed above!**
+
+- If you do encounter the above error, it is however a good idea to validate that Ninja is correctly installed - via Git Bash:
+    ```
+    ninja --version
+    echo $?     # should returne exit-code 0
+    ```
+
+- If the exit-code from the above is anything other than `0`, then `pip uninstall -y ninja` and `pip install ninja` and retry, however this is unlikely to be an issue!
+
+- Lastly of note, `pip install exllamav2 exllamav3` installs the Just-In-Time (JIT) compile versions of these packages, which leads to very slow startup times for HF-Waitress as the backends must be compiled on load, while performing `pip install .` from within the cloned repos builds the entire package and allows for near-instant startup of the HF-Waitress server.
+
+#### Permission Errors 
+
+- In case you encounter `Permission` Errors when quantizing models with ExLlamaV2, try the following:
+
+    0. FIRSTLY, see the sections on OneDrive & the proper installation procedure!!
+
+    1. OneDrive is the most likely culprit if on a synced folder so make sure to disable or at least temporarily shut it.
+
+    2. If that doesn't work/apply, try running `python hf_waitress.py --exl2` via an Admin shell from within the `LARS-Enterprise/web_app` dir.
+
+    3. If all else fails, try uninstalling and re-installing via an `Admin` shell: run `pip uninstall exllamav2 -y`, delete the entire `exllamav2` directory, re-clone and re-install, and retry quantization via `python hf_waitress.py --exl2` from within the `LARS-Enterprise/web_app` dir.
+
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
 ## Usage - First Run
@@ -539,7 +574,6 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 - On first query, an embedding model (all-mpnet-base-v2) will be downloaded from HuggingFace Hub, which should take a brief time
 
 - **NOTE: ASR & TTS are not enabled by default, and must be enabled manually via the Settings menu!**
-
 
 ### Laptop Powerplan Recommendation
 
@@ -573,6 +607,15 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 ## Optional Dependencies
 
+### Transformers Dev Versions
+
+- Occasionally, a new LLM Arch might require the installation of Transformers from source, as the stable pip version may not be equipped to support the new model.
+
+- In this case, install from source with the understanding that overall stability may be impacted - in almost all cases it's better to wait for a stable release!
+    ```
+    pip uninstall -y transformers
+    pip install git+https://github.com/huggingface/transformers
+    ```
 
 ### llama.cpp
 
@@ -728,6 +771,10 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 ## Troubleshooting Installation Issues
 
+### Ninja Build Errors
+
+- Refer to the [ExLlama installation](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#proper-installation-procedure)) section for help!
+
 ### Python Issues:
 
 - LARS has been built and tested with Python v3.11.x
@@ -765,56 +812,79 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     python3 --version
     ```
 
+- For issues with specific packages or cached wheels, try the following:
+
+    1. Rebuild packages without using cached wheels or pre-compiled binaries:
+        ```
+        pip install ninja --no-binary ninja --no-cache-dir
+        ```
+
+    2. Inspect local cache for a specific package:
+        ```
+        pip cache list ninja
+        pip cache list flash_attn
+        ```
+    
+    3. Remove local cache for a specified package:
+        ```
+        pip cache remove ninja
+        ```
+
+    4. Delete entire local cache - Locate & delete the cache dir:
+        ```
+        pip cache dir
+        ```
+
 - If you encounter errors with ```pip install```, try the following:
 
-1. Remove version numbers:
+    1. Remove version numbers:
 
-    - If a specific package version causes an error, edit the corresponding requirements.txt file to remove the version constraint, that is the `==version.number` segment, for example:    
-    ```urllib3==2.0.4```    
-    simply becomes:    
-    ```urllib3```
+        - If a specific package version causes an error, edit the corresponding requirements.txt file to remove the version constraint, that is the `==version.number` segment, for example:    
+        ```urllib3==2.0.4```    
+        simply becomes:    
+        ```urllib3```
 
-2. Create and use a Python virtual environment:
+    2. Create and use a Python virtual environment:
 
-    - NOTE: THIS IS NOT ADVISABLE FOR NOW AS A NUMBER OF PROCESS ARE LAUNCHED BY PRIVION WHICH WILL FAIL AS THEY MIGHT START IN THE GLOBAL NAMESPACE! RETAINING THIS SECTION FOR REF BUT DO NOT DO THIS FOR NOW!
+        - NOTE: THIS IS NOT ADVISABLE FOR NOW AS A NUMBER OF PROCESS ARE LAUNCHED BY PRIVION WHICH WILL FAIL AS THEY MIGHT START IN THE GLOBAL NAMESPACE! RETAINING THIS SECTION FOR REF BUT DO NOT DO THIS FOR NOW!
 
-    - It's advisable to use a virtual environment to avoid conflicts with other Python projects
+        - It's advisable to use a virtual environment to avoid conflicts with other Python projects
 
-    - Windows:
-    
-        - Create a Python virtual environment (venv):
-            ```
-            python -m venv larsenv
-            ```
+        - Windows:
+        
+            - Create a Python virtual environment (venv):
+                ```
+                python -m venv larsenv
+                ```
 
-        - Activate, and subsequently use, the venv:
-            ```
-            .\larsenv\Scripts\activate
-            ```
+            - Activate, and subsequently use, the venv:
+                ```
+                .\larsenv\Scripts\activate
+                ```
 
-        - Deactivate venv when done:
-            ```
-            deactivate
-            ```
+            - Deactivate venv when done:
+                ```
+                deactivate
+                ```
 
-    - Linux and MacOS:
+        - Linux and MacOS:
 
-        - Create a Python virtual environment (venv):
-            ```
-            python3 -m venv larsenv
-            ```
+            - Create a Python virtual environment (venv):
+                ```
+                python3 -m venv larsenv
+                ```
 
-        - Activate, and subsequently use, the venv:
-            ```
-            source larsenv/bin/activate
-            ```
+            - Activate, and subsequently use, the venv:
+                ```
+                source larsenv/bin/activate
+                ```
 
-        - Deactivate venv when done:
-            ```
-            deactivate
-            ```
+            - Deactivate venv when done:
+                ```
+                deactivate
+                ```
 
-3. If problems persist, consider opening an issue on the [LARS GitHub repository](https://github.com/abgulati/LARS-Enterprise/issues) for support.
+    3. If problems persist, consider opening an issue on the [LARS GitHub repository](https://github.com/abgulati/LARS-Enterprise/issues) for support.
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
