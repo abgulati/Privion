@@ -68,7 +68,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     - [9. Speech Features - ASR & TTS ](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#11-speech-features---asr--tts)
     - [10. Docker Desktop](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#12-docker)
     - [11. ExLlamaV2 and ExLlamaV3](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#11-exllamav2-and-exllamav3)
-        - [Note on OneDrive & Other Cloud Sync Services](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#note-on-onedrive---other-cloud-sync-services)
+        - [Note on OneDrive & Other Cloud Sync Services](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#note-on-onedrive--other-cloud-sync-services)
         - [Proper Installation Procedure](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#proper-installation-procedure)
         - [Permission Errors ](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#permission-errors)
 3. [Usage - First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#usage---first-run)
