@@ -5198,6 +5198,8 @@ def asr_server_starter(hard_reboot_required: bool = False):
         '--quantize', 'n',
     ]
 
+    print(f"\n\nLaunching ASR-Waitress server with command: {' '.join(cmd_list)}\n\n")
+
     try:
         if platform.system() == 'Windows':
             asr_waitress_process = subprocess.Popen(
@@ -5822,8 +5824,10 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
     launch_args = launch_args.strip()
     base_command = 'python' if platform.system() == 'Windows' else 'python3'
     command_list = [base_command, 'hf_waitress.py']
-    if launch_args.strip():  # Add any additional arguments - Only if there are actual arguments
+    if launch_args:  # Add any additional arguments - Only if there are actual arguments
         command_list.extend(launch_args.split())
+
+    print(f"\n\nLaunching HF-Waitress server with command: {' '.join(command_list)}\n\n")
 
     try:
         if platform.system() == 'Windows':
