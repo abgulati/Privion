@@ -67,8 +67,8 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     - [8. Flash-Attention 2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#8-flash-attention-2)
     - [9. Speech Features - ASR & TTS ](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#11-speech-features---asr--tts)
     - [10. Docker Desktop](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#12-docker)
-    - [11. ExLlamaV2 and ExLlamaV3](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#10-exllamav3)
-        - [Note on OneDrive & Other Cloud Sync Services](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#note-on-onedrive-&-other-cloud-sync-services)
+    - [11. ExLlamaV2 and ExLlamaV3](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#10-exllamav2-and-exllamav3)
+        - [Note on OneDrive & Other Cloud Sync Services](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#note-on-onedrive---other-cloud-sync-services)
         - [Proper Installation Procedure](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#proper-installation-procedure)
         - [Permission Errors ](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#permission-errors)
 3. [Usage - First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#usage---first-run)
@@ -609,7 +609,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 ### Transformers Dev Versions
 
-- Occasionally, a new LLM Arch might require the installation of Transformers from source, as the stable pip version may not be equipped to support the new model.
+- Occasionally, a new LLM architecture might require the installation of Transformers from source, as the stable pip version may not be equipped to support the new model.
 
 - In this case, install from source with the understanding that overall stability may be impacted - in almost all cases it's better to wait for a stable release!
     ```
@@ -773,7 +773,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 ### Ninja Build Errors
 
-- Refer to the [ExLlama installation](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#proper-installation-procedure)) section for help!
+- Refer to the [ExLlama installation](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#proper-installation-procedure) section for help!
 
 ### Python Issues:
 
