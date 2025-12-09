@@ -8,13 +8,13 @@ try:
     from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Tokenizer
     from exllamav2.generator import ExLlamaV2StreamingGenerator, ExLlamaV2DynamicGenerator, ExLlamaV2Sampler, ExLlamaV2DynamicJob
     from exllamav2 import ExLlamaV2Cache, ExLlamaV2Cache_8bit, ExLlamaV2Cache_Q4, ExLlamaV2Cache_Q6, ExLlamaV2Cache_Q8
-except ImportError:
+except Exception:
     print("exllamav2 is not installed. Skipping import.")
 
 try:
     from exllamav3 import Model, Config, Cache, Tokenizer, Generator, Job, CacheLayer_fp16, CacheLayer_quant
     from exllamav3.generator.sampler import ComboSampler
-except ImportError:
+except Exception:
     print("exllamav3 is not installed. Skipping import.")
 
 try:
@@ -24,7 +24,7 @@ try:
     import librosa
     import torch
     import queue
-except ImportError:
+except Exception:
     print("Core dependecies for ASR pipeline are not installed, skipping import. WARNING: ASR will not work!")
 
 try:
@@ -35,19 +35,22 @@ try:
     from scipy.io.wavfile import read   # To read the in-memory audio wav file
     import tempfile
     import pyttsx3
-except ImportError:
+except Exception:
     print("Optional dependecies for ASR pipeline are not installed, skipping import. WARNING: Some ASR models/features will not work!")
 
-from diffusers import FluxPipeline, FluxTransformer2DModel
+try:
+    from diffusers import FluxPipeline, FluxTransformer2DModel
+except Exception:
+    print("diffusers is not installed. Skipping import.")
 
 try:
     from optimum.quanto import freeze, qfloat8, quantize
-except ImportError:
+except Exception:
     print("optimum.quanto is not installed. Skipping import.")
 
 try:
     from transformers import MllamaForConditionalGeneration
-except ImportError:
+except Exception:
     print("transformers version is below 4.45.0 required from Llama3.2-Vision. Skipping MllamaForConditionalGeneration import.")
 
 from werkzeug.utils import secure_filename
@@ -98,7 +101,7 @@ except Exception as e:
 
 try:
     if not os.path.exists(os.path.join(os.getcwd(), 'exllamav3')):
-        subprocess.run(['git', 'clone', '-b', 'v0.0.15', 'https://github.com/turboderp-org/exllamav3'], check=True)  # check=True raises an exception on non-zero exit code
+        subprocess.run(['git', 'clone', '-b', 'v0.0.17', 'https://github.com/turboderp-org/exllamav3'], check=True)  # check=True raises an exception on non-zero exit code
 except Exception as e:
     print(f"Could not clone exllamav3, encountered error: {e}")
 
