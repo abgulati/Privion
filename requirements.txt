@@ -1,5 +1,5 @@
 accelerate>=1.7.0
-bitsandbytes>=0.46.0
+bitsandbytes>=0.46.1
 blobfile>=3.0.0
 chromadb>=1.0.12
 diffusers>=0.33.1
