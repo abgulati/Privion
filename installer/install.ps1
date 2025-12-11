@@ -73,6 +73,7 @@ Write-Host "    - [OK] ASR & TTS dependencies installed." -ForegroundColor Green
 # c. Reset NumPy & Transformers to compatible versions
 pip install numpy==2.2.6
 pip install transformers==4.57.3
+pip uninstall -y hf_xet
 
 Write-Host "    - [6] Setting FFMpeg to PATH..." -ForegroundColor Yellow
 $FFMpegPath = "$PSScriptRoot\ffmpeg-8.0-full_build-shared\bin"
