@@ -526,7 +526,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
         cd LARS-Enterprise\web_app\exllamav3
         pip install . --no-build-isolation
         ```
-    5. The `--no-build-isolation` flag is crucial as newer versions of PIP strictly enforce the PEP 517 standard wherein it creates a hermetically sealed (airtight) "clean room" for the build
+    5. The `--no-build-isolation` flag is crucial as newer versions of PIP strictly enforce the PEP 517 standard wherein a hermetically sealed (airtight) "clean room" is created for the build
         - Large dependencies such as Torch might not be included in that temporary clean room!
         - This can lead to silent errors such as `Cannot precompile unless torch is installed.` 
         - To view these and diagnose other build issues, add the `--verbose` flag: `pip install . -v`
