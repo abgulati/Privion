@@ -416,9 +416,10 @@ Privion is a versatile AI application focused on privacy and offline inferencing
             pip install nemo_toolkit['asr']
             ```
 
-        - This might change your NumPy version to one incompatible with other dependencies, so lastly:
+        - This might change the version of NumPy & Transformers to one incompatible with other dependencies, so lastly:
             ```
             pip install numpy==2.2.6
+            pip install transformers==4.57.3
             ```
 
     4. Recommended ASR Settings in Privion:
@@ -490,6 +491,10 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - Thus we have the latest ExLlamaV3, which is still in its infancy and early development cycle so keep an eye on the [official repo!](https://github.com/turboderp-org/exllamav3)
 
+- While ExLlamaV2 is compatible with a host of GPUs, ExLlamaV3 presently only supports Nvidia GPUs. Check the official repos and install either/both accordingly!
+
+- On a system with Nvidia GPUs, if you wish to install only one of these backends, go with `exllamav3`. However, it's recommended to install both as `v2` is more mature and can serve as a fallback for `v3`.
+
 #### Note on OneDrive & Other Cloud Sync Services
 
 - **Do NOT set this up in a location that's synced by a cloud-backup service, such as OneDrive! This is because a lot of files are created & updated during quantizing and deleted during or thereafter, and cloud-syncing services will hold permissions hostage as they attempt to upload backups. If unavoidable, make sure to disable the cloud-backup service temporarily when quantizing models.**
@@ -514,17 +519,29 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     4. Installation can now be carried out:
         ```
         cd LARS-Enterprise\web_app\exllamav2
-        pip install . --no-deps
+        pip install . --no-build-isolation
 
         # After completion, repeat for v3:
 
         cd LARS-Enterprise\web_app\exllamav3
-        pip install . --no-deps
+        pip install . --no-build-isolation
         ```
-    5. We use the `--no-deps` flags above as dependencies for both exllama backends are maintained in the LARS-Enterprise/Privion `requirements.txt` file
-    6. While ExLlamaV2 is compatible with a host of GPUs, ExLlamaV3 presently only supports Nvidia GPUs. Check the official repos and install either/both accordingly!
-    7. On a system with Nvidia GPUs, if you wish to install only one of these backends, go with `exllamav3`. However, it's recommended to install both as `v2` is more mature and can serve as a fallback for `v3`, which is in early stages and better supports modern LLM archictectures.  
-
+    5. The `--no-build-isolation` flag is crucial as newer versions of PIP strictly enforce the PEP 517 standard wherein it creates a hermetically sealed (airtight) "clean room" for the build
+        - Large dependencies such as Torch might not be included in that temporary clean room!
+        - This can lead to silent errors such as `Cannot precompile unless torch is installed.` 
+        - To view these and diagnose other build issues, add the `--verbose` flag: `pip install . -v`
+    6. The installation should take at the very least a couple minutes for each, and you should see your CPU ramping up during this time.
+    7. If the installation completes near instantly, that likely means the required CUDA/C++ extensions were not compiled:
+        - Due to this, a Just-in-Time (JIT) compilation will be attempted when HF-Waitress is launched
+        - As a result, the server will take an annoyingly long time to launch
+        - Quantization via ExLlamaV2 and ExLlamaV3 will most likely fail in this scenarion
+        - Investigate the cause by uninstalling the backends, then reinstalling in verbose mode and noting the errors:
+            ```
+            pip uninstall -y exllamav2 exllamav3
+            cd web_app/exllamav2
+            pip install . -v
+            ```
+            
 - **Ignoring the above steps will result in a cryptic error pertaining to Ninja when attempting quantization, with a collosal and completely useless traceback!**
 
 - Specifically, the error will be along the lines of `subprocess.CalledProcessError: Command '['ninja', '-v']' returned non-zero exit status 1104.`
