@@ -1,3 +1,0 @@
-aiowebostv>=0.7.5
-govee-local-api>=2.2.0
-wakeonlan>=3.1.0
