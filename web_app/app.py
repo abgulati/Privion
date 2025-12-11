@@ -3643,7 +3643,7 @@ def get_google_drive_user():
         return jsonify(success=True, user_name=user_name)
     except Exception as e:
         handle_error_no_return("Could not get user name from Google Drive, encountered error: ", e)
-        return jsonify(success=True)
+        return jsonify(success=False)
 
 
 @app.route('/logout_from_google_drive')
@@ -5394,7 +5394,7 @@ def check_status_and_shutdown_llm_server(server_to_shutdown: str):
             raise Exception(result['message'])
     
     except Exception as e:
-        err_msg = f"Could not terminate running server at URL {target_server_url}. Your IP is likely not whitelisted and thus unauthorized for this action, contact the administrator for help. Provide the following technical details: "
+        err_msg = f"Could not terminate running server at URL {target_server_url}. The server may have been launched externally, in which case Privion does not have control over it, or your IP is not whitelisted / authorized for this action. Contact the administrator for help with the following technical details: "
         handle_error_no_return(err_msg, e)
         return {'success': False, 'message': f"{err_msg} {e}"}
 
@@ -5707,7 +5707,8 @@ def run_prechecks_for_hf_waitress_server_starter(exclusive_server_mode: bool, ha
     '''
     
     global LLAMA_CPP_PROCESS
-    hf_waitress_server_running, llama_cpp_server_running = False, False
+    hf_waitress_server_running = False
+    llama_cpp_server_running = False if LLAMA_CPP_PROCESS is None else True
     hf_waitress_base_url = get_url_for_server('hf-waitress')
     llama_cpp_base_url = get_url_for_server('llama-cpp')
     try:
