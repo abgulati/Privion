@@ -1,0 +1,141 @@
+{
+	"info": {
+		"_postman_id": "dd6b8eb2-154e-4323-8bc1-ef9354cafae3",
+		"name": "Kosmos-2.5",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "40026557"
+	},
+	"item": [
+		{
+			"name": "infer - legacy",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "image",
+							"type": "file",
+							"src": "/C:/Users/abhee/OneDrive/Documents/Work_Stuff/LLMs/microsoft/kosmos-windows-debugging/Markdown-Issue/Sample-4-Ports.png"
+						},
+						{
+							"key": "task",
+							"value": "ocr",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:25000/infer",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "25000",
+					"path": [
+						"infer"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "infer_file",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/M:/Storage/lars_storage/uploaded_pdfs/W2_Elizabeth_Darling.pdf"
+						},
+						{
+							"key": "task",
+							"value": "ocr",
+							"type": "text"
+						},
+						{
+							"key": "threshold",
+							"value": "20",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:25000/infer_file",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "25000",
+					"path": [
+						"infer_file"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "infer_file_stream",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/M:/Storage/lars_storage/uploaded_pdfs/W2_Elizabeth_Darling.pdf"
+						},
+						{
+							"key": "task",
+							"value": "ocr",
+							"type": "text"
+						},
+						{
+							"key": "threshold",
+							"value": "20",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:25000/infer_file_stream",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "25000",
+					"path": [
+						"infer_file_stream"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "stop_streaming",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:25000/stop_streaming",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "25000",
+					"path": [
+						"stop_streaming"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

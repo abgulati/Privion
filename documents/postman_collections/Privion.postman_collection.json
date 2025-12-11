@@ -1,0 +1,434 @@
+{
+	"info": {
+		"_postman_id": "175c798b-051f-4c52-bacc-85bd6561f8b1",
+		"name": "Privion",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "40026557"
+	},
+	"item": [
+		{
+			"name": "Start-FalkorDB",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/start_falkordb",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"start_falkordb"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Config-Reader",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"keys\": [\r\n    \"model_choice\",\r\n    \"enable_tts\",\r\n    \"asr_model\",\r\n    \"asr_vad_model\",\r\n    \"asr_torch_device\",\r\n    \"asr_wake_word\",\r\n    \"selected_embedding_model\"\r\n  ]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:5000/config_reader_api",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"config_reader_api"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Config-Writer",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"config_updates\": {\r\n    \"llama_cpp_gpu_layers\":50,\r\n    \"llama_cpp_use_gpu\":true,\r\n    \"asr_wake_word\":\"marcus\"\r\n  }\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:5000/config_writer_api",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"config_writer_api"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Load-Local-Models",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/load_local_models",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"load_local_models"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GGUF-Reader",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"model_name\":\"Qwen3-1.7B-Q3_K_M.gguf\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:5000/gguf_reader",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"gguf_reader"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Check-GDrive-Auth",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/check_gdrive_auth",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"check_gdrive_auth"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Fetch-File-List-From-GDrive",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/fetch_file_list_from_google_drive",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"fetch_file_list_from_google_drive"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get-GDrive-User",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/get_google_drive_user",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"get_google_drive_user"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Load-TTS-Pipeline",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/load_tts_pipeline",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"load_tts_pipeline"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "TTS-Voice",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"text\":\"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:5000/tts_voice",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"tts_voice"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Shutdown-LLM-Server",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"server_to_shutdown\":\"asr-waitress\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:5000/shutdown_local_llm_server",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"shutdown_local_llm_server"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "HF-Waitress-Starter",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"hard_reboot_required\":false\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:5000/hf_waitress_server_starter_endpoint",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"hf_waitress_server_starter_endpoint"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Check-LLM-Server-Status",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "server_to_check",
+							"value": "llama-cpp",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:5000/check_local_llm_server_status",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"check_local_llm_server_status"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "LLM-Server-Starter",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/local_llm_server_starter",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"local_llm_server_starter"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "System-Prompt-Update",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "prompt_template",
+							"value": "Answer the user's question in as much detail as possible. Be very helpful, witty and precise. Do not make up answers or fabricate false information!",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:5000/set_prompt_template",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"set_prompt_template"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Fetch-File-List-From-VectorDB",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "selected_embedding_model",
+							"value": "Qwen/Qwen3-Embedding-0.6B",
+							"type": "text"
+						},
+						{
+							"key": "selected_knowledge_domain",
+							"value": "Financial",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:5000/fetch_file_list_for_vector_db",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"fetch_file_list_for_vector_db"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Load-Chat-History-List",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/load_chat_history_list",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"load_chat_history_list"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

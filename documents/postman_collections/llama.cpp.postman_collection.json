@@ -1,0 +1,60 @@
+{
+	"info": {
+		"_postman_id": "b76868e0-54d3-4a07-920e-04d8e915b697",
+		"name": "llama.cpp",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "40026557"
+	},
+	"item": [
+		{
+			"name": "/v1/chat/completions",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"messages\": [\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Hello!\"\r\n        }\r\n    ],\r\n    \"temperature\":0.1,\r\n    \"top_k\":40,\r\n    \"top_p\":0.9,\r\n    \"min_p\":0.1,\r\n    \"n_keep\":0,\r\n    \"repeat_penalty\":1,\r\n    \"presence_penalty\":0,\r\n    \"frequency_penalty\":0,\r\n    \"stream\": true\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/v1/chat/completions",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"v1",
+						"chat",
+						"completions"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/v1/models",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/v1/models",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"v1",
+						"models"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

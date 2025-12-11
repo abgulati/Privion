@@ -1,0 +1,67 @@
+{
+	"info": {
+		"_postman_id": "0432e02c-23cb-46c5-940d-2700f206e46b",
+		"name": "HF-Waitress-OpenAI",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "40026557"
+	},
+	"item": [
+		{
+			"name": "/v1/chat/completions",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"model\": \"exl3\",\r\n    \"messages\": [\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Hello!\"\r\n        }\r\n    ],\r\n    \"temperature\":0.1,\r\n    \"top_k\":40,\r\n    \"top_p\":0.9,\r\n    \"min_p\":0.1,\r\n    \"n_keep\":0,\r\n    \"repeat_penalty\":1,\r\n    \"presence_penalty\":0,\r\n    \"frequency_penalty\":0,\r\n    \"stream\": true\r\n  }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:9069/v1/chat/completions",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"v1",
+						"chat",
+						"completions"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/v1/models",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"model\": \"exl2\",\r\n    \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}],\r\n    \"stream\": true\r\n  }"
+				},
+				"url": {
+					"raw": "http://localhost:9069/v1/models",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"v1",
+						"models"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

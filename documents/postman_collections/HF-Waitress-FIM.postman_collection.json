@@ -1,0 +1,148 @@
+{
+	"info": {
+		"_postman_id": "4d4cb315-e429-41f0-aa7c-debed01f1e59",
+		"name": "HF-Waitress-FIM",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "40026557"
+	},
+	"item": [
+		{
+			"name": "Exl3-FIM-Stream",
+			"protocolProfileBehavior": {
+				"followRedirects": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					},
+					{
+						"key": "X-Return-Full-Text",
+						"value": "False",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Temperature",
+						"value": "0.7",
+						"type": "text"
+					},
+					{
+						"key": "X-Do-Sample",
+						"value": "True",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Top-K",
+						"value": "40",
+						"type": "text"
+					},
+					{
+						"key": "X-Top-P",
+						"value": "0.95",
+						"type": "text"
+					},
+					{
+						"key": "X-Min-P",
+						"value": "0.05",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"prefix\":\"def hello():\", \"suffix\":\"\", \"language\":\"python\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:9069/exl3_fim_stream",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"exl3_fim_stream"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Exl2-FIM-Stream",
+			"protocolProfileBehavior": {
+				"followRedirects": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					},
+					{
+						"key": "X-Return-Full-Text",
+						"value": "False",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Temperature",
+						"value": "0.7",
+						"type": "text"
+					},
+					{
+						"key": "X-Do-Sample",
+						"value": "True",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Top-K",
+						"value": "40",
+						"type": "text"
+					},
+					{
+						"key": "X-Top-P",
+						"value": "0.95",
+						"type": "text"
+					},
+					{
+						"key": "X-Min-P",
+						"value": "0.05",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"prefix\":\"def hello():\", \"suffix\":\"\", \"language\":\"python\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:9069/exl2_fim_stream",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"exl2_fim_stream"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

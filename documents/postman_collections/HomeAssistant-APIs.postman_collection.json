@@ -1,0 +1,319 @@
+{
+	"info": {
+		"_postman_id": "8d987410-56e5-4897-a3f0-2ed86a738cba",
+		"name": "HomeAssistant-APIs",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "40026557"
+	},
+	"item": [
+		{
+			"name": "Home",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://homeassistant.local:8123",
+					"protocol": "http",
+					"host": [
+						"homeassistant",
+						"local"
+					],
+					"port": "8123"
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2ZjNhODU0MzNmMTI0NjA4OTg1OTAxMjUyMjYwYjAwOSIsImlhdCI6MTc1Nzk3NTU4MCwiZXhwIjoyMDczMzM1NTgwfQ.TsA7RIerXs7pAwyiGrU-wSdMeTbzAjDd_EJydDFwyE8",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://homeassistant.local:8123/api/",
+					"protocol": "http",
+					"host": [
+						"homeassistant",
+						"local"
+					],
+					"port": "8123",
+					"path": [
+						"api",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/ <get-endpoints>",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2MDY4ODBhNjBkYjI0MjA2ODNhZDMxZTg3NTBiM2YxMSIsImlhdCI6MTc1ODA1OTA3MiwiZXhwIjoyMDczNDE5MDcyfQ.eM0zKfgS5aLdkv98JFNXWvWfiplLLRNsYMx_uVPFns8",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://homeassistant.local:8123/api/services",
+					"protocol": "http",
+					"host": [
+						"homeassistant",
+						"local"
+					],
+					"port": "8123",
+					"path": [
+						"api",
+						"services"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/states",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2MDY4ODBhNjBkYjI0MjA2ODNhZDMxZTg3NTBiM2YxMSIsImlhdCI6MTc1ODA1OTA3MiwiZXhwIjoyMDczNDE5MDcyfQ.eM0zKfgS5aLdkv98JFNXWvWfiplLLRNsYMx_uVPFns8",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://homeassistant.local:8123/api/states",
+					"protocol": "http",
+					"host": [
+						"homeassistant",
+						"local"
+					],
+					"port": "8123",
+					"path": [
+						"api",
+						"states"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/states/<entity_id>",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2ZjNhODU0MzNmMTI0NjA4OTg1OTAxMjUyMjYwYjAwOSIsImlhdCI6MTc1Nzk3NTU4MCwiZXhwIjoyMDczMzM1NTgwfQ.TsA7RIerXs7pAwyiGrU-wSdMeTbzAjDd_EJydDFwyE8",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://homeassistant.local:8123/api/states/button.wake_on_lan_a4_36_c7_58_3f_18",
+					"protocol": "http",
+					"host": [
+						"homeassistant",
+						"local"
+					],
+					"port": "8123",
+					"path": [
+						"api",
+						"states",
+						"button.wake_on_lan_a4_36_c7_58_3f_18"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/states/<entity_id>",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2ZjNhODU0MzNmMTI0NjA4OTg1OTAxMjUyMjYwYjAwOSIsImlhdCI6MTc1Nzk3NTU4MCwiZXhwIjoyMDczMzM1NTgwfQ.TsA7RIerXs7pAwyiGrU-wSdMeTbzAjDd_EJydDFwyE8",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"state\": \"off\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://homeassistant.local:8123/api/states/media_player.lg_webos_tv_oled48a2pua",
+					"protocol": "http",
+					"host": [
+						"homeassistant",
+						"local"
+					],
+					"port": "8123",
+					"path": [
+						"api",
+						"states",
+						"media_player.lg_webos_tv_oled48a2pua"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/states/services - TV On!",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2MDY4ODBhNjBkYjI0MjA2ODNhZDMxZTg3NTBiM2YxMSIsImlhdCI6MTc1ODA1OTA3MiwiZXhwIjoyMDczNDE5MDcyfQ.eM0zKfgS5aLdkv98JFNXWvWfiplLLRNsYMx_uVPFns8",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"mac\":\"a4:36:c7:58:3f:18\",\r\n    \"broadcast_address\":\"192.168.1.142\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://homeassistant.local:8123/api/services/wake_on_lan/send_magic_packet",
+					"protocol": "http",
+					"host": [
+						"homeassistant",
+						"local"
+					],
+					"port": "8123",
+					"path": [
+						"api",
+						"services",
+						"wake_on_lan",
+						"send_magic_packet"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/api/states/services - TV Off!",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2MDY4ODBhNjBkYjI0MjA2ODNhZDMxZTg3NTBiM2YxMSIsImlhdCI6MTc1ODA1OTA3MiwiZXhwIjoyMDczNDE5MDcyfQ.eM0zKfgS5aLdkv98JFNXWvWfiplLLRNsYMx_uVPFns8",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"entity_id\":\"media_player.lg_webos_tv_oled48a2pua\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://homeassistant.local:8123/api/services/media_player/turn_off",
+					"protocol": "http",
+					"host": [
+						"homeassistant",
+						"local"
+					],
+					"port": "8123",
+					"path": [
+						"api",
+						"services",
+						"media_player",
+						"turn_off"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

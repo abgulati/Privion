@@ -1,9 +1,9 @@
 {
 	"info": {
-		"_postman_id": "0ea1e9f3-4c4c-4dd1-914f-c126f2943e0f",
+		"_postman_id": "7ebc68a7-51c1-47ec-8ecf-7607095c8834",
 		"name": "all-apis",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "19227763"
+		"_exporter_id": "40026557"
 	},
 	"item": [
 		{
@@ -193,7 +193,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"}, \r\n        {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n        {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n        {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n    ] \r\n}",
+					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"},\r\n        {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n        {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n        {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n    ] \r\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -823,6 +823,567 @@
 					"body": "{\n    \"response\": [\n        {\n            \"generated_text\": \"Let's solve the equation 2x + 3 = 7.\\n\\nTo solve for x, we need to isolate the variable x. We can do this by subtracting 3 from both sides of the equation:\\n\\n2x + 3 - 3 = 7 - 3\\n\\nThis simplifies to:\\n\\n2x = 4\\n\\nNext, we can divide both sides of the equation by 2 to solve for x:\\n\\n2x / 2 = 4 / 2\\n\\nx = 2\\n\\nSo, the value of x is 2.\"\n        }\n    ],\n    \"success\": true\n}"
 				}
 			]
+		},
+		{
+			"name": "ExLlamaV2-Tool-Stream",
+			"protocolProfileBehavior": {
+				"followRedirects": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					},
+					{
+						"key": "X-Return-Full-Text",
+						"value": "False",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Temperature",
+						"value": "0.7",
+						"type": "text"
+					},
+					{
+						"key": "X-Do-Sample",
+						"value": "True",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Top-K",
+						"value": "40",
+						"type": "text"
+					},
+					{
+						"key": "X-Top-P",
+						"value": "0.95",
+						"type": "text"
+					},
+					{
+						"key": "X-Min-P",
+						"value": "0.05",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"},\r\n        {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n        {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n        {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n    ] \r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:9069/exl2_stream",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"exl2_stream"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "http://localhost:9069/completions",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"messages\": [\r\n    {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"}, \r\n    {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n    {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n    {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:9069/completions",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "9069",
+							"path": [
+								"completions"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Server",
+							"value": "Werkzeug/3.0.1 Python/3.11.5"
+						},
+						{
+							"key": "Date",
+							"value": "Sun, 28 Jul 2024 07:43:01 GMT"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						},
+						{
+							"key": "Content-Length",
+							"value": "388"
+						},
+						{
+							"key": "Connection",
+							"value": "close"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"response\": [\n        {\n            \"generated_text\": \"Let's solve the equation 2x + 3 = 7.\\n\\nTo solve for x, we need to isolate the variable x. We can do this by subtracting 3 from both sides of the equation:\\n\\n2x + 3 - 3 = 7 - 3\\n\\nThis simplifies to:\\n\\n2x = 4\\n\\nNext, we can divide both sides of the equation by 2 to solve for x:\\n\\n2x / 2 = 4 / 2\\n\\nx = 2\\n\\nSo, the value of x is 2.\"\n        }\n    ],\n    \"success\": true\n}"
+				}
+			]
+		},
+		{
+			"name": "New Request",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		},
+		{
+			"name": "Exl2-FIM-Stream",
+			"protocolProfileBehavior": {
+				"followRedirects": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					},
+					{
+						"key": "X-Return-Full-Text",
+						"value": "False",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Temperature",
+						"value": "0.7",
+						"type": "text"
+					},
+					{
+						"key": "X-Do-Sample",
+						"value": "True",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Top-K",
+						"value": "40",
+						"type": "text"
+					},
+					{
+						"key": "X-Top-P",
+						"value": "0.95",
+						"type": "text"
+					},
+					{
+						"key": "X-Min-P",
+						"value": "0.05",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"prefix\":\"def hello():\", \"suffix\":\"\", \"language\":\"python\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:9069/exl2_fim_stream",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"exl2_fim_stream"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "http://localhost:9069/completions",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"messages\": [\r\n    {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"}, \r\n    {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n    {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n    {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:9069/completions",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "9069",
+							"path": [
+								"completions"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Server",
+							"value": "Werkzeug/3.0.1 Python/3.11.5"
+						},
+						{
+							"key": "Date",
+							"value": "Sun, 28 Jul 2024 07:43:01 GMT"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						},
+						{
+							"key": "Content-Length",
+							"value": "388"
+						},
+						{
+							"key": "Connection",
+							"value": "close"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"response\": [\n        {\n            \"generated_text\": \"Let's solve the equation 2x + 3 = 7.\\n\\nTo solve for x, we need to isolate the variable x. We can do this by subtracting 3 from both sides of the equation:\\n\\n2x + 3 - 3 = 7 - 3\\n\\nThis simplifies to:\\n\\n2x = 4\\n\\nNext, we can divide both sides of the equation by 2 to solve for x:\\n\\n2x / 2 = 4 / 2\\n\\nx = 2\\n\\nSo, the value of x is 2.\"\n        }\n    ],\n    \"success\": true\n}"
+				}
+			]
+		},
+		{
+			"name": "ExLlamaV3-Stream",
+			"protocolProfileBehavior": {
+				"followRedirects": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					},
+					{
+						"key": "X-Return-Full-Text",
+						"value": "False",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Temperature",
+						"value": "0.7",
+						"type": "text"
+					},
+					{
+						"key": "X-Do-Sample",
+						"value": "True",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Top-K",
+						"value": "40",
+						"type": "text"
+					},
+					{
+						"key": "X-Top-P",
+						"value": "0.95",
+						"type": "text"
+					},
+					{
+						"key": "X-Min-P",
+						"value": "0.05",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\r\n        \"role\": \"system\",\r\n        \"content\": \"You are a home automation assistant tasked with assisting the user in performing real-world actions\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Turn on the lamp\"\r\n        }\r\n    ],\r\n    \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"wol_turn_on_tv\", \"description\": \"Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"mac_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"}, \"target_ip\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}, \"port\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lg_webos_tv_turn_on\", \"description\": \"Turns on an LG WebOS TV.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"mac_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"}, \"target_ip\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}, \"port\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lg_webos_tv_turn_off\", \"description\": \"Turns off an LG WebOS TV.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"ip_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lamp_turn_on\", \"description\": \"Turns on a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lamp_turn_off\", \"description\": \"Turns off a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_brightness\", \"description\": \"Sets the brightness of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"brightness\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '100' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_color\", \"description\": \"Sets the color of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"red\": {\"type\": \"integer\", \"description\": \"\"}, \"green\": {\"type\": \"integer\", \"description\": \"\"}, \"blue\": {\"type\": \"integer\", \"description\": \"\"}}, \"required\": [\"red\", \"green\", \"blue\"], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_temperature\", \"description\": \"Sets the temperature of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"temperature\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '2700' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_scene\", \"description\": \"Sets the scene of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"scene\": {\"type\": \"string\", \"description\": \"\", \"enum\": [\"sunrise\", \"sunset\", \"movie\", \"dating\", \"romantic\", \"twinkle\", \"candlelight\", \"snowflake\", \"energetic\", \"breathe\", \"crossing\"]}}, \"required\": [\"scene\"], \"additionalProperties\": false}}}]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:9069/exl3_stream",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"exl3_stream"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "http://localhost:9069/completions",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"messages\": [\r\n    {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"}, \r\n    {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n    {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n    {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:9069/completions",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "9069",
+							"path": [
+								"completions"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Server",
+							"value": "Werkzeug/3.0.1 Python/3.11.5"
+						},
+						{
+							"key": "Date",
+							"value": "Sun, 28 Jul 2024 07:43:01 GMT"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						},
+						{
+							"key": "Content-Length",
+							"value": "388"
+						},
+						{
+							"key": "Connection",
+							"value": "close"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"response\": [\n        {\n            \"generated_text\": \"Let's solve the equation 2x + 3 = 7.\\n\\nTo solve for x, we need to isolate the variable x. We can do this by subtracting 3 from both sides of the equation:\\n\\n2x + 3 - 3 = 7 - 3\\n\\nThis simplifies to:\\n\\n2x = 4\\n\\nNext, we can divide both sides of the equation by 2 to solve for x:\\n\\n2x / 2 = 4 / 2\\n\\nx = 2\\n\\nSo, the value of x is 2.\"\n        }\n    ],\n    \"success\": true\n}"
+				}
+			]
+		},
+		{
+			"name": "Exl3-FIM-Stream",
+			"protocolProfileBehavior": {
+				"followRedirects": false
+			},
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					},
+					{
+						"key": "X-Return-Full-Text",
+						"value": "False",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Temperature",
+						"value": "0.7",
+						"type": "text"
+					},
+					{
+						"key": "X-Do-Sample",
+						"value": "True",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Top-K",
+						"value": "40",
+						"type": "text"
+					},
+					{
+						"key": "X-Top-P",
+						"value": "0.95",
+						"type": "text"
+					},
+					{
+						"key": "X-Min-P",
+						"value": "0.05",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"prefix\":\"def hello():\", \"suffix\":\"\", \"language\":\"python\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:9069/exl2_fim_stream",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"exl2_fim_stream"
+					]
+				}
+			},
+			"response": [
+				{
+					"name": "http://localhost:9069/completions",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"messages\": [\r\n    {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"}, \r\n    {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n    {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n    {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:9069/completions",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "9069",
+							"path": [
+								"completions"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Server",
+							"value": "Werkzeug/3.0.1 Python/3.11.5"
+						},
+						{
+							"key": "Date",
+							"value": "Sun, 28 Jul 2024 07:43:01 GMT"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						},
+						{
+							"key": "Content-Length",
+							"value": "388"
+						},
+						{
+							"key": "Connection",
+							"value": "close"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"response\": [\n        {\n            \"generated_text\": \"Let's solve the equation 2x + 3 = 7.\\n\\nTo solve for x, we need to isolate the variable x. We can do this by subtracting 3 from both sides of the equation:\\n\\n2x + 3 - 3 = 7 - 3\\n\\nThis simplifies to:\\n\\n2x = 4\\n\\nNext, we can divide both sides of the equation by 2 to solve for x:\\n\\n2x / 2 = 4 / 2\\n\\nx = 2\\n\\nSo, the value of x is 2.\"\n        }\n    ],\n    \"success\": true\n}"
+				}
+			]
+		},
+		{
+			"name": "/v1/chat/completions",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"model\": \"exl3\",\r\n    \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}],\r\n    \"stream\": true\r\n  }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:9069/v1/chat/completions",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"v1",
+						"chat",
+						"completions"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/v1/models",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"model\": \"exl2\",\r\n    \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}],\r\n    \"stream\": true\r\n  }"
+				},
+				"url": {
+					"raw": "http://localhost:9069/v1/models",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "9069",
+					"path": [
+						"v1",
+						"models"
+					]
+				}
+			},
+			"response": []
 		}
 	]
 }

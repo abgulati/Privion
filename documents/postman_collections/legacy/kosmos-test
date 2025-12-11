@@ -1,0 +1,163 @@
+{
+	"info": {
+		"_postman_id": "e4f91d47-99e8-47de-8485-7bc0fad5ed3d",
+		"name": "Test",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "40026557"
+	},
+	"item": [
+		{
+			"name": "infer - legacy",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "image",
+							"type": "file",
+							"src": "/C:/Users/abhee/OneDrive/Documents/Work_Stuff/LLMs/microsoft/kosmos-windows-debugging/Markdown-Issue/Sample-4-Ports.png"
+						},
+						{
+							"key": "task",
+							"value": "ocr",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:25000/infer",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "25000",
+					"path": [
+						"infer"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "infer_file",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/M:/Storage/lars_storage/uploaded_pdfs/W2_Elizabeth_Darling.pdf"
+						},
+						{
+							"key": "task",
+							"value": "ocr",
+							"type": "text"
+						},
+						{
+							"key": "threshold",
+							"value": "20",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:25000/infer_file",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "25000",
+					"path": [
+						"infer_file"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "infer_file_stream",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/C:/Users/LARS/Documents/LARS-Enterprise/documents/sample_docs/optic_connectors.png"
+						},
+						{
+							"key": "task",
+							"value": "ocr",
+							"type": "text"
+						},
+						{
+							"key": "threshold",
+							"value": "30",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:25000/infer_file_stream",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "25000",
+					"path": [
+						"infer_file_stream"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "stop_streaming",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:25000/stop_streaming",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "25000",
+					"path": [
+						"stop_streaming"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "reclaim_kosmos_vram",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:25000/reclaim_kosmos_vram",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "25000",
+					"path": [
+						"reclaim_kosmos_vram"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

@@ -1,0 +1,135 @@
+{
+	"info": {
+		"_postman_id": "b6099068-ce5f-4e31-82e5-de9aeb6ee28f",
+		"name": "Perplexica",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "40026557"
+	},
+	"item": [
+		{
+			"name": "Get-Providers",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					},
+					{
+						"key": "X-Return-Full-Text",
+						"value": "False",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Temperature",
+						"value": "0.7",
+						"type": "text"
+					},
+					{
+						"key": "X-Do-Sample",
+						"value": "True",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Top-K",
+						"value": "40",
+						"type": "text"
+					},
+					{
+						"key": "X-Top-P",
+						"value": "0.95",
+						"type": "text"
+					},
+					{
+						"key": "X-Min-P",
+						"value": "0.05",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:3003/api/providers",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3003",
+					"path": [
+						"api",
+						"providers"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Search",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					},
+					{
+						"key": "X-Return-Full-Text",
+						"value": "False",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Temperature",
+						"value": "0.7",
+						"type": "text"
+					},
+					{
+						"key": "X-Do-Sample",
+						"value": "True",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Top-K",
+						"value": "40",
+						"type": "text"
+					},
+					{
+						"key": "X-Top-P",
+						"value": "0.95",
+						"type": "text"
+					},
+					{
+						"key": "X-Min-P",
+						"value": "0.05",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"chatModel\": {\r\n    \"providerId\": \"5b304ad3-4787-4c5d-8c13-9114d2590f94\",\r\n    \"key\": \"exl3\"\r\n  },\r\n  \"embeddingModel\": {\r\n    \"providerId\": \"c5d67f42-db96-44fe-b996-03222d5868cb\",\r\n    \"key\": \"Xenova/all-MiniLM-L6-v2\"\r\n  },\r\n  \"optimizationMode\": \"balanced\",\r\n  \"focusMode\": \"webSearch\",\r\n  \"query\": \"What is Perplexica\",\r\n  \"history\": [\r\n    [\"human\", \"Hi, how are you?\"],\r\n    [\"assistant\", \"I am doing well, how can I help you today?\"]\r\n  ],\r\n  \"systemInstructions\": \"Focus on providing technical details about Perplexica's architecture.\",\r\n  \"stream\": false\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:3003/api/search",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3003",
+					"path": [
+						"api",
+						"search"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
