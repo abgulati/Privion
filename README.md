@@ -535,13 +535,13 @@ Privion is a versatile AI application focused on privacy and offline inferencing
         - Due to this, a Just-in-Time (JIT) compilation will be attempted when HF-Waitress is launched
         - As a result, the server will take an annoyingly long time to launch
         - Quantization via ExLlamaV2 and ExLlamaV3 will most likely fail in this scenarion
-        - Investigate the cause by uninstalling the backends, then reinstalling in verbose mode and noting the errors:
+        - Investigate the cause by uninstalling the backends, then reinstalling in verbose mode and noting any errors/warning:
             ```
             pip uninstall -y exllamav2 exllamav3
             cd web_app/exllamav2
             pip install . -v
             ```
-            
+
 - **Ignoring the above steps will result in a cryptic error pertaining to Ninja when attempting quantization, with a collosal and completely useless traceback!**
 
 - Specifically, the error will be along the lines of `subprocess.CalledProcessError: Command '['ninja', '-v']' returned non-zero exit status 1104.`
@@ -847,10 +847,27 @@ Privion is a versatile AI application focused on privacy and offline inferencing
         pip cache remove ninja
         ```
 
-    4. Delete entire local cache - Locate & delete the cache dir:
-        ```
-        pip cache dir
-        ```
+    4. Inspect and if necessary, purge local cache:
+
+        - Get an overview of the current cache, including total size and directory location:
+            ```
+            pip cache info
+            ```
+
+        - Show all wheel files currently stored in the cache:
+            ```
+            pip cache list
+            ```
+
+        - Show the exact file path where the cache is located on your system:
+            ```
+            pip cache dir
+            ```
+
+        - Clear everything stored in pip's local cache:
+            ```
+            pip cache purge
+            ```
 
 - If you encounter errors with ```pip install```, try the following:
 
