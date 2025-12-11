@@ -1,0 +1,9 @@
+# IMP: Install these AFTER the main `requirements.txt` and the correct version of PyTorch, in that order!
+torchcodec>=0.7.0
+kokoro>=0.9.4
+librosa>=0.11.0
+sounddevice>=0.5.2
+nemo_toolkit>=2.5.0
+sacrebleu>=2.5.1
+pyttsx3>=2.99
+numpy==2.2.6
