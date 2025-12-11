@@ -83,8 +83,8 @@ Write-Host "    - [OK] Flash-Attention 2 installed." -ForegroundColor Green
 Write-Host "    - [5] Installing ASR & TTS dependencies..." -ForegroundColor Yellow
 
 # Install 7-Zip (Needed for FFmpeg extraction) and ESpeak-NG (Needed for TTS)
-winget install --id=7zip.7zip -e --accept-source-agreements --accept-package-agreements
-winget install --id=eSpeak-NG.eSpeak-NG -e --accept-source-agreements --accept-package-agreements
+winget install --id=7zip.7zip -e --accept-source-agreements --accept-package-agreements --disable-interactivity
+winget install --id=eSpeak-NG.eSpeak-NG -e --accept-source-agreements --accept-package-agreements --disable-interactivity
 Write-Host "    - [OK] 7-Zip & ESpeak-NG installed." -ForegroundColor Green
 
 # Install PIP dependencies, reset versions and ensure hf_xet is uninstalled
