@@ -6880,7 +6880,8 @@ def get_full_prompt_for_server(local_llm_server: str, full_prompt: str, user_que
 
 def get_ids_for_llm_response_setup(stream_session_id:str, chat_id:str, sequence_id:str = None, regeneration_request:bool = False, reuse_ssid:bool = False) -> tuple[str, str, int]:
     '''
-    Determines and assigns the stream_session_id, key_for_vector_results and current_sequence_id keys for any query received from the client. Every query has a unique stream_session_id.\n
+    Determines and assigns the stream_session_id, key_for_vector_results and current_sequence_id keys for any query received from the client. 
+    Every query has a unique stream_session_id.\n
     Handles two cases:
         - Regenration requests:
             - The client sends the stream_session_id and sequence_id of the message to regenerate.
@@ -6888,7 +6889,8 @@ def get_ids_for_llm_response_setup(stream_session_id:str, chat_id:str, sequence_
         - Regular requests:
             - The client sends the chat_id.
             - The stream_session_id is generated afresh, and the key_for_vector_results is set subsequently.
-            - The sequence_id is determined by obtaining the present max sequence_id for the given chat_id, and will be incremented by 1 at a later stage (after the chat history is fetched and the prompt template is applied) before returning to the client.
+            - The sequence_id is determined by obtaining the present max sequence_id for the given chat_id, and will be incremented by 1 at a later stage 
+            (after the chat history is fetched and the prompt template is applied) before returning to the client.\n
     '''
     if regeneration_request:
         if stream_session_id is None or stream_session_id == "" or sequence_id is None:
@@ -7695,13 +7697,16 @@ def execute_search_tools_on_query(user_query:str, embedding_function:str, llm_se
 def determine_service_and_ids_for_query():
     '''
     This is the first API invoked when a user submits a query via the Privion/LARS frontend.\n
-    Main goal is to to determine the sequence_id and stream_session_id to be assigned to the query, handle any special cases and lastly, query the LLM to determine the appropriate search-service/tools to best respond to the user.\n
+    Main goal is to to determine the sequence_id and stream_session_id to be assigned to the query, handle any special cases and lastly, query the LLM 
+    to determine the appropriate search-service/tools to best respond to the user.\n
     One of two downstream outcomes:
-        - No further search-tools are needed, either because force_disable_rag is True, or there's a special case (vision/diffusers image-gen model) or of course, in case the LLM determined that no search-tools are needed! Or,
+        - No further search-tools are needed, either because force_disable_rag is True, or there's a special case (vision/diffusers image-gen model) or of course, 
+        if the LLM opts for a direct response. Or,
         - Further processing (RAG) is required, and the client must make another request to actually execute the search.
 
     We want to ensure that in the case of the former, the client has all the required information to proceed to the next step thus we have some redundancy.\n
-    For instance in case another request is necessary, the sequence_id determination and chat-history loading / prompt template application must be redone by invoke-tools_for_query().
+    For instance in case another request is necessary, the sequence_id determination and chat-history loading / prompt template application must be redone by 
+    invoke-tools_for_query().
     '''
     print("\n\nDetermining service and ids for query\n\n")
 
@@ -7753,9 +7758,12 @@ def determine_service_and_ids_for_query():
 def invoke_tools_for_query():
     '''
     This API is only to be invoked if in the previous step, the LLM determined that RAG/other tools are necessary.\n
-    The client is basically saying, "Hey here's the user query and the RAG config that was deemed necessary, along with the stream_session_id and sequence_id that have already been assigned to this query. Please execute the search and return the full & final prompt."\n
-    The sequence ID sent by the client is used in case this is a regeneration request, as the chat history need only be fetched upto that sequence ID, and the prompt template applied accordingly.\n
-    In case of a regular request, the sequence ID is redetermined anyways due to the way the get-ids_for_llm_response_setup() works, so the received value is ignored, which is not a problem. The client-sent value is only used in case of regeneration requests.\n
+    The client is basically saying, "Hey here's the user query and the RAG config that was deemed necessary, along with the stream_session_id and sequence_id.
+    Please execute the search and return the full & final prompt."\n
+    The sequence ID sent by the client is used in case this is a regeneration request, as the chat history need only be fetched upto that sequence ID, 
+    and the prompt template applied accordingly.\n
+    In case of a regular request, the sequence ID is redetermined anyways due to the way the get-ids_for_llm_response_setup() works, so the received value is ignored,
+    which is not a problem. The client-sent value is only used for regeneration requests.\n
     The logic behind decrementing and incrementing the sequence-ID stays the same as in determine-service_and_ids_for_query():
         - Increment: By 1 for regular requests, or if it's currently 0 before returning to the client.
         - Decrement: Only in case of regeneration requests, to fetch the chat history upto the provided sequence ID non-inclusively.
@@ -7765,7 +7773,7 @@ def invoke_tools_for_query():
     try:
         config = read_config_for_llm_response_setup()
         stream_session_id, user_query, chat_id, llm_set_rag_config, regeneration_request, sequence_id = read_request_data_for_tools_response(request)
-        stream_session_id, key_for_vector_results, current_sequence_id = get_ids_for_llm_response_setup(stream_session_id = stream_session_id, chat_id = chat_id, sequence_id = sequence_id, regeneration_request = regeneration_request, reuse_ssid = True)
+        stream_session_id, key_for_vector_results, current_sequence_id = get_ids_for_llm_response_setup(stream_session_id, chat_id, sequence_id, regeneration_request, reuse_ssid = True)
     except Exception as e:
         return handle_api_error("Error getting base values for invoke-tools_for_query, encountered error: ", e)
     

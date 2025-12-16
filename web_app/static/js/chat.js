@@ -261,7 +261,7 @@ function createUserMessageHTML(userInputForHtml){
     rendering it uselessly non-functional.
     
     And as noted in appendContentToResponse(), it's also highly inefficient!
-     */
+    */
 
     return uniqueId;
 }
@@ -274,7 +274,7 @@ function updateChatAreaWithUserInput(userInputForHtml) {
     This is why appendChatIdToUserMessage() & appendStreamSessionIdToUserMessage() are only called if (!regeneration_request).
     However, the sequence-id does need to be reset even for regen requests, because regenerating a response deletes any prior messages for the sake of the chat template, 
     thus the sequence ID will need to be reset in any case where the regenration request is for any message other than the latest one.
-    In this case, the stream-session-id is for the regen request is obtained by a call to the prepareAttributeForUserMessage() method, which
+    In this case, the stream-session-id for the regen request is obtained by a call to the prepareAttributeForUserMessage() method, which
     is called by a click event listener set at DOM load by initializeRegenerateResponseButton(). 
     */
     const uniqueId = createUserMessageHTML(userInputForHtml);
