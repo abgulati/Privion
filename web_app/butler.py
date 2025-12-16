@@ -4,6 +4,8 @@ import llm_apis as llm_apis_module
 from wakeonlan import send_magic_packet
 import ha_device_modules.lg_webos_tv as lg_webos_tv_module
 import ha_device_modules.govee_lights as govee_lights_module
+import ha_device_modules.kasa_plug as kasa_plug_module
+import ha_device_modules.kasa_bulb as kasa_bulb_module
 
 from typing import Optional
 from pathlib import Path
@@ -149,6 +151,12 @@ def generate_tools_schema(services_config: dict) -> list[dict]:
             if 'enum' in field_details:
                 property_def['enum'] = field_details.get('enum', [])
 
+            if 'minimum' in field_details:
+                property_def['minimum'] = field_details.get('minimum')
+
+            if 'maximum' in field_details:
+                property_def['maximum'] = field_details.get('maximum')
+
             tool['function']['parameters']['properties'][field_name] = property_def
             
             is_explicitly_required = field_details.get('required', False)
@@ -243,6 +251,42 @@ def set_lamp_scene(scene: str):
     '''
     return asyncio.run(govee_lights_module.light_set_scene_handler(scene))
 
+def plug_turn_on():
+    '''
+    Turns on a smart plug.
+    '''
+    return asyncio.run(kasa_plug_module.plug_turn_on_handler())
+
+def plug_turn_off():
+    '''
+    Turns off a smart plug.
+    '''
+    return asyncio.run(kasa_plug_module.plug_turn_off_handler())
+
+def bulb_turn_on():
+    '''
+    Turns on a smart bulb.
+    '''
+    return asyncio.run(kasa_bulb_module.bulb_turn_on_handler())
+
+def bulb_turn_off():
+    '''
+    Turns off a smart bulb.
+    '''
+    return asyncio.run(kasa_bulb_module.bulb_turn_off_handler())
+
+def set_bulb_brightness(brightness: str | int):
+    '''
+    Sets the brightness of a smart bulb.
+    '''
+    return asyncio.run(kasa_bulb_module.bulb_set_brightness_handler(int(brightness)))
+
+
+def set_bulb_color(hue: str | int, saturation: str | int, value: str | int):
+    '''
+    Sets the color of a smart bulb.
+    '''
+    return asyncio.run(kasa_bulb_module.bulb_set_color_handler(int(hue), int(saturation), int(value)))
 
 def execute_tool_call(tool_name, llm_args, services_config: dict) -> dict:
     '''
