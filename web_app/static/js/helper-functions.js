@@ -54,6 +54,14 @@ function setTts(tts) {
     document.getElementById('chatState').setAttribute('data-tts', tts);
 }
 
+function setLegacyMode(legacy_mode) {
+    document.getElementById('chatState').setAttribute('data-legacy-mode', legacy_mode);
+}
+
+function getLegacyMode() {
+    return document.getElementById('chatState').getAttribute('data-legacy-mode');
+}
+
 function getTts() {
     return document.getElementById('chatState').getAttribute('data-tts');
 }

@@ -359,6 +359,15 @@ function getTtsConfig() {
 }
 
 
+function getAdvancedSettingsConfig() {
+    config = {
+        'legacy_mode': document.getElementById('legacy_mode').checked
+    };
+    setLegacyMode(config.legacy_mode);
+    return config;
+}
+
+
 function getHfWaitressConfig() {
     let hf_config = {
         'model_id': document.getElementById('hf-waitress-llm-custom-dropdown-selected-value').textContent,
@@ -681,7 +690,8 @@ function handleSaveChanges() {
         ...getGoogleDriveConfig(),
         ...getButlerConfig(),
         ...getAsrConfig(),
-        ...getTtsConfig()
+        ...getTtsConfig(),
+        ...getAdvancedSettingsConfig()
     };
 
     let hfSavePromise;  // Declaring the variable that will hold the promise returned by handle-HfWaitressChanges(). Defaulting will result in a race condition, so we'll need to handle the Promise chain manually.

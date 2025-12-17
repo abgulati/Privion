@@ -25,21 +25,21 @@ function initializeRegenerateResponseButton() {
             const userMessageDiv = e.target.closest('.user-message');
             const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
             clearToolChainToggle(streamSessionId);
-            requestFormattedPrompt(true, false, false, streamSessionId, sequenceId);    // Request the formatted prompt
+            executePrompt(true, false, false, streamSessionId, sequenceId);    // Request the formatted prompt
             deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
             appendLoadingAnimation(userMessageDiv);
         } else if (e.target.classList.contains('regenerate-with-citations-enabled-option')) {
             const userMessageDiv = e.target.closest('.user-message');
             const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
             clearToolChainToggle(streamSessionId);
-            requestFormattedPrompt(true, true, false, streamSessionId, sequenceId);    // Request the formatted prompt
+            executePrompt(true, true, false, streamSessionId, sequenceId);    // Request the formatted prompt
             deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
             appendLoadingAnimation(userMessageDiv);
         } else if (e.target.classList.contains('regenerate-with-citations-disabled-option')) {
             const userMessageDiv = e.target.closest('.user-message');
             const {streamSessionId, sequenceId} = prepareAttributeForUserMessage(userMessageDiv);
             clearToolChainToggle(streamSessionId);
-            requestFormattedPrompt(true, false, true, streamSessionId, sequenceId);    // Request the formatted prompt
+            executePrompt(true, false, true, streamSessionId, sequenceId);    // Request the formatted prompt
             deleteChatAreaElements(userMessageDiv.nextElementSibling); // Delete subsequent user messages and response containers
             appendLoadingAnimation(userMessageDiv);
         } else if (e.target.classList.contains('delete-option')) {
@@ -101,6 +101,7 @@ function loadCoreLarsConfig() {
         'force_enable_rag',
         'force_disable_rag',
         'enable_graph_rag',
+        'legacy_mode',
         'enable_butler_mode_selection',
         'upload_doc_to_graph_db',
         'graph_rag_context_length_limit_chars',
@@ -1825,6 +1826,12 @@ function initializeTTSTabComponents(values) {
 }
 
 
+function initializeAdvancedSettingsTabComponents(values) {
+    document.getElementById('legacy_mode').checked = values.legacy_mode;
+    setLegacyMode(values.legacy_mode);
+}
+
+
 function initializeSettingsModalTabCycleListener() {
     // Now that all on-load setup for Modal-Setting's Tabs based on config.json is completed, set listeners to cycle between tabs:
     let options = document.querySelectorAll('[data-content]');
@@ -2013,6 +2020,7 @@ document.addEventListener("DOMContentLoaded", function() {
             initializeButlerTabComponents(values);
             initializeAsrTabComponents(values);
             initializeTTSTabComponents(values);
+            initializeAdvancedSettingsTabComponents(values);
             initializeSettingsModalTabCycleListener();
             local_llm_server = values.local_llm_server;
             if (getTts() === "true") { loadTTSPipeline(); }

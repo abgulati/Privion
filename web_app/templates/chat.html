@@ -153,7 +153,7 @@
                     <i class="fa-solid fa-microphone-slash"></i>
                 </button>
 
-                <button class="btn btn-primary-send" id="sendButton" onclick="closeNav(); requestFormattedPrompt()">Send</button>
+                <button class="btn btn-primary-send" id="sendButton" onclick="closeNav(); executePrompt()">Send</button>
             </div>
             
         </div>
@@ -222,7 +222,7 @@
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option8">Butler Settings</a>
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option9">ASR Settings</a>
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option10">TTS Settings</a>
-                                <a href="#" class="list-group-item list-group-item-action" data-content="option11">Additional Settings</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option11">Advanced Settings</a>
                                 <!--Add as Needed-->
                             </div>
 
@@ -2263,9 +2263,25 @@
 
                                 <div id="option11" class="d-none">
                                     <!--Option 6 Content-->
-                                    <h5>Additional Settings</h5>
+                                    <h5>Advanced Settings</h5>
+
                                     <br>
-                                    <p>Look forward to future updates!</p>
+
+                                    <div class="settings-table-container">
+                                        <table class="settings-table">
+                                            <tr class="settings-table-header-row">
+                                                <th style="width: 20%;">Additional Settings</th>
+                                                <th>Description</th>
+                                                <th style="width: 20%;">Value</th>
+                                            </tr>
+                                            <tr class="settings-table-row">     <!--Row IDs below are provided for JS (row hiding etc.!-->
+                                                <td class="settings_table_setting_name">Legacy Mode</td>
+                                                <td class="settings_table_setting_description">Enable legacy mode. This is a temporary feature to help with the transition to a new native tool-calling system. It will be removed in the future.</td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="checkbox" id="legacy_mode" name="legacy_mode" value="true"></td>
+                                            </tr>
+                                        </table>
+                                    </div>
+
                                 </div>
 
                                 <!--Add as Needed-->

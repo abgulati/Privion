@@ -989,7 +989,13 @@ async function fetchTTSVoice(text) {
 }
 
 
-async function requestFormattedPrompt(regeneration_request=false, regenerate_with_citations_force_enabled=false, regenerate_with_citations_force_disabled=false, regen_stream_session_id=null, regen_sequence_id=null) {
+async function requestFormattedPrompt(
+    regeneration_request=false, 
+    regenerate_with_citations_force_enabled=false, 
+    regenerate_with_citations_force_disabled=false, 
+    regen_stream_session_id=null, 
+    regen_sequence_id=null
+) {
     initializePromptRequest();
 
     const current_chat_id = getChatId();
@@ -1065,6 +1071,29 @@ async function requestFormattedPrompt(regeneration_request=false, regenerate_wit
 }
 
 
+async function executePrompt(
+    regeneration_request=false, 
+    regenerate_with_citations_force_enabled=false, 
+    regenerate_with_citations_force_disabled=false, 
+    regen_stream_session_id=null, 
+    regen_sequence_id=null
+) {
+    
+    if (getLegacyMode() === 'true') {
+        return await requestFormattedPrompt(
+            regeneration_request,
+            regenerate_with_citations_force_enabled,
+            regenerate_with_citations_force_disabled,
+            regen_stream_session_id,
+            regen_sequence_id
+        );  // must await so we don't simply return a promise immediately, rather wait for the requestFormattedPrompt() to complete!
+    }
+
+
+
+}
+
+
 // Call sendMessage() if the user presses the 'Enter' key
 const maxRows = 11; // Replace this value with the maximum allowed number of rows you want
 const inputTextAreaElement = document.getElementById("user-input");
@@ -1122,7 +1151,7 @@ inputTextAreaElement.addEventListener("keydown", function(event) {
         if(!sendButton.disabled) {  //Only trigger a send event if the button is not disabled, i.e. another stream is in progress!
             inputTextAreaElement.style.height = `${lineHeight}px`;
             currentHeight = lineHeight;
-            requestFormattedPrompt();
+            executePrompt();
         }
     } 
     else if (event.shiftKey && event.key == "Enter") {

@@ -136,7 +136,7 @@ async function drainQueue() {
         const inputEl = document.getElementById('user-input');
         if (inputEl) inputEl.value = next;
         // Uses the existing chat flow
-        await requestFormattedPrompt();
+        await executePrompt();
     } catch (e) {
         console.error('LLM dispatch failed:', e);
     } finally {
