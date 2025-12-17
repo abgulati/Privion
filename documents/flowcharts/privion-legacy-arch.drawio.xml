@@ -1,269 +1,336 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36" version="29.2.7">
-  <diagram name="Page-1" id="brR21u6aWqyi2bKhKgTx">
-    <mxGraphModel dx="7365" dy="2843" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+  <diagram name="Page-1" id="DeQ7WT5ddZRQC1f96dia">
+    <mxGraphModel dx="1749" dy="1623" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-53" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-24" parent="1" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 8;fillColor=#F2E7FA;strokeColor=#9673a6;" value="" vertex="1">
+          <mxGeometry height="640" width="1300" x="180" y="1490" as="geometry" />
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-15" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;dashed=1;dashPattern=8 8;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="825" y="3410" as="sourcePoint" />
-            <mxPoint x="825" y="3290" as="targetPoint" />
+            <mxPoint x="850" y="760" as="sourcePoint" />
+            <mxPoint x="850" y="1120" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-25" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
+        <mxCell id="Pz7mGCGZEHnyq9AoGnor-1" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=50;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=4;whiteSpace=wrap;html=1;" value="Privion Serverside (Backend)" vertex="1">
+          <mxGeometry height="280" width="160" x="290" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="Pz7mGCGZEHnyq9AoGnor-2" parent="Pz7mGCGZEHnyq9AoGnor-1" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;resizable=0;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="+ Manages Chat History&lt;div&gt;&lt;br&gt;+ Creates Messages Object&lt;br&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Executes Tools&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Assigns Chat &amp;amp; Session IDs&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Fetches RAG References&lt;/div&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="230" width="160" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="Pz7mGCGZEHnyq9AoGnor-3" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=50;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=4;whiteSpace=wrap;html=1;" value="Privion Clientside (Frontend)" vertex="1">
+          <mxGeometry height="280" width="160" x="770" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="Pz7mGCGZEHnyq9AoGnor-4" parent="Pz7mGCGZEHnyq9AoGnor-3" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;resizable=0;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="&lt;div&gt;+ Submits User Queries to Privion Backend for Formatting and Storage&lt;br&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Receives Complete Messages Object from Privion Backend&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Communicates with LLM Servers (HF-Waitress &amp;amp; llama-server):&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;a. Submits complete messages object&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;b. Processes real-time response event-stream&lt;br&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="230" width="160" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="Pz7mGCGZEHnyq9AoGnor-5" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=50;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=4;whiteSpace=wrap;html=1;" value="LLM Server (Backend)" vertex="1">
+          <mxGeometry height="280" width="160" x="1250" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="Pz7mGCGZEHnyq9AoGnor-6" parent="Pz7mGCGZEHnyq9AoGnor-5" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;resizable=0;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="&lt;div&gt;+ Loads Selected LLM to Device Memory&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Provides Custom (HF-Waitress) and OpenAI-Compatible Streaming &amp;amp; Non-Streaming APIs to Interact with the LLM&amp;nbsp;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;(HF-Waitress &amp;amp; llama-server)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Returns Completely Generated Response, or a Live Event-Stream of LLM-Generated Tokens (stream: false / true resp)&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="230" width="160" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="Pz7mGCGZEHnyq9AoGnor-7" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="Pz7mGCGZEHnyq9AoGnor-2" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="305" y="2190" as="sourcePoint" />
-            <mxPoint x="305" y="1580" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="369.8" y="407.24" />
+            </Array>
+            <mxPoint x="370" y="480" as="sourcePoint" />
+            <mxPoint x="370.0800000000001" y="390" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-29" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-25" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Execute Butler Tools" vertex="1">
-          <mxGeometry relative="1" x="0.8245" y="1" as="geometry">
+        <mxCell id="Pz7mGCGZEHnyq9AoGnor-8" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="Pz7mGCGZEHnyq9AoGnor-4" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="850" y="480" as="sourcePoint" />
+            <mxPoint x="790" y="340" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Pz7mGCGZEHnyq9AoGnor-9" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="Pz7mGCGZEHnyq9AoGnor-6" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="1330" y="480" as="sourcePoint" />
+            <mxPoint x="1270" y="340" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-1" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="370" y="400" as="sourcePoint" />
+            <mxPoint x="850" y="400" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-2" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-1" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Init: Assign ChatID" vertex="1">
+          <mxGeometry relative="1" x="-0.009" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-36" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-3" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="305" y="3270" as="sourcePoint" />
-            <mxPoint x="305" y="2190" as="targetPoint" />
+            <mxPoint x="850" y="480" as="sourcePoint" />
+            <mxPoint x="370" y="520" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-50" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-36" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="If RAG Context Exists,&lt;div&gt;Generate References HTML&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Store to Chat History DB&lt;/div&gt;" vertex="1">
-          <mxGeometry relative="1" x="-0.6004" y="-1" as="geometry">
-            <mxPoint x="-1" y="16" as="offset" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="QQuOZ3j-adqORCpuWpkL-1" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=50;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=4;whiteSpace=wrap;html=1;" value="Privion Serverside (Backend)" vertex="1">
-          <mxGeometry height="280" width="160" x="230" y="80" as="geometry" />
-        </mxCell>
-        <mxCell id="QQuOZ3j-adqORCpuWpkL-2" parent="QQuOZ3j-adqORCpuWpkL-1" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;resizable=0;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="+ Manages chat history&lt;div&gt;&lt;br&gt;+ Creates messages object&lt;br&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Executes tools&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Assigns Chat &amp;amp; Session IDs&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Fetches RAG references&lt;/div&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="230" width="160" y="50" as="geometry" />
-        </mxCell>
-        <mxCell id="QQuOZ3j-adqORCpuWpkL-5" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=50;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=4;whiteSpace=wrap;html=1;" value="Privion Clientside (Frontend)" vertex="1">
-          <mxGeometry height="280" width="160" x="745" y="80" as="geometry" />
-        </mxCell>
-        <mxCell id="QQuOZ3j-adqORCpuWpkL-6" parent="QQuOZ3j-adqORCpuWpkL-5" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;resizable=0;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="&lt;div&gt;+ Submits user queries to Privion backend for formatting and storage&lt;br&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Receives complete messages object from Privion backend&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Communicates with LLM Servers (HF-Waitress &amp;amp; llama-server):&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;a. Submits complete messages object&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;b. Processes real-time response event-stream&lt;br&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="230" width="160" y="50" as="geometry" />
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-1" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="QQuOZ3j-adqORCpuWpkL-2" value="">
-          <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="305" y="1580" as="sourcePoint" />
-            <mxPoint x="795" y="630" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-7" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-1" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Determines Service Use:&amp;nbsp;&lt;div&gt;RAG, GraphRAG, Butler Mode or Direct Response&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Handles special cases:&amp;nbsp;&lt;/div&gt;&lt;div&gt;image-generation &amp;amp;&amp;nbsp;&lt;span style=&quot;background-color: light-dark(#ffffff, var(--ge-dark-color, #121212)); color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;(multimodal) LLMs,&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: light-dark(#ffffff, var(--ge-dark-color, #121212)); color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;regeneration requests&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Prepares &amp;amp; returns final Messages obj&amp;nbsp;&lt;/div&gt;&lt;div&gt;if direct-response / image-gen&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Sets unique StreamSessionID&lt;/div&gt;&lt;div&gt;(if not regenration request)&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Sets SequenceID (will be refreshed before&amp;nbsp;&lt;/div&gt;&lt;div&gt;storage to HistoryDB in the final step)&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Confirms presently loaded LLM server:&lt;/div&gt;&lt;div&gt;HF-Waitress, HFW-Diffusers (image-gen),&amp;nbsp;&lt;/div&gt;&lt;div&gt;HFW-Vision (multimodal) or llama-cpp&lt;/div&gt;" vertex="1">
-          <mxGeometry relative="1" x="0.6207" y="-1" as="geometry">
-            <mxPoint x="-1" y="29" as="offset" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-12" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-1" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;div&gt;Handle Butler Mode&lt;/div&gt;&lt;div&gt;(Skip to &lt;span style=&quot;background-color: rgb(0, 255, 255);&quot;&gt;Blue&lt;/span&gt;&amp;nbsp;if not applicable)&lt;/div&gt;" vertex="1">
-          <mxGeometry relative="1" x="-0.9489" as="geometry">
-            <mxPoint y="-469" as="offset" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-15" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-1" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=#00FFFF;" value="&lt;div&gt;&lt;span style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Execute RAG (if not Butler Mode)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Append Butler execution&amp;nbsp;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;results / RAG context to user query&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Create final Messages obj for&amp;nbsp;&lt;/div&gt;&lt;div&gt;client request&amp;nbsp; to LLM Server&amp;nbsp;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;Refreshe Sequence ID" vertex="1">
-          <mxGeometry relative="1" x="-0.571" y="1" as="geometry">
-            <mxPoint y="861" as="offset" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-2" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="QQuOZ3j-adqORCpuWpkL-6" value="">
-          <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="825" y="1100" as="sourcePoint" />
-            <mxPoint x="795" y="630" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-9" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-2" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Assigns IDs to UI elements basis&amp;nbsp;&lt;div&gt;StreamSessionID&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Handles Service Invocation&amp;nbsp;&lt;/div&gt;&lt;div&gt;(if required - else skip to &lt;span style=&quot;background-color: rgb(0, 255, 0);&quot;&gt;Green&lt;/span&gt;)&lt;/div&gt;" vertex="1">
-          <mxGeometry relative="1" x="-0.4044" y="-2" as="geometry">
-            <mxPoint x="-2" y="10" as="offset" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-3" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
-          <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="825" y="400" as="sourcePoint" />
-            <mxPoint x="315" y="480" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-6" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-3" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="User Submits Query" vertex="1">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-4" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-3" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="User Submits Query" vertex="1">
           <mxGeometry relative="1" x="-0.0056" y="1" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-4" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=50;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=4;whiteSpace=wrap;html=1;" value="LLM Server (Backend)" vertex="1">
-          <mxGeometry height="280" width="160" x="1265" y="80" as="geometry" />
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-5" parent="fJHkzdQGwVCSKPfU--4b-4" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;resizable=0;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="&lt;div&gt;+ Loads selected LLM to device memory&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Provides custom (HF-Waitress) and OpenAI-compatible streaming &amp;amp; non-streaming APIs to interact with the LLM&amp;nbsp;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;(HF-Waitress &amp;amp; llama-server)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;+ Responds with completely generated response, or a live event-stream of LLM-generated tokens (stream: false / true resp)&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="230" width="160" y="50" as="geometry" />
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-8" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-5" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="315" y="760" as="sourcePoint" />
-            <mxPoint x="825" y="840" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="369.71" y="527.24" />
+            </Array>
+            <mxPoint x="369.90999999999997" y="600" as="sourcePoint" />
+            <mxPoint x="369.90999999999997" y="480" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-10" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-8" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="825" y="940" as="sourcePoint" />
-            <mxPoint x="315" y="1050" as="targetPoint" />
+            <mxPoint x="1330" y="1120" as="sourcePoint" />
+            <mxPoint x="1330" y="480" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-11" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-10" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Service/Tool Request&lt;div&gt;(Only for RAG/Butler)&lt;/div&gt;" vertex="1">
-          <mxGeometry relative="1" x="-0.0538" as="geometry">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-9" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="370" y="840" as="sourcePoint" />
+            <mxPoint x="1330" y="920" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-10" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-9" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Determines Service Use:&amp;nbsp;&lt;div&gt;RAG, GraphRAG, Butler Mode or Direct Response&lt;/div&gt;" vertex="1">
+          <mxGeometry relative="1" x="0.039" y="-1" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-14" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="fJHkzdQGwVCSKPfU--4b-5" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-11" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="1345" y="1590" as="sourcePoint" />
-            <mxPoint x="1185" y="930" as="targetPoint" />
+            <mxPoint x="370" y="1120" as="sourcePoint" />
+            <mxPoint x="370" y="600" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-26" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-14" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;div&gt;Determine Tool Use&lt;/div&gt;&lt;div&gt;for Butler Tasks&lt;/div&gt;" vertex="1">
-          <mxGeometry relative="1" x="-0.5756" y="-1" as="geometry">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-19" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-11" style="edgeLabel;html=1;align=left;verticalAlign=middle;resizable=0;points=[];" value="&lt;div&gt;&lt;span style=&quot;background-color: rgb(255, 255, 255);&quot;&gt;IF Services Required:&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: rgb(255, 255, 255);&quot;&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;Prepares Service-Use Ticket&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: rgb(255, 255, 255);&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: rgb(255, 255, 255);&quot;&gt;&lt;span&gt;ELSE:&lt;/span&gt;&lt;span style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255)); white-space-collapse: preserve;&quot;&gt;&#x9;&lt;/span&gt;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: rgb(255, 255, 255);&quot;&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;Generates Final Messages Object,&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: rgb(255, 255, 255);&quot;&gt;&lt;span&gt;Confirming&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Go-Ahead for Direct Response&lt;/span&gt;&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry relative="1" x="-0.9279" as="geometry">
+            <mxPoint x="-100" y="9" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-6" connectable="0" parent="1" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;div&gt;&lt;span style=&quot;background-color: light-dark(#ffffff, var(--ge-dark-color, #121212)); color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Handles special cases:&amp;nbsp;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;image-generation &amp;amp;&amp;nbsp;&lt;span style=&quot;background-color: light-dark(#ffffff, var(--ge-dark-color, #121212)); color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;(multimodal) LLMs,&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: light-dark(#ffffff, var(--ge-dark-color, #121212)); color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;regeneration requests&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Prepares &amp;amp; returns final Messages obj&amp;nbsp;&lt;/div&gt;&lt;div&gt;if direct-response / image-gen&lt;/div&gt;&lt;div&gt;(Skip to &lt;span style=&quot;background-color: rgb(255, 128, 0);&quot;&gt;&lt;b&gt;ORANGE&lt;/b&gt;&lt;/span&gt;)&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Sets unique StreamSessionID&lt;/div&gt;&lt;div&gt;(if not regenration request)&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Sets SequenceID (will be refreshed before&amp;nbsp;&lt;/div&gt;&lt;div&gt;storage to HistoryDB in the final step)&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Confirms presently loaded LLM server:&lt;/div&gt;&lt;div&gt;HF-Waitress, HFW-Diffusers (image-gen),&amp;nbsp;&lt;/div&gt;&lt;div&gt;HFW-Vision (multimodal) or llama-cpp&lt;/div&gt;" vertex="1">
+          <mxGeometry x="380" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-12" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="1330" y="960" as="sourcePoint" />
+            <mxPoint x="370" y="1040" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-13" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-12" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="LLM Response Confirming&lt;div&gt;Service (Tool) Use / Direct Response&lt;/div&gt;" vertex="1">
+          <mxGeometry relative="1" x="0.0066" y="-3" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-16" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-14" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="305" y="1100" as="sourcePoint" />
-            <mxPoint x="1345" y="1290" as="targetPoint" />
+            <mxPoint x="850" y="760" as="sourcePoint" />
+            <mxPoint x="850" y="480" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-18" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-16" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Submit User Request&lt;div&gt;alongside Tools JSON Object&lt;/div&gt;" vertex="1">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-16" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="370" y="1180" as="sourcePoint" />
+            <mxPoint x="850" y="1260" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-17" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-16" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;background-color: rgb(255, 128, 0);&quot;&gt;Query Evaluation Response Comprising:&lt;/span&gt;&lt;div&gt;&lt;span style=&quot;background-color: rgb(255, 128, 0);&quot;&gt;1. StreamSessionID (IF New Request)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: rgb(255, 128, 0);&quot;&gt;2. LLM Server Information&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: rgb(255, 128, 0);&quot;&gt;3. Final Messages Object (IF Applicable)&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry relative="1" x="-0.0908" y="3" as="geometry">
+            <mxPoint x="20" y="7" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-20" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="850" y="1480" as="sourcePoint" />
+            <mxPoint x="850" y="1120" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-21" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-20" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Assigns IDs to UI Elements Basis&lt;div&gt;StreamSessionID&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Handles Service Invocation&lt;/div&gt;&lt;div&gt;(Skip to &lt;b style=&quot;&quot;&gt;&lt;span style=&quot;background-color: rgb(0, 255, 0);&quot;&gt;GREEN&lt;/span&gt;&lt;span style=&quot;background-color: rgb(255, 255, 255);&quot;&gt;&amp;nbsp;&lt;/span&gt;&lt;/b&gt;IF Not Applicable)&lt;/div&gt;" vertex="1">
+          <mxGeometry relative="1" x="0.2581" y="-1" as="geometry">
+            <mxPoint x="-1" y="66" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-22" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="850" y="1390" as="sourcePoint" />
+            <mxPoint x="370" y="1460" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-23" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-22" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Service (Tool) Request&lt;div&gt;IF Applicable - RAG/Butler Only&lt;/div&gt;" vertex="1">
+          <mxGeometry relative="1" x="-0.0444" y="-2" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-27" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="370" y="1540" as="sourcePoint" />
+            <mxPoint x="1330" y="1720" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-28" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-27" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Submit User Request&lt;div&gt;Alongside Tools JSON Object&lt;/div&gt;" vertex="1">
           <mxGeometry relative="1" x="-0.4783" y="-3" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-20" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-29" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="1345" y="1370" as="sourcePoint" />
-            <mxPoint x="305" y="1600" as="targetPoint" />
+            <mxPoint x="1330" y="1810" as="sourcePoint" />
+            <mxPoint x="370" y="2020" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-27" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-20" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Tool Invocation Response" vertex="1">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-30" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-29" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Tool Invocation Response" vertex="1">
           <mxGeometry relative="1" x="-0.6547" y="-2" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-30" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-31" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;b&gt;&lt;font style=&quot;font-size: 25px; color: rgb(76, 0, 153);&quot;&gt;Tool&lt;/font&gt;&lt;/b&gt;&lt;div&gt;&lt;b style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&lt;font style=&quot;font-size: 25px; color: rgb(76, 0, 153);&quot;&gt;Use&lt;/font&gt;&lt;/b&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="60" x="240" y="1795" as="geometry" />
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-39" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;dashed=1;dashPattern=8 8;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="1345" y="2190" as="sourcePoint" />
-            <mxPoint x="1345" y="1590" as="targetPoint" />
+            <mxPoint x="850" y="2140" as="sourcePoint" />
+            <mxPoint x="850" y="1480" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-35" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-30" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Analyse Outcome&amp;nbsp;&lt;div&gt;of Butler Task Execution&lt;/div&gt;" vertex="1">
-          <mxGeometry relative="1" x="0.0241" y="-3" as="geometry">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-40" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="1330" y="2100" as="sourcePoint" />
+            <mxPoint x="1330" y="1120" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-82" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="370" y="2970" as="sourcePoint" />
+            <mxPoint x="370" y="2140" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-85" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-82" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="&lt;span style=&quot;color: rgba(0, 0, 0, 0); font-family: monospace; font-size: 0px; text-align: start; background-color: rgb(236, 236, 236);&quot;&gt;%3CmxGraphModel%3E%3Croot%3E%3CmxCell%20id%3D%220%22%2F%3E%3CmxCell%20id%3D%221%22%20parent%3D%220%22%2F%3E%3CmxCell%20id%3D%222%22%20connectable%3D%220%22%20parent%3D%221%22%20style%3D%22edgeLabel%3Bhtml%3D1%3Balign%3Dcenter%3BverticalAlign%3Dmiddle%3Bresizable%3D0%3Bpoints%3D%5B%5D%3BlabelBackgroundColor%3D%2300FFFF%3B%22%20value%3D%22%26lt%3Bdiv%26gt%3B%26lt%3Bspan%20style%3D%26quot%3Bcolor%3A%20light-dark(rgb(0%2C%200%2C%200)%2C%20rgb(255%2C%20255%2C%20255))%3B%26quot%3B%26gt%3BExecute%20RAG%20(if%20not%20Butler%20Mode)%26lt%3B%2Fspan%26gt%3B%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3B%26lt%3Bspan%20style%3D%26quot%3Bcolor%3A%20light-dark(rgb(0%2C%200%2C%200)%2C%20rgb(255%2C%20255%2C%20255))%3B%26quot%3B%26gt%3B%26lt%3Bbr%26gt%3B%26lt%3B%2Fspan%26gt%3B%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3B%26lt%3Bspan%20style%3D%26quot%3Bcolor%3A%20light-dark(rgb(0%2C%200%2C%200)%2C%20rgb(255%2C%20255%2C%20255))%3B%26quot%3B%26gt%3BAppend%20Butler%20execution%26amp%3Bnbsp%3B%26lt%3B%2Fspan%26gt%3B%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3Bresults%20%2F%20RAG%20context%20to%20user%20query%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3B%26lt%3Bbr%26gt%3B%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3BCreate%20final%20Messages%20obj%20for%26amp%3Bnbsp%3B%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3Bclient%20request%26amp%3Bnbsp%3B%20to%20LLM%20Server%26amp%3Bnbsp%3B%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3B%26lt%3Bbr%26gt%3B%26lt%3B%2Fdiv%26gt%3BRefreshe%20Sequence%20ID%22%20vertex%3D%221%22%3E%3CmxGeometry%20x%3D%22305.07376987226553%22%20y%3D%222178.998101995413%22%20as%3D%22geometry%22%2F%3E%3C%2FmxCell%3E%3C%2Froot%3E%3C%2FmxGraphModel%3E&lt;/span&gt;&lt;span style=&quot;color: rgba(0, 0, 0, 0); font-family: monospace; font-size: 0px; text-align: start; background-color: rgb(236, 236, 236);&quot;&gt;%3CmxGraphModel%3E%3Croot%3E%3CmxCell%20id%3D%220%22%2F%3E%3CmxCell%20id%3D%221%22%20parent%3D%220%22%2F%3E%3CmxCell%20id%3D%222%22%20connectable%3D%220%22%20parent%3D%221%22%20style%3D%22edgeLabel%3Bhtml%3D1%3Balign%3Dcenter%3BverticalAlign%3Dmiddle%3Bresizable%3D0%3Bpoints%3D%5B%5D%3BlabelBackgroundColor%3D%2300FFFF%3B%22%20value%3D%22%26lt%3Bdiv%26gt%3B%26lt%3Bspan%20style%3D%26quot%3Bcolor%3A%20light-dark(rgb(0%2C%200%2C%200)%2C%20rgb(255%2C%20255%2C%20255))%3B%26quot%3B%26gt%3BExecute%20RAG%20(if%20not%20Butler%20Mode)%26lt%3B%2Fspan%26gt%3B%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3B%26lt%3Bspan%20style%3D%26quot%3Bcolor%3A%20light-dark(rgb(0%2C%200%2C%200)%2C%20rgb(255%2C%20255%2C%20255))%3B%26quot%3B%26gt%3B%26lt%3Bbr%26gt%3B%26lt%3B%2Fspan%26gt%3B%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3B%26lt%3Bspan%20style%3D%26quot%3Bcolor%3A%20light-dark(rgb(0%2C%200%2C%200)%2C%20rgb(255%2C%20255%2C%20255))%3B%26quot%3B%26gt%3BAppend%20Butler%20execution%26amp%3Bnbsp%3B%26lt%3B%2Fspan%26gt%3B%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3Bresults%20%2F%20RAG%20context%20to%20user%20query%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3B%26lt%3Bbr%26gt%3B%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3BCreate%20final%20Messages%20obj%20for%26amp%3Bnbsp%3B%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3Bclient%20request%26amp%3Bnbsp%3B%20to%20LLM%20Server%26amp%3Bnbsp%3B%26lt%3B%2Fdiv%26gt%3B%26lt%3Bdiv%26gt%3B%26lt%3Bbr%26gt%3B%26lt%3B%2Fdiv%26gt%3BRefreshe%20Sequence%20ID%22%20vertex%3D%221%22%3E%3CmxGeometry%20x%3D%22305.07376987226553%22%20y%3D%222178.998101995413%22%20as%3D%22geometry%22%2F%3E%3C%2FmxCell%3E%3C%2Froot%3E%3C%2FmxGraphModel%3E&lt;/span&gt;" vertex="1">
+          <mxGeometry relative="1" x="0.979" y="-1" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-31" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-83" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="305" y="1680" as="sourcePoint" />
-            <mxPoint x="1345" y="1850" as="targetPoint" />
+            <mxPoint x="850" y="2960" as="sourcePoint" />
+            <mxPoint x="850" y="2140" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-33" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-31" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Request Tool Execution Analysis" vertex="1">
-          <mxGeometry relative="1" x="-0.5943" y="-1" as="geometry">
-            <mxPoint as="offset" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-34" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-84" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="1345" y="1920" as="sourcePoint" />
-            <mxPoint x="305" y="2100" as="targetPoint" />
+            <mxPoint x="1330" y="2960" as="sourcePoint" />
+            <mxPoint x="1330" y="2100" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-37" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-87" connectable="0" parent="1" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=#00FFFF;" value="&lt;div&gt;&lt;span style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Execute RAG (IF Not Butler Mode)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Append Butler Execution&amp;nbsp;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;Results / RAG-Context to User Query&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Create Final Messages Obj for&amp;nbsp;&lt;/div&gt;&lt;div&gt;Client Request&amp;nbsp; to LLM Server&amp;nbsp;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;Refresh Sequence ID" vertex="1">
+          <mxGeometry x="370" y="2230" as="geometry" />
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-88" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="1344.29" y="3270" as="sourcePoint" />
-            <mxPoint x="1344.29" y="2190" as="targetPoint" />
+            <mxPoint x="370" y="2320" as="sourcePoint" />
+            <mxPoint x="850" y="2400" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-39" edge="1" parent="1" style="endArrow=none;dashed=1;html=1;rounded=0;" value="">
-          <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="825" y="2210" as="sourcePoint" />
-            <mxPoint x="825" y="1100" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-40" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
-          <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="824.63" y="3290" as="sourcePoint" />
-            <mxPoint x="824.63" y="2210" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-54" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-40" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Append PDF Viewer to&lt;div&gt;Response Container if&amp;nbsp;&lt;/div&gt;&lt;div&gt;RAG context exists&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Append User Rating Stars&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Finalize Markdown Rendering&lt;/div&gt;" vertex="1">
-          <mxGeometry relative="1" x="-0.9649" y="2" as="geometry">
-            <mxPoint x="2" y="29" as="offset" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-41" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
-          <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="305" y="2280" as="sourcePoint" />
-            <mxPoint x="825" y="2400" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-42" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-41" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Final Messages Obj" vertex="1">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-89" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-88" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Final Messages Obj" vertex="1">
           <mxGeometry relative="1" x="0.0073" y="3" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-43" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-90" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="825" y="2460" as="sourcePoint" />
-            <mxPoint x="1345" y="2560" as="targetPoint" />
+            <mxPoint x="850" y="2440" as="sourcePoint" />
+            <mxPoint x="1330" y="2520" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-44" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-43" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=#00FF00;" value="Submit Complete &amp;amp; Final&amp;nbsp;&lt;div&gt;Prompt to LLM&lt;/div&gt;" vertex="1">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-91" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-90" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelBackgroundColor=#00FF00;" value="Submit Complete &amp;amp; Final&amp;nbsp;&lt;div&gt;Prompt to LLM&lt;/div&gt;" vertex="1">
           <mxGeometry relative="1" x="-0.0644" y="2" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-45" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-92" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="1345" y="2620" as="sourcePoint" />
-            <mxPoint x="825" y="2800" as="targetPoint" />
+            <mxPoint x="1330" y="2560" as="sourcePoint" />
+            <mxPoint x="850" y="2680" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-46" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-45" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Receive Real-Time&amp;nbsp;&lt;div&gt;Response Stream&lt;/div&gt;" vertex="1">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-93" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-92" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Receive Real-Time&amp;nbsp;&lt;div&gt;Response Stream&lt;/div&gt;" vertex="1">
           <mxGeometry relative="1" x="-0.0013" y="-6" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-47" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-94" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="825" y="2840" as="sourcePoint" />
-            <mxPoint x="305" y="3030" as="targetPoint" />
+            <mxPoint x="850" y="2720" as="sourcePoint" />
+            <mxPoint x="370" y="2840" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-48" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-47" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Fetch RAG References&lt;div&gt;(if applicable)&lt;/div&gt;&lt;div&gt;and Store to Chat History DB&lt;/div&gt;" vertex="1">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-95" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-94" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Fetch RAG References&lt;div&gt;(IF Applicable)&lt;/div&gt;&lt;div&gt;and Store to Chat History DB&lt;/div&gt;" vertex="1">
           <mxGeometry relative="1" x="0.0815" y="-2" as="geometry">
             <mxPoint y="-1" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-51" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-97" connectable="0" parent="1" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="If RAG Context Exists,&lt;div&gt;Generate References HTML&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Store to Chat History DB&lt;/div&gt;" vertex="1">
+          <mxGeometry x="370" y="2900" as="geometry" />
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-98" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="305" y="3130" as="sourcePoint" />
-            <mxPoint x="825" y="3240" as="targetPoint" />
+            <mxPoint x="370" y="3240" as="sourcePoint" />
+            <mxPoint x="370" y="2970" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-52" connectable="0" parent="fJHkzdQGwVCSKPfU--4b-51" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Final Serverside Response for Query" vertex="1">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-99" edge="1" parent="1" source="oWZWHLwwi9bQKimiQ4xG-104" style="endArrow=none;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="850" y="3280" as="sourcePoint" />
+            <mxPoint x="850" y="2960" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-100" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="1330" y="3240" as="sourcePoint" />
+            <mxPoint x="1329.87" y="2960" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-101" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="370" y="2960" as="sourcePoint" />
+            <mxPoint x="850" y="3080" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-102" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-101" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Final Serverside Response for Query" vertex="1">
           <mxGeometry relative="1" x="-0.0806" y="-1" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-55" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-103" connectable="0" parent="1" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Append PDF Viewer to&lt;div&gt;Response Container if&amp;nbsp;&lt;/div&gt;&lt;div&gt;RAG context exists&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Append User Rating Stars&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Finalize Markdown Rendering&lt;/div&gt;" vertex="1">
+          <mxGeometry x="850" y="3160" as="geometry" />
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-105" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" target="oWZWHLwwi9bQKimiQ4xG-104" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="305" y="3410" as="sourcePoint" />
-            <mxPoint x="305" y="3270" as="targetPoint" />
+            <mxPoint x="850" y="3280" as="sourcePoint" />
+            <mxPoint x="850" y="2960" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-56" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-104" parent="1" style="ellipse;html=1;shape=endState;fillColor=#000000;strokeColor=#ff0000;" value="" vertex="1">
+          <mxGeometry height="30" width="30" x="835" y="3260" as="geometry" />
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-18" edge="1" parent="1" style="endArrow=none;html=1;rounded=0;" value="">
           <mxGeometry height="50" relative="1" width="50" as="geometry">
-            <mxPoint x="1344.4099999999999" y="3410" as="sourcePoint" />
-            <mxPoint x="1344.4099999999999" y="3270" as="targetPoint" />
+            <mxPoint x="370" y="2140" as="sourcePoint" />
+            <mxPoint x="370" y="1150" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fJHkzdQGwVCSKPfU--4b-57" parent="1" style="ellipse;html=1;shape=endState;fillColor=#000000;strokeColor=#ff0000;" value="" vertex="1">
-          <mxGeometry height="30" width="30" x="810" y="3410" as="geometry" />
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-34" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-18" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Execute Butler Tools&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Prepare Final Messages Object&lt;/div&gt;&lt;div&gt;with Tool Use Results&lt;/div&gt;&lt;div&gt;(Custom Action Analysis Prompt)&lt;/div&gt;" vertex="1">
+          <mxGeometry relative="1" x="-0.8357" as="geometry">
+            <mxPoint y="13" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="oWZWHLwwi9bQKimiQ4xG-35" connectable="0" parent="oWZWHLwwi9bQKimiQ4xG-18" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Handle Butler Mode&lt;div&gt;Skip to &lt;b style=&quot;background-color: rgb(0, 255, 255);&quot;&gt;BLUE&lt;/b&gt; for RAG&lt;/div&gt;" vertex="1">
+          <mxGeometry relative="1" x="0.2642" y="1" as="geometry">
+            <mxPoint y="-4" as="offset" />
+          </mxGeometry>
         </mxCell>
       </root>
     </mxGraphModel>
