@@ -7694,6 +7694,33 @@ def execute_search_tools_on_query(user_query:str, embedding_function:str, llm_se
 
 
 
+@app.route('/get_tools_schema')
+def get_tools_schema():
+    '''
+    This API is used to get the tools schema for the butler mode.
+    '''
+    try:
+        _, full_tools_config = butler_module._full_read_butler_tools_config()
+        tools_schema = butler_module.generate_tools_schema(full_tools_config.get('services', {}))
+    except Exception as e:
+        return handle_api_error("Error getting tools schema in method get-tools_schema, encountered error: ", e)
+    return jsonify({"success": True, "tools_schema": tools_schema})
+
+
+@app.route('/execute_tools', methods=['POST'])
+def execute_tools():
+    '''
+    This API is used to execute the tools for the butler mode.
+    '''
+    try:
+        tools_json = request.json
+        tool_results = butler_module.execute_tools(tools_json)
+        print(f"Tool results: {tool_results}")
+        return jsonify({"success": tool_results['success'], "tool_result_list": tool_results['tool_result_list'], "message": tool_results['message']})
+    except Exception as e:
+        return handle_api_error(f"Error executing tools in method execute-tools - {tool_results['message']}. Encountered error: ", e)
+
+
 @app.route('/determine_service_and_ids_for_query', methods=['POST'])
 def determine_service_and_ids_for_query():
     '''

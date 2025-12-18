@@ -429,6 +429,91 @@
 				}
 			},
 			"response": []
+		},
+		{
+			"name": "Get-Tools-Schema",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "X-Max-New-Tokens",
+						"value": "500",
+						"type": "text"
+					},
+					{
+						"key": "X-Return-Full-Text",
+						"value": "False",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Temperature",
+						"value": "0.7",
+						"type": "text"
+					},
+					{
+						"key": "X-Do-Sample",
+						"value": "True",
+						"type": "text",
+						"disabled": true
+					},
+					{
+						"key": "X-Top-K",
+						"value": "40",
+						"type": "text"
+					},
+					{
+						"key": "X-Top-P",
+						"value": "0.95",
+						"type": "text"
+					},
+					{
+						"key": "X-Min-P",
+						"value": "0.05",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:5000/get_tools_schema",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"get_tools_schema"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Execute-Tools",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"tool_calls\": [\r\n        {\r\n            \"id\": \"call_151a2be9\",\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_brightness\",\r\n                \"arguments\": \"{\\\"brightness\\\":100}\"\r\n            }\r\n        },\r\n        {\r\n            \"id\": \"call_6434bc93\",\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_scene\",\r\n                \"arguments\": \"{\\\"scene\\\":\\\"dating\\\"}\"\r\n            }\r\n        }\r\n    ]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:5000/execute_tools",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"execute_tools"
+					]
+				}
+			},
+			"response": []
 		}
 	]
 }
