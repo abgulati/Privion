@@ -58,6 +58,14 @@ function setLegacyMode(legacy_mode) {
     document.getElementById('chatState').setAttribute('data-legacy-mode', legacy_mode);
 }
 
+function setServerType(server_type) {
+    document.getElementById('chatState').setAttribute('data-server-type', server_type);
+}
+
+function getServerType() {
+    return document.getElementById('chatState').getAttribute('data-server-type');
+}
+
 function getLegacyMode() {
     return document.getElementById('chatState').getAttribute('data-legacy-mode');
 }
@@ -122,6 +130,34 @@ function getUniqueId() {
         const v = c === 'x' ? r : (r & 0x3 | 0x8);
         return v.toString(16);
     });
+}
+
+function incrementSequenceId() {
+    const updated_sequence_id = parseInt(getSequenceId()) + 1;
+    setSequenceId(updated_sequence_id);
+    return updated_sequence_id;
+}
+
+function decrementSequenceId() {
+    const updated_sequence_id = parseInt(getSequenceId()) - 1;
+    setSequenceId(updated_sequence_id);
+    return updated_sequence_id;
+}
+
+function coerceToObject(maybeJson, label = "prompt") {
+    // Regular mode: already an object
+    if (maybeJson && typeof maybeJson === 'object') return maybeJson;
+
+    // Legacy mode: JSON string
+    if (typeof maybeJson === 'string') {
+        const s = maybeJson.trim();
+        try{
+            return JSON.parse(s);
+        } catch (e) {
+            errorHandlerNoAlert("coercing to object", "coerceToObject()", `Error parsing ${label} as JSON: ${e.message}`);
+            return null;
+        }
+    }
 }
 
 // Debounce function to limit how often it's called:
