@@ -2279,6 +2279,24 @@
                                                 <td class="settings_table_setting_description">Enable legacy mode. This is a temporary feature to help with the transition to a new native tool-calling system. It will be removed in the future.</td>
                                                 <td class="settings_table_setting_value"><input class="settings-input-fields" type="checkbox" id="legacy_mode" name="legacy_mode" value="true"></td>
                                             </tr>
+                                            <tr class="settings-table-row">
+                                                <td class="settings_table_setting_name">Tool Response Mode</td>
+                                                <td class="settings_table_setting_description">How to respond to tool calls. One of:
+                                                    <ul>
+                                                        <li>role_tool: Use the role_tool format (OpenAI-style tool role)</li>
+                                                        <li>user_tool_response_tag: Use the user_tool_response_tag format (For models like Orchestrator-8B, etc. that require <tool_result>...</tool_result> tags in user roles)</li>
+                                                        <li>both: Use both formats (experimental)</li>
+                                                    </ul>
+                                                    <p>Default: role_tool</p>
+                                                </td>
+                                                <td class="settings_table_setting_value">
+                                                    <select id="tool_response_mode" name="tool_response_mode" class="modal-selects">
+                                                        <option value="role_tool">role_tool [Default]</option>
+                                                        <option value="user_tool_response_tag">user_tool_response_tag</option>
+                                                        <option value="both">both</option>
+                                                    </select>
+                                                </td>
+                                            </tr>
                                         </table>
                                     </div>
 
@@ -2329,6 +2347,7 @@
         
         <script src="{{ url_for('static', filename='js/helper-functions.js') }}"></script>
         <script src="{{ url_for('static', filename='js/save-config.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/tool-support.js') }}"></script>
         <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
         <script src="{{ url_for('static', filename='js/upload-functions.js') }}"></script>
         <script src="{{ url_for('static', filename='js/privion-js-classes.js') }}"></script>

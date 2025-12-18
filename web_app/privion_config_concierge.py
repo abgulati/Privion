@@ -220,6 +220,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                 'llama_cpp_access_url':'localhost',
                 'llama_cpp_server_port':8080,
                 'legacy_mode':True,
+                'tool_response_mode':'role_tool',
                 'do_rag':True,
                 'butler_mode':False,
                 'enable_butler_mode_selection':False,

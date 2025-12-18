@@ -102,6 +102,7 @@ function loadCoreLarsConfig() {
         'force_disable_rag',
         'enable_graph_rag',
         'legacy_mode',
+        'tool_response_mode',
         'enable_butler_mode_selection',
         'upload_doc_to_graph_db',
         'graph_rag_context_length_limit_chars',
@@ -318,6 +319,8 @@ function loadCoreHfConfig() {
         return response.json()
     })
     .then(data => {
+        if (data.vision == 'true') { setServerType('hfw-vision'); }
+        if (data.flux_diffusers == 'true') { setServerType('hfw-diffusers'); }
         return data.values;
     })
     .catch(error => {
@@ -706,6 +709,7 @@ function initializeLocalLLMServerDropdown(local_llm_server, exclusive_server_mod
 
     document.getElementById('llama_cpp_div').style.display = local_llm_server === 'llama-cpp' ? 'block' : 'none';
     document.getElementById('hf_waitress_div').style.display = local_llm_server === 'hf-waitress' ? 'block' : 'none';
+    setServerType(local_llm_server);
 }
 
 
@@ -1828,6 +1832,7 @@ function initializeTTSTabComponents(values) {
 
 function initializeAdvancedSettingsTabComponents(values) {
     document.getElementById('legacy_mode').checked = values.legacy_mode;
+    document.getElementById('tool_response_mode').value = values.tool_response_mode;
     setLegacyMode(values.legacy_mode);
 }
 
@@ -2036,6 +2041,7 @@ document.addEventListener("DOMContentLoaded", function() {
             loadChatHistoryMenu();  // should be done regardless of errors
             handleGoogleDrivePostAuth();
             hideStreamSpinner();
+            setSequenceId(0);   // init new chat
             appendStreamInfo("All loaded up & ready to chat!", 'success');
         })
         .catch(error => {

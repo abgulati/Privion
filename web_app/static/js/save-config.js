@@ -361,7 +361,8 @@ function getTtsConfig() {
 
 function getAdvancedSettingsConfig() {
     config = {
-        'legacy_mode': document.getElementById('legacy_mode').checked
+        'legacy_mode': document.getElementById('legacy_mode').checked,
+        'tool_response_mode': document.getElementById('tool_response_mode').value
     };
     setLegacyMode(config.legacy_mode);
     return config;
