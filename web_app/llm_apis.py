@@ -70,39 +70,10 @@ def hf_waitress_streaming_api_handler(endpoint_url:str, headers:dict, payload:st
         
     except Exception as e:
         raise Exception(f"Failed request to HF-Waitress {endpoint_url} API, encountered error: {e}")
-    
 
-def hf_waitress_streaming_api_handler_with_tools(endpoint_url:str, headers:dict, payload:str) -> dict:
-    print(f"\nHF-Waitress Streaming Request Response Handler with Tools Invoked\n")
-    
+
+def extract_tool_calls_from_response(full_response_text:str) -> list[dict]:
     try:
-        response = requests.post(endpoint_url, headers=headers, data=payload, stream=True)
-        response.raise_for_status()  # Raise an exception for bad status codes so we can catch them in the except block
-
-        full_response_text = ""
-        for line in response.iter_lines(decode_unicode=True):
-            if line:
-                if line.startswith("data:"):
-                    event_data = line[6:].strip()
-                    try:
-                        token = str(json.loads(event_data))
-                        full_response_text += token
-                    except json.JSONDecodeError as e:
-                        print(f"Failed to parse event data: {event_data}, encountered error: ", e)
-                elif line.startswith("event: END"):
-                    break
-                else:
-                    print(f"\nUnexpected Line Format: {line}\n")
-        
-        print(f"Full response text: {full_response_text}")
-        
-        if not full_response_text:
-            print("\nWarning: No response from exl2-stream / exl2-grapher request\n")
-            return {'role': 'assistant', 'content': None}
-        
-        # --- PARSE NATIVE RESPONSE INTO OBJECT ---
-        # Since the HF-Waitress custom backend returns raw text (with XML tags), 
-        # we parse it here so the Controller treats it exactly like Llama.cpp
         print("\n--- Starting tool parsing ---")
 
         tool_calls = []
@@ -188,17 +159,6 @@ def hf_waitress_streaming_api_handler_with_tools(endpoint_url:str, headers:dict,
                 except Exception as e:
                     print(f"Failed to parse custom XML format: {e}")
 
-            # --- Fallback for single Custom XML if regex failed to split functions ---
-            if not parse_success and tool_name:
-                tool_calls.append({
-                    'id': 'call_' + str(hash(tool_name))[:8],    # :8 is for brevity, but you could use a longer ID if needed
-                    'type': 'function',
-                    'function': {
-                        'name': tool_name,
-                        'arguments': json.dumps(tool_args) # OpenAI expects stringified JSON here
-                    }
-                })
-
         # Remove ALL <tool_call> blocks from the text shown to the user
         content = tool_regex.sub('', full_response_text).strip()
 
@@ -208,7 +168,43 @@ def hf_waitress_streaming_api_handler_with_tools(endpoint_url:str, headers:dict,
             result['tool_calls'] = tool_calls
 
         return result
+    except Exception as e:
+        raise Exception(f"Failed to extract tool calls from response, encountered error: {e}")
 
+
+def hf_waitress_streaming_api_handler_with_tools(endpoint_url:str, headers:dict, payload:str) -> dict:
+    print(f"\nHF-Waitress Streaming Request Response Handler with Tools Invoked\n")
+    
+    try:
+        response = requests.post(endpoint_url, headers=headers, data=payload, stream=True)
+        response.raise_for_status()  # Raise an exception for bad status codes so we can catch them in the except block
+
+        full_response_text = ""
+        for line in response.iter_lines(decode_unicode=True):
+            if line:
+                if line.startswith("data:"):
+                    event_data = line[6:].strip()
+                    try:
+                        token = str(json.loads(event_data))
+                        full_response_text += token
+                    except json.JSONDecodeError as e:
+                        print(f"Failed to parse event data: {event_data}, encountered error: ", e)
+                elif line.startswith("event: END"):
+                    break
+                else:
+                    print(f"\nUnexpected Line Format: {line}\n")
+        
+        print(f"Full response text: {full_response_text}")
+        
+        if not full_response_text:
+            print("\nWarning: No response from exl2-stream / exl2-grapher request\n")
+            return {'role': 'assistant', 'content': None}
+        
+        # --- PARSE NATIVE RESPONSE INTO OBJECT ---
+        # Since the HF-Waitress custom backend returns raw text (with XML tags), 
+        # we parse it here so the Controller treats it exactly like Llama.cpp
+        return extract_tool_calls_from_response(full_response_text)
+        
     except Exception as e:
         raise Exception(f"Failed request to HF-Waitress {endpoint_url} API, encountered error: {e}")
 
