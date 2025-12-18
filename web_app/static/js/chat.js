@@ -268,14 +268,14 @@ function createUserMessageHTML(userInputForHtml){
 
 function updateChatAreaWithUserInput(userInputForHtml) {
     /*
-    The uniqueId is used primarily to set the data-chat-id, data-sequence-id and data-stream-session-id attributes on the user-message element by the methods immediately below.
-    These methods leverage querySelector to find the user-message element by the uniqueId, and then set the attributes on it.
+    The uniqueId is used primarily to set the data-chat-id, data-sequence-id and data-stream-session-id attributes on 
+    the user-message element, by the methods immediately below.
+    Those methods leverage querySelector to find the user-message element by the uniqueId, and then set attributes on it.
     For regeneration requests, these attributes are already set to the correct chat-id & stream-session-id, so they needen't be set again.
     This is why appendChatIdToUserMessage() & appendStreamSessionIdToUserMessage() are only called if (!regeneration_request).
-    However, the sequence-id does need to be reset even for regen requests, because regenerating a response deletes any prior messages for the sake of the chat template, 
-    thus the sequence ID will need to be reset in any case where the regenration request is for any message other than the latest one.
-    In this case, the stream-session-id for the regen request is obtained by a call to the prepareAttributeForUserMessage() method, which
-    is called by a click event listener set at DOM load by initializeRegenerateResponseButton(). 
+    In other words, for regen requests, the uniqueID is irrelevant and not used, and instead the previously set stream-session-id is reused!
+    The old stream-session-id is obtained by a call to the prepareAttributeForUserMessage() method, which
+    is called by a click event listener set at DOM load by initializeRegenerateResponseButton().
     */
     const uniqueId = createUserMessageHTML(userInputForHtml);
     appendLoadingAnimation();
@@ -292,8 +292,8 @@ function appendStreamSessionIdToUserMessage(uniqueId, stream_session_id) {
     userMessageElement.setAttribute('data-stream-session-id', stream_session_id);
 }
 
-function appendSequenceIdToUserMessage(uniqueId, stream_session_id, regeneration_request, sequence_id) {
-    const userMessageElement = regeneration_request ? document.querySelector(`.user-message[data-stream-session-id="${stream_session_id}"]`) : document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
+function appendSequenceIdToUserMessage(uniqueId, sequence_id) {
+    const userMessageElement = document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
     userMessageElement.setAttribute('data-sequence-id', sequence_id);
 }
 
@@ -353,11 +353,11 @@ async function handleToolUse(stream_session_id, userInput, current_chat_id, llm_
     const {reused_stream_session_id, tool_formatted_user_prompt, sequence_id, reconfirmed_server_type} = invoke_tools_data;
     console.log("tool_formatted_user_prompt: ", JSON.parse(tool_formatted_user_prompt));
     setSequenceId(sequence_id);
-    appendSequenceIdToUserMessage(uniqueId, stream_session_id, regeneration_request, sequence_id);
+    if (!regeneration_request) { appendSequenceIdToUserMessage(uniqueId, sequence_id); }
     return {reused_stream_session_id, tool_formatted_user_prompt, reconfirmed_server_type};
 }
 
-function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, responseContentID, stream_session_id) {
+function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, responseContentID, stream_session_id, sequence_id) {
     // Not called again for regen requests, as the response container is already present in the chat area.
     const chatArea = document.getElementById('chat-area');
     
@@ -366,6 +366,7 @@ function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, r
     responseContainer.className = 'response-and-viewer-container';
     responseContainer.id = masterWrapperID;
     responseContainer.setAttribute('data-stream-session-id', stream_session_id);
+    responseContainer.setAttribute('data-sequence-id', sequence_id);
     responseContainer.innerHTML = `
         <div class="llm-wrapper" style="display:none;" id="${responseWrapperID}">
             <div class="llm-response" id="${responseContentID}"></div>
@@ -385,7 +386,6 @@ function handleSetupResponse(data) {
     const tool_use = (do_rag || perform_graph_rag || butler_mode) ? true : false;
     console.log("formatted_user_prompt: ", JSON.parse(formatted_user_prompt));
     setSequenceId(sequence_id);
-    appendSequenceIdToUserMessage(data.user_message_html_unique_id, stream_session_id, data.regeneration_request, sequence_id);
 
     const responseIDs = {
         responseWrapperID: `ResponseWrapper${stream_session_id}`,
@@ -393,7 +393,10 @@ function handleSetupResponse(data) {
         masterWrapperID: `MasterWrapper${stream_session_id}`
     }
 
-    if (!data.regeneration_request) { appendResponseContainerToChatArea(responseIDs.masterWrapperID, responseIDs.responseWrapperID, responseIDs.responseContentID, stream_session_id); }
+    if (!data.regeneration_request) { 
+        appendResponseContainerToChatArea(responseIDs.masterWrapperID, responseIDs.responseWrapperID, responseIDs.responseContentID, stream_session_id, sequence_id); 
+        appendSequenceIdToUserMessage(data.user_message_html_unique_id, sequence_id);
+    }
     displayProcessingStatus('Generating...');
 
     return { tool_use, llm_set_rag_config, stream_session_id, formatted_user_prompt, responseIDs, sequence_id, server_type };
@@ -417,10 +420,13 @@ function printErrorToChatArea(responseContentID, error_message) {
 }
 
 
-async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer) {
+async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer, tools_schema=null) {
     const url = "http://localhost:8080/v1/chat/completions";
+    let formattedPromptCopy = structuredClone(formattedPrompt); // objects passed by reference so appending tools to the passed object will make it persistent even when tools_schema is null in a future call!
 
-    const requestData = JSON.parse(formattedPrompt);
+    const requestData = coerceToObject(formattedPromptCopy, "llama.cpp request");
+    if (tools_schema) { requestData.tools = tools_schema; }
+    else delete requestData.tools;  // if the incoming formattedPrompt already has a .tools property from any earlier mutation (or from elsewhere), so best to explicitly remove it when tools_schema is null
     requestData.stream = true;
     requestData.temperature = parseFloat(document.getElementById('tempSlider').value);
     requestData.top_k = parseInt(document.getElementById('topkSlider').value);
@@ -571,11 +577,12 @@ function createDownloadContainerForFile(filename) {
 }
 
 
-async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer, file=null) {
+async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer, file=null, tools_schema=null) {
     let url;
     let hfwHeaders = new Headers();
     let formdata = null;
     let rawBodyJSONStringified = null;
+    let formattedPromptCopy = structuredClone(formattedPrompt); // objects passed by reference so appending tools to the passed object will make it persistent even when tools_schema is null in a future call!
 
     const vision = getVision();
     const exl2 = getExl2();
@@ -591,7 +598,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
 
         formdata = new FormData();
 
-        const parsedPrompt = JSON.parse(formattedPrompt);
+        const parsedPrompt = coerceToObject(formattedPromptCopy, "vision prompt");
         formdata.append("messages", JSON.stringify(parsedPrompt.messages));
         if (file) { formdata.append("file", file); }
     } else if (exl2 === "true") {
@@ -606,8 +613,11 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
         hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
 
-        rawBodyJSONObj = JSON.parse(formattedPrompt);                                
-        rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
+        const requestObj = coerceToObject(formattedPromptCopy, "exl2 request");
+        if (tools_schema) requestObj.tools = tools_schema;
+        else delete requestObj.tools;
+        rawBodyJSONStringified = JSON.stringify(requestObj);
+
     } else if (exl3 === "true") {
         console.log("Invoking exl3_stream");
         const hfWaitress_URL = getHfwUrl();
@@ -624,8 +634,11 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         hfwHeaders.append("X-Presence-Penalty", document.getElementById('HfwPresencePenaltySlider').value);
         hfwHeaders.append("X-Frequency-Penalty", document.getElementById('HfwFrequencyPenaltySlider').value);
 
-        rawBodyJSONObj = JSON.parse(formattedPrompt);                                
-        rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
+        const requestObj = coerceToObject(formattedPromptCopy, "exl3 request");
+        console.log("tools_schema: ", tools_schema);
+        if (tools_schema) requestObj.tools = tools_schema;
+        else delete requestObj.tools;
+        rawBodyJSONStringified = JSON.stringify(requestObj);
 
     } else {
         console.log("Invoking completions_stream");
@@ -641,8 +654,10 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         hfwHeaders.append("X-Min-P", document.getElementById('HfwMinpSlider').value);
         hfwHeaders.append("X-Do-Sample", document.getElementById('HfwTempSlider').value > 0 ? "True" : "False");
         
-        rawBodyJSONObj = JSON.parse(formattedPrompt);                                
-        rawBodyJSONStringified = JSON.stringify(rawBodyJSONObj);
+        const requestObj = coerceToObject(formattedPromptCopy, "completions request");
+        if (tools_schema) requestObj.tools = tools_schema;
+        else delete requestObj.tools;
+        rawBodyJSONStringified = JSON.stringify(requestObj);
     }
     
     try {
@@ -794,15 +809,15 @@ async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, 
     
 }
 
-async function fetchEventStream(serverType, formattedPrompt, responseContentID, chatContainer, file=null) {
+async function fetchEventStream(serverType, formattedPrompt, responseContentID, chatContainer, file=null, tools_schema=null) {
     if (serverType == 'llama-cpp') {
-        return fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer);
+        return fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer, tools_schema);
     } else if (serverType == 'hf-waitress') {
-        return fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer);
+        return fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer, file=null, tools_schema=tools_schema);
     } else if (serverType == 'hfw-diffusers') {
         return fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, chatContainer);
     } else if (serverType == 'hfw-vision') {
-        return fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer, file);
+        return fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer, file, tools_schema);
     } else {
         throw new Error(`Invalid server type: ${serverType}`);
     }
@@ -1026,7 +1041,9 @@ async function requestFormattedPrompt(
         // 1b- invoke-tools_if_necessitated_by_llm
         tool_use && ({reused_stream_session_id: final_stream_session_id, tool_formatted_user_prompt: final_formatted_user_prompt, reconfirmed_server_type: final_server_type} = await handleToolUse(stream_session_id, userInput, current_chat_id, llm_set_rag_config, regeneration_request, uniqueId, sequence_id));
 
-        if (!regeneration_request) { appendStreamSessionIdToUserMessage(uniqueId, final_stream_session_id); }
+        if (!regeneration_request) { 
+            appendStreamSessionIdToUserMessage(uniqueId, final_stream_session_id); 
+        }
 
         // 2- fetch-EventStream()
         traceManager.startStep('Generating Response...');
@@ -1063,7 +1080,7 @@ async function requestFormattedPrompt(
         if (traceManager) {
             traceManager.completeCurrentStep();
         }
-        errorHandlerNoAlert("chatting with the LLM", "request-FormattedPrompt()", String(error.message))
+        errorHandlerNoAlert("chatting with the LLM", "request-FormattedPrompt()", String(error.message));
     } finally {
         enableSendButton();
         displayProcessingStatus(false);
@@ -1086,11 +1103,87 @@ async function executePrompt(
             regenerate_with_citations_force_disabled,
             regen_stream_session_id,
             regen_sequence_id
-        );  // must await so we don't simply return a promise immediately, rather wait for the requestFormattedPrompt() to complete!
+        );  // must await so we don't simply return a promise immediately, rather wait for the request-FormattedPrompt() to complete!
     }
 
+    initializePromptRequest();
+        
+    const current_sequence_id = regeneration_request ? regen_sequence_id : incrementSequenceId();
+    const current_chat_id = getChatId();
+    const {userInput, file} = getUserInput();
+    const userInputForHtml = regeneration_request ? userInput : formatTabsAndSpaces(userInput); // Old input need-not be re-formatted!
+    const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);  // The use of the uniqueId is explained in the docstring of updateChatAreaWithUserInput().
+    
+    const userMessageElement = regeneration_request ? document.querySelector(`.user-message[data-stream-session-id="${regen_stream_session_id}"]`) : document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
+    const traceManager = userMessageElement._traceManager;  // created and stored in the userMessageElement at time of create-UserMessageHTML()!
+    
+    if (regeneration_request) { resetResponseAndViewerContainerWithStreamSessionId(regen_stream_session_id); }
 
+    let file_attached = false;
+    if (file) { file_attached = true; }
 
+    try {
+        traceManager.startStep("Processing Prompt...");
+
+        const stream_session_id = regeneration_request? regen_stream_session_id : getUniqueId();
+        const responseIDs = {
+            responseWrapperID: `ResponseWrapper${stream_session_id}`,
+            responseContentID: `ResponseContent${stream_session_id}`,
+            masterWrapperID: `MasterWrapper${stream_session_id}`
+        }
+        
+        if (!regeneration_request) {
+            appendSequenceIdToUserMessage(uniqueId, current_sequence_id);
+            appendStreamSessionIdToUserMessage(uniqueId, stream_session_id);
+            appendResponseContainerToChatArea(responseIDs.masterWrapperID, responseIDs.responseWrapperID, responseIDs.responseContentID, stream_session_id, current_sequence_id);
+        }
+        
+        let apiMessages = getMessagesObject(regeneration_request, regen_sequence_id);
+        const tools_schema = await getToolsSchema();
+        const chatContainer = document.getElementById('chat-area');
+        let totalContent = await fetchEventStream(getServerType(), apiMessages, responseIDs.responseContentID, chatContainer, file, tools_schema);
+        const { plain_text, invoke_tools, tool_calls } = extractToolCallsFromResponse(totalContent);
+        if (invoke_tools == true) {
+            console.log("invoke_tools is true");
+            // TODO: handle tool-call div creation
+            const tool_execution_response = await executeTools(tool_calls);
+            const tool_execution_data = await tool_execution_response.json();
+            const tool_result = tool_execution_data.tool_result_list;
+            const toolResponseMode = document.getElementById('tool_response_mode').value;
+            apiMessages = updateMessagesObjectWithToolResult(apiMessages, tool_calls, tool_result, plain_text, toolResponseMode);
+            totalContent += await fetchEventStream(getServerType(), apiMessages, responseIDs.responseContentID, chatContainer, file);
+        }
+        
+        const getReferencesParams = {
+            'chat_id':current_chat_id,
+            'sequence_id': current_sequence_id,
+            'stream_session_id': stream_session_id,
+            'user_query': userInputForHtml,
+            'user_query_html': userMessageElement.outerHTML,
+            'llm_response': totalContent,
+            'formatted_user_prompt': JSON.stringify(apiMessages),
+            'regeneration_request': regeneration_request,
+            'regenerate_with_citations_force_enabled': regenerate_with_citations_force_enabled
+        };
+
+        await getReferences(invoke_tools, getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);
+
+        // Complete final step
+        traceManager.completeCurrentStep();
+
+        if (document.getElementById('enable_tts').checked) { await fetchTTSVoice(totalContent); }   // Not using getTts() here so simple checkbox change is enough, rather than a config save!
+
+    } catch (error) {
+        decrementSequenceId();
+        // Stop timer on error
+        if (traceManager) {
+            traceManager.completeCurrentStep();
+        }
+        errorHandlerNoAlert("chatting with the LLM", "execute-Prompt()", String(error.message));
+    } finally {
+        enableSendButton();
+        displayProcessingStatus(false);
+    }
 }
 
 
