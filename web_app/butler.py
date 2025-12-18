@@ -406,3 +406,39 @@ def execute_butler_tasks(user_query:str) -> dict:
         except Exception as e:
             print(f"Both Butler Tool Execution and Action Analysis Prompt Creation Failed: {str(e)}")
             return {'success': False, 'message': f"Both Butler Tool Execution and Action Analysis Prompt Creation Failed: {str(e)}", 'action_analysis_prompt': None}
+        
+
+def execute_tools(tools_json: dict) -> dict:
+    print(f"Executing tools: {tools_json}")
+    tool_result_list = []
+    _, full_tools_config = _full_read_butler_tools_config()
+
+    try:
+        if tools_json.get('tool_calls', None):
+            print(f"LLM decided to call {len(tools_json['tool_calls'])} tool(s).")
+
+            for tool_call in tools_json['tool_calls']:
+                # OpenAI format: 'function' is a dict, 'arguments' is a JSON STRING
+                fn_name = tool_call['function']['name']
+                raw_args = tool_call['function']['arguments']
+                
+                # Safe Parsing
+                if isinstance(raw_args, str):
+                    fn_args = json.loads(raw_args)
+                else:
+                    fn_args = raw_args # In case the custom backend already made it a dict!
+
+                # Execute
+                result = execute_tool_call(fn_name, fn_args, full_tools_config.get('services', {}))
+                tool_result_list.append({
+                    'role': 'tool',
+                    'tool_call_id': tool_call['id'],
+                    'name': fn_name,
+                    'content': result['message']
+                })
+                print(f"Tool execution result for {fn_name}: {result}")
+
+        return {'success': True, 'tool_result_list': tool_result_list, 'message': 'Tools executed successfully.'}
+    except Exception as e:
+        print(f"Error executing tools: {str(e)}")
+        return {'success': False, 'tool_result_list': [], 'message': f"Error executing tools: {str(e)}"}
