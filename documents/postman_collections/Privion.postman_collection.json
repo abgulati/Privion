@@ -434,45 +434,7 @@
 			"name": "Get-Tools-Schema",
 			"request": {
 				"method": "GET",
-				"header": [
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					},
-					{
-						"key": "X-Return-Full-Text",
-						"value": "False",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Temperature",
-						"value": "0.7",
-						"type": "text"
-					},
-					{
-						"key": "X-Do-Sample",
-						"value": "True",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Top-K",
-						"value": "40",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-P",
-						"value": "0.95",
-						"type": "text"
-					},
-					{
-						"key": "X-Min-P",
-						"value": "0.05",
-						"type": "text"
-					}
-				],
+				"header": [],
 				"url": {
 					"raw": "http://localhost:5000/get_tools_schema",
 					"protocol": "http",
