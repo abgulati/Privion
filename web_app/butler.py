@@ -14,6 +14,8 @@ import asyncio
 import json
 import ast
 
+# Initialize Global Service Instance
+SMART_HOME_SERVICE = SmartHomeService()
 
 ########################---------------------config setup---------------------###############################
 BUTLER_TOOLS_CONFIG_PATH, FULL_BUTLER_TOOLS_CONFIG = None, None # set in core controller method - execute-butler_tasks()
@@ -169,6 +171,14 @@ def generate_tools_schema(services_config: dict) -> list[dict]:
 
 
 ### TOOL DEFS:
+def _get_device_ip(device_name: str) -> Optional[str]:
+    """Helper to get IP from name using SmartHomeService."""
+    device = SMART_HOME_SERVICE.get_device_by_name(device_name)
+    if device and device.get('ip_address'):
+        return device['ip_address']
+    print(f"Device '{device_name}' not found or has no IP.")
+    return None
+
 def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9'):
     '''
     Uses Wake-On-LAN (WOL) to turn on a TV.
@@ -251,42 +261,52 @@ def set_lamp_scene(scene: str):
     '''
     return asyncio.run(govee_lights_module.light_set_scene_handler(scene))
 
-def plug_turn_on():
-    '''
-    Turns on a smart plug.
-    '''
-    return asyncio.run(kasa_plug_module.plug_turn_on_handler())
+def check_device_online(device_name: str):
+    ip = _get_device_ip(device_name)
+    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
+    
+    # Check device type to route to correct module
+    device = SMART_HOME_SERVICE.get_device_by_name(device_name)
+    if not device: return {"success": False, "message": f"Device '{device_name}' not found in DB."}
+    
+    dev_type = device['type']
+    handler_module = DEVICE_TYPE_HANDLERS.get(dev_type)
+    
+    if handler_module:
+        return asyncio.run(handler_module.check_online_handler(ip_address=ip))
+    else:
+        return {"success": False, "message": f"Online check not implemented for device type: {dev_type}"}
 
-def plug_turn_off():
-    '''
-    Turns off a smart plug.
-    '''
-    return asyncio.run(kasa_plug_module.plug_turn_off_handler())
+def plug_turn_on(device_name: str):
+    ip = _get_device_ip(device_name)
+    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
+    return asyncio.run(kasa_plug_module.plug_turn_on_handler(ip_address=ip))
 
-def bulb_turn_on():
-    '''
-    Turns on a smart bulb.
-    '''
-    return asyncio.run(kasa_bulb_module.bulb_turn_on_handler())
+def plug_turn_off(device_name: str):
+    ip = _get_device_ip(device_name)
+    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
+    return asyncio.run(kasa_plug_module.plug_turn_off_handler(ip_address=ip))
 
-def bulb_turn_off():
-    '''
-    Turns off a smart bulb.
-    '''
-    return asyncio.run(kasa_bulb_module.bulb_turn_off_handler())
+def bulb_turn_on(device_name: str):
+    ip = _get_device_ip(device_name)
+    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
+    return asyncio.run(kasa_bulb_module.bulb_turn_on_handler(ip_address=ip))
 
-def set_bulb_brightness(brightness: str | int):
-    '''
-    Sets the brightness of a smart bulb.
-    '''
-    return asyncio.run(kasa_bulb_module.bulb_set_brightness_handler(int(brightness)))
+def bulb_turn_off(device_name: str):
+    ip = _get_device_ip(device_name)
+    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
+    return asyncio.run(kasa_bulb_module.bulb_turn_off_handler(ip_address=ip))
+
+def set_bulb_brightness(device_name: str, brightness: str | int):
+    ip = _get_device_ip(device_name)
+    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
+    return asyncio.run(kasa_bulb_module.bulb_set_brightness_handler(int(brightness), ip_address=ip))
 
 
-def set_bulb_color(hue: str | int, saturation: str | int, value: str | int):
-    '''
-    Sets the color of a smart bulb.
-    '''
-    return asyncio.run(kasa_bulb_module.bulb_set_color_handler(int(hue), int(saturation), int(value)))
+def set_bulb_color(device_name: str, hue: str | int, saturation: str | int, value: str | int):
+    ip = _get_device_ip(device_name)
+    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
+    return asyncio.run(kasa_bulb_module.bulb_set_color_handler(int(hue), int(saturation), int(value), ip_address=ip))
 
 def execute_tool_call(tool_name, llm_args, services_config: dict) -> dict:
     '''

@@ -1,6 +1,16 @@
 {
     "services": {
-        
+        "check_device_online": {
+            "name": "Check Device Online Status",
+            "description": "Checks if a specific smart home device is currently online and reachable on the network.",
+            "fields": {
+                "device_name": {
+                    "required": true,
+                    "type": "string",
+                    "description": "The exact name of the device to check (e.g. 'Living Room Lamp')."
+                }
+            }
+        },
         "wol_turn_on_tv": {
             "name": "WOL Turn On TV",
             "description": "Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.",
@@ -20,7 +30,6 @@
                 }
             }
         },
-
         "lg_webos_tv_turn_on": {
             "name": "LG WebOS TV Turn On",
             "description": "Turns on an LG WebOS TV.",
@@ -40,7 +49,6 @@
                 }
             }
         },
-
         "lg_webos_tv_turn_off": {
             "name": "LG WebOS TV Turn Off",
             "description": "Turns off an LG WebOS TV.",
@@ -51,21 +59,16 @@
                 }
             }
         },
-
         "lamp_turn_on": {
             "name": "Lamp Turn On",
             "description": "Turns on a Govee lamp.",
-            "fields": {
-            }
+            "fields": {}
         },
-        
         "lamp_turn_off": {
             "name": "Lamp Turn Off",
             "description": "Turns off a Govee lamp.",
-            "fields": {
-            }
+            "fields": {}
         },
-
         "set_lamp_brightness": {
             "name": "Set Lamp Brightness",
             "description": "Sets the brightness of a Govee lamp.",
@@ -77,7 +80,6 @@
                 }
             }
         },
-
         "set_lamp_color": {
             "name": "Set Lamp Color",
             "description": "Sets the color of a Govee lamp.",
@@ -99,7 +101,6 @@
                 }
             }
         },
-
         "set_lamp_temperature": {
             "name": "Set Lamp Temperature",
             "description": "Sets the temperature of a Govee lamp.",
@@ -111,7 +112,6 @@
                 }
             }
         },
-
         "set_lamp_scene": {
             "name": "Set Lamp Scene",
             "description": "Sets the scene of a Govee lamp.",
@@ -135,18 +135,15 @@
                 }
             }
         },
-
         "plug_turn_on": {
             "name": "Plug Turn On",
             "description": "Turns on a Kasa plug.",
-            "fields": {
-            }
+            "fields": {}
         },
         "plug_turn_off": {
             "name": "Plug Turn Off",
             "description": "Turns off a Kasa plug.",
-            "fields": {
-            }
+            "fields": {}
         },
         "bulb_turn_on": {
             "name": "Bulb Turn On",
