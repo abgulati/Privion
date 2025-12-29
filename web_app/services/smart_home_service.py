@@ -8,29 +8,59 @@ class SmartHomeService:
     Stateless service class for managing the smart home database.
     Handles connection lifecycle and CRUD operations for Zones, Rooms, Devices, and Automations.
     """
-    # Each house will have its own database    
-    DB_NAME = "cameron_home.db"
-
-    # Assuming the service is located in web_app/services/
-    # DB will be in web_app/data/
-    DB_PATH = Path(__file__).parent.parent / "data" / DB_NAME
-
+    # DB_NAME and DB_PATH are now instance variables determined at runtime
+    # DB_NAME is the name of the database file - set to "smart_home.db"
+    # DB_PATH is the path to the database file
+    
     def __init__(self):
-        self.init_db()
+        self._configure_db_path()
+        
+        # If the DB does not exist, create it and initialize the tables
+        if not self.DB_PATH.exists():
+            print(f"[SmartHomeService] Database not found at {self.DB_PATH}. Creating...")
+            self.init_db()
+        else:
+            print(f"[SmartHomeService] Database found at {self.DB_PATH}.")
+
+    def _configure_db_path(self):
+        """
+        Reads storage_config.json to find the base_directory and sets DB_PATH.
+        """
+        try:
+            # storage_config.json is up two parent directories
+            config_path = Path(__file__).parent.parent / "storage_config.json"
+            
+            # Indicate error if the config path does not exist
+            if not config_path.exists():
+                raise FileNotFoundError(f"[SmartHomeService] CRITICAL: storage_config.json not found at {config_path}. Cannot determine database location.")
+
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                base_dir = config.get('base_directory')
+                
+                if not base_dir:
+                    raise ValueError("[SmartHomeService] CRITICAL: 'base_directory' key missing in storage_config.json.")
+                    
+                self.DB_PATH = Path(base_dir) / "smart_home.db"
+            
+        except Exception as e:
+            # Re-raise exceptions to stop execution
+            print(f"[SmartHomeService] FATAL ERROR configuring DB path: {e}")
+            raise e
 
     def _get_connection(self) -> sqlite3.Connection:
         """Create and return a new database connection."""
+        # Ensure parent directory exists for the new DB path
+        if not self.DB_PATH.parent.exists():
+             self.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+             
         conn = sqlite3.connect(self.DB_PATH)
         conn.row_factory = sqlite3.Row
         return conn
 
     def init_db(self):
         """
-        Initialize the database tables if they do not exist.
-        This logic will need to evolve over time as the database schema changes.
-        We need to think through how we will create databases during device setup.
-        For now, this serves as a simple way to initialize the database on startup when the 
-        global butler service creates a SmartHomeService instance.
+        Initialize the database tables.
         """
         conn = self._get_connection()
         try:
