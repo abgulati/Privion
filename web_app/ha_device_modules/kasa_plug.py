@@ -2,8 +2,6 @@
 from kasa.iot import IotPlug as KasaSmartPlug
 from kasa import Discover
 
-KASA_PLUG_IP_ADDR = "192.168.0.68"
-
 async def find_device_ip(mac_address: str) -> str | None:
     # Broadcast discovery
     found = await Discover.discover(target="255.255.255.255")
@@ -30,14 +28,13 @@ async def check_online_handler(ip_address: str) -> dict:
             pass
         return {"success": False, "message": f"offline: {e}"}
 
-async def kasa_connect():
+async def kasa_connect(ip_address: str):
     try:
-        dev = KasaSmartPlug(KASA_PLUG_IP_ADDR)
+        dev = KasaSmartPlug(ip_address)
         await dev.update()
         return dev
     except Exception as e:
         return {"success": False, "message": f"Error connecting to Kasa plug: {e}"}
-    
 async def kasa_disconnect(dev):
     try:
         await dev.protocol.close()
@@ -45,9 +42,10 @@ async def kasa_disconnect(dev):
     except Exception as e:
         return {"success": False, "message": f"Error disconnecting from Kasa plug: {e}"}
 
-async def plug_turn_on_handler():
+
+async def plug_turn_on_handler(ip_address: str):
     try:
-        dev = await kasa_connect()
+        dev = await kasa_connect(ip_address)
         await dev.turn_on()
         print("Turned ON")
         await kasa_disconnect(dev)
@@ -55,9 +53,9 @@ async def plug_turn_on_handler():
     except Exception as e:
         return {"success": False, "message": f"Error turning on Kasa plug: {e}"}
 
-async def plug_turn_off_handler():
+async def plug_turn_off_handler(ip_address: str):
     try:
-        dev = await kasa_connect()
+        dev = await kasa_connect(ip_address)
         await dev.turn_off()
         print("Turned OFF")
         await kasa_disconnect(dev)

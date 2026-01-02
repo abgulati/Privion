@@ -7706,6 +7706,16 @@ def get_tools_schema():
         return handle_api_error("Error getting tools schema in method get-tools_schema, encountered error: ", e)
     return jsonify({"success": True, "tools_schema": tools_schema})
 
+@app.route('/get_db_schema')
+def get_db_schema():
+    '''
+    This API is used to get the DB schema for the butler mode.
+    '''
+    try:
+        db_schema = butler_module.generate_db_schema()
+    except Exception as e:
+        return handle_api_error("Error getting DB schema in method get-db_schema, encountered error: ", e)
+    return jsonify({"success": True, "db_schema": db_schema})
 
 @app.route('/execute_tools', methods=['POST'])
 def execute_tools():

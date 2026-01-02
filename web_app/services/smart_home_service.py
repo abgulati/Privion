@@ -219,6 +219,25 @@ class SmartHomeService:
         finally:
             conn.close()
 
+    def get_all_db_info(self) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            # Enriched query to get room and zone names
+            query = """
+            SELECT 
+                d.*,
+                r.name as room_name,
+                z.name as zone_name
+            FROM devices d
+            LEFT JOIN rooms r ON d.room_id = r.id
+            LEFT JOIN zones z ON r.zone_id = z.id
+            """
+            cursor.execute(query)
+            return [dict(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
     def update_device_status(self, device_id: int, is_online: bool):
         conn = self._get_connection()
         try:

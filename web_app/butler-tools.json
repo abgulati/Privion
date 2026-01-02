@@ -138,27 +138,56 @@
         "plug_turn_on": {
             "name": "Plug Turn On",
             "description": "Turns on a Kasa plug.",
-            "fields": {}
+            "fields": {
+                "ip_address": {
+                    "required": true,
+                    "type": "string",
+                    "description": "The IP address of the plug"
+                }
+            }
         },
         "plug_turn_off": {
             "name": "Plug Turn Off",
             "description": "Turns off a Kasa plug.",
-            "fields": {}
+            "fields": {
+                "ip_address": {
+                    "required": true,
+                    "type": "string",
+                    "description": "The IP address of the plug"
+                }
+            }
         },
         "bulb_turn_on": {
             "name": "Bulb Turn On",
             "description": "Turns on a Kasa bulb.",
-            "fields": {}
+            "fields": {
+                "ip_address": {
+                    "required": true,
+                    "type": "string",
+                    "description": "The IP address of the bulb"
+                }
+            }
         },
         "bulb_turn_off": {
             "name": "Bulb Turn Off",
             "description": "Turns off a Kasa bulb.",
-            "fields": {}
+            "fields": {
+                "ip_address": {
+                    "required": true,
+                    "type": "string",
+                    "description": "The IP address of the bulb"
+                }
+            }
         },
         "set_bulb_brightness": {
             "name": "Set Bulb Brightness",
             "description": "Sets the brightness of a Kasa bulb.",
             "fields": {
+                "ip_address": {
+                    "required": true,
+                    "type": "string",
+                    "description": "The IP address of the bulb"
+                },
                 "brightness": {
                     "required": true,
                     "default": 100,
@@ -170,6 +199,11 @@
             "name": "Set Lamp Color",
             "description": "Sets the color of a Kasa bulb.",
             "fields": {
+                "ip_address": {
+                    "required": true,
+                    "type": "string",
+                    "description": "The IP address of the bulb"
+                },
                 "hue": {
                     "required": true,
                     "type": "integer",

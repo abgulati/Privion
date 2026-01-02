@@ -14,6 +14,8 @@ import asyncio
 import json
 import ast
 
+from services.smart_home_service import SmartHomeService
+
 # Initialize Global Service Instance
 SMART_HOME_SERVICE = SmartHomeService()
 
@@ -169,6 +171,11 @@ def generate_tools_schema(services_config: dict) -> list[dict]:
     
     return tools_schema
 
+def generate_db_schema():
+    '''
+    Generates a DB schema from the smart home database.
+    '''
+    return SMART_HOME_SERVICE.get_all_db_info()
 
 ### TOOL DEFS:
 def _get_device_ip(device_name: str) -> Optional[str]:
@@ -178,6 +185,10 @@ def _get_device_ip(device_name: str) -> Optional[str]:
         return device['ip_address']
     print(f"Device '{device_name}' not found or has no IP.")
     return None
+
+async def _get_device_ip_async(device_name: str) -> Optional[str]:
+    """Async helper to get IP from name using SmartHomeService in a thread."""
+    return await asyncio.to_thread(_get_device_ip, device_name)
 
 def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9'):
     '''
@@ -207,7 +218,7 @@ def lg_webos_tv_turn_on(mac_address:str, target_ip: Optional[str] = None, port: 
     return wol_turn_on_tv(mac_address, target_ip, port)
 
 
-def lg_webos_tv_turn_off(ip_address: Optional[str] = None):
+async def lg_webos_tv_turn_off(ip_address: Optional[str] = None):
     '''
     Turns on an LG WebOS TV.
     '''
@@ -217,98 +228,104 @@ def lg_webos_tv_turn_off(ip_address: Optional[str] = None):
             return {"success": False, "message": "No LG WebOS TVs found on the network."}
         ip_address = webos_ip
         print(f"Found LG WebOS TV at IP address: {ip_address}")
-    return asyncio.run(lg_webos_tv_module.webos_pair_connect_and_power_off_async(ip_address))
+    return await lg_webos_tv_module.webos_pair_connect_and_power_off_async(ip_address)
 
 
-def lamp_turn_on():
+async def lamp_turn_on():
     '''
     Turns on a lamp.
     '''
-    return asyncio.run(govee_lights_module.light_turn_on_handler())
+    return await govee_lights_module.light_turn_on_handler()
 
 
-def lamp_turn_off():
+async def lamp_turn_off():
     '''
     Turns off a lamp.
     '''
-    return asyncio.run(govee_lights_module.light_turn_off_handler())
+    return await govee_lights_module.light_turn_off_handler()
 
 
-def set_lamp_brightness(brightness: str | int):
+async def set_lamp_brightness(brightness: str | int):
     '''
     Sets the brightness of a lamp.
     '''
-    return asyncio.run(govee_lights_module.light_set_brightness_handler(int(brightness)))
+    return await govee_lights_module.light_set_brightness_handler(int(brightness))
 
 
-def set_lamp_color(red: str | int, green: str | int, blue: str | int):
+async def set_lamp_color(red: str | int, green: str | int, blue: str | int):
     '''
     Sets the color of a lamp.
     '''
-    return asyncio.run(govee_lights_module.light_set_color_handler(int(red), int(green), int(blue)))
+    return await govee_lights_module.light_set_color_handler(int(red), int(green), int(blue))
 
 
-def set_lamp_temperature(temperature: str | int):
+async def set_lamp_temperature(temperature: str | int):
     '''
     Sets the temperature of a lamp.
     '''
-    return asyncio.run(govee_lights_module.light_set_temperature_handler(int(temperature)))
+    return await govee_lights_module.light_set_temperature_handler(int(temperature))
 
 
-def set_lamp_scene(scene: str):
+async def set_lamp_scene(scene: str):
     '''
     Sets the scene of a lamp.
     '''
-    return asyncio.run(govee_lights_module.light_set_scene_handler(scene))
+    return await govee_lights_module.light_set_scene_handler(scene)
 
-def check_device_online(device_name: str):
-    ip = _get_device_ip(device_name)
-    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
+async def check_device_online(device_name: str):
+    # Run DB lookup in thread to prevent blocking
+    device = await asyncio.to_thread(SMART_HOME_SERVICE.get_device_by_name, device_name)
     
-    # Check device type to route to correct module
-    device = SMART_HOME_SERVICE.get_device_by_name(device_name)
     if not device: return {"success": False, "message": f"Device '{device_name}' not found in DB."}
+    
+    ip = device.get('ip_address')
+    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
     
     dev_type = device['type']
     handler_module = DEVICE_TYPE_HANDLERS.get(dev_type)
     
     if handler_module:
-        return asyncio.run(handler_module.check_online_handler(ip_address=ip))
+        return await handler_module.check_online_handler(ip_address=ip)
     else:
         return {"success": False, "message": f"Online check not implemented for device type: {dev_type}"}
 
-def plug_turn_on(device_name: str):
-    ip = _get_device_ip(device_name)
-    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
-    return asyncio.run(kasa_plug_module.plug_turn_on_handler(ip_address=ip))
+async def plug_turn_on(ip_address: Optional[str] = None, device_name: Optional[str] = None):
+    if not ip_address and device_name:
+        ip_address = await _get_device_ip_async(device_name)
+    if not ip_address: return {"success": False, "message": "IP address or valid Device Name required."}
+    return await kasa_plug_module.plug_turn_on_handler(ip_address=ip_address)
 
-def plug_turn_off(device_name: str):
-    ip = _get_device_ip(device_name)
-    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
-    return asyncio.run(kasa_plug_module.plug_turn_off_handler(ip_address=ip))
+async def plug_turn_off(ip_address: Optional[str] = None, device_name: Optional[str] = None):
+    if not ip_address and device_name:
+        ip_address = await _get_device_ip_async(device_name)
+    if not ip_address: return {"success": False, "message": "IP address or valid Device Name required."}
+    return await kasa_plug_module.plug_turn_off_handler(ip_address=ip_address)
 
-def bulb_turn_on(device_name: str):
-    ip = _get_device_ip(device_name)
-    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
-    return asyncio.run(kasa_bulb_module.bulb_turn_on_handler(ip_address=ip))
+async def bulb_turn_on(ip_address: Optional[str] = None, device_name: Optional[str] = None):
+    if not ip_address and device_name:
+        ip_address = await _get_device_ip_async(device_name)
+    if not ip_address: return {"success": False, "message": "IP address or valid Device Name required."}
+    return await kasa_bulb_module.bulb_turn_on_handler(ip_address=ip_address)
 
-def bulb_turn_off(device_name: str):
-    ip = _get_device_ip(device_name)
-    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
-    return asyncio.run(kasa_bulb_module.bulb_turn_off_handler(ip_address=ip))
+async def bulb_turn_off(ip_address: Optional[str] = None, device_name: Optional[str] = None):
+    if not ip_address and device_name:
+        ip_address = await _get_device_ip_async(device_name)
+    if not ip_address: return {"success": False, "message": "IP address or valid Device Name required."}
+    return await kasa_bulb_module.bulb_turn_off_handler(ip_address=ip_address)
 
-def set_bulb_brightness(device_name: str, brightness: str | int):
-    ip = _get_device_ip(device_name)
-    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
-    return asyncio.run(kasa_bulb_module.bulb_set_brightness_handler(int(brightness), ip_address=ip))
+async def set_bulb_brightness(brightness: str | int, ip_address: Optional[str] = None, device_name: Optional[str] = None):
+    if not ip_address and device_name:
+        ip_address = await _get_device_ip_async(device_name)
+    if not ip_address: return {"success": False, "message": "IP address or valid Device Name required."}
+    return await kasa_bulb_module.bulb_set_brightness_handler(ip_address, int(brightness))
 
+async def set_bulb_color(hue: str | int, saturation: str | int, value: str | int, ip_address: Optional[str] = None, device_name: Optional[str] = None):
+    if not ip_address and device_name:
+        ip_address = await _get_device_ip_async(device_name)
+    if not ip_address: return {"success": False, "message": "IP address or valid Device Name required."}
+    return await kasa_bulb_module.bulb_set_color_handler(ip_address, int(hue), int(saturation), int(value))
 
-def set_bulb_color(device_name: str, hue: str | int, saturation: str | int, value: str | int):
-    ip = _get_device_ip(device_name)
-    if not ip: return {"success": False, "message": f"Device '{device_name}' not found."}
-    return asyncio.run(kasa_bulb_module.bulb_set_color_handler(int(hue), int(saturation), int(value), ip_address=ip))
-
-def execute_tool_call(tool_name, llm_args, services_config: dict) -> dict:
+async def execute_tool_call(tool_name, llm_args, services_config: dict) -> dict:
     '''
     1. Looks up the function in Python.
     2. Looks up the default values in your JSON config.
@@ -340,7 +357,13 @@ def execute_tool_call(tool_name, llm_args, services_config: dict) -> dict:
             final_args.update(llm_args)
 
         print(f"Executing {tool_name} with args: {final_args}")
-        return func_to_call(**final_args)   # **final_args unpacks the dictionary into keyword arguments
+        
+        # Handle Async vs Sync functions
+        # If the function is async, await it to allow it to run concurrently with other tool calls
+        if asyncio.iscoroutinefunction(func_to_call):
+            return await func_to_call(**final_args)
+        else:
+            return func_to_call(**final_args)
     
     except Exception as e:
         print(f"Error executing {tool_name} with args: {final_args}, encountered error: {e}")
@@ -392,19 +415,33 @@ def execute_butler_tasks(user_query:str) -> dict:
         if llm_response_obj.get('tool_calls', None):
             print(f"LLM decided to call {len(llm_response_obj['tool_calls'])} tool(s).")
 
-            for tool_call in llm_response_obj['tool_calls']:
-                 # OpenAI format: 'function' is a dict, 'arguments' is a JSON STRING
-                fn_name = tool_call['function']['name']
-                raw_args = tool_call['function']['arguments']
+            # inner async function ensures that task creation is happening inside the active event loop
+            async def run_butler_tasks_concurrently():
+                tasks = []
+                # Map to keep track of names for action_result assignment
+                task_names = []
                 
-                # Safe Parsing
-                if isinstance(raw_args, str):
-                    fn_args = json.loads(raw_args)
-                else:
-                    fn_args = raw_args # In case the custom backend already made it a dict!
+                for tool_call in llm_response_obj['tool_calls']:
+                     # OpenAI format: 'function' is a dict, 'arguments' is a JSON STRING
+                    fn_name = tool_call['function']['name']
+                    raw_args = tool_call['function']['arguments']
+                    
+                    # Safe Parsing
+                    if isinstance(raw_args, str):
+                        fn_args = json.loads(raw_args)
+                    else:
+                        fn_args = raw_args 
 
-                # Execute
-                result = execute_tool_call(fn_name, fn_args, FULL_BUTLER_TOOLS_CONFIG.get('services', {}))
+                    task_names.append(fn_name)
+                    tasks.append(execute_tool_call(fn_name, fn_args, FULL_BUTLER_TOOLS_CONFIG.get('services', {})))
+                
+                return await asyncio.gather(*tasks), task_names
+
+            # Run concurrently
+            results, task_names = asyncio.run(run_butler_tasks_concurrently())
+
+            for i, result in enumerate(results):
+                fn_name = task_names[i]
                 action_result[fn_name] = result
                 print(f"Action result after tool execution {fn_name}: {result}")
 
@@ -430,12 +467,25 @@ def execute_butler_tasks(user_query:str) -> dict:
 
 def execute_tools(tools_json: dict) -> dict:
     print(f"Executing tools: {tools_json}")
-    tool_result_list = []
-    _, full_tools_config = _full_read_butler_tools_config()
-
     try:
+        return asyncio.run(_execute_tools_concurrent(tools_json))
+    except Exception as e:
+        print(f"Error executing tools (loop): {str(e)}")
+        return {'success': False, 'tool_result_list': [], 'message': f"Error executing tools: {str(e)}"}
+
+async def _execute_tools_concurrent(tools_json: dict) -> dict:
+    '''
+    Executes multiple tool calls concurrently.
+    '''
+    try:
+        tool_result_list = []
+        _, full_tools_config = _full_read_butler_tools_config()
+        
         if tools_json.get('tool_calls', None):
             print(f"LLM decided to call {len(tools_json['tool_calls'])} tool(s).")
+            
+            tasks = []
+            tool_call_mappings = [] # To map results back to IDs
 
             for tool_call in tools_json['tool_calls']:
                 # OpenAI format: 'function' is a dict, 'arguments' is a JSON STRING
@@ -446,19 +496,37 @@ def execute_tools(tools_json: dict) -> dict:
                 if isinstance(raw_args, str):
                     fn_args = json.loads(raw_args)
                 else:
-                    fn_args = raw_args # In case the custom backend already made it a dict!
+                    fn_args = raw_args
 
-                # Execute
-                result = execute_tool_call(fn_name, fn_args, full_tools_config.get('services', {}))
+                # Create Task
+                coro = execute_tool_call(fn_name, fn_args, full_tools_config.get('services', {}))
+                tasks.append(coro)
+                tool_call_mappings.append(tool_call)
+
+            # Run concurrently
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for i, result in enumerate(results):
+                tool_call = tool_call_mappings[i]
+                fn_name = tool_call['function']['name']
+                
+                # Handle Exceptions in execution
+                if isinstance(result, Exception):
+                    message = f"Error executing {fn_name}: {result}"
+                else:
+                    message = result['message']
+                
+                print(f"Tool execution result for {fn_name}: {message}")
+
                 tool_result_list.append({
                     'role': 'tool',
                     'tool_call_id': tool_call['id'],
                     'name': fn_name,
-                    'content': result['message']
+                    'content': message
                 })
-                print(f"Tool execution result for {fn_name}: {result}")
 
         return {'success': True, 'tool_result_list': tool_result_list, 'message': 'Tools executed successfully.'}
+
     except Exception as e:
         print(f"Error executing tools: {str(e)}")
         return {'success': False, 'tool_result_list': [], 'message': f"Error executing tools: {str(e)}"}

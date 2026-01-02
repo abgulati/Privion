@@ -72,6 +72,28 @@ function getToolsSchema() {
 }
 
 
+function getDbSchema() {
+    return fetch('/get_db_schema')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.success) {
+                throw new Error('Failed to fetch db schema: ' + data.error);
+            }
+            console.log("db schema successfully fetched: ", data.db_schema);
+            return data.db_schema;
+        })
+        .catch(error => {
+            errorHandlerNoAlert("getting db schema", "getDbSchema()", "Error getting db schema: " + error);
+            return null;
+        });
+}
+
+
 function generateId(str) {
     /**
      * Simple helper to generate a short hash string from content.

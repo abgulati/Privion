@@ -1140,6 +1140,17 @@ async function executePrompt(
         
         let apiMessages = getMessagesObject(regeneration_request, regen_sequence_id);
         const tools_schema = await getToolsSchema();
+        const db_schema = await getDbSchema();
+
+        if (db_schema) {
+            const dbContext = `\n\nHere is a list of all the devices, their types, ip addresses, current states, room location, and zone location available in the smart home:\n${JSON.stringify(db_schema, null, 2)}`;
+            if (apiMessages.messages.length > 0 && apiMessages.messages[0].role === 'system') {
+                apiMessages.messages[0].content += dbContext;
+            } else {
+                apiMessages.messages.unshift({ role: 'system', content: dbContext });
+            }
+        }
+
         const chatContainer = document.getElementById('chat-area');
         let totalContent = await fetchEventStream(getServerType(), apiMessages, responseIDs.responseContentID, chatContainer, file, tools_schema);
         const { plain_text, invoke_tools, tool_calls } = extractToolCallsFromResponse(totalContent);
