@@ -380,7 +380,7 @@ def config_writer_api():
        
 try:
     read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 
-        'docs_to_knowledge_graph_dir', 'upload_staging_folder', 'graph_db_data_directory'])
+        'docs_to_knowledge_graph_dir', 'upload_staging_folder', 'graph_db_data_directory', 'smart_home_dir'])
 except Exception as e:
     handle_local_error("Could not read paths for app directories (model_dir, highlighted_docs, upload_folder, etc.) from config.json on boot, encountered error: ", e)
 
@@ -393,6 +393,7 @@ try:
     os.makedirs(read_return['docs_to_knowledge_graph_dir'], exist_ok=True)
     os.makedirs(read_return['upload_staging_folder'], exist_ok=True)
     os.makedirs(read_return['graph_db_data_directory'], exist_ok=True)
+    os.makedirs(read_return['smart_home_dir'], exist_ok=True)
 except Exception as e:
     handle_local_error("Failed to create app directories, encountered error: ", e)
 

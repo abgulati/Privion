@@ -2,6 +2,7 @@ import sqlite3
 import json
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+from privion_config_concierge import read_config
 
 class SmartHomeService:
     """
@@ -27,21 +28,8 @@ class SmartHomeService:
         Reads storage_config.json to find the base_directory and sets DB_PATH.
         """
         try:
-            # storage_config.json is up two parent directories
-            config_path = Path(__file__).parent.parent / "storage_config.json"
-            
-            # Indicate error if the config path does not exist
-            if not config_path.exists():
-                raise FileNotFoundError(f"[SmartHomeService] CRITICAL: storage_config.json not found at {config_path}. Cannot determine database location.")
-
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-                base_dir = config.get('base_directory')
-                
-                if not base_dir:
-                    raise ValueError("[SmartHomeService] CRITICAL: 'base_directory' key missing in storage_config.json.")
-                    
-                self.DB_PATH = Path(base_dir) / "smart_home.db"
+            read_return = read_config(['smart_home_db_path'])
+            self.DB_PATH = Path(read_return['smart_home_db_path'])
             
         except Exception as e:
             # Re-raise exceptions to stop execution

@@ -183,6 +183,8 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                 'graph_models_base_directory_name': 'graph-model-servers',
                 'graph_extraction_model_directory_name': 'graph-extraction-model-server',
                 'graph_summary_generator_directory_name': 'graph-summary-generator-server',
+                'smart_home_dir': base_directory + '/smart_home',
+                'smart_home_db_path': base_directory + '/smart_home/smart_home.db',
                 'local_llm_server':'hf-waitress',
                 'exclusive_server_mode':True,  # If True, only one main LLM server instance will be allowed to run at a time. For example, when launching llama.cpp, HF-Waitress will be shut down.
                 'model_choice':'Meta-Llama-3-8B-Instruct.f16.gguf',
