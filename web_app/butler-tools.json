@@ -1,5 +1,19 @@
 {
     "services": {
+
+        "search": {
+            "name": "Local & Web RAG Search",
+            "description": "RAG tool for local & web search. Performs best when given a comprehensive search-optimized query.",
+            "fields": {
+                "query": {
+                    "required": true,
+                    "type": "string"
+                },
+                "stream_session_id": {
+                    "type": "string"
+                }
+            }
+        },
         
         "wol_turn_on_tv": {
             "name": "WOL Turn On TV",

@@ -220,11 +220,11 @@ function extractToolCallsFromResponse(fullResponseText) {
 }
 
 
-function executeTools(tool_calls) {
+function executeTools(tool_calls, stream_session_id=null) {
     return fetch('/execute_tools', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ 'tool_calls': tool_calls })
+        body: JSON.stringify({ 'tool_calls': tool_calls, 'stream_session_id': stream_session_id })
     });
 }
 

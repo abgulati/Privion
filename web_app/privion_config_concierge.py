@@ -178,6 +178,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                 'docs_to_knowledge_graph_dir': base_directory + '/docs_to_knowledge_graph',
                 'upload_staging_folder':base_directory + '/upload_staging',
                 'upload_staging_db':base_directory + '/upload_staging.db',
+                'rag_context_db':base_directory + '/rag_context.db',
                 'knowledge_domain_base_directory': base_directory + '/knowledge_domains',
                 'graph_db_data_directory': base_directory + '/graph_db_data',
                 'graph_models_base_directory_name': 'graph-model-servers',

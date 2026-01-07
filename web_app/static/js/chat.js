@@ -1146,7 +1146,7 @@ async function executePrompt(
         if (invoke_tools == true) {
             console.log("invoke_tools is true");
             // TODO: handle tool-call div creation
-            const tool_execution_response = await executeTools(tool_calls);
+            const tool_execution_response = await executeTools(tool_calls, stream_session_id);
             const tool_execution_data = await tool_execution_response.json();
             const tool_result = tool_execution_data.tool_result_list;
             const toolResponseMode = document.getElementById('tool_response_mode').value;

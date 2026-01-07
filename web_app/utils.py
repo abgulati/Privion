@@ -101,6 +101,40 @@ def safe_empty_cuda_cache(timeout:int=10):
         print("\nReturning without emptying CUDA cache\n")
 
 
+def add_column_if_not_exists(cursor, table_name, column_name, column_type):
+    try:
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        columns = cursor.fetchall()
+        column_names = [column[1] for column in columns]
+        if column_name not in column_names:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+    except Exception as e:
+        print(f"Error adding column {column_name} to {table_name}: ", e)
+
+
+def get_container_id_by_container_name(container_name:str) -> str:
+    print(f"\nChecking if container {container_name} is running...\n")
+    try:
+        result = subprocess.run(
+            ['docker', 'ps', '--filter', f'name={container_name}' , '--format', '{{.ID}}'], # get container ID
+            capture_output=True,    # captures the command's output and error, while suppressing the print to the terminal
+            text=True,  # Get output as string and not bytes
+            check=True
+        )
+        return result.stdout.strip()    # Will return the container ID if the container is running, otherwise will return an empty string!
+    except Exception as e:
+        raise Exception(f"Could not check if {container_name} Docker container is running, encountered error: {e}")
+
+
+def check_if_container_is_running(container_name:str) -> bool:
+    try:
+        container_id = get_container_id_by_container_name(container_name)
+        return container_id is not None and container_id != ""
+    except Exception as e:
+        print(f"Could not check if {container_name} Docker container is running, encountered error: {e}")
+        return False
+
+
 def get_url_for_server(server_to_check):
     if server_to_check == 'llama-cpp':
         try:

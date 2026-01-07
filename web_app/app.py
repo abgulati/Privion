@@ -3,7 +3,7 @@ from flask import send_from_directory
 from flask_cors import CORS
 from flask import jsonify
 
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import SentenceTransformer
 import torch
 import numpy as np
 
@@ -48,17 +48,13 @@ import re
 import gc
 from logging.handlers import RotatingFileHandler
 
-from whoosh.index import create_in, open_dir
-from whoosh.fields import Schema, TEXT, ID
-from whoosh.qparser import QueryParser, OrGroup
-from whoosh.query import Term, Or
-from whoosh import scoring
-
 from waitress import serve
 
 import fitz # PyMuPDF - fitz.open(filename) accepts a string or pathlib.Path
 
 from llm_apis import hf_waitress_non_streaming_api_handler, make_request_to_llm_server
+import rag_support as rag_support_module
+import rag_core as rag_core_module
 import butler as butler_module
 
 try:
@@ -547,111 +543,18 @@ def safe_remove_folder_from_filepath(folderpath:pathlib.Path):
 
 ############################----------------------------------------------###############################
 
-def get_path_to_knowledge_domain() -> pathlib.Path:
-    '''
-    Get the path to the knowledge domain.
-
-    Returns:
-        - pathlib.Path: The path to the knowledge domain
-    '''
-    print("Getting path to knowledge domain")
-    try:
-        read_return = read_config(['selected_knowledge_domain', 'knowledge_domain_base_directory'])
-    except Exception as e:
-        handle_local_error("Missing values in config.json, could not get path to knowledge domain. Error: ", e)
-
-    try:
-        path_to_knowledge_domain = pathlib.Path(rf"{str(read_return['knowledge_domain_base_directory'])}").resolve() / str(read_return['selected_knowledge_domain'])
-
-        if not path_to_knowledge_domain.exists():
-            path_to_knowledge_domain.mkdir(parents=True, exist_ok=True)
-            print(f"\n\nCreated knowledge domain directory: {path_to_knowledge_domain}\n\n")
-        
-        return path_to_knowledge_domain
-    except Exception as e:
-        handle_local_error("Could not create knowledge domain folder, encountered error: ", e)
-
-
-def determine_whoosh_index_folder() -> pathlib.Path:
-    '''
-    Determine the path to the Whoosh Index folder.
-
-    Returns:
-        - pathlib.Path: The path to the Whoosh Index folder
-    '''
-    print("Determining Whoosh Index Folder")
-
-    path_to_knowledge_domain = get_path_to_knowledge_domain()
-
-    try:
-        selected_embedding_model = str(read_config(['selected_embedding_model'])['selected_embedding_model'])
-    except Exception as e:
-        handle_local_error("Could not determine selected embedding model, encountered error: ", e)
-
-    try:
-        whoosh_index_folder = path_to_knowledge_domain / "vector_db_and_whoosh_index" / selected_embedding_model / "whoosh_index"
-    except Exception as e:
-        handle_local_error("Could not determine whoosh index folder, encountered error: ", e)
-
-    return whoosh_index_folder
-
-
-def create_whoosh_index_in_folder(whoosh_index_folder:pathlib.Path):
-
-    print(f"Creating Whoosh Index in folder: {whoosh_index_folder}")
-    
-     # Define the Index schema: what fields it contains
-    schema = Schema(
-        content=TEXT(stored=True),
-        source_link=ID(stored=True),
-        source=ID(stored=True),
-        page_number=ID(stored=True),
-        entities_and_relationships=ID(stored=True)
-    )
-
-    # Create a directory for persistent storage of the index to disk
-    try:
-        whoosh_index_folder.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        handle_local_error("Failed to create directory for the Whoosh Index, encountered error: ", e)
-    # Create the index based on the schema definted above
-    try:
-        ix = create_in(str(whoosh_index_folder), schema)
-    except Exception as e:
-        handle_local_error("Failed to create Whoosh Index, encountered error: ", e)
-
-    return ix
-
-
-def get_whoosh_index_object_for_folder(whoosh_index_folder:pathlib.Path):
-
-    print(f"Getting Whoosh Index Object for folder: {whoosh_index_folder}")
-
-    if not whoosh_index_folder.exists():
-        try:
-            ix = create_whoosh_index_in_folder(whoosh_index_folder)
-        except Exception as e:
-            handle_local_error("Failed to create Whoosh Index, encountered error: ", e)
-    else:
-        try:
-            ix = open_dir(str(whoosh_index_folder))
-        except Exception as e:
-            handle_local_error("Failed to open Whoosh Index, encountered error: ", e)
-
-    return ix
-
 
 def whoosh_indexer(new_chunks:list[dict]):
 
     print("\n\nWhoosh Indexing Chunks\n\n")
     
     try:
-        whoosh_index_folder = determine_whoosh_index_folder()
+        whoosh_index_folder = rag_support_module.determine_whoosh_index_folder()
     except Exception as e:
         handle_local_error("Failed to determine Whoosh Index Folder, encountered error: ", e)
     
     try:
-        ix = get_whoosh_index_object_for_folder(whoosh_index_folder)
+        ix = rag_support_module.get_whoosh_index_object_for_folder(whoosh_index_folder)
     except Exception as e:
         handle_local_error("Failed to get Whoosh Index Object, encountered error: ", e)
         
@@ -672,86 +575,6 @@ def whoosh_indexer(new_chunks:list[dict]):
         
     except Exception as e:
         handle_local_error("Failed to write to Whoosh Index, encountered error: ", e)
-
-
-def search_whoosh_index(query:str) -> list[dict]:
-
-    print("Searching Whoosh Index")
-    
-    try:
-        read_return = read_config(['fetch_top_k_results_from_whoosh', 'whoosh_search_weighting', 'min_lexical_similarity_threshold'])
-        fetch_top_k_results_from_whoosh = int(read_return['fetch_top_k_results_from_whoosh'])
-        whoosh_search_weighting = read_return['whoosh_search_weighting']
-        min_lexical_similarity_threshold = float(read_return['min_lexical_similarity_threshold'])  # Like semantic search with ChromaDB, higher scores indicate better matches but the range with Whoosh is different!
-    except Exception as e:
-        handle_local_error("Missing whoosh config in config.json for method search-whoosh_index. Error: ", e)
-
-    try:
-        whoosh_index_folder = determine_whoosh_index_folder()
-    except Exception as e:
-        handle_local_error("Failed to determine Whoosh Index Folder, encountered error: ", e)
-
-    try:
-        ix = get_whoosh_index_object_for_folder(whoosh_index_folder)
-    except Exception as e:
-        handle_local_error("Failed to get Whoosh Index Object, encountered error: ", e)
-
-    whoosh_weighting = scoring.BM25F()  # Rough ranges: 0.0: No Match; 1-2: Weak Match; 3-5: Moderate Match; 6+: Strong Match
-    if whoosh_search_weighting == "TF-IDF":
-        whoosh_weighting = scoring.TF_IDF()  # Rough ranges: 0.0: No Match; 1-4: Weak Match; 5-10: Moderate Match; 10+: Strong Match
-    
-    try:
-        with ix.searcher(weighting=whoosh_weighting) as searcher:
-            query_parser = QueryParser("content", schema=ix.schema, group=OrGroup)
-            parsed_query = query_parser.parse(query)
-
-            results = searcher.search(parsed_query, limit=fetch_top_k_results_from_whoosh)
-            print(f"Whoosh Results: Number of results: {len(results)}")
-
-            # Filter by score threshold
-            filtered_results = [
-                {
-                    'content': result['content'],
-                    'source_link': result['source_link'],
-                    'source': result['source'],
-                    'page_number': result['page_number'],
-                    'entities_and_relationships': result['entities_and_relationships'],
-                    'score': result.score
-                }
-                for result in results
-                if result.score >= min_lexical_similarity_threshold
-            ]
-            print(f"Whoosh Results:Number of results after filtering by score threshold {min_lexical_similarity_threshold}: {len(filtered_results)}")
-
-            # If no results, let's try a more lenient search:
-            if len(filtered_results) == 0:
-                print("No lexical results found after filtering by score threshold, trying a more lenient search...")
-                terms = [Term("content", word) for word in query.lower().split()]
-                or_query = Or(terms)
-                lenient_results = searcher.search(or_query, limit=fetch_top_k_results_from_whoosh)
-                print(f"number of results after very lenient search: {len(lenient_results)}")
-
-                filtered_results = [
-                    {
-                        'content': result['content'],
-                        'source_link': result['source_link'],
-                        'source': result['source'],
-                        'page_number': result['page_number'],
-                        'entities_and_relationships': result['entities_and_relationships'],
-                        'score': result.score
-                    }
-                    for result in lenient_results
-                    if result.score >= min_lexical_similarity_threshold
-                ]
-                print(f"Whoosh Results: Number of results after filtering by score threshold {min_lexical_similarity_threshold} in very lenient search: {len(filtered_results)}")
-
-            return filtered_results
-            
-            # return [{'content': result['content'], 'source': result['source'], 'page_number': result['page_number']} for result in results]
-
-    except Exception as e:
-        handle_error_no_return("Failed to search Whoosh Index, encountered error: ", e)
-        return []
 
 
 def PDFtoAzureDocAiTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
@@ -1999,33 +1822,6 @@ def chunk_docs_with_page_numbers(input_filepath:pathlib.Path, chunk_size:int=250
     return documents
 
 
-def create_vector_db_directory(path_to_knowledge_domain:pathlib.Path, embedding_function:str) -> pathlib.Path:
-    '''
-    Create the vector_db directory.
-
-    Args:
-        - path_to_knowledge_domain: pathlib.Path of the path to the knowledge domain
-        - embedding_function: str of the embedding function
-
-    Returns:
-        - pathlib.Path: The path to the vector_db directory
-
-    Raises:
-        - Exception: If the vector_db directory cannot be created
-    '''
-
-    try:
-        vector_db_path = path_to_knowledge_domain / "vector_db_and_whoosh_index" / embedding_function
-        if not vector_db_path.exists():
-            vector_db_path.mkdir(parents=True, exist_ok=True)
-            print(f"\n\nCreated vector_db directory: {vector_db_path}\n\n")
-        else:
-            print(f"\n\nVector_db directory already exists, returning path: {vector_db_path}\n\n")
-        return vector_db_path
-    except Exception as e:
-        handle_local_error("Could not create vector_db directory, encountered error: ", e)
-
-
 def core_embedder(chunks:list[dict], selected_embedding_model:str, path_to_knowledge_domain:pathlib.Path) -> bool:
     '''
     Embed the chunks and store them in the VectorDB.
@@ -2072,7 +1868,7 @@ def core_embedder(chunks:list[dict], selected_embedding_model:str, path_to_knowl
             gc.collect()
 
     # Get VectorDB Directory
-    vector_db_path = create_vector_db_directory(path_to_knowledge_domain, selected_embedding_model)
+    vector_db_path = rag_support_module.create_vector_db_directory(path_to_knowledge_domain, selected_embedding_model)
 
     # Store Chunks in VectorDB
     print("Storing to VectorDB: ChromaDB")
@@ -2326,29 +2122,6 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
             handle_local_error("\nCould not iterate over chunk entities, encountered error: ", e)
 
 
-def get_graph_db_client():
-    print("\nObtaining Graph DB Client\n")
-
-    try:
-        read_return = read_config(['graph_db_server_host', 'assign_host_port_to_graph_db_server'])
-        graph_db_server_host = str(read_return['graph_db_server_host'])
-        assign_host_port_to_graph_db_server = int(read_return['assign_host_port_to_graph_db_server'])
-
-        client = FalkorDB(host=graph_db_server_host, port=assign_host_port_to_graph_db_server)
-        print(f"\nGraph DB Client obtained successfully!\n")
-        return client
-    except Exception as e:
-        handle_local_error("Could not obtain Graph DB Client, encountered error: ", e)
-
-
-def sanitize_names(name:str) -> str:
-    name_str = str(name).lower()
-    sanitized = re.sub(r'[^a-zA-Z0-9]', '_', name_str)  # Matches all non-alphanumeric characters and replaces them with an underscore as OpenCypher spec disallows them in node names
-    if sanitized[0].isdigit():
-        sanitized = 'n_' + sanitized    # OpenCypher spec disallows digits at the beginning of a node name, even if they're strings eg "2025"!
-    return sanitized
-
-
 def get_request_params_for_graph_summarizer_model():
     try:
         config_data = read_config([
@@ -2574,7 +2347,7 @@ def add_nodes_to_graph(selected_knowledge_domain: str, nodes: list, graph: Falko
                 # print(f"Skipping duplicate node {name} of type {node_type} in {selected_knowledge_domain} graph DB")
                 continue
 
-            node_name = sanitize_names(name)
+            node_name = rag_support_module.sanitize_names(name)
 
             # MERGE on stable properties to prevent duplicates, then SET the summary and add source_documents and page_numbers as per the case:
             graph.query(f"""
@@ -2638,9 +2411,9 @@ def add_relationships_to_graph(selected_knowledge_domain: str, relationships: li
                 # print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) in {selected_knowledge_domain} graph DB")
                 continue
 
-            source = sanitize_names(source)
-            target = sanitize_names(target)
-            relationship_type = sanitize_names(relationship_type).upper()
+            source = rag_support_module.sanitize_names(source)
+            target = rag_support_module.sanitize_names(target)
+            relationship_type = rag_support_module.sanitize_names(relationship_type).upper()
 
             '''
             MERGE on stable properties to prevent duplicates, then SET the summary and add source_documents and page_numbers as per the case.
@@ -2800,64 +2573,11 @@ def append_graph_entities_to_chunks(chunks, complete_chunk_entities):
     return chunks
 
 
-def bring_graph_db_online():    # launch FalkorDB Docker container
-    print(f"\nLaunching FalkorDB Docker container...\n")
-
-    try:
-        read_return = read_config([
-            'launch_graph_db_with_ui', 'assign_host_port_to_graph_db_server', 
-            'assign_host_port_to_graph_db_ui', 'graph_db_data_directory'])
-        launch_graph_db_with_ui = read_return['launch_graph_db_with_ui']
-        assign_host_port_to_graph_db_server = read_return['assign_host_port_to_graph_db_server']
-        assign_host_port_to_graph_db_ui = read_return['assign_host_port_to_graph_db_ui']
-        graph_db_data_directory = read_return['graph_db_data_directory']
-    except Exception as e:
-        handle_local_error("Could not read graph DB config when attempting to bring FalkorDB online, encountered error: ", e)
-
-    # Check if Docker Engine is running
-    try:
-        subprocess.run(['docker', 'info'], capture_output=True, check=True)  # check=True will raise an exception if the command returns a non-zero exit code
-    except Exception as e:
-        handle_local_error("Docker Engine is not running, encountered error: ", e)
-
-    print("\nDocker Engine is running, proceeding with FalkorDB Docker container launch...\n")
-
-    if check_if_container_is_running('falkor-db'):
-        print("\nFalkorDB Docker container is already running, skipping launch...\n")
-        return True
-
-    command = [
-        'docker', 'run', '-p', f'{assign_host_port_to_graph_db_server}:6379',
-        *(['-p', f'{assign_host_port_to_graph_db_ui}:3000'] if launch_graph_db_with_ui else []),
-        '--name', 'falkor-db',
-        '-it', '--rm', '-v', f'{graph_db_data_directory}:/var/lib/falkordb/data', 'falkordb/falkordb:edge'
-    ]   # Using conditional list-unpacking with * to handle optional arguments!
-
-    try:
-        subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE) if platform.system() == 'Windows' else subprocess.Popen(command, shell=True)
-        # Check if the container is running
-        container_name = 'falkor-db'
-        timeout = 2
-        attempts = 50
-        for _ in range(attempts):
-            if check_if_container_is_running(container_name):
-                print(f"\nFalkorDB Docker container launched successfully!\n")
-                return True
-            else:
-                print(f"\n\nFalkorDB Docker container not yet running, waiting {timeout} seconds before retrying...\n\n")
-                time.sleep(timeout)
-
-    except Exception as e:
-        handle_local_error("Could not launch FalkorDB Docker container, encountered error: ", e)
-
-    return True
-
-
 @app.route('/start_falkordb')
 def start_falkordb():
     print("\nStarting FalkorDB Docker container...\n")
     try:
-        bring_graph_db_online()
+        rag_support_module.bring_graph_db_online()
         return jsonify({"message": "FalkorDB Docker container started successfully", "success": True}), 200
     except Exception as e:
         return handle_api_error("Could not start FalkorDB Docker container, encountered error: ", e)
@@ -2972,7 +2692,7 @@ def apply_leiden_clustering_to_graph(selected_knowledge_domain):
     print(f"\n\nApplying Leiden clustering to the graph for {selected_knowledge_domain}...\n\n")
 
     try:
-        client = get_graph_db_client()
+        client = rag_support_module.get_graph_db_client()
         clustering_success, status_message = apply_leiden_clustering(client, str(selected_knowledge_domain))
         if not clustering_success:
             raise Exception(status_message)
@@ -3181,7 +2901,7 @@ def graph_generator(chunks:list[dict], input_filepath:pathlib.Path) -> bool:
     print(f"\n\nGraph Generator Invoked. Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
     try:
-        bring_graph_db_online()
+        rag_support_module.bring_graph_db_online()
     except Exception as e:
         handle_local_error("Could not bring graph DB online, encountered error: ", e)
 
@@ -3218,7 +2938,7 @@ def graph_generator(chunks:list[dict], input_filepath:pathlib.Path) -> bool:
             handle_local_error("Failed to extract entities and relationships from chunk entities, encountered error: ", e)
     
     try:
-        client = get_graph_db_client()
+        client = rag_support_module.get_graph_db_client()
         graph = client.select_graph(selected_knowledge_domain)  # Will create the graph if it doesn't exist
     except Exception as e:
         handle_local_error(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB, encountered error: ", e)
@@ -3250,7 +2970,7 @@ def read_embeddings_config() -> tuple[str, pathlib.Path, int, int, bool, bool]:
     except Exception as e:
         handle_local_error("Missing values in config.json, could not read embeddings config. Error: ", e)
 
-    path_to_knowledge_domain = get_path_to_knowledge_domain()
+    path_to_knowledge_domain = rag_support_module.get_path_to_knowledge_domain()
     return read_return['selected_embedding_model'], path_to_knowledge_domain, int(read_return['chunk_size']), int(read_return['chunk_overlap']), str(read_return['upload_doc_to_graph_db']).lower() == 'true', str(read_return['perform_only_graph_rag']).lower() == 'true'
 
 
@@ -6061,14 +5781,14 @@ def delete_knowledge_domain_graph(knowledge_domain:str) -> bool:
 
     try:
         if not check_if_container_is_running('falkor-db'):
-            bring_graph_db_online()
+            rag_support_module.bring_graph_db_online()
             time.sleep(5)   # While the bring-graph-db-online() method waits for the container to start, loading the datasets takes a bit longer so we wait 5 seconds before proceeding.
     except Exception as e:
         handle_error_no_return(f"Could not bring graph DB online, unable to delete knowledge graph for {knowledge_domain} domain. Encountered error: ", e)
         return False
     
     try:
-        client = get_graph_db_client()
+        client = rag_support_module.get_graph_db_client()
         graph = client.select_graph(knowledge_domain)
         graph.delete()  # client.delete_graph() is unsupported by FalkorDB. Delete individual nodes with Cypher: `MATCH (n) DETACH DELETE n`
         print(f"Successfully deleted graph for {knowledge_domain} domain in graph DB")
@@ -6567,79 +6287,6 @@ def update_record_in_history_db(
     return formatted_datetime, chat_id
 
 
-def rerank_results_ml(query:str, documents:list[Document], top_n:int=5) -> list[Document]:
-    print("\n\nReranking Invoked\n\n")
-
-    try:
-        read_return = read_config(['use_embedding_model_for_reranking', 'selected_embedding_model', 'selected_reranker_model'])
-        use_embedding_model_for_reranking = str(read_return['use_embedding_model_for_reranking']).lower() == 'true'
-        selected_embedding_model = str(read_return['selected_embedding_model'])
-        selected_reranker_model = str(read_return['selected_reranker_model'])
-    except Exception as e:
-        use_embedding_model_for_reranking = True
-        handle_error_no_return("Could not read reranker configfrom config.json, encountered error: ", e)
-
-    if use_embedding_model_for_reranking:
-        selected_reranker_model = selected_embedding_model
-    else:
-        selected_reranker_model = selected_reranker_model
-
-    print(f"\n\nSelected model for re-ranking: {selected_reranker_model}\n\n")
-
-    model = None
-    try:
-        # Load pre-trained SBERT model
-        model = SentenceTransformer(selected_reranker_model)
-        
-        # Encode the query
-        query_embedding = model.encode(query, convert_to_tensor=True)
-        
-        # Encode the documents
-        doc_embeddings = model.encode([doc.page_content for doc in documents], convert_to_tensor=True)
-    except Exception as e:
-        handle_local_error(f"Could not rerank results with {selected_reranker_model}, encountered error: ", e)
-        return [doc.page_content for doc in documents]
-    finally:
-        if model is not None:
-            del model
-            if torch.cuda.is_available():
-                print("Emptying CUDA cache")
-                torch.cuda.empty_cache()
-            print("Collecting garbage")
-            gc.collect()
-
-    try:
-        # Compute cosine similarities
-        cosine_scores = util.pytorch_cos_sim(query_embedding, doc_embeddings)[0]
-    except Exception as e:
-        handle_local_error("Could not compute cosine similarities, encountered error: ", e)
-        return [doc.page_content for doc in documents]
-    
-    try:
-        # Create a list of (index, score) tuples
-        indexed_scores = list(enumerate(cosine_scores))
-        
-        # Sort by score in descending order
-        sorted_indexes = sorted(indexed_scores, key=lambda x: x[1], reverse=True)
-        
-        # Reorder the original documents based on the sorted indexes
-        ranked_documents = [documents[idx] for idx, _ in sorted_indexes[:top_n]]
-
-        # print(f"\n\nReturning Top {len(ranked_documents)} Ranked Documents: {ranked_documents}\n\n")
-
-        '''
-        Studies show that LLMs and Transformers in-general tend to perform better when the most relevant context is towards the beginning or end of the input, while important context in between tends to get 'lost in the middle'! 
-        This can be a serious problem for a large multi-turn conversation, wherein extensive back-and-forth query-response history exists and grows with each prompt. 
-        Therefore, the re-ranker method has been modified below to return a reversed context docs list, placing the most relevant docs at the end, so the list is now in ascending order of relevance. 
-        This should be helpful right from query 1 especially when the system prompt is large!
-        '''
-        return ranked_documents[::-1]   #Slice to reverse the list, as `.reverse()` would return None because it creates an inplace change on the original list without returning anything
-
-    except Exception as e:
-        handle_local_error("Could not reorder documents, encountered error: ", e)
-        return [doc.page_content for doc in documents]
-
-
 def get_formatted_prompt_from_history_db(chat_id, sequence_id):
 
     print(f"\n\nFormatting prompt from history for chat with chat_id: {chat_id} and sequence_id: {sequence_id}\n\n")
@@ -6676,68 +6323,6 @@ def get_hf_waitress_formatted_user_prompt(formatted_user_prompt: str, llm_respon
     history_prompt_json['messages'].append(new_response)
     updated_history_prompt_json = json.dumps(history_prompt_json, indent=4)
     return str(updated_history_prompt_json)
-
-
-def map_graph_entities_to_filtered_docs(combined_docs:list[Document], graph_entities_map:dict) -> list[Document]:
-    print("\n\nMapping graph entities to filtered docs\n\n")
-    for doc in combined_docs:
-        try:
-            doc.metadata['entities_and_relationships'] = graph_entities_map[doc.metadata['unique_id']]
-        except Exception as e:
-            handle_error_no_return("Could not map graph entities to doc, skipping. Encountered error: ", e)
-            doc.metadata['entities_and_relationships'] = {}
-    return combined_docs
-
-
-def combine_and_deduplicate_search_results(whoosh_results:list[dict], vector_results:list[Document]) -> tuple[list[Document], dict]:
-    print("\n\nCombining whoosh and vector results\n\n")
-
-    combined_results = []
-    graph_entities_map = {}
-
-    # Convert whoosh results to Document objects
-    for result in whoosh_results:
-        temp_unique_id = str(uuid.uuid4())
-        combined_results.append(Document(
-            page_content=result['content'].strip().replace('\n', ' '),
-            metadata={
-                'source_link': result['source_link'],
-                'source': result['source'],
-                'page_number': result['page_number'],
-                'unique_id': temp_unique_id
-            }
-        ))
-        graph_entities_map[temp_unique_id] = result['entities_and_relationships']
-
-    # Add the vector results to the combined results - Unfortunately can't do in a single elegant line as we're also deciding whether to include graph entities or not!
-    # combined_results.extend(vector_results)   # To keep this unchanged, we'd have to re-search the vectorDB to include or exclude graph entities, which is way worse!
-    for doc in vector_results:
-        temp_unique_id = str(uuid.uuid4())
-        combined_results.append(Document(
-            page_content=doc.page_content,
-            metadata={
-                'source_link': doc.metadata['source_link'],
-                'source': doc.metadata['source'],
-                'page_number': doc.metadata['page_number'],
-                'unique_id': temp_unique_id
-            }
-        ))
-        graph_entities_map[temp_unique_id] = doc.metadata['entities_and_relationships']
-
-    # Filter out any duplicate documents based on page_content
-    try:
-        seen = {}
-        unique_results = []
-        for doc in combined_results:
-            if doc.page_content not in seen:
-                seen[doc.page_content] = True
-                unique_results.append(doc)
-
-        combined_results = unique_results
-    except Exception as e:
-        handle_error_no_return("Could not filter out duplicate documents in method combine-and_deduplicate_search_results. Returning all results. Encountered error: ", e)
-    
-    return combined_results, graph_entities_map
 
 
 def get_session_id_and_vector_key(reusable_ssid:str = None) -> tuple[str, str]:
@@ -6951,599 +6536,6 @@ def handle_force_disabled_rag(local_llm_server:str, full_prompt:str, user_query:
     return jsonify({"success": True, "stream_session_id": stream_session_id, "llm_set_rag_config": DISABLED_CONFIG, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
 
 
-def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results_from_vectordb: int) -> list[Document]:
-    print("Searching vectorDB")
-
-    min_semantic_similarity_threshold = float(read_config(['min_semantic_similarity_threshold'])['min_semantic_similarity_threshold'])
-
-    path_to_knowledge_domain = get_path_to_knowledge_domain()
-    vector_db_path = create_vector_db_directory(path_to_knowledge_domain, embedding_function)
-
-    print(f"Searching Knowledge Domain: {path_to_knowledge_domain} with embedding function: {embedding_function}")
-
-     # Load Embedding Model
-    embedding_model = None
-    try:
-        embedding_model = SentenceTransformer(embedding_function, trust_remote_code=True)
-    except Exception as e:
-        handle_local_error("Could not load embedding model for searching the vector database, encountered error: ", e)
-
-    try:
-        # Initialize Chroma Client and collection
-        chroma_client = chromadb.PersistentClient(path=str(vector_db_path), settings=chromadb.Settings(allow_reset=True))
-        collection = chroma_client.get_or_create_collection(name="knowledge_domain", metadata={"hnsw:space": "cosine"}) # By default, ChromaDB returns the L2 distance (lower is better), but we want cosine distance (higher is better)
-
-        query_embedding = embedding_model.encode(user_query)
-
-        # Perform the semantic search - 'results' is a dictionary with keys 'documents', 'metadatas', 'distances', whose values are lists of length = fetch_top_k_results_from_vectordb
-        results = collection.query(
-            query_embeddings=query_embedding.tolist(),  # Convert embeddings from NumPy arrays to list of lists
-            n_results=fetch_top_k_results_from_vectordb,    # top-k here implies the top from the matched set, regardless of the actual similarity score!
-            include=["documents", "metadatas", "distances"]
-        )
-
-        # Format similar to LangChain's Output so as to maintain consistency
-        docs_list_with_cosine_distance = [
-            (
-                Document(
-                    page_content=doc,
-                    metadata=metadata
-                ),
-                distance
-            )
-            for doc, metadata, distance in zip(
-                results['documents'][0],
-                results['metadatas'][0],
-                results['distances'][0]
-            )
-            if distance >= min_semantic_similarity_threshold    # ChromaDB's score ranges from -1 (perfect dissimilarity) to 1 (perfect similarity), with 0.0 meaning no similarity.
-        ]   # The zip() function combines multiple iterables (lists, tuples, etc.) element by element and helps iterate over multiple lists simultaneously
-
-        print(f"Result of Semantic Search: Found {len(docs_list_with_cosine_distance)} documents of {len(results['documents'][0])} with a minimum semantic similarity threshold of {min_semantic_similarity_threshold}")
-        return docs_list_with_cosine_distance
-    except Exception as e:
-        handle_error_no_return("Could not perform similarity_search to determine do_rag when attempting to setup_for_streaming_response, encountered error: ", e)
-        return []
-    finally:
-        if embedding_model is not None:
-            del embedding_model
-            if torch.cuda.is_available():
-                print("Emptying CUDA cache")
-                torch.cuda.empty_cache()
-            print("Collecting garbage")
-            gc.collect()
-
-
-def extract_content_source_and_page_data_from_summary_text(summary_text: str) -> tuple[str, str, list]:
-    '''
-    Extracts content data, source document name and page numbers from a text string ending with the pattern:
-    {Source Document Name: xxx}\n{Page Number(s): [y,z]}\n\n
-    This pattern is established in the process_nodes_and_relationships method of hf_waitress.py
-    
-    Args:
-        summary_text (str): The input text containing the metadata
-    
-    Returns:
-        tuple[str, str, list]: (content_data, source_document_name, page_numbers_list)
-    '''
-    try:
-        source_pattern = r'{Source Document Name: (.*?)}'   # () creates a capturing group and .*? matches any char except newline zero or more times, non-greedily
-        source_match = re.search(source_pattern, summary_text)
-        source_doc_name = source_match.group(1) if source_match else ""  # group(1) returns the first (and in this case, only) capturing group. 0 would return the entire match.
-        
-        page_pattern = r'{Page Number\(s\): \[(.*?)\]}'
-        page_match = re.search(page_pattern, summary_text)
-        if page_match:  # Convert string representation of list to actual list of integers
-            pages_str = page_match.group(1)
-            pages = [int(p.strip()) for p in pages_str.split(',')]
-        else:
-            pages = []
-        
-        content_data = summary_text[:source_match.start()].strip() if source_match else summary_text.strip()
-
-        return content_data, source_doc_name, pages
-    except Exception as e:
-        handle_error_no_return("Could not extract content data, source document name and page numbers from summary text, returning unchanged summary text. Encountered error: ", e)
-        return summary_text, "", []
-
-
-def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length_limit_chars: int, user_query: str) -> tuple[str, list[Document]]:
-    print(f"\n\nGetting summary report\n\n")
-    
-    summary_report = set()
-    summary_doc_objects = []
-    
-    try:
-        
-        for _, chunk_data in summarized_chunk_entities.items():
-            source_doc_name = chunk_data['source_doc_name']
-            
-            if source_doc_name == 'user_query':
-                print("\nSkipping user query chunk\n")
-                continue
-            
-            try:
-                for node in chunk_data['entities_and_relationships']['nodes']:
-
-                    if not node.get('summary'):
-                        continue    # Skip nodes with no summaries
-                    
-                    for summary in node.get('summary', []): # There may be multiple summaries for a single node, so we iterate over the list of summaries.
-                        try:
-                            if summary is not None and summary != '':
-                                summary_preface_string = f"Summary for entity '{node['name']}' of type '{node['type']}'"
-
-                            try:
-                                content_data, source_doc_name, pages = extract_content_source_and_page_data_from_summary_text(summary)
-                                source_link = f"http://llm-citations-database.net/source?doc_name={source_doc_name}&page_number={[pages[0]]}"
-                                summary_doc_objects.append(Document(page_content=f"{summary_preface_string} -\nsource_link:{source_link}:\n{summary}\nsource_link:{source_link}\n\n", metadata={'page_number': pages, 'source': source_doc_name}))
-                            except Exception as e:
-                                handle_error_no_return("Could not convert GraphRAG context to Document object, skipping. Encountered error: ", e)
-
-                            entry = (
-                                f"{summary_preface_string} - {summary}" #The summary, as generated in the process_nodes_and_relationships method of hf_waitress.py, contains metadata and newline spacing.
-                            )
-                            summary_report.add(entry)
-                        except Exception as e:
-                            handle_error_no_return("Error processing a node's summary when adding to summary report. Skipping this summary. encountered error: ", e)
-            
-            except Exception as e:
-                handle_error_no_return("Error processing node in chunk_data when adding to summary report, likely a corrupt dict. Skipping node summaries for this chunk. encountered error: ", e)
-            
-            try:
-                for relationship in chunk_data['entities_and_relationships']['relationships']:
-                
-                    if not relationship.get('summary'):
-                        continue    # Skip relationships with no summaries
-
-                    for summary in relationship.get('summary', []):
-                        try:
-                            if summary is not None and summary != '':
-                                summary_preface_string = f"Summary for relationship '{relationship['relationship']}' between entities '{relationship['source']}' and '{relationship['target']}'"
-
-                            try:
-                                content_data, source_doc_name, pages = extract_content_source_and_page_data_from_summary_text(summary)
-                                source_link = f"http://llm-citations-database.net/source?doc_name={source_doc_name}&page_number={[pages[0]]}"
-                                summary_doc_objects.append(Document(page_content=f"{summary_preface_string} -\nsource_link:{source_link}:\n{summary}\nsource_link:{source_link}\n\n", metadata={'page_number': pages, 'source': source_doc_name}))
-                            except Exception as e:
-                                handle_error_no_return("Could not convert GraphRAG context to Document object, skipping. Encountered error: ", e)
-
-                                entry = (
-                                    f"{summary_preface_string} - {summary}"
-                                )
-                                summary_report.add(entry)
-                        except Exception as e:
-                            handle_error_no_return("Error processing a relationship's summary when adding to summary report. Skipping this summary. encountered error: ", e)
-            
-            except Exception as e:
-                handle_error_no_return("Error processing relationship in chunk_data when adding to summary report, likely a corrupt dict. Skipping relationship summaries for this chunk. encountered error: ", e)
-    
-    except Exception as e:
-        handle_error_no_return("Could not process summary report, skipping remaining items and exiting. Encountered error: ", e)
-    
-    textual_summary_report = ''.join(summary_report)
-
-    if len(textual_summary_report) > graph_rag_context_length_limit_chars:
-        try:
-            textual_summary_report = ''
-            try:
-                reranked_summaries_list_ascending = rerank_results_ml(user_query, summary_doc_objects, top_n=len(summary_doc_objects))
-            except Exception as e:
-                handle_error_no_return("Could not rerank search results, skipping. Encountered error: ", e)
-                reranked_summaries_list_ascending = summary_doc_objects
-            reranked_summaries_list_descending = reranked_summaries_list_ascending[::-1]    # The `rerank-results_ml` method returns a list of docs in ascending order of relevance, so we need to reverse it so we may iterate starting with the most relevant docs!
-            for doc in reranked_summaries_list_descending:
-                if len(textual_summary_report) + len(str(doc.page_content)) > graph_rag_context_length_limit_chars:
-                    break
-                textual_summary_report += str(doc.page_content)
-            
-            # print(f"\n\nReturning Textual summary report: {textual_summary_report}\n\n")
-            return textual_summary_report, reranked_summaries_list_descending
-        except Exception as e:
-            handle_local_error("Could not handle summary report that is too long, encountered error: ", e)
-    else:
-        return textual_summary_report, summary_doc_objects
-
-
-def get_summary_and_source_documents_for_node(graph, name, node_type):
-    # print(f"\nChecking if summary for node {name} of type {node_type} exists in graph\n")
-
-    try:
-        node_name = sanitize_names(name)
-
-        query = f"""
-            MATCH (n:{node_name} {{name: '%s', type: '%s'}})
-            RETURN n.summary AS summary, n.source_documents AS source_documents
-        """ % (name.replace("'", ""), node_type.replace("'", ""))
-
-        result = graph.query(query)
-        
-        if hasattr(result, 'result_set') and result.result_set:
-            # print(f"\nExisting summary for node found: {result.result_set[0][0]}\n")
-            summary_list = list(result.result_set[0][0]) if result.result_set[0][0] else []
-            source_documents_list = list(result.result_set[0][1]) if result.result_set[0][1] else []
-            return summary_list, source_documents_list
-        else:
-            # print(f"\nNo existing summary for node found...\n")
-            return [], []   # If no summary is found, return an empty list:
-
-    except Exception as e:
-        handle_error_no_return(f"Could not check if node {name} of type {node_type} exists in graph, returning empty list. Encountered error: ", e)
-        return [], []
-
-
-def get_summaries_for_all_nodes(nodes: list, graph: FalkorDB, get_source_documents: bool = False):
-    nodes_with_existing_summaries = []
-    processed_nodes = {}    # Will de-duplicate nodes!
-
-    for _, node in enumerate(nodes):
-        try:
-            if not isinstance(node, dict):
-                print(f"Skipping summary retrieval for node - Invalid Type: Expected a dict, got {type(node).__name__}")
-                continue
-
-            name = str(node.get('name', ''))
-            node_type = str(node.get('type', ''))
-
-            if name == '' or node_type == '':
-                print(f"Skipping summary retrieval for node because it's missing required fields: name={name}, type={node_type}")
-                continue
-
-            node_key = (name, node_type)
-            if node_key in processed_nodes:
-                # print(f"Skipping duplicate node {name} of type {node_type} when checking for existing summaries in graph DB")
-                continue
-
-            try:
-                existing_summary, existing_source_documents = get_summary_and_source_documents_for_node(graph, name, node_type)
-            except Exception as e:
-                existing_summary = []
-                existing_source_documents = []
-                handle_error_no_return(f"Could not check existing summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
-
-            # update node in chunk_entities dict:
-            if get_source_documents:
-                nodes_with_existing_summaries.append({
-                    'name': name,
-                    'type': node_type,
-                    'summary': existing_summary,
-                    'source_documents': existing_source_documents
-                })
-            else:
-                nodes_with_existing_summaries.append({
-                    'name': name,
-                    'type': node_type,
-                    'summary': existing_summary
-                })
-
-            processed_nodes[node_key] = True
-
-        except Exception as e:
-            handle_error_no_return(f"Could not get summary for node {name} of type {node_type}, skipping. Encountered error: ", e)
-                    
-    return nodes_with_existing_summaries
-
-
-def get_summary_and_source_documents_for_relationship(graph, source, target, relationship_type):
-    # print(f"\nChecking if summary for relationship {source} -> {target} ({relationship_type}) exists in graph\n")
-
-    source_label = sanitize_names(source)
-    target_label = sanitize_names(target)
-
-    try:
-        query = f"""
-            MATCH (s:{source_label} {{name: '{source}'}})-[r:{relationship_type}]->(t:{target_label} {{name: '{target}'}})
-            RETURN r.summary AS summary, r.source_documents AS source_documents
-        """
-
-        result = graph.query(query)
-
-        if hasattr(result, 'result_set') and result.result_set:
-            # print(f"\nExisting summary for relationship found: {result.result_set[0][0]}\n")
-            summary_list = list(result.result_set[0][0]) if result.result_set[0][0] else []
-            source_documents_list = list(result.result_set[0][1]) if result.result_set[0][1] else []
-            return summary_list, source_documents_list
-        else:
-            # print(f"\nNo existing summary for relationship found...\n")
-            return [], []   # If no summary is found, return an empty list:
-
-    except Exception as e:
-        handle_error_no_return(f"Could not check if summary for relationship {source} -> {target} ({relationship_type}) exists in graph, returning empty list. Encountered error: ", e)
-        return [], []
-
-
-def get_summaries_for_all_relationships(relationships: list, graph: FalkorDB, get_source_documents: bool = False):
-
-    relationships_with_existing_summaries = []
-    processed_relationships = {}    # Will de-duplicate relationships!
-
-    for _, relationship in enumerate(relationships):
-        try:
-            if not isinstance(relationship, dict):
-                print(f"Skipping summary retrieval for relationship - Invalid Type: Expected a dict, got {type(relationship).__name__}")
-                continue
-
-            source = str(relationship.get('source', ''))
-            target = str(relationship.get('target', ''))
-            relationship_type = sanitize_names(str(relationship.get('relationship', '')).upper())   # Added as sanitize_names().upper() hence formatting here too!
-
-            if source == '' or target == '' or relationship_type == '':
-                print(f"Skipping summary retrieval for relationship because it's missing required fields: source={source}, target={target}, relationship={relationship_type}")
-                continue
-
-            relationship_key = (source, target, relationship_type)
-            if relationship_key in processed_relationships:
-                # print(f"Skipping duplicate relationship {source} -> {target} ({relationship_type}) when checking for existing summaries in graph DB")
-                continue
-
-            try:
-                existing_summary, existing_source_documents = get_summary_and_source_documents_for_relationship(graph, source.replace("'", ""), target.replace("'", ""), relationship_type)
-            except Exception as e:
-                existing_summary = []
-                existing_source_documents = []
-                handle_error_no_return(f"Could not check existing summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
-
-            if get_source_documents:
-                relationships_with_existing_summaries.append({
-                    'source': source,
-                    'target': target,
-                    'relationship': str(relationship['relationship']),
-                    'summary': existing_summary,
-                    'source_documents': existing_source_documents
-                })
-            else:
-                relationships_with_existing_summaries.append({
-                    'source': source,
-                    'target': target,
-                    'relationship': str(relationship['relationship']),
-                    'summary': existing_summary
-                })
-
-            processed_relationships[relationship_key] = True
-
-        except Exception as e:
-            handle_error_no_return(f"Could not get summary for relationship {source} -> {target} ({relationship_type}), skipping. Encountered error: ", e)
-
-    return relationships_with_existing_summaries
-
-
-def get_summaries_from_graph_db(chunk_entities: dict, selected_knowledge_domain: str, graph: FalkorDB) -> dict:
-    '''
-    Receives a merged chunk_entities dict, which is the result of the merge-chunk_entities_for_graph_rag method:
-
-    chunk_entities = {
-        '0': {
-            '<entities_and_relationships>': '<complete_entities_and_relationships_dict>',
-            '<chunk_text>': '<text>',
-            '<source_doc_name>': '<name>'
-        }
-    }
-
-    And for each node and relationship in the 'entities_and_relationships' dict, checks for existing summaries in the GraphDB.
-    '''
-
-    print(f"\nStoring entities and relationships in {selected_knowledge_domain} graph DB\n")
-
-    try:
-        # Get summaries for all nodes and relationships:
-        for chunk_number, chunk_data in chunk_entities.items():
-            print(f"\nChecking for existing summaries for all nodes and relationships in chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
-
-            try:
-                nodes_with_existing_summaries = get_summaries_for_all_nodes(nodes=chunk_data['entities_and_relationships']['nodes'], graph=graph, get_source_documents=True)
-                chunk_entities[chunk_number]['entities_and_relationships']['nodes'] = nodes_with_existing_summaries
-            except Exception as e:
-                handle_error_no_return(f"Error checking for existing summaries for nodes, skipping chunk {chunk_number}. Encountered error: ", e)
-
-            try:
-                relationships_with_existing_summaries = get_summaries_for_all_relationships(relationships=chunk_data['entities_and_relationships']['relationships'], graph=graph, get_source_documents=True)
-                chunk_entities[chunk_number]['entities_and_relationships']['relationships'] = relationships_with_existing_summaries
-            except Exception as e:
-                handle_error_no_return(f"Error checking for existing summaries for relationships, skipping chunk {chunk_number}. Encountered error: ", e)
-    
-    except Exception as e:
-        handle_error_no_return("Could not get summaries from graph DB, encountered error: ", e)
-
-    return chunk_entities
-
-
-def merge_chunk_entities_for_graph_rag(chunk_entities: dict) -> dict:
-    '''
-    Receives a complete chunk_entities dict:
-
-    chunk_entities = {
-        '<graph_chunk_number_1>': {
-            '<entities_and_relationships>': '<node_relationships_dict>',
-            '<chunk_text>': '<text>',
-            '<source_doc_name>': '<name>',
-            '<page_number>': '<page_number>'
-        },
-        '<graph_chunk_number_2>': {
-            '<entities_and_relationships>': '<node_relationships_dict>',
-            '<chunk_text>': '<text>',
-            '<source_doc_name>': '<name>',
-            '<page_number>': '<page_number>'
-        },
-        ...
-    }
-
-    And returns a merged chunk_entities dict, because all entities and relationships are extracted from RAG context (user-query + semantic & lexical search results),
-    and merging will allow for de-duplication of nodes and relationships in the get_summary step, which is all we need for querying the GraphDB: nodes & relationships.
-
-    NOTE: Check docstring in assemble-chunks_for_graph_rag() for more details on the specific keys present! The 'page_number' key is not merged as that would be useless!
-    '''
-
-    # print(f"\n\nMerging chunk entities for graph RAG. Received chunk_entities: \n {chunk_entities}\n\n")
-    print(f"\nMerging chunk entities for graph RAG.\n")
-
-    chunk_entities_merged = {0: {
-        'chunk_text': '',
-        'entities_and_relationships': {
-            'nodes': [],
-            'relationships': []
-        },
-        'source_doc_name': ''
-    }}
-        
-    for _, chunk_data in chunk_entities.items():
-        try:
-            chunk_entities_merged[0]['chunk_text'] += f"{chunk_data['chunk_text']} "
-            chunk_entities_merged[0]['entities_and_relationships']['nodes'].extend(chunk_data['entities_and_relationships']['nodes'])   # extend() is used to add multiple elements to the end of the list...
-            chunk_entities_merged[0]['entities_and_relationships']['relationships'].extend(chunk_data['entities_and_relationships']['relationships'])   # and we don't care about de-duplicating here as that'll happen anyways in the get_summaries step!
-            chunk_entities_merged[0]['source_doc_name'] += f"{chunk_data['source_doc_name']} "
-
-        except Exception as e:
-            handle_error_no_return("Could not merge chunk entities for graph RAG, proceeding with original chunk_entities dict. WARNING: Duplicates may be present, negatively impacting the context window! Encountered error: ", e)
-
-    return chunk_entities_merged
-
-
-def assemble_chunks_for_graph_rag(docs:list[Document], user_query:str=None) -> dict:
-    '''
-    Transforms docs, which is a list of Document objects:
-
-        docs = [
-            Document(
-                page_content = '<page_content>',
-                metadata = {
-                    'source_link': '<source_link>',
-                    'source': '<source_filepath>',
-                    'page_number': '<page_number>',
-                    'entities_and_relationships': '<entities_and_relationships>'
-                }
-            ),
-            ...
-        ]
-
-    into:
-
-        chunk_entities = {
-            '<graph_chunk_number>': {
-                'chunk_text': '<page_content>',
-                'source_doc_name': '<source_filepath>',
-                'page_number': '<page_number>',
-                'entities_and_relationships': '<entities_and_relationships>'
-            },
-            ...
-        }
-    
-    for the purposes of GraphRAG's query-response pipeline.
-    
-    NOTE: While 'source_doc_name' and 'page_number' data is being added here, it's unnecessary for the GraphRAG query-response pipeline, because this data is directly
-    obtained from the GraphDB itself at a later step: In get-summaries_from_graph_db(), the get-summaries_for_all_nodes() and get-summaries_for_all_relationships()
-    methods are used to obtain the 'source_doc_name' and 'page_number' data for each node and relationship respectively, by setting get_source_documents=True.
-
-    The main source doc and page number data isobtained from the summary in the GraphDB, as summaries always end with the following pattern:
-
-        {Source Document Name: AMD_Q4_and_FY_24_EarningsRelease_FINAL}{Page Number(s): [8]}  # For example...
-    
-    In fact, 'chunk_text' is also unnecessary as only the nodes and relationships are needed for GraphRAG, not the actual text!
-    So they're all simply added here incase this data proves useful for some future use-case!
-    '''
-    try:
-        chunk_entities = {}
-        graph_chunk_count = 1   # Same init as in convert-doc_chunks_to_graph_entities()
-
-        if user_query is not None:  # For GraphRAG response query-pipeline, we need to add the user query as a chunk
-            user_query = user_query.replace("'", "").replace("<br>", "").replace("?", "")
-            user_query_chunk_text = f"Do not attempt to answer any query that follows, simply proceed to extract nodes and relationships from the following text:\n{user_query}"
-            chunk_entities[graph_chunk_count] = {
-                'chunk_text': user_query_chunk_text,
-                'source_doc_name': 'user_query'
-            }
-            graph_chunk_count += 1
-
-        print("\nGenerating Graphing Chunks Dictionary...\n")
-        
-        for count, doc in enumerate(docs):
-
-            try:
-                source_filename = pathlib.Path(rf"{str(doc.metadata.get('source'))}").resolve().name
-
-                page_number_list = []
-                try:    # page numbers while useful are non-essential which is why I'm wrapping in a dedicated try-except block that does not raise an error!
-                    page_number_list.append(int(doc.metadata.get('page_number')))
-                    page_number_list = list(set(page_number_list))   # Remove duplicates
-                except Exception as e:
-                    handle_error_no_return(f"Could not obtain page number from context document number {count} of {len(docs)} documents, skipping. Encountered error: ", e)
-
-                chunk_entities[graph_chunk_count] = {
-                    'chunk_text': str(doc.page_content).strip().replace("'", ""),
-                    'source_doc_name': source_filename,
-                    'page_number': page_number_list,
-                    'entities_and_relationships': ast.literal_eval(doc.metadata.get('entities_and_relationships', '{}'))
-                }   # check note in the docstring for more details on which keys are added here and why!
-                graph_chunk_count += 1
-            except Exception as e:
-                handle_error_no_return(f"Error processing context document number {count} of {len(docs)} documents in assemble-chunks_for_graph_db(), encountered error: ", e)
-
-    except Exception as e:
-        handle_local_error(f"Could not assemble chunk_entities dictionary for GraphRAG, encountered error: ", e)
-
-    return chunk_entities
-
-
-def execute_graph_rag(user_query:str, docs_with_graph_entities: list[Document]) -> str:
-    '''
-    Assembles document chunks into a dictionary of entities via convert-doc_chunks_to_graph_entities(); check append-graph_entities_to_chunks() for detailed
-    documentation on the structure of docs and chunk_entities.
-
-    These chunk_entities are then passed to the graphing model which will process each graph_chunk and append the `entities_and_relationships` key 
-    to each chunk_entities dict:
-        
-        '<entities_and_relationships>': {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"},...], 
-        "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"},...]}
-
-    The various chunk_entities in the dict are then merged into a singular chunk_entity for querying the GraphDB to obtain summaries (as we're only interested
-    in a de-duplicated list of nodes & relationships for GraphDB-queries). 
-    The merge-chunk_entities_for_graph_rag and get-summaries_from_graph_db methods are respectively used for this purpose.
-
-    The obtained summaries are deduplicated and formatted into a summary report via get-summary_report(), and finally re-ranked and trimmed to obtain the
-    final graphRAG context, which is then returned.
-    '''
-    
-    print(f"\n\nExecuting GraphRAG. Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-
-    try:
-        bring_graph_db_online()
-    except Exception as e:
-        handle_local_error("Could not bring graph DB or graphing model online, encountered error: ", e)
-    
-    try:
-        selected_knowledge_domain = read_config(['selected_knowledge_domain'])['selected_knowledge_domain']    
-        client = get_graph_db_client()
-        graph = client.select_graph(selected_knowledge_domain)  # Will create the graph if it doesn't exist
-    except Exception as e:
-        handle_local_error(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB, encountered error: ", e)
-
-    try:
-        complete_chunk_entities = assemble_chunks_for_graph_rag(docs_with_graph_entities, user_query=None)
-        print(f"\n\nlen of complete_chunk_entities: \n {len(complete_chunk_entities.items())}\n\n")
-        # for item in list(complete_chunk_entities.items()):
-        #     print(f"\n\n{item}\n\n")
-    except Exception as e:
-        handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
-
-    try:
-        merged_graph_rag_entities_and_relationships_dict = merge_chunk_entities_for_graph_rag(complete_chunk_entities)
-        print(f"\n\nlen of merged_graph_rag_entities_and_relationships_dict: \n {len(merged_graph_rag_entities_and_relationships_dict)}\n\n")
-    except Exception as e:
-        handle_local_error("Fatal error merging chunk entities for GraphRAG: ", e)
-
-    try:
-        summarized_and_deduplicated_chunk_entities = get_summaries_from_graph_db(merged_graph_rag_entities_and_relationships_dict, selected_knowledge_domain, graph)
-    except Exception as e:
-        handle_local_error("Could not store entities and relationships in graph DB, encountered error: ", e)
-
-    try:
-        graph_rag_context_length_limit_chars = int(read_config(['graph_rag_context_length_limit_chars'])['graph_rag_context_length_limit_chars'])
-        summary_report, reranked_summaries_list_descending = get_summary_report(summarized_and_deduplicated_chunk_entities, graph_rag_context_length_limit_chars, user_query)
-    except Exception as e:
-        handle_local_error("Could not get summary report, encountered error: ", e)
-
-    return summary_report, reranked_summaries_list_descending
-
-
 def parse_service_response(response:str):
     """
     Helper function to parse and clean the service response.
@@ -7638,62 +6630,6 @@ def determine_response_service(user_query:str, force_enable_rag:bool = False, en
     return llm_set_rag_config
 
 
-def execute_search_tools_on_query(user_query:str, embedding_function:str, llm_set_config:dict, filter_top_k_results_by_reranking:int, fetch_top_k_results_from_vectordb:int) -> tuple[list[Document], bool]:
-    print("Searching knowledge base")
-
-    if not llm_set_config.get('do_rag', True) and not llm_set_config.get('perform_graph_rag', False):
-        print("No RAG or GraphRAG to perform, returning...")
-        return [], False, None
-
-    filtered_docs = []
-    try:
-        docs_list_with_cosine_distance = search_vector_db(user_query, embedding_function, int(fetch_top_k_results_from_vectordb))
-        filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc, score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of a Document object and a float score!
-    except Exception as e:
-        handle_error_no_return("Could not perform vector search to determine do_rag when attempting to search-knowledge-base, encountered error: ", e)
-
-    whoosh_results = []
-    try:
-        whoosh_results = search_whoosh_index(user_query)
-    except Exception as e:
-        handle_error_no_return("Could not perform whoosh search to determine do_rag when attempting to search-knowledge-base, encountered error: ", e)
-
-    combined_docs = []
-    try:
-        combined_docs, graph_entities_map = combine_and_deduplicate_search_results(whoosh_results, filtered_docs)   # Combine the whoosh and vector results
-    except Exception as e:
-        handle_error_no_return("Could not combine and deduplicate search results, skipping. Encountered error: ", e)
-        combined_docs = filtered_docs
-
-    if not combined_docs:   # i.e. if blank
-        print("No documents for citations, returning...")
-        return [], False, None
-
-    try:
-        docs = rerank_results_ml(user_query, combined_docs, top_n=filter_top_k_results_by_reranking)
-    except Exception as e:
-        handle_error_no_return("Could not rerank search results, skipping. Encountered error: ", e)
-        docs = combined_docs
-        
-    perform_graph_rag = llm_set_config.get('perform_graph_rag', False)
-    enable_graph_rag = read_config(['enable_graph_rag'])['enable_graph_rag']
-
-    graph_rag_context = None
-    if perform_graph_rag and llm_set_config.get('do_rag', True) and enable_graph_rag:   # All conditions must be met for GraphRAG to be performed!
-        try:
-            docs_with_graph_entities = map_graph_entities_to_filtered_docs(docs, graph_entities_map)
-            graph_rag_context, reranked_summaries_list_descending = execute_graph_rag(user_query, docs_with_graph_entities)
-            if reranked_summaries_list_descending != []:
-                return reranked_summaries_list_descending, llm_set_config.get('do_rag', True), graph_rag_context
-        except Exception as e:
-            handle_error_no_return("Could not execute graph RAG, encountered error: ", e)
-    else:
-        safe_write_config({'perform_graph_rag': False})  # In-case the LLM elected to use GraphRAG but the user has explicitly disabled it, we need to set perform-graph_rag to False to avoid any issues downstream!
-
-    return docs, llm_set_config.get('do_rag', True), graph_rag_context
-
-
-
 @app.route('/get_tools_schema')
 def get_tools_schema():
     '''
@@ -7714,7 +6650,8 @@ def execute_tools():
     '''
     try:
         tools_json = request.json
-        tool_results = butler_module.execute_tools(tools_json)
+        stream_session_id = tools_json.get('stream_session_id', None)
+        tool_results = butler_module.execute_tools(tools_json, stream_session_id)
         print(f"Tool results: {tool_results}")
         return jsonify({"success": tool_results['success'], "tool_result_list": tool_results['tool_result_list'], "message": tool_results['message']})
     except Exception as e:
@@ -7822,7 +6759,9 @@ def invoke_tools_for_query():
     # print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n")
             
     try:
-        docs, do_rag, graph_rag_context = execute_search_tools_on_query(user_query, config['selected_embedding_model'], llm_set_rag_config, int(config['filter_top_k_results_by_reranking']), int(config['fetch_top_k_results_from_vectordb']))
+        docs, do_rag, graph_rag_context = rag_core_module.legacy_execute_search_tools_on_query(
+            user_query, config['selected_embedding_model'], llm_set_rag_config, int(config['filter_top_k_results_by_reranking']), int(config['fetch_top_k_results_from_vectordb'])
+        )
     except Exception as e:
         return handle_api_error("Could not execute RAG tools, encountered error: ", e)
 
@@ -8071,10 +7010,10 @@ def get_request_parameters_for_get_references(request: Request) -> tuple[str, st
         handle_local_error("Could not read request content in method get-request_parameters_for_get_references(), encountered error: ", e)
 
 
-def read_config_for_get_references() -> tuple[str, str, str, str, bool]:
+def read_config_for_get_references() -> tuple[str, bool, bool]:
     try:
-        read_return = read_config(['local_llm_server', 'perform_graph_rag'])
-        return read_return['local_llm_server'], read_return['perform_graph_rag']
+        read_return = read_config(['local_llm_server', 'perform_graph_rag', 'legacy_mode'])
+        return read_return['local_llm_server'], read_return['perform_graph_rag'], read_return['legacy_mode']
     except Exception as e:
         handle_local_error("Could not read config.json in method read-config_for_get_references(), encountered error: ", e)
 
@@ -8085,7 +7024,8 @@ def get_references():
     print("\n\nStoring History Post-Response -- Determining if Citations are Necessary\n\n")
 
     try:
-        local_llm_server, perform_graph_rag = read_config_for_get_references()
+        local_llm_server, perform_graph_rag, legacy_mode = read_config_for_get_references()
+        do_rag = False
     except Exception as e:
         return handle_api_error("Missing values in config.json when attempting to get-references. Error: ", e)
 
@@ -8093,27 +7033,28 @@ def get_references():
         stream_session_id, user_query, user_query_html, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request = get_request_parameters_for_get_references(request)
     except Exception as e:
         return handle_api_error("Could not read request content in method get-references, encountered error: ", e)
-
-    do_rag = False  # check docstring in function call below for details on this aspect
-    try:
-        _, do_rag = get_vector_results_for_get_references(stream_session_id)
-    except Exception as e:
-        handle_error_no_return("Error determining if RAG was used in method get-references - Could not check the queries dict. Proceeding without RAG. Encountered error: ", e)
-
+    
     if local_llm_server == 'llama-cpp':
         local_llm_chat_template_format = "llama-cpp-jinja"
     elif local_llm_server == 'hf-waitress':
         local_llm_chat_template_format = "Transformers-AutoTokenizer"
-        if flux_diffusers_is_enabled():
-            do_rag = False
-    
-    if perform_graph_rag:
+
+    if legacy_mode:
         try:
-            last_context_index = formatted_user_prompt.rindex("The following context might be helpful in answering the user query above.")
-            graph_context_trimmed_prompt = formatted_user_prompt[:last_context_index]
-            formatted_user_prompt = graph_context_trimmed_prompt + '"}]}'   # proper closing of the JSON array
+            _, do_rag = get_vector_results_for_get_references(stream_session_id)    # check docstring in function call below for details
         except Exception as e:
-            handle_error_no_return("Trimming RAG context unnecessary, skipping. Encountered error: ", e)
+            handle_error_no_return("Error determining if RAG was used in method get-references - Could not check the queries dict. Proceeding without RAG. Encountered error: ", e)
+    
+        if perform_graph_rag:
+            try:
+                last_context_index = formatted_user_prompt.rindex("The following context might be helpful in answering the user query above.")
+                graph_context_trimmed_prompt = formatted_user_prompt[:last_context_index]
+                formatted_user_prompt = graph_context_trimmed_prompt + '"}]}'   # proper closing of the JSON array
+            except Exception as e:
+                handle_error_no_return("Trimming RAG context unnecessary, skipping. Encountered error: ", e)
+    else:
+        _, do_rag = rag_core_module.fetch_rag_context(stream_session_id, persist_in_db=False)
+    
     formatted_user_prompt = get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response)
 
     if not do_rag:
@@ -8130,11 +7071,11 @@ def get_references():
 
     print("\n\nFetching Citations\n\n")
 
-    pdf_section_html = None
-    llm_response_with_citation_links = llm_response #fallback!
     try:
         llm_response_with_citation_links, pdf_section_html = add_citations_and_pdf_browser_to_llm_response(llm_response, stream_session_id)
     except Exception as e:
+        pdf_section_html = None
+        llm_response_with_citation_links = llm_response
         handle_error_no_return("Could not add citations and pdf browser to llm_response, encountered error: ", e)
     
     try:

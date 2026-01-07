@@ -1,4 +1,5 @@
 import prompt_formatting as prompt_formatting_module
+import rag_core as rag_core_module
 import llm_apis as llm_apis_module
 
 from wakeonlan import send_magic_packet
@@ -169,7 +170,15 @@ def generate_tools_schema(services_config: dict) -> list[dict]:
 
 
 ### TOOL DEFS:
-def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9'):
+def search(query:str, **kwargs) -> dict:
+    '''
+    Searches the local & web knowledge base.
+    '''
+    stream_session_id = kwargs.get('stream_session_id', None)
+    return rag_core_module.execute_full_search(query, stream_session_id)
+
+
+def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9', **kwargs):
     '''
     Uses Wake-On-LAN (WOL) to turn on a TV.
     Args:
@@ -193,11 +202,11 @@ def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port: str |
         return {"success": False, "message": f"Error sending Wake on LAN magic packet: {str(e)}"}
 
 
-def lg_webos_tv_turn_on(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9'):
+def lg_webos_tv_turn_on(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9', **kwargs):
     return wol_turn_on_tv(mac_address, target_ip, port)
 
 
-def lg_webos_tv_turn_off(ip_address: Optional[str] = None):
+def lg_webos_tv_turn_off(ip_address: Optional[str] = None, **kwargs):
     '''
     Turns on an LG WebOS TV.
     '''
@@ -210,85 +219,86 @@ def lg_webos_tv_turn_off(ip_address: Optional[str] = None):
     return asyncio.run(lg_webos_tv_module.webos_pair_connect_and_power_off_async(ip_address))
 
 
-def lamp_turn_on():
+def lamp_turn_on(**kwargs):
     '''
     Turns on a lamp.
     '''
     return asyncio.run(govee_lights_module.light_turn_on_handler())
 
 
-def lamp_turn_off():
+def lamp_turn_off(**kwargs):
     '''
     Turns off a lamp.
     '''
     return asyncio.run(govee_lights_module.light_turn_off_handler())
 
 
-def set_lamp_brightness(brightness: str | int):
+def set_lamp_brightness(brightness: str | int, **kwargs):
     '''
     Sets the brightness of a lamp.
     '''
     return asyncio.run(govee_lights_module.light_set_brightness_handler(int(brightness)))
 
 
-def set_lamp_color(red: str | int, green: str | int, blue: str | int):
+def set_lamp_color(red: str | int, green: str | int, blue: str | int, **kwargs):
     '''
     Sets the color of a lamp.
     '''
     return asyncio.run(govee_lights_module.light_set_color_handler(int(red), int(green), int(blue)))
 
 
-def set_lamp_temperature(temperature: str | int):
+def set_lamp_temperature(temperature: str | int, **kwargs):
     '''
     Sets the temperature of a lamp.
     '''
     return asyncio.run(govee_lights_module.light_set_temperature_handler(int(temperature)))
 
 
-def set_lamp_scene(scene: str):
+def set_lamp_scene(scene: str, **kwargs):
     '''
     Sets the scene of a lamp.
     '''
     return asyncio.run(govee_lights_module.light_set_scene_handler(scene))
 
-def plug_turn_on():
+def plug_turn_on(**kwargs):
     '''
     Turns on a smart plug.
     '''
     return asyncio.run(kasa_plug_module.plug_turn_on_handler())
 
-def plug_turn_off():
+def plug_turn_off(**kwargs):
     '''
     Turns off a smart plug.
     '''
     return asyncio.run(kasa_plug_module.plug_turn_off_handler())
 
-def bulb_turn_on():
+def bulb_turn_on(**kwargs):
     '''
     Turns on a smart bulb.
     '''
     return asyncio.run(kasa_bulb_module.bulb_turn_on_handler())
 
-def bulb_turn_off():
+def bulb_turn_off(**kwargs):
     '''
     Turns off a smart bulb.
     '''
     return asyncio.run(kasa_bulb_module.bulb_turn_off_handler())
 
-def set_bulb_brightness(brightness: str | int):
+def set_bulb_brightness(brightness: str | int, **kwargs):
     '''
     Sets the brightness of a smart bulb.
     '''
     return asyncio.run(kasa_bulb_module.bulb_set_brightness_handler(int(brightness)))
 
 
-def set_bulb_color(hue: str | int, saturation: str | int, value: str | int):
+def set_bulb_color(hue: str | int, saturation: str | int, value: str | int, **kwargs):
     '''
     Sets the color of a smart bulb.
     '''
     return asyncio.run(kasa_bulb_module.bulb_set_color_handler(int(hue), int(saturation), int(value)))
 
-def execute_tool_call(tool_name, llm_args, services_config: dict) -> dict:
+
+def execute_tool_call(tool_name, llm_args, services_config: dict, stream_session_id: str = None) -> dict:
     '''
     1. Looks up the function in Python.
     2. Looks up the default values in your JSON config.
@@ -307,7 +317,7 @@ def execute_tool_call(tool_name, llm_args, services_config: dict) -> dict:
         fields_def = service_def.get('fields', {})
 
         # MERGE: Start with defaults, overwrite with LLM-provided args
-        final_args = {}
+        final_args = {'stream_session_id': stream_session_id}
         
         # 1. Load defaults from config (handles hardcoded IPs)
         for field_name, field_info in fields_def.items():
@@ -408,7 +418,7 @@ def execute_butler_tasks(user_query:str) -> dict:
             return {'success': False, 'message': f"Both Butler Tool Execution and Action Analysis Prompt Creation Failed: {str(e)}", 'action_analysis_prompt': None}
         
 
-def execute_tools(tools_json: dict) -> dict:
+def execute_tools(tools_json: dict, stream_session_id: str = None) -> dict:
     print(f"Executing tools: {tools_json}")
     tool_result_list = []
     _, full_tools_config = _full_read_butler_tools_config()
@@ -429,7 +439,7 @@ def execute_tools(tools_json: dict) -> dict:
                     fn_args = raw_args # In case the custom backend already made it a dict!
 
                 # Execute
-                result = execute_tool_call(fn_name, fn_args, full_tools_config.get('services', {}))
+                result = execute_tool_call(fn_name, fn_args, full_tools_config.get('services', {}), stream_session_id)
                 tool_result_list.append({
                     'role': 'tool',
                     'tool_call_id': tool_call['id'],
