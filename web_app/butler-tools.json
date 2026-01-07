@@ -8,9 +8,6 @@
                 "query": {
                     "required": true,
                     "type": "string"
-                },
-                "stream_session_id": {
-                    "type": "string"
                 }
             }
         },
