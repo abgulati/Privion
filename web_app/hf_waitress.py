@@ -88,6 +88,8 @@ from flask_cors import CORS
 
 from waitress import serve
 
+import global_state
+
 try:
     if not os.path.exists(os.path.join(os.getcwd(), 'exllamav2')):
         subprocess.run(['git', 'clone', '-b', 'v0.3.2', 'https://github.com/turboderp-org/exllamav2.git'], check=True)  # check=True raises an exception on non-zero exit code
@@ -4107,35 +4109,43 @@ def exl3_stream():
         return handle_api_error("Could not create ExLlamaV3 Job object for exl3-stream. Error details follow. In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, and of course, allocate an adequate context-window! Error: ", e)
 
     try:
+        # Halt Maintenance Mode
+        global_state.set_system_busy(True)
+
         def generate():
+            try:
+                global STOP_GENERATION
+                STOP_GENERATION = False
 
-            global STOP_GENERATION
-            STOP_GENERATION = False
-
-            while True:
-                if STOP_GENERATION: # Handle Manual Stop Signal
-                    print("\n\nStopping generation with stop_event\n\n")
-                    try:
-                        EXL3_GENERATOR.cancel(job)
-                    except:
-                        pass
-                    STOP_GENERATION = False
-                    break
+                while True:
+                    if STOP_GENERATION: # Handle Manual Stop Signal
+                        print("\n\nStopping generation with stop_event\n\n")
+                        try:
+                            EXL3_GENERATOR.cancel(job)
+                        except:
+                            pass
+                        STOP_GENERATION = False
+                        break
+                    
+                    token = user_queue.get()
+                    if token is None:
+                        break
+                    
+                    yield f"data: {json.dumps(token)}\n\n"
                 
-                token = user_queue.get()
-                if token is None:
-                    break
-                
-                yield f"data: {json.dumps(token)}\n\n"
-            
-            yield f"event: END\ndata: \"null\"\n\n"
+                yield f"event: END\ndata: \"null\"\n\n"
 
-            print("\nexl3-stream done\n")
+                print("\nexl3-stream done\n")
+            finally:
+                # Resume Maintenance Mode - Triggers once the generation process is complete (no more tokens to be generated)
+                global_state.set_system_busy(False)
 
         print("\n\nInferencing Begins!\n\n")
         return Response(generate(), content_type='text/event-stream')
     
     except Exception as e:
+        # Resume Maintenance Mode - This case handles any errors or exceptions that occur during the generation process
+        global_state.set_system_busy(False)
         return handle_api_error("Could not generate exl3-stream, encountered error: ", e)
 
 

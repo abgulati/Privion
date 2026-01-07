@@ -61,6 +61,8 @@ import fitz # PyMuPDF - fitz.open(filename) accepts a string or pathlib.Path
 from llm_apis import hf_waitress_non_streaming_api_handler, make_request_to_llm_server
 import butler as butler_module
 
+from services.maintenance_service import start_background_service
+
 try:
     # Standard Pipeline
     from docling.datamodel.pipeline_options import (
@@ -8280,4 +8282,9 @@ if __name__ == '__main__':
     # app.run(debug=True)
     # app.run(host='0.0.0.0', port=5000)
     MAX_UPLOAD_SIZE = 100 * 1024 * 1024 * 1024  # 100GB in bytes upload limit
+    
+    # Start Maintenance Service (Background Daemon)
+    start_background_service()
+
     serve(app, host=lars_host, port=lars_port, max_request_body_size=MAX_UPLOAD_SIZE)
+    

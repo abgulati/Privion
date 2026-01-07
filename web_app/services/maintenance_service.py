@@ -1,7 +1,10 @@
-from web_app.services.smart_home_service import SmartHomeService
-from web_app.device_registry import DEVICE_TYPE_HANDLERS
+from services.smart_home_service import SmartHomeService
+from device_registry import DEVICE_TYPE_HANDLERS
 import asyncio
 import time
+import threading
+import sys
+import global_state
 
 async def check_all_devices(service: SmartHomeService):
     devices = service.get_all_devices()
@@ -58,18 +61,46 @@ async def check_and_update(service, device_id, name, module, ip, mac_address):
         # Update DB
         service.update_device_status(device_id, is_online)
         
+        # Update attributes if available
+        if is_online and result.get('state'):
+             service.update_device_attributes(device_id, result['state'])
+        
     except Exception as e:
         print(f"  Error checking {name}: {e}")
+
+def start_background_service():
+    """Starts the maintenance loop in a background daemon thread."""
+    try:
+        print("Initializing Maintenance Service Background Thread...")
+        thread = threading.Thread(target=maintenance_loop, daemon=True)
+        thread.start()
+        print("Maintenance Service Background Thread Started.")
+        return thread
+    except Exception as e:
+        print(f"Failed to start Maintenance Service Background Thread: {e}")
+        return None
 
 def maintenance_loop(once=False):
     print("--- Starting Maintenance Service (Registry Pattern) ---")
     service = SmartHomeService()
     
+    # Windows-specific fix for "Event loop is closed" RuntimeError
+    if sys.platform == 'win32':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
     while True:
-        # Run the async check loop
-        asyncio.run(check_all_devices(service))
-        
-        print("[Maintenance] Cycle Complete. Waiting 60 seconds...")
+        try:
+            if global_state.get_system_busy():
+                print("[Maintenance] System is busy. Skipping maintenance cycle.")
+                time.sleep(60)
+                continue
+
+            # Run the async check loop
+            asyncio.run(check_all_devices(service))
+            print("[Maintenance] Cycle Complete. Waiting 60 seconds...")
+
+        except Exception as e:
+            print(f"[Maintenance] Critical Error in loop: {e}")
         
         if once:
             break
@@ -77,12 +108,6 @@ def maintenance_loop(once=False):
         time.sleep(60)
 
 if __name__ == "__main__":
-    import sys
-    
-    # Windows-specific fix for "Event loop is closed" RuntimeError and "WinError 10054" during UDP discovery.
-    if sys.platform == 'win32':
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
     # arg to allow running once from CLI (useful for testing)
     run_once = "--once" in sys.argv
     maintenance_loop(once=run_once)

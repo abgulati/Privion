@@ -17,8 +17,18 @@ async def check_online_handler(ip_address: str) -> dict:
     dev = KasaSmartBulb(ip_address)
     try:
         await dev.update()
+        
+        # Collect state attributes
+        state = {
+            "is_on": dev.is_on,
+            "brightness": dev.brightness,
+            "hsv": dev.hsv,
+            "color_temp": dev.color_temp,
+            # Add any other relevant attributes here
+        }
+        
         await dev.protocol.close()  # Fix: Ensure socket is closed
-        return {"success": True, "message": "online"}
+        return {"success": True, "message": "online", "state": state}
     except Exception as e:
         try:
             await dev.protocol.close()

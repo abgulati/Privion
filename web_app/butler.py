@@ -14,6 +14,7 @@ import asyncio
 import json
 import ast
 
+import global_state
 from services.smart_home_service import SmartHomeService
 
 # Initialize Global Service Instance
@@ -360,6 +361,11 @@ async def execute_tool_call(tool_name, llm_args, services_config: dict) -> dict:
         
         # Handle Async vs Sync functions
         # If the function is async, await it to allow it to run concurrently with other tool calls
+        # TODO: Develop new architecture to include some kind of priority system for tool calls that
+        #       allows for certain tools to be executed before others, or certain tools to be executed
+        #       after others, or certain tools to be executed in parallel with others. Will be very
+        #       useful for higher lever tool calls that depend on lower level tool calls to complete
+        #       before they can execute.
         if asyncio.iscoroutinefunction(func_to_call):
             return await func_to_call(**final_args)
         else:
@@ -415,33 +421,19 @@ def execute_butler_tasks(user_query:str) -> dict:
         if llm_response_obj.get('tool_calls', None):
             print(f"LLM decided to call {len(llm_response_obj['tool_calls'])} tool(s).")
 
-            # inner async function ensures that task creation is happening inside the active event loop
-            async def run_butler_tasks_concurrently():
-                tasks = []
-                # Map to keep track of names for action_result assignment
-                task_names = []
+            for tool_call in llm_response_obj['tool_calls']:
+                 # OpenAI format: 'function' is a dict, 'arguments' is a JSON STRING
+                fn_name = tool_call['function']['name']
+                raw_args = tool_call['function']['arguments']
                 
-                for tool_call in llm_response_obj['tool_calls']:
-                     # OpenAI format: 'function' is a dict, 'arguments' is a JSON STRING
-                    fn_name = tool_call['function']['name']
-                    raw_args = tool_call['function']['arguments']
-                    
-                    # Safe Parsing
-                    if isinstance(raw_args, str):
-                        fn_args = json.loads(raw_args)
-                    else:
-                        fn_args = raw_args 
+                # Safe Parsing
+                if isinstance(raw_args, str):
+                    fn_args = json.loads(raw_args)
+                else:
+                    fn_args = raw_args # In case the custom backend already made it a dict!
 
-                    task_names.append(fn_name)
-                    tasks.append(execute_tool_call(fn_name, fn_args, FULL_BUTLER_TOOLS_CONFIG.get('services', {})))
-                
-                return await asyncio.gather(*tasks), task_names
-
-            # Run concurrently
-            results, task_names = asyncio.run(run_butler_tasks_concurrently())
-
-            for i, result in enumerate(results):
-                fn_name = task_names[i]
+                # Execute
+                result = execute_tool_call(fn_name, fn_args, FULL_BUTLER_TOOLS_CONFIG.get('services', {}))
                 action_result[fn_name] = result
                 print(f"Action result after tool execution {fn_name}: {result}")
 
@@ -466,12 +458,18 @@ def execute_butler_tasks(user_query:str) -> dict:
         
 
 def execute_tools(tools_json: dict) -> dict:
+    # Halt Maintenance Mode
+    global_state.set_system_busy(True)
+
     print(f"Executing tools: {tools_json}")
     try:
         return asyncio.run(_execute_tools_concurrent(tools_json))
     except Exception as e:
         print(f"Error executing tools (loop): {str(e)}")
         return {'success': False, 'tool_result_list': [], 'message': f"Error executing tools: {str(e)}"}
+    finally:
+        # Resume Maintenance Mode
+        global_state.set_system_busy(False)
 
 async def _execute_tools_concurrent(tools_json: dict) -> dict:
     '''
