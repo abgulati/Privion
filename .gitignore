@@ -31,6 +31,10 @@ Thumbs.db
 desktop.ini
 
 # dirs
+installer/exllamav2/
+installer/exllamav3/
+installer/ffmpeg-shared/
+installer/flash-attention/
 web_app/generated_images/
 web_app/gdrive_auth/
 web_app/exllamav2/

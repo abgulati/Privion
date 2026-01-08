@@ -32,7 +32,7 @@ pip install -r reqs_butler.txt
 Write-Host "    - [OK] Butler requirements installed." -ForegroundColor Green
 
 Write-Host "    - [3] Installing PyTorch..." -ForegroundColor Yellow
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+pip3 install -U torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 Write-Host "    - [OK] PyTorch installed." -ForegroundColor Green
 
 
@@ -89,7 +89,7 @@ Write-Host "    - [OK] 7-Zip & ESpeak-NG installed." -ForegroundColor Green
 
 # Install PIP dependencies, reset versions and ensure hf_xet is uninstalled
 pip install -r reqs_speech.txt
-pip install "nemo_toolkit['asr']"
+pip install "nemo_toolkit[asr]"
 pip install numpy==2.2.6
 pip install transformers==4.57.3
 pip uninstall -y hf_xet
