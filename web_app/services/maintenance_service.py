@@ -1,10 +1,26 @@
-from services.smart_home_service import SmartHomeService
-from device_registry import DEVICE_TYPE_HANDLERS
+import sys
+import os
 import asyncio
 import time
+import signal
 import threading
-import sys
+
+# Ensure parent directory (web_app) is in sys.path so we can import 'services', 'device_registry', etc.
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
+from services.smart_home_service import SmartHomeService
+from device_registry import DEVICE_TYPE_HANDLERS
 import global_state
+
+
+SHUTDOWN_EVENT = threading.Event()
+
+def shutdown_signal_handler(signum, frame):
+    print(f"\n[Maintenance] Received signal {signum}. Shutting down gracefully...")
+    SHUTDOWN_EVENT.set()
 
 async def check_all_devices(service: SmartHomeService):
     devices = service.get_all_devices()
@@ -68,18 +84,6 @@ async def check_and_update(service, device_id, name, module, ip, mac_address):
     except Exception as e:
         print(f"  Error checking {name}: {e}")
 
-def start_background_service():
-    """Starts the maintenance loop in a background daemon thread."""
-    try:
-        print("Initializing Maintenance Service Background Thread...")
-        thread = threading.Thread(target=maintenance_loop, daemon=True)
-        thread.start()
-        print("Maintenance Service Background Thread Started.")
-        return thread
-    except Exception as e:
-        print(f"Failed to start Maintenance Service Background Thread: {e}")
-        return None
-
 def maintenance_loop(once=False):
     print("--- Starting Maintenance Service (Registry Pattern) ---")
     service = SmartHomeService()
@@ -88,11 +92,14 @@ def maintenance_loop(once=False):
     if sys.platform == 'win32':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-    while True:
+    while not SHUTDOWN_EVENT.is_set():
         try:
             if global_state.get_system_busy():
                 print("[Maintenance] System is busy. Skipping maintenance cycle.")
-                time.sleep(60)
+                # Wait 30 seconds, checking for shutdown every second
+                for _ in range(30):
+                    if SHUTDOWN_EVENT.is_set(): break
+                    time.sleep(1)
                 continue
 
             # Run the async check loop
@@ -105,9 +112,14 @@ def maintenance_loop(once=False):
         if once:
             break
             
-        time.sleep(60)
+        # Wait 60 seconds, checking for shutdown every second
+        for _ in range(60):
+            if SHUTDOWN_EVENT.is_set(): break
+            time.sleep(1)
+    
+    print("[Maintenance] Service Shutdown Complete.")
 
 if __name__ == "__main__":
-    # arg to allow running once from CLI (useful for testing)
-    run_once = "--once" in sys.argv
-    maintenance_loop(once=run_once)
+    signal.signal(signal.SIGINT, shutdown_signal_handler)
+    signal.signal(signal.SIGTERM, shutdown_signal_handler)
+    maintenance_loop()

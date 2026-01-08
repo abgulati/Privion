@@ -43,6 +43,7 @@ import json
 import time
 import ast
 import os
+import sys
 import io
 import re
 import gc
@@ -61,7 +62,7 @@ import fitz # PyMuPDF - fitz.open(filename) accepts a string or pathlib.Path
 from llm_apis import hf_waitress_non_streaming_api_handler, make_request_to_llm_server
 import butler as butler_module
 
-from services.maintenance_service import start_background_service
+MAINTENANCE_PROCESS = None
 
 try:
     # Standard Pipeline
@@ -8267,6 +8268,8 @@ def signal_handler(sig, frame):
     '''
     print("\n\n⚠️  CTRL+C Detected! Force stopping workers...\n")
     
+    stop_maintenance_service_subprocess()
+
     # Hard exit:
     # os._exit(0) is better than sys.exit(0) for signal handlers 
     # because it skips Python's cleanup handlers (except finally blocks)
@@ -8274,6 +8277,50 @@ def signal_handler(sig, frame):
     print("👋 Exiting immediately.")
     os._exit(0)
 
+def start_maintenance_service_subprocess():
+    """
+    Launches the maintenance_service.py as a separate subprocess.
+    This ensures it runs in its own memory space, avoiding GIL issues and 
+    preventing crashes from taking down the main web app. It also opens a new
+    console window on Windows for monitoring the separate process.
+    """
+    global MAINTENANCE_PROCESS
+    print("Starting Maintenance Service as Subprocess...")
+    
+    # Path to the script relative to this file
+    web_app_dir = os.path.dirname(os.path.abspath(__file__))
+    maintenance_script_path = os.path.join(web_app_dir, 'services', 'maintenance_service.py')
+    
+    try:
+        if platform.system() == 'Windows':
+            # Using CREATE_NEW_CONSOLE to open a new console window on Windows for testing and debugging purposes
+            MAINTENANCE_PROCESS = subprocess.Popen(
+                [sys.executable, maintenance_script_path], 
+                cwd=web_app_dir, 
+                creationflags=subprocess.CREATE_NEW_CONSOLE
+            )
+        else:
+            MAINTENANCE_PROCESS = subprocess.Popen(
+                [sys.executable, maintenance_script_path], 
+                cwd=web_app_dir
+            )
+        print("Maintenance Service Subprocess Launched.")
+    except Exception as e:
+        print(f"Failed to launch Maintenance Service Subprocess: {e}")
+
+def stop_maintenance_service_subprocess():
+    """
+    Gracefully stops the maintenance service subprocess.
+    """
+    global MAINTENANCE_PROCESS
+    if MAINTENANCE_PROCESS:
+        print("Stopping Maintenance Service Subprocess...")
+        try:
+            MAINTENANCE_PROCESS.terminate()
+            # On Windows terminate() is aliased to kill(), so this is sufficient.
+            MAINTENANCE_PROCESS = None
+        except Exception as e:
+            print(f"Error killing maintenance process: {e}")
 
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
@@ -8284,8 +8331,8 @@ if __name__ == '__main__':
     # app.run(host='0.0.0.0', port=5000)
     MAX_UPLOAD_SIZE = 100 * 1024 * 1024 * 1024  # 100GB in bytes upload limit
     
-    # Start Maintenance Service (Background Daemon)
-    start_background_service()
+    # Start Maintenance Service (Background Subprocess)
+    start_maintenance_service_subprocess()
 
     serve(app, host=lars_host, port=lars_port, max_request_body_size=MAX_UPLOAD_SIZE)
     
