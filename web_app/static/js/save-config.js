@@ -359,6 +359,16 @@ function getTtsConfig() {
 }
 
 
+function getWebSearchConfig() {
+    config = {
+        'enable_web_search': document.getElementById('enable_web_search').checked,
+        'assign_host_port_to_perplexica_server': document.getElementById('perplexica_server_port').value,
+        'perplexica_version': document.getElementById('perplexica_version').value
+    };
+    return config;
+}
+
+
 function getAdvancedSettingsConfig() {
     config = {
         'legacy_mode': document.getElementById('legacy_mode').checked,
@@ -692,6 +702,7 @@ function handleSaveChanges() {
         ...getButlerConfig(),
         ...getAsrConfig(),
         ...getTtsConfig(),
+        ...getWebSearchConfig(),
         ...getAdvancedSettingsConfig()
     };
 

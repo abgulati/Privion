@@ -235,7 +235,9 @@ try:
 except Exception as e:
     print(f"Could not read config.json, encountered error: {e}")
 
-# Ensure botstrap contains only base_directory (so users can move by editing this one knob!)
+# If the file doesn't exist (first-run), write defaults. On subsequent runs, simply write-back to security_config.json,
+# which serves as a confirmation mechanism of the paths set.
+# Users can move locations by simply editing the single base_dir knob in security_config.json
 try:
     with open(BOOTSTRAP_PATH, 'w') as file:
         json.dump({'base_directory': str(pathlib.Path(BASE_DIRECTORY).resolve()), 'config_path': str(pathlib.Path(CONFIG_PATH).resolve())}, file, indent=4)
@@ -2581,6 +2583,16 @@ def start_falkordb():
         return jsonify({"message": "FalkorDB Docker container started successfully", "success": True}), 200
     except Exception as e:
         return handle_api_error("Could not start FalkorDB Docker container, encountered error: ", e)
+
+
+@app.route('/start_perplexica')
+def start_perplexica():
+    print("\nStarting Perplexica Docker container...\n")
+    try:
+        rag_support_module.bring_perplexica_online()
+        return jsonify({"message": "Perplexica Docker container started successfully", "success": True}), 200
+    except Exception as e:
+        return handle_api_error("Could not start Perplexica Docker container, encountered error: ", e)
 
 
 def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with kb-generator model

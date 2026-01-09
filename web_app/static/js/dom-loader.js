@@ -100,6 +100,9 @@ function loadCoreLarsConfig() {
         'docling_num_threads',
         'force_enable_rag',
         'force_disable_rag',
+        'enable_web_search',
+        'assign_host_port_to_perplexica_server',
+        'perplexica_version',
         'enable_graph_rag',
         'legacy_mode',
         'tool_response_mode',
@@ -1830,6 +1833,13 @@ function initializeTTSTabComponents(values) {
 }
 
 
+function initializeWebSearchTabComponents(values) {
+    document.getElementById('enable_web_search').checked = values.enable_web_search;
+    document.getElementById('perplexica_server_port').value = values.assign_host_port_to_perplexica_server;
+    document.getElementById('perplexica_version').value = values.perplexica_version;
+}
+
+
 function initializeAdvancedSettingsTabComponents(values) {
     document.getElementById('legacy_mode').checked = values.legacy_mode;
     document.getElementById('tool_response_mode').value = values.tool_response_mode;
@@ -2015,6 +2025,7 @@ document.addEventListener("DOMContentLoaded", function() {
     loadCoreLarsConfig()
         .then(values => {
             startFalkorDB();
+            startPerplexica();
             initializeLLMTabComponents(values);
             initializeEmbeddingModelTabComponents(values);
             initializeSystemPromptTabComponents(values);
@@ -2025,6 +2036,7 @@ document.addEventListener("DOMContentLoaded", function() {
             initializeButlerTabComponents(values);
             initializeAsrTabComponents(values);
             initializeTTSTabComponents(values);
+            initializeWebSearchTabComponents(values);
             initializeAdvancedSettingsTabComponents(values);
             initializeSettingsModalTabCycleListener();
             local_llm_server = values.local_llm_server;
