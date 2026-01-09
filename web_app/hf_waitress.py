@@ -3822,8 +3822,6 @@ def exl2_stream():
             data = json.loads(data)
         messages = data.get('messages', [])
         tools = data.get('tools', None)
-        print(f"\n\nMessages: {messages}\n\n")
-        print(f"\n\nTools: {tools}\n\n")
         gen_settings, config_data  = get_exl2_gen_settings(request)
         user_queue = queue.Queue()
     except Exception as e:
@@ -4230,7 +4228,7 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
     
     llm_semaphore.acquire()
 
-    print("\n\nLLM semaphore acquired by OpenAI/completions_stream\n\n")
+    print("\n\nLLM semaphore acquired by OpenAI/transformers-completions Streaming Route\n\n")
 
     try:
         read_return = read_config(['model_id', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep'])
@@ -4297,42 +4295,90 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
         }
         yield f"data: {json.dumps(role_chunk)}\n\n"
 
+        # Track thinking state
+        in_thinking_block = False
+        accumulated_text = ""
+
         while True:
             if STOP_GENERATION:
                 stop_event.set()
                 thread.join()
                 break
             
-            line = data_queue.get()
-            if line is None:
+            token = data_queue.get()
+            if token is None:
                 thread.join()
                 break
             
-             # OpenAI chunk format
+            accumulated_text += token
+
+            # Check for openning thinking tag
+            if '<think>' in accumulated_text:
+                in_thinking_block = True
+                # Send any text before think as regular content
+                before_think = accumulated_text.split('<think>', 1)[0]
+                if before_think:
+                    chunk = {
+                        "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                        "model": f"Transformers-{read_return['model_id']}",
+                        "choices": [{"index": 0, "delta": {"content": before_think}, "finish_reason": None}]
+                    }
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                accumulated_text = accumulated_text.split('<think>', 1)[1]
+                continue
+            
+            # Check for closing thinking tag
+            if '</think>' in accumulated_text:
+                # Send thinking content as reasoning_content
+                thinking_text = accumulated_text.split('</think>', 1)[0]
+                if thinking_text:
+                    chunk = {
+                        "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                        "model": f"Transformers-{read_return['model_id']}",
+                        "choices": [{"index": 0, "delta": {"reasoning_content": [{"type": "text", "text": thinking_text}]}, "finish_reason": None}]
+                    }
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                
+                in_thinking_block = False
+                accumulated_text = accumulated_text.split('</think>', 1)[1]
+                continue
+
+            # If we have any accumulated text, send it as regular content
+            if len(accumulated_text) > 0:
+                if in_thinking_block:
+                    # Send as reasoning_content
+                    chunk = {
+                        "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                        "model": f"Transformers-{read_return['model_id']}",
+                        "choices": [{"index": 0, "delta": {"reasoning_content": [{"type": "text", "text": accumulated_text}]}, "finish_reason": None}]
+                    }
+                else:
+                    # Send as regular content
+                    chunk = {
+                        "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                        "model": f"Transformers-{read_return['model_id']}",
+                        "choices": [{"index": 0, "delta": {"content": token}, "finish_reason": None}]
+                    }
+                yield f"data: {json.dumps(chunk)}\n\n"
+                accumulated_text = ""
+
+        # Send any remaining text
+        if accumulated_text:
+            field = "reasoning_content" if in_thinking_block else "content"
+            content = [{"type": "text", "text": accumulated_text}] if in_thinking_block else accumulated_text
             chunk = {
-                "id": chunk_id,
-                "object": "chat.completion.chunk",
-                "created": created,
+                "id": chunk_id, "object": "chat.completion.chunk", "created": created,
                 "model": f"Transformers-{read_return['model_id']}",
-                "choices": [{
-                    "index": 0,
-                    "delta": {"content": line},
-                    "finish_reason": None
-                }]
+                "choices": [{"index": 0, "delta": {field: content}, "finish_reason": None}]
             }
             yield f"data: {json.dumps(chunk)}\n\n"
+            accumulated_text = ""
         
-        # Final chunk
+        # Send final closing chunk
         final_chunk = {
-            "id": chunk_id,
-            "object": "chat.completion.chunk",
-            "created": created,
+            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
             "model": f"Transformers-{read_return['model_id']}",
-            "choices": [{
-                "index": 0,
-                "delta": {},
-                "finish_reason": "stop"
-            }]
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
         }
         yield f"data: {json.dumps(final_chunk)}\n\n"
         yield "data: [DONE]\n\n"
@@ -4350,7 +4396,7 @@ def handle_transformers_non_streaming_openai(messages, tools, max_tokens, temper
 
     with llm_semaphore:
 
-        print("\n\nLLM semaphore acquired by OpenAI/completions\n\n")
+        print("\n\nLLM semaphore acquired by OpenAI/transformers-completions Non-Streaming Route\n\n")
 
         try:
             read_return = read_config(['model_id', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep'])
@@ -4371,7 +4417,44 @@ def handle_transformers_non_streaming_openai(messages, tools, max_tokens, temper
             input_length = inputs.input_ids.shape[1]
             decoded_output = AUTO_TOKENIZER.decode(output[0][input_length:], skip_special_tokens=True)
             inference_output = decoded_output
+
+            # 7. Split reasoning vs visible content
+            # The below approach is a simple left-to-right parser for a single tag type, 
+            # resilient to "no more tags" (-1), and tolerant of missing close tags:
+            reasoning_blocks = []
+            visible_parts = []
+            cursor = 0  # tracks the position in full_response where we're currently reading - everything before has already been handled.
+            while True:
+                start = inference_output.find('<think>', cursor)   # searches for the next opening tag after cursor - find returns the index of the match, or -1 if not found.
+                if start == -1:
+                    visible_parts.append(inference_output[cursor:])  # no more opening tags, so everything remaining is visible content.
+                    break
+                end = inference_output.find('</think>', start + len('<think>'))  # Otherwise, we look for the matching close tag
+                if end == -1:   
+                    # Again, -1 means "not found." In that case we treat the rest as visible text and break (so a missing closing tag doesn't crash the loop)
+                    visible_parts.append(inference_output[cursor:])
+                    break
+                # If both tags found:
+                if start > cursor:
+                    visible_parts.append(inference_output[cursor:start])   # text before think is visible content
+                # Text inside the tags is reasoning content, so we push it into reasoning_blocks:
+                thinking_text = inference_output[start + len('</think>'):end]
+                if thinking_text:
+                    reasoning_blocks.append({"type": "text", "text": thinking_text})
+                # Advance cursor to just after the closing tag, so the next iteration continues scanning after that block.
+                cursor = end + len('</think>')
+            visible_content = ''.join(visible_parts)
+        
             print("\nOpenAI/completions done\n")
+            prompt_tokens = len(inputs['input_ids'][0])
+            completion_tokens = len(AUTO_TOKENIZER.encode(inference_output))
+
+            message = {
+                "role": "assistant",
+                "content": visible_content
+            }
+            if reasoning_blocks:
+                message["reasoning_content"] = reasoning_blocks
 
             return jsonify({
                 "id": f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}",
@@ -4380,16 +4463,13 @@ def handle_transformers_non_streaming_openai(messages, tools, max_tokens, temper
                 "model": f"Transformers-{read_return['model_id']}",
                 "choices": [{
                     "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": inference_output
-                    },
+                    "message": message,
                     "finish_reason": "stop"
                 }],
                 "usage": {
-                    "prompt_tokens": len(inputs['input_ids'][0]),
-                    "completion_tokens": len(AUTO_TOKENIZER.encode(inference_output)),
-                    "total_tokens": len(inputs['input_ids'][0]) + len(AUTO_TOKENIZER.encode(inference_output))
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": prompt_tokens + completion_tokens
                 }
             })
         
@@ -4448,27 +4528,87 @@ def handle_exl2_streaming_openai(messages, tools, max_tokens, temperature, top_p
             }
             yield f"data: {json.dumps(role_chunk)}\n\n"
 
+            # Track thinking state
+            in_thinking_block = False
+            accumulated_text = ""
+
             while True:
                 # Block until background worker puts a token here
                 token = user_queue.get()
-
                 if token is None:   # EOS Signal
                     break
 
+                accumulated_text += token
+
+                # Check for openning thinking tag
+                if '<think>' in accumulated_text:
+                    in_thinking_block = True
+                    # Send any text before think as regular content
+                    before_think = accumulated_text.split('<think>', 1)[0]
+                    if before_think:
+                        chunk = {
+                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                            "model": f"ExLlamaV2-{config_data['model_id']}",
+                            "choices": [{"index": 0, "delta": {"content": before_think}, "finish_reason": None}]
+                        }
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                    accumulated_text = accumulated_text.split('<think>', 1)[1]
+                    continue
+                
+                # Check for closing thinking tag
+                if '</think>' in accumulated_text:
+                    # Send thinking content as reasoning_content
+                    thinking_text = accumulated_text.split('</think>', 1)[0]
+                    if thinking_text:
+                        chunk = {
+                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                            "model": f"ExLlamaV2-{config_data['model_id']}",
+                            "choices": [{"index": 0, "delta": {"reasoning_content": [{"type": "text", "text": thinking_text}]}, "finish_reason": None}]
+                        }
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                    
+                    in_thinking_block = False
+                    accumulated_text = accumulated_text.split('</think>', 1)[1]
+                    continue
+
+                # If we have any accumulated text, send it as regular content
+                if len(accumulated_text) > 0:
+                    if in_thinking_block:
+                        # Send as reasoning_content
+                        chunk = {
+                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                            "model": f"ExLlamaV2-{config_data['model_id']}",
+                            "choices": [{"index": 0, "delta": {"reasoning_content": [{"type": "text", "text": accumulated_text}]}, "finish_reason": None}]
+                        }
+                    else:
+                        # Send as regular content
+                        chunk = {
+                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                            "model": f"ExLlamaV2-{config_data['model_id']}",
+                            "choices": [{"index": 0, "delta": {"content": token}, "finish_reason": None}]
+                        }
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                    accumulated_text = ""
+
+            # Send any remaining text
+            if accumulated_text:
+                field = "reasoning_content" if in_thinking_block else "content"
+                content = [{"type": "text", "text": accumulated_text}] if in_thinking_block else accumulated_text
                 chunk = {
-                    "id": chunk_id, "object": "chat.completion.chunk", "created": created, 
+                    "id": chunk_id, "object": "chat.completion.chunk", "created": created,
                     "model": f"ExLlamaV2-{config_data['model_id']}",
-                    "choices": [{"index": 0, "delta": {"content": token},"finish_reason": None}]
+                    "choices": [{"index": 0, "delta": {field: content}, "finish_reason": None}]
                 }
                 yield f"data: {json.dumps(chunk)}\n\n"
+                accumulated_text = ""
             
+            # Send final closing chunk
             final_chunk = {
                 "id": chunk_id, "object": "chat.completion.chunk", "created": created,
                 "model": f"ExLlamaV2-{config_data['model_id']}",
                 "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
             }
             yield f"data: {json.dumps(final_chunk)}\n\n"
-            
             yield "data: [DONE]\n\n"
             
             print("\nOpenAI/exl2-stream done\n")
@@ -4482,7 +4622,7 @@ def handle_exl2_streaming_openai(messages, tools, max_tokens, temperature, top_p
 
 def handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop):
     """Handle non-streaming OpenAI-compatible responses using ExLlamaV2"""
-    print("\n\nOpenAI/exl2-stream route triggered\n\n")
+    print("\n\nOpenAI/exl2-Non-Streaming route triggered\n\n")
 
     try:
         # 1. Setup response queue for this specific request
@@ -4524,10 +4664,44 @@ def handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, t
             if token is None:   # EOS Signal
                 break
             full_response += token
+
+        # 7. Split reasoning vs visible content
+        # The below approach is a simple left-to-right parser for a single tag type, 
+        # resilient to "no more tags" (-1), and tolerant of missing close tags:
+        reasoning_blocks = []
+        visible_parts = []
+        cursor = 0  # tracks the position in full_response where we're currently reading - everything before has already been handled.
+        while True:
+            start = full_response.find('<think>', cursor)   # searches for the next opening tag after cursor - find returns the index of the match, or -1 if not found.
+            if start == -1:
+                visible_parts.append(full_response[cursor:])  # no more opening tags, so everything remaining is visible content.
+                break
+            end = full_response.find('</think>', start + len('<think>'))  # Otherwise, we look for the matching close tag
+            if end == -1:   
+                # Again, -1 means "not found." In that case we treat the rest as visible text and break (so a missing closing tag doesn't crash the loop)
+                visible_parts.append(full_response[cursor:])
+                break
+            # If both tags found:
+            if start > cursor:
+                visible_parts.append(full_response[cursor:start])   # text before think is visible content
+            # Text inside the tags is reasoning content, so we push it into reasoning_blocks:
+            thinking_text = full_response[start + len('</think>'):end]
+            if thinking_text:
+                reasoning_blocks.append({"type": "text", "text": thinking_text})
+            # Advance cursor to just after the closing tag, so the next iteration continues scanning after that block.
+            cursor = end + len('</think>')
+        visible_content = ''.join(visible_parts)
         
         print("\nOpenAI/exl2-non-streaming done\n")
         prompt_tokens = len(EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True))
         completion_tokens = len(EXL2_TOKENIZER.encode(full_response, encode_special_tokens=True))
+
+        message = {
+            "role": "assistant",
+            "content": visible_content
+        }
+        if reasoning_blocks:
+            message["reasoning_content"] = reasoning_blocks
         
         return jsonify({
             "id": f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}",
@@ -4536,10 +4710,7 @@ def handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, t
             "model": f"ExLlamaV2-{config_data['model_id']}",
             "choices": [{
                 "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": full_response
-                },
+                "message": message,
                 "finish_reason": "stop"
             }],
             "usage": {
@@ -4614,27 +4785,87 @@ def handle_exl3_streaming_openai(messages, tools, max_tokens, temperature, top_p
             }
             yield f"data: {json.dumps(role_chunk)}\n\n"
 
+            # Track thinking state
+            in_thinking_block = False
+            accumulated_text = ""
+
             while True:
                 # Block until background worker puts a token here
                 token = user_queue.get()
-
                 if token is None:   # EOS Signal
                     break
+
+                accumulated_text += token
+
+                # Check for openning thinking tag
+                if '<think>' in accumulated_text:
+                    in_thinking_block = True
+                    # Send any text before think as regular content
+                    before_think = accumulated_text.split('<think>', 1)[0]
+                    if before_think:
+                        chunk = {
+                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                            "model": f"ExLlamaV3-{config_data['model_id']}",
+                            "choices": [{"index": 0, "delta": {"content": before_think}, "finish_reason": None}]
+                        }
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                    accumulated_text = accumulated_text.split('<think>', 1)[1]
+                    continue
                 
+                # Check for closing thinking tag
+                if '</think>' in accumulated_text:
+                    # Send thinking content as reasoning_content
+                    thinking_text = accumulated_text.split('</think>', 1)[0]
+                    if thinking_text:
+                        chunk = {
+                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                            "model": f"ExLlamaV3-{config_data['model_id']}",
+                            "choices": [{"index": 0, "delta": {"reasoning_content": [{"type": "text", "text": thinking_text}]}, "finish_reason": None}]
+                        }
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                    
+                    in_thinking_block = False
+                    accumulated_text = accumulated_text.split('</think>', 1)[1]
+                    continue
+
+                # If we have any accumulated text, send it as regular content
+                if len(accumulated_text) > 0:
+                    if in_thinking_block:
+                        # Send as reasoning_content
+                        chunk = {
+                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                            "model": f"ExLlamaV3-{config_data['model_id']}",
+                            "choices": [{"index": 0, "delta": {"reasoning_content": [{"type": "text", "text": accumulated_text}]}, "finish_reason": None}]
+                        }
+                    else:
+                        # Send as regular content
+                        chunk = {
+                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
+                            "model": f"ExLlamaV3-{config_data['model_id']}",
+                            "choices": [{"index": 0, "delta": {"content": token}, "finish_reason": None}]
+                        }
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                    accumulated_text = ""
+
+            # Send any remaining text
+            if accumulated_text:
+                field = "reasoning_content" if in_thinking_block else "content"
+                content = [{"type": "text", "text": accumulated_text}] if in_thinking_block else accumulated_text
                 chunk = {
                     "id": chunk_id, "object": "chat.completion.chunk", "created": created,
                     "model": f"ExLlamaV3-{config_data['model_id']}",
-                    "choices": [{"index": 0, "delta": {"content": token}, "finish_reason": None}]
+                    "choices": [{"index": 0, "delta": {field: content}, "finish_reason": None}]
                 }
                 yield f"data: {json.dumps(chunk)}\n\n"
-            
+                accumulated_text = ""
+
+            # Send final closing chunk
             final_chunk = {
                 "id": chunk_id, "object": "chat.completion.chunk","created": created,
                 "model": f"ExLlamaV3-{config_data['model_id']}",
                 "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
             }
             yield f"data: {json.dumps(final_chunk)}\n\n"
-            
             yield "data: [DONE]\n\n"
             
             print("\nexl3-stream done\n")
@@ -4648,7 +4879,7 @@ def handle_exl3_streaming_openai(messages, tools, max_tokens, temperature, top_p
 
 def handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
     """Handle non-streaming OpenAI-compatible responses using ExLlamaV3"""
-    print("\n\nOpenAI/exl3-stream route triggered\n\n")
+    print("\n\nOpenAI/exl3-Non-Streaming route triggered\n\n")
 
     try:
         # 1. Setup response queue for this specific request
@@ -4701,9 +4932,43 @@ def handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, t
                 break
             full_response += token
 
+        # 7. Split reasoning vs visible content
+        # The below approach is a simple left-to-right parser for a single tag type, 
+        # resilient to "no more tags" (-1), and tolerant of missing close tags:
+        reasoning_blocks = []
+        visible_parts = []
+        cursor = 0  # tracks the position in full_response where we're currently reading - everything before has already been handled.
+        while True:
+            start = full_response.find('<think>', cursor)   # searches for the next opening tag after cursor - find returns the index of the match, or -1 if not found.
+            if start == -1:
+                visible_parts.append(full_response[cursor:])  # no more opening tags, so everything remaining is visible content.
+                break
+            end = full_response.find('</think>', start + len('<think>'))  # Otherwise, we look for the matching close tag
+            if end == -1:   
+                # Again, -1 means "not found." In that case we treat the rest as visible text and break (so a missing closing tag doesn't crash the loop)
+                visible_parts.append(full_response[cursor:])
+                break
+            # If both tags found:
+            if start > cursor:
+                visible_parts.append(full_response[cursor:start])   # text before think is visible content
+            # Text inside the tags is reasoning content, so we push it into reasoning_blocks:
+            thinking_text = full_response[start + len('</think>'):end]
+            if thinking_text:
+                reasoning_blocks.append({"type": "text", "text": thinking_text})
+            # Advance cursor to just after the closing tag, so the next iteration continues scanning after that block.
+            cursor = end + len('</think>')
+        visible_content = ''.join(visible_parts)
+
         print("\nOpenAI/exl3-non-streaming done\n")
         prompt_tokens = len(EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True))
         completion_tokens = len(EXL3_TOKENIZER.encode(full_response, encode_special_tokens=True))
+
+        message = {
+            "role": "assistant",
+            "content": visible_content
+        }
+        if reasoning_blocks:
+            message["reasoning_content"] = reasoning_blocks
 
         return jsonify({
             "id": f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}",
@@ -4712,10 +4977,7 @@ def handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, t
             "model": f"ExLlamaV3-{config_data['model_id']}",
             "choices": [{
                 "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": full_response
-                },
+                "message": message,
                 "finish_reason": "stop"
             }],
             "usage": {
