@@ -187,10 +187,10 @@ async def webos_pair_connect_and_power_off_async(host: str) -> dict:
     try:
         connected = await client.connect()
         if not connected:
-            return {"success": False, "message": "Failed to connect to TV."}
+            return {"success": False, "message": "Failed to connect to TV. Make sure to accept the pairing prompt on the TV!"}
 
         # If this was first-time pairing, accept the prompt on the TV.
-        # After acceptance, the client_key will be set—persist it.
+        # After acceptance, the client_key will be set, and is saved to the keys file.
         if not client_key and client.client_key:
             _save_client_key(host, client.client_key)
 

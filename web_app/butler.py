@@ -211,6 +211,7 @@ def lg_webos_tv_turn_off(ip_address: Optional[str] = None, **kwargs):
     Turns on an LG WebOS TV.
     '''
     if not ip_address:
+        print("No IP address provided, attempting to discover LG WebOS TV on the network.")
         webos_ip = lg_webos_tv_module.discover_webos_ip()
         if not webos_ip:
             return {"success": False, "message": "No LG WebOS TVs found on the network."}
@@ -316,13 +317,15 @@ def execute_tool_call(tool_name, llm_args, services_config: dict, stream_session
         service_def = services_config.get(tool_name, {})
         fields_def = service_def.get('fields', {})
 
-        # MERGE: Start with defaults, overwrite with LLM-provided args
-        final_args = {'stream_session_id': stream_session_id}
+        final_args = {}
         
         # 1. Load defaults from config (handles hardcoded IPs)
         for field_name, field_info in fields_def.items():
             if "default" in field_info:
                 final_args[field_name] = field_info["default"]
+
+        # MERGE: Start with defaults, overwrite with LLM-provided args
+        final_args['stream_session_id'] = stream_session_id
 
         # 2. Update with args the LLM actually sent
         # (e.g. LLM sends 'brightness': 50, but ignores 'mac_address')
