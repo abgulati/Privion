@@ -7,7 +7,9 @@ from falkordb import FalkorDB
 
 import subprocess
 import platform
+import requests
 import pathlib
+import json
 import time
 import re
 
@@ -217,6 +219,7 @@ def bring_perplexica_online():    # launch Perplexica Docker container
         read_return = config_manager.read_config(['assign_host_port_to_perplexica_server', 'perplexica_version'])
         assign_host_port_to_perplexica_server = read_return['assign_host_port_to_perplexica_server']
         perplexity_version = read_return['perplexica_version']
+        container_name = f'perplexica-{perplexity_version}'
     except Exception as e:
         raise Exception(f"Could not read Perplexica config when attempting to bring Perplexica Docker container online, encountered error: {e}")
 
@@ -226,33 +229,106 @@ def bring_perplexica_online():    # launch Perplexica Docker container
     except Exception as e:
         raise Exception(f"Docker Engine is not running, encountered error: {e}")
 
-    print("\nDocker Engine is running, proceeding with Perplexica Docker container launch...\n")
-
-    if utils_module.check_if_container_is_running(f'perplexica-{perplexity_version}'):
+    # Check if container is running
+    if utils_module.check_if_container_is_running(container_name):
         print("\nPerplexica Docker container is already running, skipping launch...\n")
         return True
+
+    # Check if container exists, but is stopped
+    if utils_module.check_if_container_exists(container_name):
+        print("\nPerplexica Docker container exists, but is stopped, starting it...\n")
+        try:
+            return utils_module.start_container(container_name)
+        except Exception as e:
+            raise Exception(f"Could not start Perplexica Docker container, encountered error: {e}")
+
+    # Container doesn't exist, create it
+    print("\nDocker Engine is running, proceeding with Perplexica Docker container launch...\n")
 
     command = [
         'docker', 'run', '-d', '-p', f'{assign_host_port_to_perplexica_server}:3000',
         '-v', 'perplexica-data:/home/perplexica/data',
-        '--name', f'perplexica-{perplexity_version}', f'itzcrazykns1337/perplexica:{perplexity_version}'
-    ]   # Using conditional list-unpacking with * to handle optional arguments!
+        '--name', container_name, f'itzcrazykns1337/perplexica:{perplexity_version}'
+    ]
 
     try:
-        subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE) if platform.system() == 'Windows' else subprocess.Popen(command, shell=True)
-        # # Check if the container is running
-        # container_name = 'perplexica'
-        # timeout = 2
-        # attempts = 50
-        # for _ in range(attempts):
-        #     if utils_module.check_if_container_is_running(container_name):
-        #         print(f"\nPerplexica Docker container launched successfully!\n")
-        #         return True
-        #     else:
-        #         print(f"\n\nPerplexica Docker container not yet running, waiting {timeout} seconds before retrying...\n\n")
-        #         time.sleep(timeout)
-
+        if platform.system() == 'Windows':
+            subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        else:
+            subprocess.Popen(command, shell=True)
+        
+        print(f"\nPerplexica Docker container launched successfully!\n")
+        return True
+        
     except Exception as e:
         raise Exception(f"Could not launch Perplexica Docker container, encountered error: {e}")
 
-    return True
+
+def get_perplexica_providers():
+    print("\nGetting Perplexica Providers\n")
+    try:
+        port = config_manager.read_config(['assign_host_port_to_perplexica_server'])['assign_host_port_to_perplexica_server']
+
+        url = f'http://localhost:{port}/api/providers'
+        payload = {}
+        headers = {}
+
+        response = requests.request("GET", url, headers=headers, data=payload)
+        response.raise_for_status()
+        full_response = response.json()
+
+        provider_ids = {}
+        for provider in full_response['providers']:
+            if provider['name'] == 'Transformers':
+                provider_ids['embeddingModel'] = provider['id']
+            if provider['name'] == 'HF-Waitress':
+                provider_ids['chatModel'] = provider['id']
+
+        return provider_ids
+
+    except Exception as e:
+        raise Exception(f"Could not get Perplexica Providers, encountered error: {e}")
+
+
+def perplexica_search(query:str, history:list) -> str:
+    print("\nPerforming Perplexica Search\n")
+
+    try:
+        config = config_manager.read_config([
+            'assign_host_port_to_perplexica_server', 
+            'perplexica_embedding_model', 'perplexica_optimization_mode', 
+            'perplexica_sources', 'perplexica_include_history', 
+            'perplexica_system_instructions'
+        ])
+        port = config['assign_host_port_to_perplexica_server']
+
+        provider_ids = get_perplexica_providers()
+        
+        url = f'http://localhost:{port}/api/search'
+
+        payload = json.dumps({
+            "chatModel": {
+                "providerId": provider_ids['chatModel'],
+                "key": "exl3"
+            },
+            "embeddingModel": {
+                "providerId": provider_ids['embeddingModel'],
+                "key": "Xenova/all-MiniLM-L6-v2"
+            },
+            "optimizationMode": config['perplexica_optimization_mode'],
+            "sources": config['perplexica_sources'],
+            "query": query,
+            "history": history if config['perplexica_include_history'] and history else [],
+            "systemInstructions": config['perplexica_system_instructions'],
+            "stream": False
+        })
+        headers = {
+        'Content-Type': 'application/json'
+        }
+
+        response = requests.request("POST", url, headers=headers, data=payload)
+
+        print(response.text)
+
+    except Exception as e:
+        raise Exception(f"Could not perform Perplexica Search, encountered error: {e}")

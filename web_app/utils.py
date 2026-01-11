@@ -135,6 +135,43 @@ def check_if_container_is_running(container_name:str) -> bool:
         return False
 
 
+def check_if_container_exists(container_name:str) -> bool:
+    '''
+    Check if container exists (running or stopped) and return the ID if so.
+    Use this to check for already existing containers, because `docker run` will throw a silent conflict error 
+    if attempting to start a containe rwith the name of an already existing container, even if it's stopped.
+    '''
+
+    try:
+        result = subprocess.run(
+            ['docker', 'ps', '-a', '--filter', f'name={container_name}' , '--format', '{{.Names}}'], # get container ID
+            capture_output=True,    # captures the command's output and error, while suppressing the print to the terminal
+            text=True,  # Get output as string and not bytes
+            check=True
+        )
+        containers = result.stdout.strip().split('\n')
+        return container_name in containers
+    except Exception as e:
+        print(f"Could not check if {container_name} Docker container exists, encountered error: {e}")
+        return False
+
+
+def start_container(container_name:str) -> bool:
+    '''Start an existing container by name.'''
+    try:
+        print(f"\nStarting existing Docker container '{container_name}'...\n")
+        result = subprocess.run(
+            ['docker', 'start', container_name],
+            capture_output=True,    # captures the command's output and error, while suppressing the print to the terminal
+            text=True,  # Get output as string and not bytes
+            check=True
+        )
+        print(f"\nDocker container '{container_name}' successfully started\n")
+        return True
+    except Exception as e:
+        raise Exception(f"Could not start {container_name} Docker container, encountered error: {e}")
+
+
 def get_url_for_server(server_to_check):
     if server_to_check == 'llama-cpp':
         try:
