@@ -80,6 +80,7 @@ import sys
 import ast
 import os
 import io
+import re
 
 from functools import wraps
 from logging.handlers import RotatingFileHandler
@@ -2899,6 +2900,106 @@ def inference_with_vision_model(request):
     return inference_output
 
 
+def extract_tool_calls_from_response(full_response_text:str) -> list[dict]:
+    try:
+        print("\n--- Starting tool parsing ---")
+
+        tool_calls = []
+        content = full_response_text
+
+        # 1. Regex to find ALL occurrences of <tool_call>...</tool_call>
+        # re.DOTALL ensures '.' matches newlines
+        tool_regex = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL)
+
+        for match in tool_regex.finditer(full_response_text):
+            raw_tool_content = match.group(1).strip()
+
+            tool_name = None
+            tool_args = {}
+            parse_success = False
+
+            # --- STRATEGY A: Standard JSON ---
+            if raw_tool_content.startswith("{") or raw_tool_content.startswith("["):
+                try:
+                    json_data = json.loads(raw_tool_content)
+
+                    # Handle case where the content is a LIST of tools inside one tag
+                    if isinstance(json_data, list):
+                        for item in json_data:
+                            tool_calls.append({
+                                'id': 'call_' + str(uuid.uuid4())[:8],
+                                'type': 'function',
+                                'function': {
+                                    'name': item.get("name"),
+                                    'arguments': json.dumps(item.get("arguments", {}))
+                                }
+                            })
+                        parse_success = True # We handled it, skip to next match
+                        continue 
+
+                    # Handle single JSON object
+                    else:
+                        tool_name = json_data.get('name')
+                        tool_args = json_data.get('arguments', {})
+
+                        tool_calls.append({
+                            'id': 'call_' + str(uuid.uuid4())[:8],
+                            'type': 'function',
+                            'function': {
+                                'name': tool_name,
+                                'arguments': json.dumps(tool_args)
+                            }
+                        })
+                        parse_success = True
+                except json.JSONDecodeError:
+                    print("Tool content looked like JSON but failed to parse.")
+                    pass # Fall through to Strategy B
+            
+            # --- STRATEGY B: Custom XML (<function=name>...) ---
+            if not parse_success:
+                try:
+                    # We use finditer here too, in case there are multiple <function> tags inside one <tool_call>
+                    function_regex = re.compile(r"<function=(.*?)>(.*?)</function>", re.DOTALL)
+                    
+                    found_functions = list(function_regex.finditer(raw_tool_content))
+
+                    if found_functions:
+                        for func_match in found_functions:
+                            t_name = func_match.group(1).strip()
+                            t_body = func_match.group(2).strip()
+                            t_args = {}
+                            
+                            # Extract parameters
+                            param_matches = re.findall(r"<parameter=(.*?)>(.*?)</parameter>", t_body, re.DOTALL)
+                            for p_key, p_val in param_matches:
+                                t_args[p_key.strip()] = p_val.strip()
+
+                            # Add to list immediately
+                            tool_calls.append({
+                                'id': 'call_' + str(uuid.uuid4())[:8],
+                                'type': 'function',
+                                'function': {
+                                    'name': t_name,
+                                    'arguments': json.dumps(t_args)
+                                }
+                            })
+                        parse_success = True
+                except Exception as e:
+                    print(f"Failed to parse custom XML format: {e}")
+
+        # Remove ALL <tool_call> blocks from the text shown to the user
+        content = tool_regex.sub('', full_response_text).strip()
+
+        # Return standardized dict
+        result = {'role': 'assistant', 'content': content}
+        if tool_calls:
+            result['tool_calls'] = tool_calls
+
+        return result
+    except Exception as e:
+        raise Exception(f"Failed to extract tool calls from response, encountered error: {e}")
+
+
 def auto_tokenizer_apply_chat_template(
         conversation: Union[list[dict[str, str]], list[list[dict[str, str]]]],
         tools: Optional[list[Union[dict, Callable]]] = None,
@@ -4223,6 +4324,330 @@ def exl3_fim_stream():
 
 ###################################-------------OpenAI Compatible API-------------###################################
 
+
+def init_stream_with_role_chunk(backend: str, model_id: str) -> tuple[dict, int, str]:
+
+    # created and chunk_id must be reused throughout the entire stream for a given request.
+    created = int(time.time())
+    chunk_id = f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}"
+
+    # OpenAI streaming format - Send Role Chunk First - Expected by strict OpenAI clients in streaming mode!
+    role_chunk = {
+        "id": chunk_id,
+        "object": "chat.completion.chunk",
+        "created": created,
+        "model": f"{backend}-{model_id}",
+        "system_fingerprint": None,
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "role": "assistant",
+                    "content": ""
+                },
+                "logprobs": None,
+                "finish_reason": None
+            }
+        ]
+    }
+
+    return chunk_id, created, role_chunk
+
+
+def get_openai_reasoning_content_chunk(
+    chunk_id: str,
+    created: int,
+    backend: str,
+    model_id: str,
+    text: str
+) -> dict:
+    
+    return {
+        "id": chunk_id,
+        "object": "chat.completion.chunk",
+        "created": created,
+        "model": f"{backend}-{model_id}",
+        "system_fingerprint": None,
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "reasoning_content": [
+                        {
+                            "type": "text",
+                            "text": text
+                        }
+                    ],
+                },
+                "logprobs": None,
+                "finish_reason": None
+            }
+        ]
+    }
+
+
+def get_openai_content_chunk(
+    chunk_id: str,
+    created: int,
+    backend: str,
+    model_id: str,
+    text: str
+) -> dict:
+
+    return {
+        "id": chunk_id,
+        "object": "chat.completion.chunk",
+        "created": created,
+        "model": f"{backend}-{model_id}",
+        "system_fingerprint": None,
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "content": text
+                },
+                "logprobs": None,
+                "finish_reason": None
+            }
+        ]
+    }
+
+
+def get_openai_tool_calls_chunk(
+    chunk_id: str,
+    created: int,
+    backend: str,
+    model_id: str,
+    tool_calls: list[dict]
+) -> dict:
+
+    return {
+        "id": chunk_id,
+        "object": "chat.completion.chunk",
+        "created": created,
+        "model": f"{backend}-{model_id}",
+        "system_fingerprint": None,
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "tool_calls": tool_calls
+                },
+                "logprobs": None,
+                "finish_reason": None
+            }
+        ]
+    }
+
+
+def get_openai_stop_chunk(
+    chunk_id: str,
+    created: int,
+    backend: str,
+    model_id: str
+) -> dict:
+
+    return {
+        "id": chunk_id,
+        "object": "chat.completion.chunk",
+        "created": created,
+        "model": f"{backend}-{model_id}",
+        "system_fingerprint": None,
+        "choices": [
+            {
+                "index": 0,
+                "delta": {},
+                "logprobs": None,
+                "finish_reason": "stop"
+            }
+        ]
+    }
+
+
+def generate_openai_stream_chunks(user_queue: queue.Queue, chunk_id: str, created: int, backend: str, model_id: str):
+    """
+    Generator that consumes tokens from a queue and yields OpenAI-compatible SSE chunks.
+    Handles thinking blocks, tool call suppression, and final tool parsing.
+    Centralizes logic for the various backends of HF-Waitress.
+
+    'yield' is fundamentally different from 'return' in that it does not simply terminate the function, but rather, 
+    pauses to yield a value to the caller, and the function can continue executing after the yield statement.
+    """
+
+    # Initialize State
+    in_thinking_block = False
+    in_tool_block = False
+    accumulated_text = ""
+    full_response_text = ""
+
+    while True:
+
+        token = user_queue.get()
+        if token is None:   # EOS Signal
+            break
+
+        accumulated_text += token   # Only accumulates what hasn't been streamed yet!
+        full_response_text += token
+
+        # --- Tool Call Suppression Logic ---
+        # 1. Check for opening tool tag
+        if '<tool_call>' in accumulated_text and not in_tool_block:
+            
+            in_tool_block = True
+            before_tool = accumulated_text.split('<tool_call>', 1)[0]
+
+            if before_tool: # Send any text before tag as reasoning_content or content
+                if in_thinking_block:
+                    chunk = get_openai_reasoning_content_chunk(chunk_id, created, backend, model_id, before_tool)
+                else:
+                    chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, before_tool)
+                yield f"data: {json.dumps(chunk)}\n\n"
+            
+            accumulated_text = accumulated_text.split('<tool_call>', 1)[1]
+            continue
+
+        # 2. Handle being inside a tool block
+        if in_tool_block:
+            if '</tool_call>' in accumulated_text:
+                in_tool_block = False
+                accumulated_text = accumulated_text.split('</tool_call>', 1)[1]     # Swallow the content + closing tag.
+                continue
+            else:
+                continue    # Not clearing accumulated_text incase `... content ... </tool (chunk 1) -> _call> (chunk 2)` !
+        
+        # --- Thinking Block Logic ---
+        # 3. Check for opening thinking tag
+        if '<think>' in accumulated_text:
+            
+            in_thinking_block = True
+            before_think = accumulated_text.split('<think>', 1)[0]
+            if before_think:    # Send any text before think as regular content
+                chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, before_think)
+                yield f"data: {json.dumps(chunk)}\n\n"
+            accumulated_text = accumulated_text.split('<think>', 1)[1]
+            continue
+        
+        # Check for closing thinking tag
+        if '</think>' in accumulated_text:
+            # Send thinking content as reasoning_content
+            thinking_text = accumulated_text.split('</think>', 1)[0]
+            if thinking_text:
+                chunk = get_openai_reasoning_content_chunk(chunk_id, created, backend, model_id, thinking_text)
+                yield f"data: {json.dumps(chunk)}\n\n"
+            in_thinking_block = False
+            accumulated_text = accumulated_text.split('</think>', 1)[1]
+            continue
+
+        # If we have any accumulated text, send it as regular content
+        if len(accumulated_text) > 0:
+            if in_thinking_block:
+                chunk = get_openai_reasoning_content_chunk(chunk_id, created, backend, model_id, accumulated_text)
+            else:
+                chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, accumulated_text)
+            yield f"data: {json.dumps(chunk)}\n\n"
+            accumulated_text = ""
+
+    # Send any remaining text
+    if accumulated_text and not in_tool_block:
+        if in_thinking_block:
+            chunk = get_openai_reasoning_content_chunk(chunk_id, created, backend, model_id, accumulated_text)
+        else:
+            chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, accumulated_text)
+        yield f"data: {json.dumps(chunk)}\n\n"
+        accumulated_text = ""
+    
+    # Parse tool calls from full response text before sending final chunk
+    tool_parsing_result = extract_tool_calls_from_response(full_response_text)
+    tool_calls = tool_parsing_result.get('tool_calls', None)
+
+    if tool_calls:
+        
+        for i, tool in enumerate(tool_calls):
+            tool['index'] = i   # OpenAI Stream Spec requires an 'index' for each tool call
+
+        tool_calls_chunk = get_openai_tool_calls_chunk(chunk_id, created, backend, model_id, tool_calls)
+        yield f"data: {json.dumps(tool_calls_chunk)}\n\n"
+
+    # Send final closing chunk
+    final_chunk = get_openai_stop_chunk(chunk_id, created, backend, model_id)
+    yield f"data: {json.dumps(final_chunk)}\n\n"
+    yield "data: [DONE]\n\n"
+
+
+def generate_openai_non_streaming_response(
+    model_id: str,
+    backend: str,
+    full_response: str,
+    prompt_token_usage: int,
+    completion_token_usage: int
+) -> dict:
+    
+    # Split reasoning vs visible content
+    # The below approach is a simple left-to-right parser for a single tag type, 
+    # resilient to "no more tags" (-1), and tolerant of missing close tags:
+    reasoning_blocks = []
+    visible_parts = []
+    cursor = 0  # tracks the position in full_response where we're currently reading - everything before has already been handled.
+    while True:
+        start = full_response.find('<think>', cursor)   # searches for the next opening tag after cursor - find returns the index of the match, or -1 if not found.
+        if start == -1:
+            visible_parts.append(full_response[cursor:])  # no more opening tags, so everything remaining is visible content.
+            break
+        end = full_response.find('</think>', start + len('<think>'))  # Otherwise, we look for the matching close tag
+        if end == -1:   
+            # Again, -1 means "not found." In that case we treat the rest as visible text and break (so a missing closing tag doesn't crash the loop)
+            visible_parts.append(full_response[cursor:])
+            break
+        # If both tags found:
+        if start > cursor:
+            visible_parts.append(full_response[cursor:start])   # text before think is visible content
+        # Text inside the tags is reasoning content, so we push it into reasoning_blocks:
+        thinking_text = full_response[start + len('<think>'):end]
+        if thinking_text:
+            reasoning_blocks.append({"type": "text", "text": thinking_text})
+        # Advance cursor to just after the closing tag, so the next iteration continues scanning after that block.
+        cursor = end + len('</think>')
+    visible_content = ''.join(visible_parts)
+
+    # Parse tool calls
+    tool_parsing_result = extract_tool_calls_from_response(visible_content)
+
+    # ALWAYS use the cleaned content (tags stripped)
+    final_content = tool_parsing_result.get('content', visible_content)
+    tool_calls = tool_parsing_result.get('tool_calls', None)
+
+    message = {
+        "role": "assistant",
+        "content": final_content
+    }
+
+    # Add tool_calls to the response if they were found
+    if tool_calls:
+        message["tool_calls"] = tool_calls
+    
+    if reasoning_blocks:
+        message["reasoning_content"] = reasoning_blocks
+
+    return jsonify({
+        "id": f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": f"{backend}-{model_id}",
+        "system_fingerprint": None,
+        "choices": [{
+            "index": 0,
+            "message": message,
+            "logprobs": None,  # ADD THIS
+            "finish_reason": "stop"
+        }],
+        "usage": {
+            "prompt_tokens": prompt_token_usage,
+            "completion_tokens": completion_token_usage,
+            "total_tokens": prompt_token_usage + completion_token_usage
+        }
+    })
+
+
 def handle_transformers_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop):
     """Handle streaming OpenAI-compatible responses using Transformers"""
     
@@ -4283,109 +4708,20 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
             yield f"data: {json.dumps({'error': {'message': str(e), 'type': 'server_error'}})}\n\n"
             return
         
-        # OpenAI streaming format
-        created = int(time.time())
-        chunk_id = f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}"
-
-        # Send First Chunk - Role Chunk - Expected by strict OpenAI clients in streaming mode!
-        role_chunk = {
-            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-            "model": f"Transformers-{read_return['model_id']}",
-            "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]
-        }
+        chunk_id, created, role_chunk = init_stream_with_role_chunk("Transformers", read_return['model_id'])
         yield f"data: {json.dumps(role_chunk)}\n\n"
 
-        # Track thinking state
-        in_thinking_block = False
-        accumulated_text = ""
-
-        while True:
-            if STOP_GENERATION:
-                stop_event.set()
-                thread.join()
-                break
-            
-            token = data_queue.get()
-            if token is None:
-                thread.join()
-                break
-            
-            accumulated_text += token
-
-            # Check for openning thinking tag
-            if '<think>' in accumulated_text:
-                in_thinking_block = True
-                # Send any text before think as regular content
-                before_think = accumulated_text.split('<think>', 1)[0]
-                if before_think:
-                    chunk = {
-                        "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                        "model": f"Transformers-{read_return['model_id']}",
-                        "choices": [{"index": 0, "delta": {"content": before_think}, "finish_reason": None}]
-                    }
-                    yield f"data: {json.dumps(chunk)}\n\n"
-                accumulated_text = accumulated_text.split('<think>', 1)[1]
-                continue
-            
-            # Check for closing thinking tag
-            if '</think>' in accumulated_text:
-                # Send thinking content as reasoning_content
-                thinking_text = accumulated_text.split('</think>', 1)[0]
-                if thinking_text:
-                    chunk = {
-                        "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                        "model": f"Transformers-{read_return['model_id']}",
-                        "choices": [{"index": 0, "delta": {"reasoning_content": [{"type": "text", "text": thinking_text}]}, "finish_reason": None}]
-                    }
-                    yield f"data: {json.dumps(chunk)}\n\n"
-                
-                in_thinking_block = False
-                accumulated_text = accumulated_text.split('</think>', 1)[1]
-                continue
-
-            # If we have any accumulated text, send it as regular content
-            if len(accumulated_text) > 0:
-                if in_thinking_block:
-                    # Send as reasoning_content
-                    chunk = {
-                        "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                        "model": f"Transformers-{read_return['model_id']}",
-                        "choices": [{"index": 0, "delta": {"reasoning_content": [{"type": "text", "text": accumulated_text}]}, "finish_reason": None}]
-                    }
-                else:
-                    # Send as regular content
-                    chunk = {
-                        "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                        "model": f"Transformers-{read_return['model_id']}",
-                        "choices": [{"index": 0, "delta": {"content": token}, "finish_reason": None}]
-                    }
-                yield f"data: {json.dumps(chunk)}\n\n"
-                accumulated_text = ""
-
-        # Send any remaining text
-        if accumulated_text:
-            field = "reasoning_content" if in_thinking_block else "content"
-            content = [{"type": "text", "text": accumulated_text}] if in_thinking_block else accumulated_text
-            chunk = {
-                "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                "model": f"Transformers-{read_return['model_id']}",
-                "choices": [{"index": 0, "delta": {field: content}, "finish_reason": None}]
-            }
-            yield f"data: {json.dumps(chunk)}\n\n"
-            accumulated_text = ""
-        
-        # Send final closing chunk
-        final_chunk = {
-            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-            "model": f"Transformers-{read_return['model_id']}",
-            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
-        }
-        yield f"data: {json.dumps(final_chunk)}\n\n"
-        yield "data: [DONE]\n\n"
+        yield from generate_openai_stream_chunks(
+            user_queue=data_queue,
+            chunk_id=chunk_id,
+            created=created,
+            backend="Transformers",
+            model_id=read_return['model_id']
+        )
 
         STOP_GENERATION = False
 
-        print("\nOpenAI/completions_stream done\n")
+        print("\nOpenAI/transformers-completions-stream done\n")
             
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
@@ -4418,60 +4754,17 @@ def handle_transformers_non_streaming_openai(messages, tools, max_tokens, temper
             decoded_output = AUTO_TOKENIZER.decode(output[0][input_length:], skip_special_tokens=True)
             inference_output = decoded_output
 
-            # 7. Split reasoning vs visible content
-            # The below approach is a simple left-to-right parser for a single tag type, 
-            # resilient to "no more tags" (-1), and tolerant of missing close tags:
-            reasoning_blocks = []
-            visible_parts = []
-            cursor = 0  # tracks the position in full_response where we're currently reading - everything before has already been handled.
-            while True:
-                start = inference_output.find('<think>', cursor)   # searches for the next opening tag after cursor - find returns the index of the match, or -1 if not found.
-                if start == -1:
-                    visible_parts.append(inference_output[cursor:])  # no more opening tags, so everything remaining is visible content.
-                    break
-                end = inference_output.find('</think>', start + len('<think>'))  # Otherwise, we look for the matching close tag
-                if end == -1:   
-                    # Again, -1 means "not found." In that case we treat the rest as visible text and break (so a missing closing tag doesn't crash the loop)
-                    visible_parts.append(inference_output[cursor:])
-                    break
-                # If both tags found:
-                if start > cursor:
-                    visible_parts.append(inference_output[cursor:start])   # text before think is visible content
-                # Text inside the tags is reasoning content, so we push it into reasoning_blocks:
-                thinking_text = inference_output[start + len('</think>'):end]
-                if thinking_text:
-                    reasoning_blocks.append({"type": "text", "text": thinking_text})
-                # Advance cursor to just after the closing tag, so the next iteration continues scanning after that block.
-                cursor = end + len('</think>')
-            visible_content = ''.join(visible_parts)
-        
-            print("\nOpenAI/completions done\n")
+            print("\nOpenAI/transformers-completions-non-streaming done\n")
             prompt_tokens = len(inputs['input_ids'][0])
             completion_tokens = len(AUTO_TOKENIZER.encode(inference_output))
 
-            message = {
-                "role": "assistant",
-                "content": visible_content
-            }
-            if reasoning_blocks:
-                message["reasoning_content"] = reasoning_blocks
-
-            return jsonify({
-                "id": f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}",
-                "object": "chat.completion",
-                "created": int(time.time()),
-                "model": f"Transformers-{read_return['model_id']}",
-                "choices": [{
-                    "index": 0,
-                    "message": message,
-                    "finish_reason": "stop"
-                }],
-                "usage": {
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "total_tokens": prompt_tokens + completion_tokens
-                }
-            })
+            return generate_openai_non_streaming_response(
+                model_id=read_return['model_id'],
+                backend="Transformers",
+                full_response=inference_output, 
+                prompt_token_usage=prompt_tokens,
+                completion_token_usage=completion_tokens
+            )
         
         except Exception as e:
             return jsonify(error={"message": str(e), "type": "server_error"}), 500
@@ -4517,99 +4810,16 @@ def handle_exl2_streaming_openai(messages, tools, max_tokens, temperature, top_p
         # 6. Streaming Response Generator
         def generate():
             
-            # OpenAI streaming format - Send Role Chunk First - Expected by strict OpenAI clients in streaming mode!
-            created = int(time.time())
-            chunk_id = f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}"
-
-            role_chunk = {
-                "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                "model": f"ExLlamaV2-{config_data['model_id']}",
-                "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]
-            }
+            chunk_id, created, role_chunk = init_stream_with_role_chunk("ExLlamaV2", config_data['model_id'])
             yield f"data: {json.dumps(role_chunk)}\n\n"
 
-            # Track thinking state
-            in_thinking_block = False
-            accumulated_text = ""
-
-            while True:
-                # Block until background worker puts a token here
-                token = user_queue.get()
-                if token is None:   # EOS Signal
-                    break
-
-                accumulated_text += token
-
-                # Check for openning thinking tag
-                if '<think>' in accumulated_text:
-                    in_thinking_block = True
-                    # Send any text before think as regular content
-                    before_think = accumulated_text.split('<think>', 1)[0]
-                    if before_think:
-                        chunk = {
-                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                            "model": f"ExLlamaV2-{config_data['model_id']}",
-                            "choices": [{"index": 0, "delta": {"content": before_think}, "finish_reason": None}]
-                        }
-                        yield f"data: {json.dumps(chunk)}\n\n"
-                    accumulated_text = accumulated_text.split('<think>', 1)[1]
-                    continue
-                
-                # Check for closing thinking tag
-                if '</think>' in accumulated_text:
-                    # Send thinking content as reasoning_content
-                    thinking_text = accumulated_text.split('</think>', 1)[0]
-                    if thinking_text:
-                        chunk = {
-                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                            "model": f"ExLlamaV2-{config_data['model_id']}",
-                            "choices": [{"index": 0, "delta": {"reasoning_content": [{"type": "text", "text": thinking_text}]}, "finish_reason": None}]
-                        }
-                        yield f"data: {json.dumps(chunk)}\n\n"
-                    
-                    in_thinking_block = False
-                    accumulated_text = accumulated_text.split('</think>', 1)[1]
-                    continue
-
-                # If we have any accumulated text, send it as regular content
-                if len(accumulated_text) > 0:
-                    if in_thinking_block:
-                        # Send as reasoning_content
-                        chunk = {
-                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                            "model": f"ExLlamaV2-{config_data['model_id']}",
-                            "choices": [{"index": 0, "delta": {"reasoning_content": [{"type": "text", "text": accumulated_text}]}, "finish_reason": None}]
-                        }
-                    else:
-                        # Send as regular content
-                        chunk = {
-                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                            "model": f"ExLlamaV2-{config_data['model_id']}",
-                            "choices": [{"index": 0, "delta": {"content": token}, "finish_reason": None}]
-                        }
-                    yield f"data: {json.dumps(chunk)}\n\n"
-                    accumulated_text = ""
-
-            # Send any remaining text
-            if accumulated_text:
-                field = "reasoning_content" if in_thinking_block else "content"
-                content = [{"type": "text", "text": accumulated_text}] if in_thinking_block else accumulated_text
-                chunk = {
-                    "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                    "model": f"ExLlamaV2-{config_data['model_id']}",
-                    "choices": [{"index": 0, "delta": {field: content}, "finish_reason": None}]
-                }
-                yield f"data: {json.dumps(chunk)}\n\n"
-                accumulated_text = ""
-            
-            # Send final closing chunk
-            final_chunk = {
-                "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                "model": f"ExLlamaV2-{config_data['model_id']}",
-                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
-            }
-            yield f"data: {json.dumps(final_chunk)}\n\n"
-            yield "data: [DONE]\n\n"
+            yield from generate_openai_stream_chunks(
+                user_queue=user_queue,
+                chunk_id=chunk_id,
+                created=created,
+                backend="ExLlamaV2",
+                model_id=config_data['model_id']
+            )
             
             print("\nOpenAI/exl2-stream done\n")
 
@@ -4665,60 +4875,17 @@ def handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, t
                 break
             full_response += token
 
-        # 7. Split reasoning vs visible content
-        # The below approach is a simple left-to-right parser for a single tag type, 
-        # resilient to "no more tags" (-1), and tolerant of missing close tags:
-        reasoning_blocks = []
-        visible_parts = []
-        cursor = 0  # tracks the position in full_response where we're currently reading - everything before has already been handled.
-        while True:
-            start = full_response.find('<think>', cursor)   # searches for the next opening tag after cursor - find returns the index of the match, or -1 if not found.
-            if start == -1:
-                visible_parts.append(full_response[cursor:])  # no more opening tags, so everything remaining is visible content.
-                break
-            end = full_response.find('</think>', start + len('<think>'))  # Otherwise, we look for the matching close tag
-            if end == -1:   
-                # Again, -1 means "not found." In that case we treat the rest as visible text and break (so a missing closing tag doesn't crash the loop)
-                visible_parts.append(full_response[cursor:])
-                break
-            # If both tags found:
-            if start > cursor:
-                visible_parts.append(full_response[cursor:start])   # text before think is visible content
-            # Text inside the tags is reasoning content, so we push it into reasoning_blocks:
-            thinking_text = full_response[start + len('</think>'):end]
-            if thinking_text:
-                reasoning_blocks.append({"type": "text", "text": thinking_text})
-            # Advance cursor to just after the closing tag, so the next iteration continues scanning after that block.
-            cursor = end + len('</think>')
-        visible_content = ''.join(visible_parts)
-        
         print("\nOpenAI/exl2-non-streaming done\n")
         prompt_tokens = len(EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True))
         completion_tokens = len(EXL2_TOKENIZER.encode(full_response, encode_special_tokens=True))
 
-        message = {
-            "role": "assistant",
-            "content": visible_content
-        }
-        if reasoning_blocks:
-            message["reasoning_content"] = reasoning_blocks
-        
-        return jsonify({
-            "id": f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}",
-            "object": "chat.completion",
-            "created": int(time.time()),
-            "model": f"ExLlamaV2-{config_data['model_id']}",
-            "choices": [{
-                "index": 0,
-                "message": message,
-                "finish_reason": "stop"
-            }],
-            "usage": {
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "total_tokens": prompt_tokens + completion_tokens
-            }
-        })
+        return generate_openai_non_streaming_response(
+            model_id=config_data['model_id'],
+            backend="ExLlamaV2",
+            full_response=full_response, 
+            prompt_token_usage=prompt_tokens,
+            completion_token_usage=completion_tokens
+        )
 
     except Exception as e:
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
@@ -4774,99 +4941,16 @@ def handle_exl3_streaming_openai(messages, tools, max_tokens, temperature, top_p
         # 6. Streaming Response Generator
         def generate():
             
-            # OpenAI streaming format - Send Role Chunk First - Expected by strict OpenAI clients in streaming mode!
-            created = int(time.time())
-            chunk_id = f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}"
-
-            role_chunk = {
-                "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                "model": f"ExLlamaV3-{config_data['model_id']}",
-                "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]
-            }
+            chunk_id, created, role_chunk = init_stream_with_role_chunk("ExLlamaV3", config_data['model_id'])
             yield f"data: {json.dumps(role_chunk)}\n\n"
 
-            # Track thinking state
-            in_thinking_block = False
-            accumulated_text = ""
-
-            while True:
-                # Block until background worker puts a token here
-                token = user_queue.get()
-                if token is None:   # EOS Signal
-                    break
-
-                accumulated_text += token
-
-                # Check for openning thinking tag
-                if '<think>' in accumulated_text:
-                    in_thinking_block = True
-                    # Send any text before think as regular content
-                    before_think = accumulated_text.split('<think>', 1)[0]
-                    if before_think:
-                        chunk = {
-                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                            "model": f"ExLlamaV3-{config_data['model_id']}",
-                            "choices": [{"index": 0, "delta": {"content": before_think}, "finish_reason": None}]
-                        }
-                        yield f"data: {json.dumps(chunk)}\n\n"
-                    accumulated_text = accumulated_text.split('<think>', 1)[1]
-                    continue
-                
-                # Check for closing thinking tag
-                if '</think>' in accumulated_text:
-                    # Send thinking content as reasoning_content
-                    thinking_text = accumulated_text.split('</think>', 1)[0]
-                    if thinking_text:
-                        chunk = {
-                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                            "model": f"ExLlamaV3-{config_data['model_id']}",
-                            "choices": [{"index": 0, "delta": {"reasoning_content": [{"type": "text", "text": thinking_text}]}, "finish_reason": None}]
-                        }
-                        yield f"data: {json.dumps(chunk)}\n\n"
-                    
-                    in_thinking_block = False
-                    accumulated_text = accumulated_text.split('</think>', 1)[1]
-                    continue
-
-                # If we have any accumulated text, send it as regular content
-                if len(accumulated_text) > 0:
-                    if in_thinking_block:
-                        # Send as reasoning_content
-                        chunk = {
-                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                            "model": f"ExLlamaV3-{config_data['model_id']}",
-                            "choices": [{"index": 0, "delta": {"reasoning_content": [{"type": "text", "text": accumulated_text}]}, "finish_reason": None}]
-                        }
-                    else:
-                        # Send as regular content
-                        chunk = {
-                            "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                            "model": f"ExLlamaV3-{config_data['model_id']}",
-                            "choices": [{"index": 0, "delta": {"content": token}, "finish_reason": None}]
-                        }
-                    yield f"data: {json.dumps(chunk)}\n\n"
-                    accumulated_text = ""
-
-            # Send any remaining text
-            if accumulated_text:
-                field = "reasoning_content" if in_thinking_block else "content"
-                content = [{"type": "text", "text": accumulated_text}] if in_thinking_block else accumulated_text
-                chunk = {
-                    "id": chunk_id, "object": "chat.completion.chunk", "created": created,
-                    "model": f"ExLlamaV3-{config_data['model_id']}",
-                    "choices": [{"index": 0, "delta": {field: content}, "finish_reason": None}]
-                }
-                yield f"data: {json.dumps(chunk)}\n\n"
-                accumulated_text = ""
-
-            # Send final closing chunk
-            final_chunk = {
-                "id": chunk_id, "object": "chat.completion.chunk","created": created,
-                "model": f"ExLlamaV3-{config_data['model_id']}",
-                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
-            }
-            yield f"data: {json.dumps(final_chunk)}\n\n"
-            yield "data: [DONE]\n\n"
+            yield from generate_openai_stream_chunks(
+                user_queue=user_queue,
+                chunk_id=chunk_id,
+                created=created,
+                backend="ExLlamaV3",
+                model_id=config_data['model_id']
+            )
             
             print("\nexl3-stream done\n")
 
@@ -4931,61 +5015,18 @@ def handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, t
             if token is None:   # EOS Signal
                 break
             full_response += token
-
-        # 7. Split reasoning vs visible content
-        # The below approach is a simple left-to-right parser for a single tag type, 
-        # resilient to "no more tags" (-1), and tolerant of missing close tags:
-        reasoning_blocks = []
-        visible_parts = []
-        cursor = 0  # tracks the position in full_response where we're currently reading - everything before has already been handled.
-        while True:
-            start = full_response.find('<think>', cursor)   # searches for the next opening tag after cursor - find returns the index of the match, or -1 if not found.
-            if start == -1:
-                visible_parts.append(full_response[cursor:])  # no more opening tags, so everything remaining is visible content.
-                break
-            end = full_response.find('</think>', start + len('<think>'))  # Otherwise, we look for the matching close tag
-            if end == -1:   
-                # Again, -1 means "not found." In that case we treat the rest as visible text and break (so a missing closing tag doesn't crash the loop)
-                visible_parts.append(full_response[cursor:])
-                break
-            # If both tags found:
-            if start > cursor:
-                visible_parts.append(full_response[cursor:start])   # text before think is visible content
-            # Text inside the tags is reasoning content, so we push it into reasoning_blocks:
-            thinking_text = full_response[start + len('</think>'):end]
-            if thinking_text:
-                reasoning_blocks.append({"type": "text", "text": thinking_text})
-            # Advance cursor to just after the closing tag, so the next iteration continues scanning after that block.
-            cursor = end + len('</think>')
-        visible_content = ''.join(visible_parts)
-
+        
         print("\nOpenAI/exl3-non-streaming done\n")
         prompt_tokens = len(EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True))
         completion_tokens = len(EXL3_TOKENIZER.encode(full_response, encode_special_tokens=True))
-
-        message = {
-            "role": "assistant",
-            "content": visible_content
-        }
-        if reasoning_blocks:
-            message["reasoning_content"] = reasoning_blocks
-
-        return jsonify({
-            "id": f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}",
-            "object": "chat.completion",
-            "created": int(time.time()),
-            "model": f"ExLlamaV3-{config_data['model_id']}",
-            "choices": [{
-                "index": 0,
-                "message": message,
-                "finish_reason": "stop"
-            }],
-            "usage": {
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "total_tokens": prompt_tokens + completion_tokens
-            }
-        })
+        
+        return generate_openai_non_streaming_response(
+            model_id=config_data['model_id'],
+            backend="ExLlamaV3",
+            full_response=full_response, 
+            prompt_token_usage=prompt_tokens,
+            completion_token_usage=completion_tokens
+        )
         
     except Exception as e:
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
@@ -5015,6 +5056,11 @@ def openai_compatible_api():
     
     OpenAPI 3.0.0 Specification follows OpenAI format.
     """
+
+    print("\n\n========== OPENAI API REQUEST ==========")
+    print(f"Headers: {dict(request.headers)}")
+    print(f"Body: {request.get_data(as_text=True)}")
+    print("==========================================\n\n")
 
     print("\n\nOpenAI v1/chat/completions route triggered\n\n")
     
@@ -6159,6 +6205,7 @@ def signal_handler(sig, frame):
     # and immediately terminates the process.
     print("👋 Exiting immediately.")
     os._exit(0)
+
 
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
