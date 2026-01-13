@@ -72,23 +72,6 @@ function getToolsSchema() {
 }
 
 
-function generateId(str) {
-    /**
-     * Simple helper to generate a short hash string from content.
-     * Gemini3Pro Generated Function: Mimics Python's hash() usage for generating IDs.
-     */
-    let hash = 0;
-    if (str.length === 0) return hash.toString();
-    for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i); // Convert the character to its Unicode code point
-        hash = ((hash << 5) - hash) + char; // Bitwise left shift by 5 bits and add the character
-        hash = hash & hash; // Bitwise AND with the hash to get the result - creates a 32-bit integer
-    }
-    // Return absolute hex string cropped to 8 chars to mimic the python slice
-    return Math.abs(hash).toString(16).substring(0, 8);
-}
-
-
 function extractToolCallsFromResponse(fullResponseText) {
     /**
      * Extracts tool calls from a text response containing <tool_call> tags.
@@ -100,6 +83,7 @@ function extractToolCallsFromResponse(fullResponseText) {
 
     try {
         console.log("\n--- Starting tool parsing ---");
+        console.log("Full response text: ", fullResponseText);
 
         const toolCalls = [];
         
@@ -125,7 +109,7 @@ function extractToolCallsFromResponse(fullResponseText) {
                     if (Array.isArray(jsonData)) {
                         for (const item of jsonData) {
                             toolCalls.push({
-                                'id': 'call_' + generateId(JSON.stringify(item)),
+                                'id': 'call_' + getUniqueId().substring(0, 8),
                                 'type': 'function',
                                 'function': {
                                     'name': item.name,
@@ -142,7 +126,7 @@ function extractToolCallsFromResponse(fullResponseText) {
                         toolArgs = jsonData.arguments || {};
 
                         toolCalls.push({
-                            'id': 'call_' + generateId(toolName + JSON.stringify(toolArgs)),
+                            'id': 'call_' + getUniqueId().substring(0, 8),
                             'type': 'function',
                             'function': {
                                 'name': toolName,
@@ -184,7 +168,7 @@ function extractToolCallsFromResponse(fullResponseText) {
 
                             // Add to list immediately
                             toolCalls.push({
-                                'id': 'call_' + generateId(tName + JSON.stringify(tArgs)),
+                                'id': 'call_' + getUniqueId().substring(0, 8),
                                 'type': 'function',
                                 'function': {
                                     'name': tName,

@@ -132,6 +132,22 @@ function getUniqueId() {
     });
 }
 
+function generateId(str) {
+    /**
+     * Simple helper to generate a short hash string from content.
+     * Gemini3Pro Generated Function: Mimics Python's hash() usage for generating IDs.
+     */
+    let hash = 0;
+    if (str.length === 0) return hash.toString();
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i); // Convert the character to its Unicode code point
+        hash = ((hash << 5) - hash) + char; // Bitwise left shift by 5 bits and add the character
+        hash = hash & hash; // Bitwise AND with the hash to get the result - creates a 32-bit integer
+    }
+    // Return absolute hex string cropped to 8 chars to mimic the python slice
+    return Math.abs(hash).toString(16).substring(0, 8);
+}
+
 function incrementSequenceId() {
     const updated_sequence_id = parseInt(getSequenceId()) + 1;
     setSequenceId(updated_sequence_id);

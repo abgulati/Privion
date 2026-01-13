@@ -1,5 +1,6 @@
 import requests
 import json
+import uuid
 import re
 
 from prompt_formatting import prepare_prompt_for_auto_templating
@@ -99,7 +100,7 @@ def extract_tool_calls_from_response(full_response_text:str) -> list[dict]:
                     if isinstance(json_data, list):
                         for item in json_data:
                             tool_calls.append({
-                                'id': 'call_' + str(hash(json.dumps(item)))[:8],
+                                'id': 'call_' + str(uuid.uuid4())[:8],
                                 'type': 'function',
                                 'function': {
                                     'name': item.get("name"),
@@ -115,7 +116,7 @@ def extract_tool_calls_from_response(full_response_text:str) -> list[dict]:
                         tool_args = json_data.get('arguments', {})
 
                         tool_calls.append({
-                            'id': 'call_' + str(hash(tool_name + str(tool_args)))[:8],
+                            'id': 'call_' + str(uuid.uuid4())[:8],
                             'type': 'function',
                             'function': {
                                 'name': tool_name,
@@ -148,7 +149,7 @@ def extract_tool_calls_from_response(full_response_text:str) -> list[dict]:
 
                             # Add to list immediately
                             tool_calls.append({
-                                'id': 'call_' + str(hash(t_name + str(t_args)))[:8],
+                                'id': 'call_' + str(uuid.uuid4())[:8],
                                 'type': 'function',
                                 'function': {
                                     'name': t_name,
