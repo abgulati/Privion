@@ -72,6 +72,7 @@ function getToolsSchema() {
 }
 
 
+
 function getDbSchema() {
     return fetch('/get_db_schema')
         .then(response => {
@@ -109,8 +110,6 @@ function generateId(str) {
     // Return absolute hex string cropped to 8 chars to mimic the python slice
     return Math.abs(hash).toString(16).substring(0, 8);
 }
-
-
 function extractToolCallsFromResponse(fullResponseText) {
     /**
      * Extracts tool calls from a text response containing <tool_call> tags.
@@ -122,6 +121,7 @@ function extractToolCallsFromResponse(fullResponseText) {
 
     try {
         console.log("\n--- Starting tool parsing ---");
+        console.log("Full response text: ", fullResponseText);
 
         const toolCalls = [];
         
@@ -147,7 +147,7 @@ function extractToolCallsFromResponse(fullResponseText) {
                     if (Array.isArray(jsonData)) {
                         for (const item of jsonData) {
                             toolCalls.push({
-                                'id': 'call_' + generateId(JSON.stringify(item)),
+                                'id': 'call_' + getUniqueId().substring(0, 8),
                                 'type': 'function',
                                 'function': {
                                     'name': item.name,
@@ -164,7 +164,7 @@ function extractToolCallsFromResponse(fullResponseText) {
                         toolArgs = jsonData.arguments || {};
 
                         toolCalls.push({
-                            'id': 'call_' + generateId(toolName + JSON.stringify(toolArgs)),
+                            'id': 'call_' + getUniqueId().substring(0, 8),
                             'type': 'function',
                             'function': {
                                 'name': toolName,
@@ -206,7 +206,7 @@ function extractToolCallsFromResponse(fullResponseText) {
 
                             // Add to list immediately
                             toolCalls.push({
-                                'id': 'call_' + generateId(tName + JSON.stringify(tArgs)),
+                                'id': 'call_' + getUniqueId().substring(0, 8),
                                 'type': 'function',
                                 'function': {
                                     'name': tName,
@@ -242,11 +242,11 @@ function extractToolCallsFromResponse(fullResponseText) {
 }
 
 
-function executeTools(tool_calls) {
+function executeTools(tool_calls, stream_session_id=null) {
     return fetch('/execute_tools', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ 'tool_calls': tool_calls })
+        body: JSON.stringify({ 'tool_calls': tool_calls, 'stream_session_id': stream_session_id })
     });
 }
 

@@ -230,7 +230,8 @@
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option8">Butler Settings</a>
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option9">ASR Settings</a>
                                 <a href="#" class="list-group-item list-group-item-action" data-content="option10">TTS Settings</a>
-                                <a href="#" class="list-group-item list-group-item-action" data-content="option11">Advanced Settings</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option11">Web Search Settings</a>
+                                <a href="#" class="list-group-item list-group-item-action" data-content="option12">Advanced Settings</a>
                                 <!--Add as Needed-->
                             </div>
 
@@ -1747,7 +1748,7 @@
                                                 </tr>
                                                 <tr class="settings-table-row" id="docling_vlm_options" style="display: none;">
                                                     <td class="settings_table_setting_name">VLM Model</td>
-                                                    <td class="settings_table_setting_description">Docling VLM Model: [Default: openai/whisper-large-v3]</td>
+                                                    <td class="settings_table_setting_description">Docling VLM Model: [Default: SmolDocling Transformers]</td>
                                                     <td class="settings_table_setting_value">
                                                         <select id="docling_vlm_model" name="docling_vlm_model" class="modal-selects" disabled>
                                                             <option value="smoldocling_mlx">SmolDocling MLX</option>
@@ -2054,9 +2055,9 @@
                                                 <td class="settings_table_setting_description">Automatic Speech Recognition (ASR) model used for Transcription.</td>
                                                 <td class="settings_table_setting_value">
                                                     <select id="asr_model" name="asr_model" class="modal-selects">
-                                                        <option value="openai/whisper-large-v3">OpenAI Whisper Large V3 [Default | ~8GB VRAM]</option>
+                                                        <option value="openai/whisper-large-v3">OpenAI Whisper Large V3 [~8GB VRAM]</option>
                                                         <option value="nvidia/parakeet-tdt-0.6b-v3">NVIDIA Parakeet TDT 0.6B V3 [~3GB VRAM]</option>
-                                                        <option value="nvidia/parakeet-tdt-0.6b-v2">NVIDIA Parakeet TDT 0.6B V2 [~3GB VRAM]</option>
+                                                        <option value="nvidia/parakeet-tdt-0.6b-v2">NVIDIA Parakeet TDT 0.6B V2 [DEFAULT | ~3GB VRAM]</option>
                                                         <option value="nvidia/canary-qwen-2.5b">NVIDIA Canary Qwen 2.5B [~10GB VRAM]</option>
                                                         <option value="nvidia/canary-1b-v2">NVIDIA Canary 1B V2 [~8GB VRAM]</option>
                                                         <option value="ibm-granite/granite-speech-3.3-8b">IBM Granite Speech 3.3-8B [~20GB VRAM]</option>
@@ -2076,8 +2077,8 @@
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Torch Device</td>
-                                                <td class="settings_table_setting_description">The device to use for the ASR. This is the device that will be used to run the ASR model.</td>
-                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="text" id="asr_torch_device" name="asr_torch_device" value="cpu"></td>
+                                                <td class="settings_table_setting_description">The device to use for the ASR. This is the device that will be used to run the ASR model. [Default: cuda:0 | Use 'cpu' for CPU-only inference.]</td>
+                                                <td class="settings_table_setting_value"><input class="settings-input-fields" type="text" id="asr_torch_device" name="asr_torch_device" value="cuda:0"></td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">ASR Temperature</td>
@@ -2270,7 +2271,45 @@
                                 </div>
 
                                 <div id="option11" class="d-none">
-                                    <!--Option 6 Content-->
+                                    <!--Option 11 Content-->
+                                    <h5>Web Search Settings</h5>
+
+                                    <br>
+
+                                    <button class="btn btn-primary start-perplexica-button" id="start_perplexica_button" onclick="startPerplexica()">Start Perplexica Server</button>
+
+                                    <br>
+                                    <br>
+
+                                    <div class="settings-table-container">
+                                        <table class="settings-table">
+                                            <tr class="settings-table-header-row">
+                                                <th style="width: 20%;">Web Search (RAG) Settings</th>
+                                                <th>Description</th>
+                                                <th style="width: 20%;">Value</th>
+                                            </tr>
+                                            <tr class="settings-table-row">     <!--Row IDs below are provided for JS (row hiding etc.!-->
+                                                <td class="settings_table_setting_name">Enable Web Search</td>
+                                                <td class="settings_table_setting_description">Enable web search. This will allow the model to search the web for information.</td>
+                                                <td class="settings_table_setting_value"><input type="checkbox" id="enable_web_search" name="enable_web_search" value="true"></td>
+                                            </tr>
+                                            <tr class="settings-table-row">
+                                                <td class="settings_table_setting_name">Perplexica Server Port:</td>
+                                                <td class="settings_table_setting_description">The port to use for the Perplexica server. [Default: 3003]</td>
+                                                <td class="settings_table_setting_value"><input type="number" id="perplexica_server_port" name="perplexica_server_port" value="3003"></td>
+                                            </tr>
+                                            <tr class="settings-table-row">
+                                                <td class="settings_table_setting_name">Perplexica Version:</td>
+                                                <td class="settings_table_setting_description">The version of Perplexica to use. Make sure to assign different ports if running multiple versions! [Default: 'latest' for the latest version]</td>
+                                                <td class="settings_table_setting_value"><input type="text" id="perplexica_version" name="perplexica_version" value="latest"></td>
+                                            </tr>
+                                        </table>
+                                    </div>
+
+                                </div>
+
+                                <div id="option12" class="d-none">
+                                    <!--Option 12 Content-->
                                     <h5>Advanced Settings</h5>
 
                                     <br>

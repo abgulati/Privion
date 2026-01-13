@@ -11,6 +11,17 @@
                 }
             }
         },
+
+        "search": {
+            "name": "Local & Web RAG Search",
+            "description": "RAG tool for local & web search. Performs best when given a comprehensive search-optimized query.",
+            "fields": {
+                "query": {
+                    "required": true,
+                    "type": "string"
+                }
+            }
+        },
         "wol_turn_on_tv": {
             "name": "WOL Turn On TV",
             "description": "Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.",

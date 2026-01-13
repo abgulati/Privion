@@ -101,6 +101,77 @@ def safe_empty_cuda_cache(timeout:int=10):
         print("\nReturning without emptying CUDA cache\n")
 
 
+def add_column_if_not_exists(cursor, table_name, column_name, column_type):
+    try:
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        columns = cursor.fetchall()
+        column_names = [column[1] for column in columns]
+        if column_name not in column_names:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+    except Exception as e:
+        print(f"Error adding column {column_name} to {table_name}: ", e)
+
+
+def get_container_id_by_container_name(container_name:str) -> str:
+    print(f"\nChecking if container {container_name} is running...\n")
+    try:
+        result = subprocess.run(
+            ['docker', 'ps', '--filter', f'name={container_name}' , '--format', '{{.ID}}'], # get container ID
+            capture_output=True,    # captures the command's output and error, while suppressing the print to the terminal
+            text=True,  # Get output as string and not bytes
+            check=True
+        )
+        return result.stdout.strip()    # Will return the container ID if the container is running, otherwise will return an empty string!
+    except Exception as e:
+        raise Exception(f"Could not check if {container_name} Docker container is running, encountered error: {e}")
+
+
+def check_if_container_is_running(container_name:str) -> bool:
+    try:
+        container_id = get_container_id_by_container_name(container_name)
+        return container_id is not None and container_id != ""
+    except Exception as e:
+        print(f"Could not check if {container_name} Docker container is running, encountered error: {e}")
+        return False
+
+
+def check_if_container_exists(container_name:str) -> bool:
+    '''
+    Check if container exists (running or stopped) and return the ID if so.
+    Use this to check for already existing containers, because `docker run` will throw a silent conflict error 
+    if attempting to start a containe rwith the name of an already existing container, even if it's stopped.
+    '''
+
+    try:
+        result = subprocess.run(
+            ['docker', 'ps', '-a', '--filter', f'name={container_name}' , '--format', '{{.Names}}'], # get container ID
+            capture_output=True,    # captures the command's output and error, while suppressing the print to the terminal
+            text=True,  # Get output as string and not bytes
+            check=True
+        )
+        containers = result.stdout.strip().split('\n')
+        return container_name in containers
+    except Exception as e:
+        print(f"Could not check if {container_name} Docker container exists, encountered error: {e}")
+        return False
+
+
+def start_container(container_name:str) -> bool:
+    '''Start an existing container by name.'''
+    try:
+        print(f"\nStarting existing Docker container '{container_name}'...\n")
+        result = subprocess.run(
+            ['docker', 'start', container_name],
+            capture_output=True,    # captures the command's output and error, while suppressing the print to the terminal
+            text=True,  # Get output as string and not bytes
+            check=True
+        )
+        print(f"\nDocker container '{container_name}' successfully started\n")
+        return True
+    except Exception as e:
+        raise Exception(f"Could not start {container_name} Docker container, encountered error: {e}")
+
+
 def get_url_for_server(server_to_check):
     if server_to_check == 'llama-cpp':
         try:

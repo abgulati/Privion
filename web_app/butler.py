@@ -1,4 +1,5 @@
 import prompt_formatting as prompt_formatting_module
+import rag_core as rag_core_module
 import llm_apis as llm_apis_module
 
 from wakeonlan import send_magic_packet
@@ -191,7 +192,15 @@ async def _get_device_ip_async(device_name: str) -> Optional[str]:
     """Async helper to get IP from name using SmartHomeService in a thread."""
     return await asyncio.to_thread(_get_device_ip, device_name)
 
-def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9'):
+def search(query:str, **kwargs) -> dict:
+    '''
+    Searches the local & web knowledge base.
+    '''
+    stream_session_id = kwargs.get('stream_session_id', None)
+    return rag_core_module.execute_full_search(query, stream_session_id)
+
+
+def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9', **kwargs):
     '''
     Uses Wake-On-LAN (WOL) to turn on a TV.
     Args:
@@ -215,15 +224,16 @@ def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port: str |
         return {"success": False, "message": f"Error sending Wake on LAN magic packet: {str(e)}"}
 
 
-def lg_webos_tv_turn_on(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9'):
+def lg_webos_tv_turn_on(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9', **kwargs):
     return wol_turn_on_tv(mac_address, target_ip, port)
 
 
-async def lg_webos_tv_turn_off(ip_address: Optional[str] = None):
+async def lg_webos_tv_turn_off(ip_address: Optional[str] = None, **kwargs):
     '''
     Turns on an LG WebOS TV.
     '''
     if not ip_address:
+        print("No IP address provided, attempting to discover LG WebOS TV on the network.")
         webos_ip = lg_webos_tv_module.discover_webos_ip()
         if not webos_ip:
             return {"success": False, "message": "No LG WebOS TVs found on the network."}
@@ -232,48 +242,49 @@ async def lg_webos_tv_turn_off(ip_address: Optional[str] = None):
     return await lg_webos_tv_module.webos_pair_connect_and_power_off_async(ip_address)
 
 
-async def lamp_turn_on():
+async def lamp_turn_on(**kwargs):
     '''
     Turns on a lamp.
     '''
     return await govee_lights_module.light_turn_on_handler()
 
 
-async def lamp_turn_off():
+async def lamp_turn_off(**kwargs):
     '''
     Turns off a lamp.
     '''
     return await govee_lights_module.light_turn_off_handler()
 
 
-async def set_lamp_brightness(brightness: str | int):
+async def set_lamp_brightness(brightness: str | int, **kwargs):
     '''
     Sets the brightness of a lamp.
     '''
     return await govee_lights_module.light_set_brightness_handler(int(brightness))
 
 
-async def set_lamp_color(red: str | int, green: str | int, blue: str | int):
+async def set_lamp_color(red: str | int, green: str | int, blue: str | int, **kwargs):
     '''
     Sets the color of a lamp.
     '''
     return await govee_lights_module.light_set_color_handler(int(red), int(green), int(blue))
 
 
-async def set_lamp_temperature(temperature: str | int):
+async def set_lamp_temperature(temperature: str | int, **kwargs):
     '''
     Sets the temperature of a lamp.
     '''
     return await govee_lights_module.light_set_temperature_handler(int(temperature))
 
 
-async def set_lamp_scene(scene: str):
+async def set_lamp_scene(scene: str, **kwargs):
     '''
     Sets the scene of a lamp.
     '''
     return await govee_lights_module.light_set_scene_handler(scene)
 
-async def check_device_online(device_name: str):
+<<<<<<< HEAD
+async def check_device_online(device_name: str, **kwargs):
     # Run DB lookup in thread to prevent blocking
     device = await asyncio.to_thread(SMART_HOME_SERVICE.get_device_by_name, device_name)
     
@@ -290,43 +301,43 @@ async def check_device_online(device_name: str):
     else:
         return {"success": False, "message": f"Online check not implemented for device type: {dev_type}"}
 
-async def plug_turn_on(ip_address: Optional[str] = None, device_name: Optional[str] = None):
+async def plug_turn_on(ip_address: Optional[str] = None, device_name: Optional[str] = None, **kwargs):
     if not ip_address and device_name:
         ip_address = await _get_device_ip_async(device_name)
     if not ip_address: return {"success": False, "message": "IP address or valid Device Name required."}
     return await kasa_plug_module.plug_turn_on_handler(ip_address=ip_address)
 
-async def plug_turn_off(ip_address: Optional[str] = None, device_name: Optional[str] = None):
+async def plug_turn_off(ip_address: Optional[str] = None, device_name: Optional[str] = None, **kwargs):
     if not ip_address and device_name:
         ip_address = await _get_device_ip_async(device_name)
     if not ip_address: return {"success": False, "message": "IP address or valid Device Name required."}
     return await kasa_plug_module.plug_turn_off_handler(ip_address=ip_address)
 
-async def bulb_turn_on(ip_address: Optional[str] = None, device_name: Optional[str] = None):
+async def bulb_turn_on(ip_address: Optional[str] = None, device_name: Optional[str] = None, **kwargs):
     if not ip_address and device_name:
         ip_address = await _get_device_ip_async(device_name)
     if not ip_address: return {"success": False, "message": "IP address or valid Device Name required."}
     return await kasa_bulb_module.bulb_turn_on_handler(ip_address=ip_address)
 
-async def bulb_turn_off(ip_address: Optional[str] = None, device_name: Optional[str] = None):
+async def bulb_turn_off(ip_address: Optional[str] = None, device_name: Optional[str] = None, **kwargs):
     if not ip_address and device_name:
         ip_address = await _get_device_ip_async(device_name)
     if not ip_address: return {"success": False, "message": "IP address or valid Device Name required."}
     return await kasa_bulb_module.bulb_turn_off_handler(ip_address=ip_address)
 
-async def set_bulb_brightness(brightness: str | int, ip_address: Optional[str] = None, device_name: Optional[str] = None):
+async def set_bulb_brightness(brightness: str | int, ip_address: Optional[str] = None, device_name: Optional[str] = None, **kwargs):
     if not ip_address and device_name:
         ip_address = await _get_device_ip_async(device_name)
     if not ip_address: return {"success": False, "message": "IP address or valid Device Name required."}
     return await kasa_bulb_module.bulb_set_brightness_handler(ip_address, int(brightness))
 
-async def set_bulb_color(hue: str | int, saturation: str | int, value: str | int, ip_address: Optional[str] = None, device_name: Optional[str] = None):
+async def set_bulb_color(hue: str | int, saturation: str | int, value: str | int, ip_address: Optional[str] = None, device_name: Optional[str] = None, **kwargs):
     if not ip_address and device_name:
         ip_address = await _get_device_ip_async(device_name)
     if not ip_address: return {"success": False, "message": "IP address or valid Device Name required."}
     return await kasa_bulb_module.bulb_set_color_handler(ip_address, int(hue), int(saturation), int(value))
 
-async def execute_tool_call(tool_name, llm_args, services_config: dict) -> dict:
+async def execute_tool_call(tool_name, llm_args, services_config: dict, stream_session_id: str = None) -> dict:
     '''
     1. Looks up the function in Python.
     2. Looks up the default values in your JSON config.
@@ -344,13 +355,15 @@ async def execute_tool_call(tool_name, llm_args, services_config: dict) -> dict:
         service_def = services_config.get(tool_name, {})
         fields_def = service_def.get('fields', {})
 
-        # MERGE: Start with defaults, overwrite with LLM-provided args
         final_args = {}
         
         # 1. Load defaults from config (handles hardcoded IPs)
         for field_name, field_info in fields_def.items():
             if "default" in field_info:
                 final_args[field_name] = field_info["default"]
+
+        # MERGE: Start with defaults, overwrite with LLM-provided args
+        final_args['stream_session_id'] = stream_session_id
 
         # 2. Update with args the LLM actually sent
         # (e.g. LLM sends 'brightness': 50, but ignores 'mac_address')
@@ -457,13 +470,13 @@ def execute_butler_tasks(user_query:str) -> dict:
             return {'success': False, 'message': f"Both Butler Tool Execution and Action Analysis Prompt Creation Failed: {str(e)}", 'action_analysis_prompt': None}
         
 
-def execute_tools(tools_json: dict) -> dict:
+def execute_tools(tools_json: dict, stream_session_id: str = None) -> dict:
     # Halt Maintenance Mode
     global_states.set_system_busy(True)
 
     print(f"Executing tools: {tools_json}")
     try:
-        return asyncio.run(_execute_tools_concurrent(tools_json))
+        return asyncio.run(_execute_tools_concurrent(tools_json, stream_session_id))
     except Exception as e:
         print(f"Error executing tools (loop): {str(e)}")
         return {'success': False, 'tool_result_list': [], 'message': f"Error executing tools: {str(e)}"}
@@ -471,7 +484,7 @@ def execute_tools(tools_json: dict) -> dict:
         # Resume Maintenance Mode
         global_states.set_system_busy(False)
 
-async def _execute_tools_concurrent(tools_json: dict) -> dict:
+async def _execute_tools_concurrent(tools_json: dict, stream_session_id: str = None) -> dict:
     '''
     Executes multiple tool calls concurrently.
     '''
@@ -497,14 +510,14 @@ async def _execute_tools_concurrent(tools_json: dict) -> dict:
                     fn_args = raw_args
 
                 # Create Task
-                coro = execute_tool_call(fn_name, fn_args, full_tools_config.get('services', {}))
+                coro = execute_tool_call(fn_name, fn_args, full_tools_config.get('services', {}), stream_session_id)
                 tasks.append(coro)
                 tool_call_mappings.append(tool_call)
 
             # Run concurrently
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            for i, result in enumerate(results):
+            for i, result in enumerate(results): # Iterate over RESULTS from gather
                 tool_call = tool_call_mappings[i]
                 fn_name = tool_call['function']['name']
                 
