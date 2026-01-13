@@ -88,4 +88,12 @@ async def bulb_set_color_handler(ip_address: str, hue: int, saturation: int, val
         return {"success": True, "message": "Color set command sent to Kasa bulb."}
     except Exception as e:
         return {"success": False, "message": f"Error setting the color on Kasa bulb: {e}"}
-    
+
+async def bulb_set_color_temp_handler(ip_address: str, temp: int):
+    try:
+        dev = await kasa_connect(ip_address)
+        await dev.modules["Light"].set_color_temp(temp)
+        await kasa_disconnect(dev)
+        return {"success": True, "message": "Color Temp set command sent to Kasa bulb."}
+    except Exception as e:
+        return {"success": False, "message": f"Error setting the color temp on Kasa bulb: {e}"}

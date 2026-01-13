@@ -198,6 +198,16 @@ class SmartHomeService:
         finally:
             conn.close()
 
+    def get_device_by_id(self, device_id: int) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM devices WHERE id = ?", (device_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
     def get_all_devices(self) -> List[Dict[str, Any]]:
         conn = self._get_connection()
         try:

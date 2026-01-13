@@ -45,6 +45,7 @@ import ast
 import os
 import sys
 import io
+import asyncio
 import re
 import gc
 from logging.handlers import RotatingFileHandler
@@ -114,6 +115,13 @@ try:
     from utils import get_url_for_server
 except ImportError:
     print("WARNING: utils.py is not present. Skipping import.")
+
+try:
+    from services.smart_home_service import SmartHomeService
+    from device_registry import DEVICE_TYPE_HANDLERS
+except ImportError:
+    print("WARNING: Smart Home Services could not be imported.")
+
 
 def flash_attention_is_installed() -> bool:
     try:
@@ -359,6 +367,156 @@ def config_writer_api():
         return handle_api_error("Server-side error - could not write keys to config.json. Encountered error: ", e)
     
     return jsonify({"success": write_return['success'], "restart_required": write_return['restart_required'], "reload_asr": write_return['reload_asr']})
+
+############################------------Smart Home API---------------------###############################
+
+SMART_HOME_SERVICE = None
+
+def get_smart_home_service():
+    global SMART_HOME_SERVICE
+    if SMART_HOME_SERVICE is None:
+        SMART_HOME_SERVICE = SmartHomeService()
+    return SMART_HOME_SERVICE
+
+@app.route('/api/smart_home/devices', methods=['GET'])
+def get_smart_home_devices():
+    try:
+        service = get_smart_home_service()
+        devices = service.get_all_db_info()
+        
+        # Group by Zone -> Room -> Devices
+        # Result structure: {'ZoneName': {'RoomName': [device_dict, ...]}}
+        # This will properly group devices by zone and room, even if there are multiple devices in the same room
+        model = {}
+        
+        for device in devices:
+            zone_name = device.get('zone_name') or "Unassigned Zone"
+            room_name = device.get('room_name') or "Unassigned Room"
+            
+            if zone_name not in model:
+                model[zone_name] = {}
+            if room_name not in model[zone_name]:
+                model[zone_name][room_name] = []
+            
+            attrs = device.get('attributes')
+            if isinstance(attrs, str):
+                try:
+                    device['attributes'] = json.loads(attrs)
+                except:
+                    device['attributes'] = {}
+            else:
+                device['attributes'] = attrs or {}
+            
+            model[zone_name][room_name].append(device)
+            
+        return jsonify(success=True, data=model)
+    except Exception as e:
+        return handle_api_error("Error fetching smart home devices:", e)
+
+@app.route('/api/smart_home/control', methods=['POST'])
+def control_smart_home_device():
+    try:
+        data = request.json
+        device_id = data.get('device_id')
+        action = data.get('action') # 'turn_on', 'turn_off'
+        
+        if not device_id or not action:
+            return jsonify(success=False, error="Missing device_id or action"), 400
+            
+        service = get_smart_home_service()
+        device = service.get_device_by_id(device_id)
+        
+        if not device:
+            return jsonify(success=False, error="Device not found"), 404
+            
+        device_type = device['type']
+        ip_address = device['ip_address']
+        
+        handler = DEVICE_TYPE_HANDLERS.get(device_type)
+        if not handler:
+            return jsonify(success=False, error=f"No handler for device type {device_type}"), 400
+        
+        # Helper to run async handler
+        def run_async(coro):
+             return asyncio.run(coro)
+
+        result = None
+        if action == 'turn_on':
+            if hasattr(handler, 'plug_turn_on_handler'):
+                 result = run_async(handler.plug_turn_on_handler(ip_address))
+            elif hasattr(handler, 'bulb_turn_on_handler'):
+                 result = run_async(handler.bulb_turn_on_handler(ip_address))
+            else:
+                 return jsonify(success=False, error="Device does not support turn_on"), 400
+                 
+        elif action == 'turn_off':
+             if hasattr(handler, 'plug_turn_off_handler'):
+                 result = run_async(handler.plug_turn_off_handler(ip_address))
+             elif hasattr(handler, 'bulb_turn_off_handler'):
+                 result = run_async(handler.bulb_turn_off_handler(ip_address))
+             else:
+                 return jsonify(success=False, error="Device does not support turn_off"), 400
+                 
+        elif action == 'set_color':
+             hsv = data.get('hsv') # Expecting dict: {'h': int, 's': int, 'v': int}
+             if not hsv or 'h' not in hsv or 's' not in hsv: # V is optional-ish but usually passed
+                  return jsonify(success=False, error="Missing HSV data"), 400
+                  
+             hue = hsv['h']
+             sat = hsv['s']
+             val = hsv.get('v', 100)
+             
+             if hasattr(handler, 'bulb_set_color_handler'):
+                  result = run_async(handler.bulb_set_color_handler(ip_address, hue, sat, val))
+             else:
+                  return jsonify(success=False, error="Device does not support set_color"), 400
+                 
+        elif action == 'set_color_temp':
+             temp = data.get('temp')
+             if not temp:
+                 return jsonify(success=False, error="Missing temp data"), 400
+             
+             if hasattr(handler, 'bulb_set_color_temp_handler'):
+                 result = run_async(handler.bulb_set_color_temp_handler(ip_address, temp))
+             else:
+                 return jsonify(success=False, error="Device does not support set_color_temp"), 400
+                 
+        else:
+             return jsonify(success=False, error="Invalid action"), 400
+
+        # THIS IS CRITICAL AS IT IS THE SOURCE OF TRUTH FOR ALL DEVICE STATE
+        if result and result.get('success'):
+            new_attributes = {}
+            current_attributes = device.get('attributes')
+            
+            if isinstance(current_attributes, str):
+                try: 
+                    new_attributes = json.loads(current_attributes)
+                except: 
+                    pass
+            elif isinstance(current_attributes, dict):
+                 new_attributes = current_attributes.copy()
+            
+            if action == 'turn_on':
+                new_attributes['is_on'] = True 
+            elif action == 'turn_off':
+                new_attributes['is_on'] = False
+            elif action == 'set_color':
+                 hsv = data.get('hsv', {'h':0, 's':0, 'v':100})
+                 new_attributes['hsv'] = (hsv['h'], hsv['s'], hsv.get('v', 100))
+                 new_attributes['color_temp'] = 0 # IMPORTANT: Disable white mode
+                 new_attributes['is_on'] = True
+            elif action == 'set_color_temp':
+                 new_attributes['color_temp'] = data.get('temp')
+                 new_attributes['is_on'] = True
+                
+            service.update_device_attributes(device_id, new_attributes)
+            service.update_device_status(device_id, True)
+
+        return jsonify(result)
+
+    except Exception as e:
+        return handle_api_error("Error controlling device:", e)
 
 ############################----------------------------------------------###############################
 

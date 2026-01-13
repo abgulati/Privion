@@ -1,0 +1,164 @@
+/* Smart Home UI Styles */
+#smart-home-area {
+    padding: 20px;
+    height: 100%;
+    overflow-y: auto;
+    color: #e0e0e0;
+}
+
+.smart-home-header {
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+}
+
+.zone-section {
+    margin-bottom: 30px;
+    background: rgba(255, 255, 255, 0.05); /* Glassmorphism background */
+    border-radius: 10px;
+    padding: 15px;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.zone-title {
+    font-size: 1.5rem;
+    color: #fff;
+    margin-bottom: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 5px;
+}
+
+.room-section {
+    margin-bottom: 20px;
+    margin-left: 10px;
+}
+
+.room-title {
+    font-size: 1.2rem;
+    color: #ccc;
+    margin-bottom: 10px;
+}
+
+.device-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+
+/* Base Card Style (Mimics HomeKit) */
+.device-card {
+    background-color: #2c2c2e; /* Dark Grey (Off State) */
+    border: none;
+    border-radius: 14px;
+    padding: 12px 15px; /* Slightly less vertical padding */
+    width: 200px; /* Wider */
+    height: 110px; /* Shorter */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-start;
+    transition: background-color 0.4s ease, transform 0.2s ease, box-shadow 0.4s ease;
+    cursor: pointer; /* Pointer for whole card */
+    position: relative;
+    overflow: hidden;
+}
+
+.device-card:hover { transform: scale(1.02); }
+
+/* OFF State */
+.device-card.off { background-color: #2c2c2e; color: #ffffff; }
+
+/* ON State */
+.device-card.on {
+    background-color: #fce46a; /* Dulled Yellow */
+    color: #000000;
+    box-shadow: 0 4px 15px rgba(230, 197, 67, 0.4);
+}
+
+/* Icon Styling */
+.device-icon {
+    font-size: 2.2rem; /* Was 1.8rem */
+    color: #8e8e93;
+    transition: color 0.4s ease;
+    margin-bottom: auto;
+}
+
+/* On State - Default Icon Color */
+.device-card.on .device-icon { color: #ff9500; }
+
+.device-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-top: 5px;
+    margin-bottom: 0;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: left;
+}
+
+.device-ip { display: none; }
+
+/* Bulb Controls - Bubbles */
+.bulb-controls {
+    display: flex;
+    gap: 8px;
+    position: absolute;
+    top: 15px; /* Moved to top */
+    right: 15px; /* Moved to right */
+    z-index: 10; /* Ensure on top */
+}
+
+.color-bubble {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid rgba(128,128,128,0.3);
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #fff; /* Default base */
+}
+
+.color-bubble:hover {
+    transform: scale(1.1);
+    border-color: rgba(128,128,128,0.8);
+}
+
+.color-bubble i {
+    font-size: 0.7rem;
+    color: #333;
+    pointer-events: none;
+}
+
+.white-preset { background-color: #ffffff; box-shadow: 0 0 2px rgba(0,0,0,0.1); }
+.warm-preset { background-color: #ffecd1; box-shadow: 0 0 2px rgba(0,0,0,0.1); }
+ /* custom-preset background will be set via JS */
+
+.color-bubble input[type="color"] {
+    position: absolute;
+    top: -10px; left: -10px;
+    width: 200%; height: 200%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+
+/* Specific button colors if needed, but monochrome matches HomeKit better usually. */
+/* Let's keep them neutral so they work on both backgrounds. */
+
+/* Spinner for loading */
+.loading-spinner {
+    text-align: center;
+    padding: 50px;
+    font-size: 1.5rem;
+    color: #aaa;
+}

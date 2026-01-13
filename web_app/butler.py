@@ -14,7 +14,7 @@ import asyncio
 import json
 import ast
 
-import global_state
+import global_states
 from services.smart_home_service import SmartHomeService
 
 # Initialize Global Service Instance
@@ -459,7 +459,7 @@ def execute_butler_tasks(user_query:str) -> dict:
 
 def execute_tools(tools_json: dict) -> dict:
     # Halt Maintenance Mode
-    global_state.set_system_busy(True)
+    global_states.set_system_busy(True)
 
     print(f"Executing tools: {tools_json}")
     try:
@@ -469,7 +469,7 @@ def execute_tools(tools_json: dict) -> dict:
         return {'success': False, 'tool_result_list': [], 'message': f"Error executing tools: {str(e)}"}
     finally:
         # Resume Maintenance Mode
-        global_state.set_system_busy(False)
+        global_states.set_system_busy(False)
 
 async def _execute_tools_concurrent(tools_json: dict) -> dict:
     '''

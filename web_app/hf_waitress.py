@@ -88,7 +88,7 @@ from flask_cors import CORS
 
 from waitress import serve
 
-import global_state
+import global_states
 
 try:
     if not os.path.exists(os.path.join(os.getcwd(), 'exllamav2')):
@@ -4110,7 +4110,7 @@ def exl3_stream():
 
     try:
         # Halt Maintenance Mode
-        global_state.set_system_busy(True)
+        global_states.set_system_busy(True)
 
         def generate():
             try:
@@ -4138,14 +4138,14 @@ def exl3_stream():
                 print("\nexl3-stream done\n")
             finally:
                 # Resume Maintenance Mode - Triggers once the generation process is complete (no more tokens to be generated)
-                global_state.set_system_busy(False)
+                global_states.set_system_busy(False)
 
         print("\n\nInferencing Begins!\n\n")
         return Response(generate(), content_type='text/event-stream')
     
     except Exception as e:
         # Resume Maintenance Mode - This case handles any errors or exceptions that occur during the generation process
-        global_state.set_system_busy(False)
+        global_states.set_system_busy(False)
         return handle_api_error("Could not generate exl3-stream, encountered error: ", e)
 
 

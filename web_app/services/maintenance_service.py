@@ -13,7 +13,7 @@ if parent_dir not in sys.path:
 
 from services.smart_home_service import SmartHomeService
 from device_registry import DEVICE_TYPE_HANDLERS
-import global_state
+import global_states
 
 
 SHUTDOWN_EVENT = threading.Event()
@@ -94,17 +94,15 @@ def maintenance_loop(once=False):
 
     while not SHUTDOWN_EVENT.is_set():
         try:
-            if global_state.get_system_busy():
+            if global_states.get_system_busy():
                 print("[Maintenance] System is busy. Skipping maintenance cycle.")
-                # Wait 30 seconds, checking for shutdown every second
-                for _ in range(30):
-                    if SHUTDOWN_EVENT.is_set(): break
-                    time.sleep(1)
+                # Wait 3 seconds, or until shutdown event is set
+                SHUTDOWN_EVENT.wait(3)
                 continue
 
             # Run the async check loop
             asyncio.run(check_all_devices(service))
-            print("[Maintenance] Cycle Complete. Waiting 60 seconds...")
+            print("[Maintenance] Cycle Complete. Waiting 10 seconds...")
 
         except Exception as e:
             print(f"[Maintenance] Critical Error in loop: {e}")
@@ -112,10 +110,8 @@ def maintenance_loop(once=False):
         if once:
             break
             
-        # Wait 60 seconds, checking for shutdown every second
-        for _ in range(60):
-            if SHUTDOWN_EVENT.is_set(): break
-            time.sleep(1)
+        # Wait 10 seconds, or until shutdown event is set
+        SHUTDOWN_EVENT.wait(10)
     
     print("[Maintenance] Service Shutdown Complete.")
 
