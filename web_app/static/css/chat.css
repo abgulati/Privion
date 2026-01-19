@@ -708,6 +708,16 @@ body {
     background-color: rgb(75 73 73);
 }
 
+.external-link {
+    border: none;
+    color: white;
+    border-radius: 21px;
+    padding: 1px 10px;
+    font-style: normal;
+    text-decoration: none;
+    background-color: rgb(75 73 73);
+}
+
 .user-message,
 .response-and-viewer-container {
     width: 93%;

@@ -43,23 +43,115 @@ const md = window.markdownit({
 });
 
 // Split source into normal Markdown vs <think> blocks, render each safely
-function renderMarkdownWithThink(markdown) {
+function renderMarkdownWithThinkAndTools(markdown) {
     const src = String(markdown || "");
-    const re = /<think>([\s\S]*?)<\/think>/gi;
-    let m, last = 0, html = "";
-    while ((m = re.exec(src)) !== null) {
-      if (m.index > last) html += md.render(src.slice(last, m.index));
-      const inner = md.render(m[1] || "");
-      html += `<details class="llm-think"><summary>Reasoning</summary><div class="llm-think-body">${inner}</div></details>`;
-      last = re.lastIndex;
+
+    function renderWithThinkOnly(text) {
+        const re = /<think>([\s\S]*?)<\/think>/gi;
+        let m, last = 0, html = "";
+        while ((m = re.exec(text)) !== null) {
+        if (m.index > last) html += md.render(text.slice(last, m.index));
+        const inner = md.render(m[1] || "");    // m[1] is the content inside the <think> tags, and will skip the <think> and </think> tags themselves!
+        html += `<details class="llm-think"><summary>Reasoning</summary><div class="llm-think-body">${inner}</div></details>`;
+        last = re.lastIndex;
+        }
+        if (last < text.length) html += md.render(text.slice(last));
+        return html;
     }
-    if (last < src.length) html += md.render(src.slice(last));
+
+    const toolRe = /<tool_call>([\s\S]*?)<\/tool_call>/gi;
+    let m, idx = 0, html = "";
+
+    // This loop will render one tool-call per collapsible section:
+    // while ((m = toolRe.exec(src)) !== null) {
+    //     // 1. Render text BEFORE this group of tool calls
+    //     if (m.index > idx) {
+    //         html += renderWithThinkOnly(src.slice(idx, m.index));
+    //     }
+
+    //     const toolCalls = [m[0] || ""];    // m[0] is the entire tool call string, including the <tool_call> and </tool_call> tags!
+    //     let end = toolRe.lastIndex;
+
+    //     // Inner loop: consume adjacent tool calls
+    //     while ((m = toolRe.exec(src)) !== null && m.index === end) {
+    //         toolCalls.push(m[0] || "");
+    //         end = toolRe.lastIndex;
+    //     }
+
+    //     const toolsHtml = toolCalls.map(tc => md.render(tc)).join('');
+    //     html += `<details class="llm-tool-calls"><summary>Tool calls</summary><div class="llm-tool-calls-body">${toolsHtml}</div></details>`;
+
+    //     idx = end;
+
+    //     if (!m) break;
+
+    //     // If m exists but wasn't adjacent (index !== end), set lastIndex to process it next
+    //     if (m.index !== end) toolRe.lastIndex = m.index;
+    // }
+
+    // This loop will render consecutive tool calls into a single collapsible section:
+    while ((m = toolRe.exec(src)) !== null) {
+        // 1. Render text BEFORE this group of tool calls
+        if (m.index > idx) {
+            html += renderWithThinkOnly(src.slice(idx, m.index));
+        }
+
+        // 2. Start collecting consecutiver tool calls
+        // We use m[0] to preserve the <tool_call> tags
+        const toolCalls = [m[0]];
+        let lastMatchEnd = toolRe.lastIndex;
+        let nextStartIdx = lastMatchEnd;
+
+        // Inner loop: Look for subsequent matches
+        while (true) {
+            // Save current lastIndex because exec() updates it
+            const currentLastIndex = toolRe.lastIndex;
+            const nextM = toolRe.exec(src);
+
+            if (!nextM) {
+                // No more matches in string
+                toolRe.lastIndex = currentLastIndex; // Restore for safety/clarity
+                break;
+            }
+
+            // Check if the gap between last match and this match is only whitespace
+            const gap = src.slice(lastMatchEnd, nextM.index);
+            if (!gap.trim()) {
+                // It IS consecutive (ignoring whitespace)
+                toolCalls.push(nextM[0]); // Push full tag
+                lastMatchEnd = toolRe.lastIndex;
+                nextStartIdx = lastMatchEnd;
+            } else {
+                // Found a match, but it's NOT consecutive (there was text in between).
+                // We must process this match in the OUTER loop next time.
+                // Reset regex index to the start of this non-consecutive match
+                toolRe.lastIndex = nextM.index; 
+                break;
+            }
+        }
+
+        // 3. Render the group
+        // If you want the tags to be visible as code/text, you might want to wrap in backticks or just render.
+        // Assuming you want them rendered as part of the block:
+        const toolsHtml = toolCalls.map(tc => md.render(tc)).join('\n');
+        
+        html += `<details class="llm-tool-calls"><summary>Tool calls (${toolCalls.length})</summary><div class="llm-tool-calls-body">${toolsHtml}</div></details>`;
+
+        // Update main index to continue after the last consumed tool call
+        idx = nextStartIdx;
+        
+        // Ensure the regex is ready for the next iteration of the outer loop
+        toolRe.lastIndex = idx;
+    }
+
+    if (idx < src.length) html += renderWithThinkOnly(src.slice(idx));
+    
     return html;
-  }
+}
 
 
 function renderMarkdownInto(el, markdownText) {
-    const unsafe = renderMarkdownWithThink(markdownText);
+    const unsafe = renderMarkdownWithThinkAndTools(markdownText);
 
     // NOTE: Bypassing for now as our citation-link formatting gets mucked up
     // const safe = DOMPurify.sanitize(unsafe, {
@@ -71,10 +163,11 @@ function renderMarkdownInto(el, markdownText) {
 
     // Open external links in new tabs; keep in-window citations intact
     el.querySelectorAll('a[href]:not(.citation-link)').forEach(a => {
-      a.setAttribute('target', '_blank');
-      a.setAttribute('rel', 'noopener');
+        a.classList.add('external-link');
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noopener');
     });
-  }
+}
 
 // Streaming state: accumulate raw text and re-render at a low frequency
 const streamState = new Map(); // sessionId -> { buffer: string, scheduled: boolean }
@@ -944,6 +1037,31 @@ function stopTTSPlayback() {
 }
 window.stopTTSPlayback = stopTTSPlayback;   // make it available globally for the ASGI server to call
 
+
+function cleanTtsVoiceText(text) {
+    // Find last index of </think> (if it exists) and </tool_call> (if it exists)
+    // For whichever index is later, split text at that index and return the second part
+    console.log("cleaning text for voice: ", text);
+    const thinkIndex = text.lastIndexOf("</think>");
+    const toolCallIndex = text.lastIndexOf("</tool_call>");
+    const splitIndex = Math.max(thinkIndex+8, toolCallIndex+12);
+    let ttsText = text.slice(splitIndex + 1).trim();
+
+    // remove all link <a href="...">...</a> tags
+    ttsText = ttsText.replace(/<a href="[^"]*">[^<]*<\/a>/g, '');
+    // console.log("ttsText after removing think, tool call, and link tags: ", ttsText);
+
+    // remove https and http urls:
+    ttsText = ttsText.replace(/https?:\/\/[^\s]+/g, '');
+    // console.log("ttsText after removing https and http urls: ", ttsText);
+
+    // remove all special characters from ttsText, except for spaces, newlines, tabs, commas, question and exclamation marks, and periods
+    ttsText = ttsText.replace(/[^a-zA-Z0-9\s\n\t\.,!?"']/g, '');
+    console.log("Final ttsText for AudioContext to play TTS voice: ", ttsText);
+    return ttsText;
+}
+
+
 async function fetchTTSVoice(text) {
     // Ensure we have an active AudioContext. If not, we can't play audio this way.
     if (!audioContext || audioContext.state !== 'running') {
@@ -953,18 +1071,13 @@ async function fetchTTSVoice(text) {
 
     // Stop any current TTS playback before starting a new one
     stopTTSPlayback();
-
-    let ttsText = text.includes("</think>") ? text.split("</think>")[1].trim() : text;
+    const cleanVoiceText = cleanTtsVoiceText(text);
     
-    // remove all special characters from ttsText, except for spaces, newlines, tabs, commas, question and exclamation marks, and periods
-    ttsText = ttsText.replace(/[^a-zA-Z0-9\s\n\t\.,!?"']/g, '');
-    console.log("ttsText for AudioContext to play TTS voice: ", ttsText);
-
     try {
         const response = await fetch('/tts_voice', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({'text': ttsText})
+            body: JSON.stringify({'text': cleanVoiceText})
         });
         if (!response.ok) {
             const err = await response.json();
