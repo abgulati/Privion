@@ -18,15 +18,20 @@ function getMessagesObject(regeneration_request, regen_sequence_id) {
     const sequenceId = regeneration_request ? regen_sequence_id : getSequenceId();
     if (sequenceId == 0) {
         // raise an error
-        errorHandlerNoAlert("getting messages object", "getMessagesObject()", "No messages present in the chat-area to get the messages object from.");
+        errorHandlerNoAlert("getting messages object", "get-MessagesObject()", "No messages present in the chat-area to get the messages object from.");
         return;
     }
+
+    // Get current Date:
+    const currentDate = new Date().toISOString();
+    console.log("currentDate: ", currentDate);
+    const fullSystemPrompt = "The Current Date is: " + currentDate + "\n\n" + document.getElementById('templateContent').value;
 
     let messages = [];
     if (!document.getElementById('skip_system_prompt_checkbox').checked) {
         messages.push({
             role: 'system',
-            content: document.getElementById('templateContent').value
+            content: fullSystemPrompt
         });
     }
 
