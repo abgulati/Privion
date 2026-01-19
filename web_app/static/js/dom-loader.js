@@ -101,8 +101,7 @@ function loadCoreLarsConfig() {
         'force_enable_rag',
         'force_disable_rag',
         'enable_web_search',
-        'assign_host_port_to_perplexica_server',
-        'perplexica_version',
+        'assign_host_port_to_searxng_server',
         'enable_graph_rag',
         'legacy_mode',
         'tool_response_mode',
@@ -1835,8 +1834,9 @@ function initializeTTSTabComponents(values) {
 
 function initializeWebSearchTabComponents(values) {
     document.getElementById('enable_web_search').checked = values.enable_web_search;
-    document.getElementById('perplexica_server_port').value = values.assign_host_port_to_perplexica_server;
-    document.getElementById('perplexica_version').value = values.perplexica_version;
+    document.getElementById('searxng_server_port').value = values.assign_host_port_to_searxng_server;
+    // document.getElementById('perplexica_server_port').value = values.assign_host_port_to_perplexica_server;
+    // document.getElementById('perplexica_version').value = values.perplexica_version;
 }
 
 
@@ -2025,7 +2025,7 @@ document.addEventListener("DOMContentLoaded", function() {
     loadCoreLarsConfig()
         .then(values => {
             startFalkorDB();
-            startPerplexica();
+            startSearXNG();
             initializeLLMTabComponents(values);
             initializeEmbeddingModelTabComponents(values);
             initializeSystemPromptTabComponents(values);

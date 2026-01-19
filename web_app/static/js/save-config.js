@@ -362,8 +362,9 @@ function getTtsConfig() {
 function getWebSearchConfig() {
     config = {
         'enable_web_search': document.getElementById('enable_web_search').checked,
-        'assign_host_port_to_perplexica_server': document.getElementById('perplexica_server_port').value,
-        'perplexica_version': document.getElementById('perplexica_version').value
+        'assign_host_port_to_searxng_server': document.getElementById('searxng_server_port').value,
+        // 'assign_host_port_to_perplexica_server': document.getElementById('perplexica_server_port').value,
+        // 'perplexica_version': document.getElementById('perplexica_version').value
     };
     return config;
 }
