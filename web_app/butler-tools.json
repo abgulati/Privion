@@ -3,11 +3,27 @@
 
         "search": {
             "name": "Local & Web RAG Search",
-            "description": "RAG tool for local & web search. Performs best when given a comprehensive search-optimized query.",
+            "description": "RAG tool for local & web search. Performs best when given a detailed and comprehensive, yet focused search-optimized query encompassing all relevant information from the conversational context.",
             "fields": {
                 "query": {
                     "required": true,
                     "type": "string"
+                },
+                "category": {
+                    "required": false,
+                    "type": "string",
+                    "enum": [
+                        "general",
+                        "news",
+                        "images",
+                        "videos",
+                        "music",
+                        "it",
+                        "science",
+                        "files",
+                        "social_media"
+                    ],
+                    "default": "web"
                 }
             }
         },

@@ -170,12 +170,12 @@ def generate_tools_schema(services_config: dict) -> list[dict]:
 
 
 ### TOOL DEFS:
-def search(query:str, **kwargs) -> dict:
+def search(query:str, category:str, **kwargs) -> dict:
     '''
     Searches the local & web knowledge base.
     '''
     stream_session_id = kwargs.get('stream_session_id', None)
-    return rag_core_module.execute_full_search(query, stream_session_id)
+    return rag_core_module.execute_full_search(query, category, stream_session_id)
 
 
 def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9', **kwargs):
@@ -332,7 +332,7 @@ def execute_tool_call(tool_name, llm_args, services_config: dict, stream_session
         if llm_args:
             final_args.update(llm_args)
 
-        print(f"Executing {tool_name} with args: {final_args}")
+        print(f"\n\nExecuting {tool_name} with args: {final_args}\n\n")
         return func_to_call(**final_args)   # **final_args unpacks the dictionary into keyword arguments
     
     except Exception as e:
@@ -449,7 +449,7 @@ def execute_tools(tools_json: dict, stream_session_id: str = None) -> dict:
                     'name': fn_name,
                     'content': result['message']
                 })
-                print(f"Tool execution result for {fn_name}: {result}")
+                #print(f"Tool execution result for {fn_name}: {result}")
 
         return {'success': True, 'tool_result_list': tool_result_list, 'message': 'Tools executed successfully.'}
     except Exception as e:
