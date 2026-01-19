@@ -2595,6 +2595,16 @@ def start_perplexica():
         return handle_api_error("Could not start Perplexica Docker container, encountered error: ", e)
 
 
+@app.route('/start_searxng')
+def start_searxng():
+    print("\nStarting SearXNG Docker container...\n")
+    try:
+        rag_support_module.bring_searxng_online()
+        return jsonify({"message": "SearXNG Docker container started successfully", "success": True}), 200
+    except Exception as e:
+        return handle_api_error("Could not start SearXNG Docker container, encountered error: ", e)
+
+
 def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with kb-generator model
 
     try:
@@ -6664,7 +6674,7 @@ def execute_tools():
         tools_json = request.json
         stream_session_id = tools_json.get('stream_session_id', None)
         tool_results = butler_module.execute_tools(tools_json, stream_session_id)
-        print(f"Tool results: {tool_results}")
+        print(f"\n\nTool results: {tool_results}\n\n")
         return jsonify({"success": tool_results['success'], "tool_result_list": tool_results['tool_result_list'], "message": tool_results['message']})
     except Exception as e:
         return handle_api_error(f"Error executing tools in method execute-tools - {tool_results['message']}. Encountered error: ", e)
@@ -7091,7 +7101,10 @@ def get_references():
         handle_error_no_return("Could not add citations and pdf browser to llm_response, encountered error: ", e)
     
     try:
-        model_response_for_history_db = prepare_model_response_for_storage_to_history_db(pdf_section_html, llm_response_with_citation_links)
+        if pdf_section_html:
+            model_response_for_history_db = prepare_model_response_for_storage_to_history_db(pdf_section_html, llm_response_with_citation_links)
+        else:
+            model_response_for_history_db = llm_response_with_citation_links
     except Exception as e:
         handle_error_no_return("Could not prep data to store to chat history DB in get-references(), encountered error: ", e)
 

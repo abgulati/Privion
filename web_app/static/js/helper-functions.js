@@ -894,6 +894,28 @@ function startPerplexica() {
     });
 }
 
+
+function startSearXNG() {
+    fetch("/start_searxng")
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.error)});
+        }
+        return response.json()
+    })
+    .then(data => {
+        if (data.success) {
+            console.log("SearXNG started successfully");
+        } else {
+            throw new Error('Internal Server Error when starting SearXNG: Check server-log and server command-line for more details.');
+        }
+    })
+    .catch(error => {
+        console.error("Error starting SearXNG, skipping: ", error);
+    });
+}
+
+
 function startFalkorDB() {
     fetch("/start_falkordb")
     .then(response => {

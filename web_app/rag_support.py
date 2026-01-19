@@ -8,10 +8,12 @@ from falkordb import FalkorDB
 import subprocess
 import platform
 import requests
+import textwrap
 import pathlib
 import json
 import time
 import re
+import os
 
 
 
@@ -332,3 +334,96 @@ def perplexica_search(query:str, history:list) -> str:
 
     except Exception as e:
         raise Exception(f"Could not perform Perplexica Search, encountered error: {e}")
+
+
+def setup_searxng_settings_yaml():
+    try:
+        read_return = config_manager.read_config(['searxng_dir'])
+
+        # Ensure path is absolute for Docker volume mounting
+        searxng_path = os.path.abspath(read_return['searxng_dir'])
+        os.makedirs(searxng_path, exist_ok=True)
+
+        file_path = os.path.join(searxng_path, 'settings.yml')
+
+        if not os.path.exists(file_path):
+            with open(file_path, 'w') as f:
+
+                settings_yaml = textwrap.dedent(f"""
+                    use_default_settings: true
+
+                    server:
+                        # Internal container port (do not change this)
+                        port: 8080
+                        bind_address: "0.0.0.0"
+                        secret_key: "a_very_long_random_string"
+
+                        # CRITICAL: Disable limiter for RAG/API usage
+                        limiter: false
+
+                    search:
+                        formats:
+                            - html
+                            - json  # <--- This is the critical line to enable the API
+                    
+                    # Optional: Disable throttling if you are the only user
+                    # protection_max_requests: 100 
+                    # protection_limiter_window: 1
+                """)
+
+                f.write(settings_yaml)
+            print(f"\nSearXNG settings.yml created successfully at {file_path}!\n")
+
+        return True
+    except Exception as e:
+        raise Exception(f"Could not setup SearXNG settings.yaml, encountered error: {e}")
+
+
+def bring_searxng_online():
+    try:
+
+        config = config_manager.read_config(['assign_host_port_to_searxng_server', 'searxng_dir'])
+        container_name = 'searxng'
+
+        # Ensure absolute path for volume mount
+        abs_searxng_dir = os.path.abspath(config['searxng_dir'])
+        host_port = str(config['assign_host_port_to_searxng_server'])
+
+        setup_searxng_settings_yaml()
+
+        # Check if Docker Engine is running
+        subprocess.run(['docker', 'info'], capture_output=True, check=True)  # check=True will raise an exception if the command returns a non-zero exit code
+
+        # Check if container is running
+        if utils_module.check_if_container_is_running(container_name):
+            print("\nSearXNG Docker container is already running, skipping launch...\n")
+            return True
+
+        # Check if container exists, but is stopped
+        if utils_module.check_if_container_exists(container_name):
+            print("\nSearXNG Docker container exists, but is stopped, starting it...\n")
+            return utils_module.start_container(container_name)
+
+        # Container doesn't exist, create it
+        print("\nDocker Engine is running, proceeding with SearXNG Docker container launch...\n")
+
+        command = [
+            'docker', 'run', '-d',
+            '--name', container_name,
+            '-p', f'{host_port}:8080',
+            '-v', f'{abs_searxng_dir}:/etc/searxng',
+            'searxng/searxng:latest'
+        ]
+
+        if platform.system() == 'Windows':
+            subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        else:
+            # shell=True is dangerous/buggy with list arguments on Linux. 
+            # Use shell=False (default) when passing a list.
+            subprocess.Popen(command, shell=False)
+        
+        print(f"\nSearXNG Docker container launched successfully!\n")
+        return True
+
+    except Exception as e:
+        raise Exception(f"Could not bring SearXNG online, encountered error: {e}")
