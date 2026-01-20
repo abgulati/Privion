@@ -8,6 +8,7 @@ from whoosh.query import Term, Or
 from whoosh import scoring
 from falkordb import FalkorDB
 
+import requests
 import chromadb
 import datetime
 import sqlite3
@@ -154,19 +155,43 @@ def extract_content_source_and_page_data_from_summary_text(summary_text: str) ->
         page_match = re.search(page_pattern, summary_text)
         if page_match:  # Convert string representation of list to actual list of integers
             pages_str = page_match.group(1)
-            pages = [int(p.strip()) for p in pages_str.split(',')]
+            pages = [int(p.strip()) for p in pages_str.split(',')] if pages_str else [1]
         else:
-            pages = []
+            pages = [1]
         
         content_data = summary_text[:source_match.start()].strip() if source_match else summary_text.strip()
 
         return content_data, source_doc_name, pages
     except Exception as e:
         print(f"Could not extract content data, source document name and page numbers from summary text, returning unchanged summary text. Encountered error: {e}")
-        return summary_text, "", []
+        return summary_text, "", [1]
 
 
 def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length_limit_chars: int, user_query: str) -> tuple[str, list[Document]]:
+    '''
+    Receives a dictionary of chunk entities complete with summaries for the comprising nodes and relationships, 
+    the graph RAG context length limit in characters, and the user query.
+
+    The user query is used to rerank the summaries if the provided limit is exceeded.
+
+    Returns a summary report string and a list of Document objects, comprising the summaries as Document objects, which
+    are assembled as follows:
+
+        1. A summary-preface-string is constructed basis the node/relationship entities details
+        2. For a given summary, the source-doc-name and page number(s) are extracted from the summary text.
+        3. A source-link is constructed using the source-doc-name and page number(s)
+        4. An entry is formatted as follows:
+            {Summary Preface String} -
+            source_link:{source_link}:
+            {Summary Text}
+            source_link:{source_link}
+            \n\n
+        5. The entry is added to the summary-report set and the summary-doc-objects list, with exceptions handled via a simplified entry fallback.
+
+    The summary-report set is used to ensure that the same summary is not added multiple times to the summary report.
+    The summary-doc-objects list is used to store the summaries as Document objects, which are then used to rerank the summaries if the provided limit is exceeded.
+
+    '''
     print(f"\n\nGetting summary report\n\n")
     
     summary_report = set()
@@ -189,22 +214,29 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
                     
                     for summary in node.get('summary', []): # There may be multiple summaries for a single node, so we iterate over the list of summaries.
                         try:
-                            if summary is not None and summary != '':
-                                summary_preface_string = f"Summary for entity '{node['name']}' of type '{node['type']}'"
+                            if not summary:
+                                continue
+                            
+                            summary_preface_string = f"Summary for entity '{node['name']}' of type '{node['type']}'"
 
                             try:
                                 content_data, source_doc_name, pages = extract_content_source_and_page_data_from_summary_text(summary)
                                 source_link = f"http://llm-citations-database.net/source?doc_name={source_doc_name}&page_number={[pages[0]]}"
-                                summary_doc_objects.append(Document(page_content=f"{summary_preface_string} -\nsource_link:{source_link}:\n{summary}\nsource_link:{source_link}\n\n", metadata={'page_number': pages, 'source': source_doc_name}))
+                                page_content_entry = f"{summary_preface_string} -\nsource_link:{source_link}:\n{summary}\nsource_link:{source_link}\n\n"
+                                
+                                summary_doc_objects.append(Document(page_content=page_content_entry, metadata={'page_number': pages, 'source': source_doc_name}))
+                            
                             except Exception as e:
                                 print(f"Could not convert GraphRAG context to Document object, skipping. Encountered error: {e}")
-
-                            entry = (
-                                f"{summary_preface_string} - {summary}" #The summary, as generated in the process_nodes_and_relationships method of hf_waitress.py, contains metadata and newline spacing.
-                            )
-                            summary_report.add(entry)
+                                page_content_entry = (
+                                    f"{summary_preface_string} - {summary}" #The summary, as generated in the process_nodes_and_relationships method of hf_waitress.py, contains metadata and newline spacing.
+                                )
+                            
+                            summary_report.add(page_content_entry)
+                        
                         except Exception as e:
                             print(f"Error processing a node's summary when adding to summary report. Skipping this summary. encountered error: {e}")
+                            continue
             
             except Exception as e:
                 print(f"Error processing node in chunk_data when adding to summary report, likely a corrupt dict. Skipping node summaries for this chunk. encountered error: {e}")
@@ -217,22 +249,29 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
 
                     for summary in relationship.get('summary', []):
                         try:
-                            if summary is not None and summary != '':
-                                summary_preface_string = f"Summary for relationship '{relationship['relationship']}' between entities '{relationship['source']}' and '{relationship['target']}'"
+                            if not summary:
+                                continue
+                            
+                            summary_preface_string = f"Summary for relationship '{relationship['relationship']}' between entities '{relationship['source']}' and '{relationship['target']}'"
 
                             try:
                                 content_data, source_doc_name, pages = extract_content_source_and_page_data_from_summary_text(summary)
                                 source_link = f"http://llm-citations-database.net/source?doc_name={source_doc_name}&page_number={[pages[0]]}"
-                                summary_doc_objects.append(Document(page_content=f"{summary_preface_string} -\nsource_link:{source_link}:\n{summary}\nsource_link:{source_link}\n\n", metadata={'page_number': pages, 'source': source_doc_name}))
+                                page_content_entry = f"{summary_preface_string} -\nsource_link:{source_link}:\n{summary}\nsource_link:{source_link}\n\n"
+                                
+                                summary_doc_objects.append(Document(page_content=page_content_entry, metadata={'page_number': pages, 'source': source_doc_name}))
+                            
                             except Exception as e:
                                 print(f"Could not convert GraphRAG context to Document object, skipping. Encountered error: {e}")
-
-                                entry = (
+                                page_content_entry = (
                                     f"{summary_preface_string} - {summary}"
                                 )
-                                summary_report.add(entry)
+                            
+                            summary_report.add(page_content_entry)
+                        
                         except Exception as e:
                             print(f"Error processing a relationship's summary when adding to summary report. Skipping this summary. encountered error: {e}")
+                            continue
             
             except Exception as e:
                 print(f"Error processing relationship in chunk_data when adding to summary report, likely a corrupt dict. Skipping relationship summaries for this chunk. encountered error: {e}")
@@ -243,25 +282,23 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
     textual_summary_report = ''.join(summary_report)
 
     if len(textual_summary_report) > graph_rag_context_length_limit_chars:
+        trimmed_summary_report = ''
         try:
-            textual_summary_report = ''
-            try:
-                reranked_summaries_list_ascending = rerank_results_ml(user_query, summary_doc_objects, top_n=len(summary_doc_objects))
-            except Exception as e:
-                print(f"Could not rerank search results, skipping. Encountered error: {e}")
-                reranked_summaries_list_ascending = summary_doc_objects
-            reranked_summaries_list_descending = reranked_summaries_list_ascending[::-1]    # The `rerank-results_ml` method returns a list of docs in ascending order of relevance, so we need to reverse it so we may iterate starting with the most relevant docs!
-            for doc in reranked_summaries_list_descending:
-                if len(textual_summary_report) + len(str(doc.page_content)) > graph_rag_context_length_limit_chars:
-                    break
-                textual_summary_report += str(doc.page_content)
             
-            # print(f"\n\nReturning Textual summary report: {textual_summary_report}\n\n")
-            return textual_summary_report, reranked_summaries_list_descending
+            reranked_summaries_list = rerank_results_ml(user_query, summary_doc_objects, top_n=len(summary_doc_objects), ascending_relevance_sort=False)
+            
+            for doc in reranked_summaries_list:
+                
+                if len(trimmed_summary_report) + len(str(doc.page_content)) > graph_rag_context_length_limit_chars:
+                    break
+                trimmed_summary_report += str(doc.page_content)
+            
+            return trimmed_summary_report, reranked_summaries_list
+
         except Exception as e:
-            raise Exception(f"Could not handle summary report that is too long, encountered error: {e}")
-    else:
-        return textual_summary_report, summary_doc_objects
+            print(f"Could not rerank & trim GraphRAG summaries, returning original summary report. Encountered error: {e}")
+
+    return textual_summary_report, summary_doc_objects
 
 
 def get_summary_and_source_documents_for_node(graph, name, node_type):
@@ -552,18 +589,18 @@ def assemble_chunks_for_graph_rag(docs:list[Document], user_query:str=None) -> d
     obtained from the GraphDB itself at a later step: In get-summaries_from_graph_db(), the get-summaries_for_all_nodes() and get-summaries_for_all_relationships()
     methods are used to obtain the 'source_doc_name' and 'page_number' data for each node and relationship respectively, by setting get_source_documents=True.
 
-    The main source doc and page number data isobtained from the summary in the GraphDB, as summaries always end with the following pattern:
+    The main source doc and page number data is obtained from the summary in the GraphDB, as summaries always end with the following pattern:
 
         {Source Document Name: AMD_Q4_and_FY_24_EarningsRelease_FINAL}{Page Number(s): [8]}  # For example...
     
     In fact, 'chunk_text' is also unnecessary as only the nodes and relationships are needed for GraphRAG, not the actual text!
-    So they're all simply added here incase this data proves useful for some future use-case!
+    So they're all simply added here incase this data proves useful for some future downstream tasks.
     '''
     try:
         chunk_entities = {}
         graph_chunk_count = 1   # Same init as in convert-doc_chunks_to_graph_entities()
 
-        if user_query is not None:  # For GraphRAG response query-pipeline, we need to add the user query as a chunk
+        if user_query is not None:  # For legacy-GraphRAG response query-pipeline, we need to add the user query as a chunk
             user_query = user_query.replace("'", "").replace("<br>", "").replace("?", "")
             user_query_chunk_text = f"Do not attempt to answer any query that follows, simply proceed to extract nodes and relationships from the following text:\n{user_query}"
             chunk_entities[graph_chunk_count] = {
@@ -604,25 +641,38 @@ def assemble_chunks_for_graph_rag(docs:list[Document], user_query:str=None) -> d
 
 def execute_graph_rag(user_query:str, docs_with_graph_entities: list[Document]) -> tuple[str, list[Document]]:
     '''
-    Assembles document chunks into a dictionary of entities via convert-doc_chunks_to_graph_entities(); check append-graph_entities_to_chunks() for detailed
-    documentation on the structure of docs and chunk_entities.
+    Receives a list of Document objects, comprising combined RAG results from local and Web sources, all containing 
+    graph 'entities_and_relationships' in their metadata (set to empty dict for WebRAG / if no graph data is present).
 
-    These chunk_entities are then passed to the graphing model which will process each graph_chunk and append the `entities_and_relationships` key 
-    to each chunk_entities dict:
-        
-        '<entities_and_relationships>': {"nodes": [{"type": "organization","name": "Intel"},{"type": "object","name": "Intel Products"},...], 
-        "relationships": [{"source": "Intel","target": "Intel Products","relationship": "business unit"},...]}
+    Will use append-graph_entities_to_chunks() to transform the list of Document objects into a dictionary of chunk_entities, 
+    (see that method for detailed documentation on the structure of docs and chunk_entities), and then merges them into a 
+    singular chunk_entity for querying the GraphDB to obtain summaries via merge-chunk_entities_for_graph_rag()
+    (as we're only interested in the total list of nodes & relationships for GraphDB-queries).
 
-    The various chunk_entities in the dict are then merged into a singular chunk_entity for querying the GraphDB to obtain summaries (as we're only interested
-    in a de-duplicated list of nodes & relationships for GraphDB-queries). 
-    The merge-chunk_entities_for_graph_rag and get-summaries_from_graph_db methods are respectively used for this purpose.
+    Inline comments in the merge method explain that deduplication of the list of nodes & relationships occurs naturally later. 
+    
+    Finally, the merged chunk_entities are used to fetch summaries from the GraphDB via the get-summary methods, and the summaries 
+    are deduplicated and formatted into a summary report via get-summary_report().
 
-    The obtained summaries are deduplicated and formatted into a summary report via get-summary_report(), and finally re-ranked and trimmed to obtain the
-    final graphRAG context, which is then returned.
+    Returns: A summary report string and a list combining the summaries and Web Documents as Document objects.
+    See method get-summary_report() for detailed documentation on the structure of the summary report and the list of Document objects.
     '''
     
     print(f"\n\nExecuting GraphRAG. Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
+    # --- 1. SEPARATE WEB DOCS FROM GRAPH DOCS ---
+    graph_docs = []
+    web_docs = []
+
+    for doc in docs_with_graph_entities:
+        if doc.metadata.get('entities_and_relationships'):
+            graph_docs.append(doc)
+        else:   # blank dict will result in a False check, and the else block will execute
+            web_docs.append(doc)
+
+    print(f"Graph Pipeline: Processing {len(graph_docs)} Graph Docs and preserving {len(web_docs)} Web Docs.")
+
+     # --- 2. SETUP GRAPH DB ---
     try:
         rag_support_module.bring_graph_db_online()
     except Exception as e:
@@ -635,47 +685,83 @@ def execute_graph_rag(user_query:str, docs_with_graph_entities: list[Document]) 
     except Exception as e:
         raise Exception(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB, encountered error: {e}")
 
-    try:
-        complete_chunk_entities = assemble_chunks_for_graph_rag(docs_with_graph_entities, user_query=None)
-        print(f"\n\nlen of complete_chunk_entities: \n {len(complete_chunk_entities.items())}\n\n")
-        # for item in list(complete_chunk_entities.items()):
-        #     print(f"\n\n{item}\n\n")
-    except Exception as e:
-        raise Exception(f"Could not assemble chunks for graph DB, encountered error: {e}")
+    # --- 3. EXECUTE GRAPH PIPELINE (ON GRAPH DOCS ONLY) ---
+    summaries_list = []
+    summary_report = ""
 
-    try:
-        merged_graph_rag_entities_and_relationships_dict = merge_chunk_entities_for_graph_rag(complete_chunk_entities)
-        print(f"\n\nlen of merged_graph_rag_entities_and_relationships_dict: \n {len(merged_graph_rag_entities_and_relationships_dict)}\n\n")
-    except Exception as e:
-        raise Exception(f"Fatal error merging chunk entities for GraphRAG: {e}")
+    if graph_docs:
+        try:
+            complete_chunk_entities = assemble_chunks_for_graph_rag(graph_docs, user_query=None)
+            print(f"\n\nlen of complete_chunk_entities: \n {len(complete_chunk_entities.items())}\n\n")
+            # for item in list(complete_chunk_entities.items()):
+            #     print(f"\n\n{item}\n\n")
+        except Exception as e:
+            raise Exception(f"Could not assemble chunks for graph DB, encountered error: {e}")
 
-    try:
-        summarized_and_deduplicated_chunk_entities = get_summaries_from_graph_db(merged_graph_rag_entities_and_relationships_dict, selected_knowledge_domain, graph)
-    except Exception as e:
-        raise Exception(f"Could not fetch summaries for entities and relationships from graph DB, encountered error: {e}")
+        try:
+            merged_graph_rag_entities_and_relationships_dict = merge_chunk_entities_for_graph_rag(complete_chunk_entities)
+            print(f"\n\nlen of merged_graph_rag_entities_and_relationships_dict: \n {len(merged_graph_rag_entities_and_relationships_dict)}\n\n")
+        except Exception as e:
+            raise Exception(f"Fatal error merging chunk entities for GraphRAG: {e}")
 
-    try:
-        graph_rag_context_length_limit_chars = int(config_manager.read_config(['graph_rag_context_length_limit_chars'])['graph_rag_context_length_limit_chars'])
-        summary_report, reranked_summaries_list_descending = get_summary_report(summarized_and_deduplicated_chunk_entities, graph_rag_context_length_limit_chars, user_query)
-    except Exception as e:
-        raise Exception(f"Could not get summary report, encountered error: {e}")
+        try:
+            summarized_and_deduplicated_chunk_entities = get_summaries_from_graph_db(merged_graph_rag_entities_and_relationships_dict, selected_knowledge_domain, graph)
+        except Exception as e:
+            raise Exception(f"Could not fetch summaries for entities and relationships from graph DB, encountered error: {e}")
 
-    return summary_report, reranked_summaries_list_descending
+        try:
+            graph_rag_context_length_limit_chars = int(config_manager.read_config(['graph_rag_context_length_limit_chars'])['graph_rag_context_length_limit_chars'])
+            summary_report, summaries_list = get_summary_report(summarized_and_deduplicated_chunk_entities, graph_rag_context_length_limit_chars, user_query)
+        except Exception as e:
+            raise Exception(f"Could not get summary report, encountered error: {e}")
+    
+    else:
+        print("No Graph Docs found (Web Search only).")
+
+    # --- 4. MERGE WEB CONTENT BACK IN ---
+    
+    # A. Append Web Content to the Text Report (String)
+    if web_docs:
+        summary_report += "\n\n" + "="*20 + "\n EXTERNAL WEB SEARCH RESULTS \n" + "="*20 + "\n\n"
+        '''
+        multiplying a string ("=" * 20) repeats it.
+        So, that one line of code injects this exact block of text into your prompt:
+        ====================
+        EXTERNAL WEB SEARCH RESULTS 
+        ====================
+        '''
+        for doc in web_docs:
+            summary_report += f"Title: {doc.metadata.get('title', 'Unknown')}\n"
+            summary_report += f"source_link: {doc.metadata.get('source_link', '')}\n"
+            summary_report += f"Content: {doc.page_content}\n\n"
+
+    # B. Merge Document Lists
+    # If both are empty, the returned list will be blank and execute-full_search will fallback to non-Graph docs list!
+    final_docs_list = summaries_list + web_docs
+    return summary_report, final_docs_list
 
 
 def map_graph_entities_to_filtered_docs(combined_docs:list[Document], graph_entities_map:dict) -> list[Document]:
+    '''
+    Maps graph entities to the filtered docs, by assigning the graph entities to the metadata of the corresponding Document object.
+    '''
     print("\n\nMapping graph entities to filtered docs\n\n")
     for doc in combined_docs:
-        try:
+        if doc.metadata.get('unique_id') and doc.metadata['unique_id'] in graph_entities_map:
             doc.metadata['entities_and_relationships'] = graph_entities_map[doc.metadata['unique_id']]
-        except Exception as e:
-            print(f"Could not map graph entities to doc, skipping. Encountered error: {e}")
+        else:
+            # It is a Web Doc OR a Local Doc with no graph data -> Set empty dict
             doc.metadata['entities_and_relationships'] = {}
     return combined_docs
 
 
-def rerank_results_ml(query:str, documents:list[Document], top_n:int=5) -> list[Document]:
+def rerank_results_ml(query:str, documents:list[Document], top_n:int=5, ascending_relevance_sort:bool=True) -> list[Document]:
     print("\n\nReranking Invoked\n\n")
+
+    # 1. Safety Check: Don't crash if search returned nothing
+    if not documents:
+        print("No documents to rerank.")
+        return []
 
     try:
         read_return = config_manager.read_config(['use_embedding_model_for_reranking', 'selected_embedding_model', 'selected_reranker_model'])
@@ -683,72 +769,77 @@ def rerank_results_ml(query:str, documents:list[Document], top_n:int=5) -> list[
         selected_embedding_model = str(read_return['selected_embedding_model'])
         selected_reranker_model = str(read_return['selected_reranker_model'])
     except Exception as e:
-        use_embedding_model_for_reranking = True
-        print(f"Could not read reranker configfrom config.json, encountered error: {e}")
-
+        print(f"Could not read reranker config, using defaults. Error: {e}")
+        # FALLBACKS defined here so the code doesn't crash later
+        use_embedding_model_for_reranking = True 
+        selected_embedding_model = 'all-MiniLM-L6-v2' 
+        selected_reranker_model = 'all-MiniLM-L6-v2'
+    
     if use_embedding_model_for_reranking:
         selected_reranker_model = selected_embedding_model
-    else:
-        selected_reranker_model = selected_reranker_model
 
     print(f"\n\nSelected model for re-ranking: {selected_reranker_model}\n\n")
 
     model = None
     try:
-        # Load pre-trained SBERT model
         model = SentenceTransformer(selected_reranker_model)
         
-        # Encode the query
+        ## Bi-Encoder Logic (do NOT use cross-encoder Re-Ranking models here, stick to embedding models only for now!)
         query_embedding = model.encode(query, convert_to_tensor=True)
-        
-        # Encode the documents
-        doc_embeddings = model.encode([doc.page_content for doc in documents], convert_to_tensor=True)
-    except Exception as e:
-        raise Exception(f"Could not rerank results with {selected_reranker_model}, encountered error: {e}")
-        return [doc.page_content for doc in documents]
-    finally:
-        if model is not None:
-            del model
-            if torch.cuda.is_available():
-                print("Emptying CUDA cache")
-                torch.cuda.empty_cache()
-            print("Collecting garbage")
-            gc.collect()
-
-    try:
-        # Compute cosine similarities
-        cosine_scores = util.pytorch_cos_sim(query_embedding, doc_embeddings)[0]
-    except Exception as e:
-        raise Exception(f"Could not compute cosine similarities, encountered error: {e}")
-        return [doc.page_content for doc in documents]
+        doc_contents = [doc.page_content for doc in documents]
+        doc_embeddings = model.encode(doc_contents, convert_to_tensor=True)
     
-    try:
-        # Create a list of (index, score) tuples
-        indexed_scores = list(enumerate(cosine_scores))
-        
-        # Sort by score in descending order
-        sorted_indexes = sorted(indexed_scores, key=lambda x: x[1], reverse=True)
-        
-        # Reorder the original documents based on the sorted indexes
-        ranked_documents = [documents[idx] for idx, _ in sorted_indexes[:top_n]]
+        cosine_scores = util.pytorch_cos_sim(query_embedding, doc_embeddings)[0]
 
-        # print(f"\n\nReturning Top {len(ranked_documents)} Ranked Documents: {ranked_documents}\n\n")
+        ## Attach score to metadata and sort
 
-        '''
-        Studies show that LLMs and Transformers in-general tend to perform better when the most relevant context is towards the beginning or end of the input, while important context in between tends to get 'lost in the middle'! 
-        This can be a serious problem for a large multi-turn conversation, wherein extensive back-and-forth query-response history exists and grows with each prompt. 
-        Therefore, the re-ranker method has been modified below to return a reversed context docs list, placing the most relevant docs at the end, so the list is now in ascending order of relevance. 
-        This should be helpful right from query 1 especially when the system prompt is large!
-        '''
-        return ranked_documents[::-1]   #Slice to reverse the list, as `.reverse()` would return None because it creates an inplace change on the original list without returning anything
+        # We zip the documents with their scores, as opposed to enumerate `list(enumerate(cosine_scores))`,
+        # which would pair each score with an index (0, 1, 2, etc.), which is not what we want!
+        doc_score_pairs = list(zip(documents, cosine_scores))
+
+        # Sort by score descending (sort paired items)
+        doc_score_pairs.sort(key=lambda x: x[1], reverse=True)
+
+        # Slice top_n
+        top_pairs = doc_score_pairs[:top_n]
+
+        # Update metadata with scores (zip version is extensible and allows additions as below:)
+        for doc, score in top_pairs:
+            doc.metadata['relevance_score'] = float(score)
+
+        # Extract just the docs
+        top_docs = [doc for doc, score in top_pairs]
+
+        if ascending_relevance_sort:
+            # "Lost in the Middle" Optimization (Reverse list)
+            # This puts the highest score LAST (closest to the LLM generation prompt)
+            return top_docs[::-1]   
+            # Slice to reverse the list, as `.reverse()` would return None since it 
+            # creates an inplace change on the original list without returning anything!
+        else:
+            return top_docs
 
     except Exception as e:
-        print(f"Could not reorder documents, encountered error: {e}")
-        return [doc.page_content for doc in documents]
+        print(f"Reranking failed: {e}")
+        return documents[:top_n]
 
+    finally:
+        # if model is not None:
+        #     del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
 
 
 def combine_and_deduplicate_search_results(whoosh_results:list[dict], vector_results:list[Document]) -> tuple[list[Document], dict]:
+    '''
+    Combines whoosh and vector results into a single list of Document objects, while building a dictionary of graph entities.
+    A unique ID is assigned to the metadata of each Document object, which is also used as a key in the graph_entities_map to
+    map graph 'entities_and_relationships' to the corresponding Document object.
+    We keep the graph entities separate like this so as to keep the Document object itself lightweight, as it may be appended as 
+    RAG context to the user prompt. These entities are only needed to extract summaries from the GraphDB IF GraphRAG is enabled,
+    and including them in the Document object would serve no purpose except to bloat the RAG context unnecessarily.
+    '''
     print("\n\nCombining whoosh and vector results\n\n")
 
     combined_results = []
@@ -933,13 +1024,66 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
         print(f"Could not perform similarity_search to determine do_rag when attempting to setup_for_streaming_response, encountered error: {e}")
         return []
     finally:
-        if embedding_model is not None:
-            del embedding_model
-            if torch.cuda.is_available():
-                print("Emptying CUDA cache")
-                torch.cuda.empty_cache()
-            print("Collecting garbage")
-            gc.collect()
+        # if embedding_model is not None:
+        #     del embedding_model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+
+
+def search_searxng(user_query:str, category:str='general') -> list[Document]:
+    '''
+    Searches the web for information using SearXNG.
+    '''
+    try:
+
+        print("\n\nSearching Web via local SearXNG server...\n\n")
+
+        searxng_config = config_manager.read_config(['assign_host_port_to_searxng_server'])
+
+        url = f"http://localhost:{searxng_config['assign_host_port_to_searxng_server']}/search"
+
+        params = {
+            'q': user_query,
+            'format': 'json',
+            'categories': category,
+            'language': 'auto'
+        }
+        response = requests.get(url, params=params)
+        results = response.json().get('results', [])
+
+        if not results:
+            return []
+
+        documents = []
+        print(f"Scraping {len(results)} URLs...")
+        for res in results:
+
+            try:
+                snippet = res.get('content', '')
+
+                if snippet:
+                    # Create Document object - Does NOT contain unique_id and page_number, the latter for obvious reasons &
+                    # the lack of the former is handled by map-graph_entities_to_filtered_docs() later.
+                    doc = Document(
+                        page_content=snippet,
+                        metadata={
+                            'source_link': res['url'],
+                            'source': res['engine'],
+                            'title': res['title'],  # instead of 'page_number'
+                            'score': 0.0 # Placeholder - instead of 'unique_id'
+                        }
+                    )
+                    documents.append(doc)
+            except:
+                continue
+
+        print(f"Scraped {len(documents)} documents from SearXNG")
+        return documents
+
+    except Exception as e:
+        print(f"Could not search SearXNG, encountered error: {e}")
+        return []
 
 
 def legacy_execute_search_tools_on_query(
@@ -992,9 +1136,9 @@ def legacy_execute_search_tools_on_query(
     if perform_graph_rag and llm_set_config.get('do_rag', True) and enable_graph_rag:   # All conditions must be met for GraphRAG to be performed!
         try:
             docs_with_graph_entities = map_graph_entities_to_filtered_docs(docs, graph_entities_map)
-            graph_rag_context, reranked_summaries_list_descending = execute_graph_rag(user_query, docs_with_graph_entities)
-            if reranked_summaries_list_descending != []:
-                return reranked_summaries_list_descending, llm_set_config.get('do_rag', True), graph_rag_context
+            graph_rag_context, summaries_list = execute_graph_rag(user_query, docs_with_graph_entities)
+            if len(summaries_list) > 0:
+                return summaries_list, llm_set_config.get('do_rag', True), graph_rag_context
         except Exception as e:
             print(f"Could not execute graph RAG, encountered error: {e}")
     else:
@@ -1003,17 +1147,17 @@ def legacy_execute_search_tools_on_query(
     return docs, llm_set_config.get('do_rag', True), graph_rag_context
 
 
-def execute_full_search(query:str, stream_session_id: str = None) -> dict:
+def execute_full_search(query:str, category:str, stream_session_id: str = None) -> dict:
     print("Executing full search")
 
     try:
         rag_config = config_manager.read_config([
             'selected_embedding_model', 'filter_top_k_results_by_reranking', 
             'fetch_top_k_results_from_vectordb', 'enable_graph_rag',
-            'force_disable_rag', 'enable_graph_rag'
+            'force_disable_rag', 'enable_web_search'
         ])
     except Exception as e:
-        raise Exception(f"Could not read rag config in method execute_full_search, encountered error: {e}")
+        raise Exception(f"Could not read rag config in method execute-full_search, encountered error: {e}")
     
     if rag_config['force_disable_rag']:
         print("Force disable rag is True, returning...")
@@ -1033,16 +1177,32 @@ def execute_full_search(query:str, stream_session_id: str = None) -> dict:
         print(f"Could not perform whoosh search to determine do_rag when attempting to search-knowledge-base, encountered error: {e}")
 
     combined_docs = []
+    graph_entities_map = {}
     try:
         combined_docs, graph_entities_map = combine_and_deduplicate_search_results(whoosh_results, filtered_docs)   # Combine the whoosh and vector results
     except Exception as e:
         print(f"Could not combine and deduplicate search results, skipping. Encountered error: {e}")
         combined_docs = filtered_docs
 
+    web_docs = []
+    if rag_config['enable_web_search']:
+        try:
+            print("Attempting Web Search via SearXNG...")
+            web_docs = search_searxng(query, category)
+            print(f"Web search returned {len(web_docs)} documents")
+        except Exception as e:
+            print(f"Could not perform web search, encountered error: {e}")
+
+    # We merge AFTER Document-RAG deduplication so we don't break existing GraphRAG logic, but BEFORE reranking so the AI can choose the best content.
+    if web_docs:
+        combined_docs.extend(web_docs)
+
+    # --- Safety Check ---
     if not combined_docs:   # i.e. if blank
         print("No documents for citations, returning...")
         return {'success': False, 'message': 'No citation data found for query', 'docs': [], 'do_rag': False, 'graph_rag_context': None}
 
+    docs = []
     try:
         docs = rerank_results_ml(query, combined_docs, top_n=int(rag_config['filter_top_k_results_by_reranking']))
     except Exception as e:
@@ -1050,16 +1210,20 @@ def execute_full_search(query:str, stream_session_id: str = None) -> dict:
         docs = combined_docs
 
     if rag_config['enable_graph_rag']:
+        
         try:
+            
             docs_with_graph_entities = map_graph_entities_to_filtered_docs(docs, graph_entities_map)
-            graph_rag_context, reranked_summaries_list_descending = execute_graph_rag(query, docs_with_graph_entities)
-            if len(reranked_summaries_list_descending) > 0:
-                persist_rag_context(stream_session_id, reranked_summaries_list_descending)
-                return {'success': True, 'message': graph_rag_context, 'docs': reranked_summaries_list_descending, 'do_rag': True, 'graph_rag_context': graph_rag_context}
+            graph_rag_context, summaries_list = execute_graph_rag(query, docs_with_graph_entities)
+            
+            if len(summaries_list) > 0 and len(graph_rag_context) > 0:  # GraphRAG results actually exist!
+                persist_rag_context(stream_session_id, summaries_list)
+                return {'success': True, 'message': graph_rag_context, 'docs': summaries_list, 'do_rag': True, 'graph_rag_context': graph_rag_context}                
+        
         except Exception as e:
             print(f"Could not execute graph RAG, encountered error: {e}")
+    
     else:
         persist_rag_context(stream_session_id, docs)
-        return {'success': True, 'message': docs, 'docs': str(docs), 'do_rag': True, 'graph_rag_context': None}
     
-
+    return {'success': True, 'message': docs, 'docs': str(docs), 'do_rag': True, 'graph_rag_context': None}
