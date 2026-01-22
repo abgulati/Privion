@@ -162,3 +162,186 @@
     font-size: 1.5rem;
     color: #aaa;
 }
+
+
+@media (max-width: 768px) {
+    #smart-home-area {
+        padding: 15px;
+    }
+
+    .zone-section {
+        padding: 12px;
+        margin-bottom: 20px;
+    }
+
+    .zone-title {
+        font-size: 1.3rem;
+        margin-bottom: 12px;
+    }
+
+    .room-title {
+        font-size: 1.1rem;
+        margin-bottom: 8px;
+    }
+
+    .device-grid {
+        gap: 12px;
+    }
+
+    .device-card {
+        width: 180px;
+        height: 100px;
+        padding: 10px 13px;
+    }
+
+    .device-icon {
+        font-size: 2rem;
+    }
+
+    .device-name {
+        font-size: 0.85rem;
+    }
+
+    .bulb-controls {
+        gap: 7px;
+        top: 13px;
+        right: 13px;
+    }
+
+    .color-bubble {
+        width: 22px;
+        height: 22px;
+    }
+}
+
+@media (max-width: 480px) {
+    #smart-home-area {
+        padding: 15px 10px;
+    }
+
+    .smart-home-header {
+        margin-bottom: 15px;
+        padding-bottom: 8px;
+    }
+
+    .zone-section {
+        padding: 10px;
+        margin-bottom: 20px;
+    }
+
+    .zone-title {
+        font-size: 1.2rem;
+        margin-bottom: 10px;
+    }
+
+    .room-section {
+        margin-bottom: 15px;
+        margin-left: 5px;
+    }
+
+    .room-title {
+        font-size: 1rem;
+        margin-bottom: 8px;
+    }
+
+    .device-grid {
+        gap: 10px;
+        justify-content: center;
+    }
+
+    .device-card {
+        width: 160px;
+        height: 95px;
+        padding: 10px 12px;
+    }
+
+    .device-icon {
+        font-size: 1.8rem;
+    }
+
+    .device-name {
+        font-size: 0.8rem;
+    }
+
+    .bulb-controls {
+        gap: 6px;
+        top: 12px;
+        right: 12px;
+    }
+
+    .color-bubble {
+        width: 20px;
+        height: 20px;
+    }
+
+    .color-bubble i {
+        font-size: 0.6rem;
+    }
+}
+
+@media (max-width: 360px) {
+    #smart-home-area {
+        padding: 10px 8px;
+    }
+
+    .zone-title {
+        font-size: 1.1rem;
+    }
+
+    .room-title {
+        font-size: 0.95rem;
+    }
+
+    .device-grid {
+        gap: 8px;
+    }
+
+    .device-card {
+        width: 145px;
+        height: 90px;
+        padding: 8px 10px;
+    }
+
+    .device-icon {
+        font-size: 1.6rem;
+    }
+
+    .device-name {
+        font-size: 0.75rem;
+    }
+
+    .bulb-controls {
+        gap: 5px;
+        top: 10px;
+        right: 10px;
+    }
+
+    .color-bubble {
+        width: 18px;
+        height: 18px;
+    }
+
+    .color-bubble i {
+        font-size: 0.55rem;
+    }
+}
+
+@media (max-height: 600px) and (orientation: landscape) {
+    #smart-home-area {
+        padding: 10px;
+    }
+
+    .device-grid {
+        gap: 10px;
+    }
+
+    .device-card {
+        width: 150px;
+        height: 85px;
+    }
+
+    .zone-section {
+        margin-bottom: 15px;
+    }
+}
+

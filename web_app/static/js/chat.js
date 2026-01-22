@@ -421,7 +421,8 @@ function printErrorToChatArea(responseContentID, error_message) {
 
 
 async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer, tools_schema=null) {
-    const url = "http://localhost:8080/v1/chat/completions";
+    const host = window.location.hostname;
+    const url = `http://${host}:8080/v1/chat/completions`;
     let formattedPromptCopy = structuredClone(formattedPrompt); // objects passed by reference so appending tools to the passed object will make it persistent even when tools_schema is null in a future call!
 
     const requestData = coerceToObject(formattedPromptCopy, "llama.cpp request");

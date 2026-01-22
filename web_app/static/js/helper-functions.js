@@ -17,7 +17,8 @@ function setOldLlmModel(model) {
 }
 
 function setHfwUrl(host, port) {
-    document.getElementById('chatState').setAttribute('data-hf-waitress-url', `http://${host}:${port}`);
+    const actualHost = (host === 'localhost' || host === '127.0.0.1') ? window.location.hostname : host;
+    document.getElementById('chatState').setAttribute('data-hf-waitress-url', `http://${actualHost}:${port}`);
 }
 
 function setHfwAsrAsgiHost(host) {
@@ -29,8 +30,9 @@ function setHfwAsrAsgiPort(port) {
 }
 
 function setHfwAsrUrl(host, port) {
-    document.getElementById('chatState').setAttribute('data-hf-asr-url', `http://${host}:${port}`);
-    setHfwAsrAsgiHost(host);
+    const actualHost = (host === 'localhost' || host === '127.0.0.1') ? window.location.hostname : host;
+    document.getElementById('chatState').setAttribute('data-hf-asr-url', `http://${actualHost}:${port}`);
+    setHfwAsrAsgiHost(actualHost);
     setHfwAsrAsgiPort(port);
 }
 

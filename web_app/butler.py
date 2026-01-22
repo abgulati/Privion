@@ -283,7 +283,6 @@ async def set_lamp_scene(scene: str, **kwargs):
     '''
     return await govee_lights_module.light_set_scene_handler(scene)
 
-<<<<<<< HEAD
 async def check_device_online(device_name: str, **kwargs):
     # Run DB lookup in thread to prevent blocking
     device = await asyncio.to_thread(SMART_HOME_SERVICE.get_device_by_name, device_name)

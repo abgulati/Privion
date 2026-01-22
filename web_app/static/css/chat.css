@@ -1935,3 +1935,362 @@ body:has(.user-message) .header-right {
     border-bottom-width: 0;     /* The border-bottom-width property is used to set the width of the bottom border of the element. */
     box-sizing: border-box;     /* The box-sizing property of the element is the width and height of the element. */
 }
+
+
+/* Responsive Design */
+
+.header-container {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background-color: rgba(24, 26, 27, 0.95);
+    backdrop-filter: blur(10px);
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.nav-toggle {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    gap: 10px;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+@media (max-width: 1024px) {
+    .input-area {
+        padding: 15px 50px;
+    }
+
+    .user-message,
+    .response-and-viewer-container {
+        width: 95%;
+    }
+
+    .welcome-button {
+        width: 350px;
+        height: 200px;
+    }
+
+    .app-title-playfair {
+        font-size: 38px;
+    }
+
+    .privion-welcome-text {
+        font-size: 38px;
+    }
+
+    .privion-welcome-sub-text {
+        font-size: 24px;
+    }
+}
+
+@media (max-width: 768px) {
+    .header-container {
+        padding: 10px 15px;
+    }
+
+    .app-title-playfair {
+        font-size: 32px;
+        left: 5px;
+    }
+
+    .header-icons,
+    .header-icons-extended,
+    .header-icons-extended-margin-right {
+        font-size: 28px;
+    }
+
+    .input-area {
+        padding: 15px 20px;
+        flex-wrap: wrap;
+    }
+
+    .input-wrapper {
+        margin-bottom: 10px;
+        width: 100%;
+    }
+
+    .upload-file-btn,
+    .upload-folder-btn,
+    .record-audio-btn {
+        height: 45px !important;
+        width: 70px !important;
+        font-size: 14px;
+    }
+
+    .btn-primary-send {
+        height: 45px;
+        min-width: 80px;
+    }
+
+    .user-message,
+    .response-and-viewer-container {
+        width: 98%;
+        font-size: 15px;
+    }
+
+    .llm-response {
+        font-size: 15px;
+    }
+
+    .welcome-buttons {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .welcome-button {
+        width: 90%;
+        max-width: 400px;
+        height: 180px;
+    }
+
+    .welcome-button i {
+        font-size: 32px;
+    }
+
+    .welcome-button span {
+        font-size: 22px;
+        margin-bottom: 40px;
+    }
+
+    .privion-welcome-text {
+        font-size: 32px;
+        padding: 0 20px;
+    }
+
+    .privion-welcome-sub-text {
+        font-size: 20px;
+        padding: 0 20px;
+    }
+
+    .chat-container {
+        height: 92vh;
+    }
+
+    .chat-area {
+        margin-top: 20px;
+        margin-bottom: 15px;
+    }
+}
+
+@media (max-width: 480px) {
+    .app-title-playfair {
+        font-size: 28px;
+        left: 3px;
+    }
+
+    .nav-toggle {
+        display: flex;
+        align-items: center;
+        gap:5px;
+    }
+
+    .header-icons,
+    .header-icons-extended,
+    .header-icons-extended-margin-right {
+        font-size: 24px;
+    }
+
+    .header-icons-extended-margin-right {
+        margin-right: 10px;
+    }
+
+    .header-right {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .input-area {
+        padding: 10px 15px;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .input-wrapper {
+        width: 100%;
+        margin-right: 0;
+        margin-bottom: 10px;
+    }
+
+    .form-control {
+        padding-right: 45px;
+    }
+
+    #textAttachmentButton {
+        right: 10px;
+        font-size: 18px;
+    }
+
+    #stopGenerationButton {
+        right: 10px;
+        font-size: 13px;
+    }
+
+    .upload-file-btn,
+    .upload-folder-btn,
+    .record-audio-btn {
+        flex: 1;
+        height: 42px !important;
+        width: auto !important;
+        min-width: 60px;
+        margin-right: 5px;
+    }
+
+    .record-audio-btn {
+        margin-right: 5px !important;
+    }
+
+    .btn-primary-send {
+        width: 100%;
+        height: 45px;
+        margin-top: 8px;
+    }
+
+    .user-message {
+        padding: 0.7rem;
+        padding-left: 30px;
+        font-size: 14px;
+    }
+
+    .llm-response {
+        font-size: 14px;
+        padding: 0.8rem;
+    }
+
+    .tool-chain-toggle {
+        left: 8px;
+        top: 16px;
+        font-size: 14px;
+    }
+
+    .tool-chain-trace {
+        margin: 10px -0.6rem -0.6rem -28px;
+        padding: 8px;
+        font-size: 13px;
+    }
+
+    .welcome-button {
+        width: 95%;
+        height: 160px;
+        padding: 15px;
+    }
+
+    .welcome-button i {
+        font-size: 28px;
+        padding: 8px;
+    }
+
+    .welcome-button span {
+        font-size: 20px;
+        margin-bottom: 35px;
+    }
+
+    .privion-welcome-text {
+        font-size: 26px;
+        padding: 0 15px;
+    }
+
+    .privion-welcome-sub-text {
+        font-size: 18px;
+        padding: 0 15px;
+    }
+
+    .chat-container {
+        height: 90vh;
+    }
+
+    .scroll-down-btn {
+        bottom: 95px;
+        right: 15px;
+        font-size: 22px;
+    }
+
+    .sidenav {
+        width: 0;
+    }
+
+    .sidenav.open {
+        width: 85%;
+        max-width: 300px;
+    }
+
+    .sidenav-content {
+        top: 120px;
+    }
+
+    .hamburger-new-chat-button {
+        padding: 3px 0px 10px 35px;
+        font-size: 19px;
+    }
+
+    .nav-item {
+        font-size: 18px;
+        padding: 8px 8px 8px 25px;
+    }
+}
+
+@media (max-width: 360px) {
+    .app-title-playfair {
+        font-size: 24px;
+    }
+
+    .header-icons,
+    .header-icons-extended,
+    .header-icons-extended-margin-right {
+        font-size: 22px;
+    }
+
+    .privion-welcome-text {
+        font-size: 22px;
+    }
+
+    .privion-welcome-sub-text {
+        font-size: 16px;
+    }
+
+    .welcome-button {
+        height: 145px;
+    }
+
+    .welcome-button i {
+        font-size: 24px;
+    }
+
+    .welcome-button span {
+        font-size: 18px;
+        margin-bottom: 25px;
+    }
+}
+
+@media (max-height: 600px) and (orientation: landscape) {
+    .chat-container {
+        height: 88vh;
+    }
+
+    .welcome-screen {
+        padding: 20px 0;
+    }
+
+    .welcome-buttons {
+        margin: 20px 0;
+    }
+
+    .welcome-button {
+        height: 140px;
+    }
+
+    .privion-welcome-text,
+    .privion-welcome-sub-text {
+        font-size: 20px;
+    }
+}
