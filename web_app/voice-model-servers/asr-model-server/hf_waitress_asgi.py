@@ -1294,6 +1294,8 @@ def parse_arguments():
         parser.add_argument("--flux_low_vram_optimizations", action="store_true", default=read_return['flux_low_vram_optimizations'], help="Save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power")
         parser.add_argument("--load_quantized_flux", action="store_true", default=read_return['load_quantized_flux'], help="Add this flag when loading quantized FLUX models directly off the HF-Hub.")
         parser.add_argument("--vision", action="store_true", default=False, help="Add this flag when loading vision models directly off the HF-Hub.")
+        parser.add_argument("--tts", action="store_true", default=False, help="Add this flag when loading TTS models directly off the HF-Hub. Defaults to False.")
+        parser.add_argument("--asr", action="store_true", default=False, help="Add this flag when loading ASR models directly off the HF-Hub. Defaults to False.")
         parser.add_argument("--gguf_model_id", type=str, default=None, help="GGUF model_id of the target repo. Defaults to None")
         parser.add_argument("--gguf_filename", type=str, default=None, help="GGUF filename from the target repo. Defaults to None")
         parser.add_argument("--quantize", type=str, default=read_return['quantize'], help="Quantization method to be utilized. Simply type 'n' to not use quantization. Remembers previously set value. Default: bitsandbytes")
@@ -1425,9 +1427,12 @@ def parse_arguments():
                     print("Flux model auto-detected, setting flux_diffusers=True")
                     args.flux_diffusers = True
                     args.vision = False
+                    args.tts = False
+                    args.asr = False
                     args.gguf = False
                     args.awq = False
                     args.exl2 = False
+                    args.exl3 = False
                 else:
                     args.flux_diffusers = False
 
@@ -1435,31 +1440,33 @@ def parse_arguments():
                     print("Llama-3.2-Vision model auto-detected, setting vision=True")
                     args.vision = True
                     args.flux_diffusers = False
+                    args.tts = False
+                    args.asr = False
                     args.gguf = False
                     args.awq = False
                     args.exl2 = False
+                    args.exl3 = False
                 else:
                     args.vision = False
 
-                if ("openai/whisper" in args.model_id.lower()) and ("v3" in args.model_id.lower()):
-                    print("OpenAI Whisper V3 model auto-detected, setting asr=True")
-                    args.asr = True
+                asr_model_list = [
+                    "openai/whisper",
+                    "nvidia/parakeet-tdt-0.6b",
+                    "nvidia/canary-qwen-2.5b",
+                    "nvidia/canary-1b-v2",
+                    "ibm-granite/granite-speech-3.3"
+                ]
 
-                elif ("nvidia/parakeet-tdt-0.6b" in args.model_id.lower()):
-                    print(f"{args.model_id} model auto-detected, setting asr=True")
+                if any(model in args.model_id.lower() for model in asr_model_list):
+                    print(f"ASR model ({args.model_id}) auto-detected, setting asr=True")
                     args.asr = True
-
-                elif ("nvidia/canary-qwen-2.5b" in args.model_id.lower()):
-                    print("NVIDIA Canary Qwen 2.5B model auto-detected, setting asr=True")
-                    args.asr = True
-
-                elif ("nvidia/canary-1b-v2" in args.model_id.lower()):
-                    print("NVIDIA Canary 1B V2 model auto-detected, setting asr=True")
-                    args.asr = True
-
-                elif ("ibm-granite/granite-speech-3.3" in args.model_id.lower()):
-                    print("IBM Granite Speech 3.3 model auto-detected, setting asr=True")
-                    args.asr = True
+                    args.tts = False
+                    args.vision = False
+                    args.flux_diffusers = False
+                    args.exl2 = False
+                    args.exl3 = False
+                    args.gguf = False
+                    args.awq = False
 
                 elif ("tts" in args.model_id.lower()):
                     print("TTS model auto-detected, setting tts=True")
@@ -1467,10 +1474,11 @@ def parse_arguments():
                     args.asr = False
                     args.quantize = 'n'
                     args.use_flash_attention_2 = True
-                
-                else:
-                    args.asr = False
-                    args.tts = False
+                    args.flux_diffusers = False
+                    args.exl2 = False
+                    args.exl3 = False
+                    args.gguf = False
+                    args.awq = False
 
                 print(f"asr: {args.asr}")
 
