@@ -8,14 +8,14 @@ try:
     from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Tokenizer
     from exllamav2.generator import ExLlamaV2StreamingGenerator, ExLlamaV2DynamicGenerator, ExLlamaV2Sampler, ExLlamaV2DynamicJob
     from exllamav2 import ExLlamaV2Cache, ExLlamaV2Cache_8bit, ExLlamaV2Cache_Q4, ExLlamaV2Cache_Q6, ExLlamaV2Cache_Q8
-except Exception:
-    print("exllamav2 is not installed. Skipping import.")
+except Exception as e:
+    print(f"exllamav2 is not installed. Skipping import. Encountered error: {e}")
 
 try:
     from exllamav3 import Model, Config, Cache, Tokenizer, Generator, Job, CacheLayer_fp16, CacheLayer_quant
     from exllamav3.generator.sampler import ComboSampler
-except Exception:
-    print("exllamav3 is not installed. Skipping import.")
+except Exception as e:
+    print(f"exllamav3 is not installed. Skipping import. Encountered error: {e}")
 
 try:
     from transformers import AutoModelForSpeechSeq2Seq
@@ -24,8 +24,8 @@ try:
     import librosa
     import torch
     import queue
-except Exception:
-    print("Core dependecies for ASR pipeline are not installed, skipping import. WARNING: ASR will not work!")
+except Exception as e:
+    print(f"Core dependecies for ASR pipeline are not installed, skipping import. WARNING: ASR will not work! Encountered error: {e}")
 
 try:
     from nemo.collections.speechlm2.models import SALM
@@ -35,23 +35,29 @@ try:
     from scipy.io.wavfile import read   # To read the in-memory audio wav file
     import tempfile
     import pyttsx3
-except Exception:
-    print("Optional dependecies for ASR pipeline are not installed, skipping import. WARNING: Some ASR models/features will not work!")
+except Exception as e:
+    print(f"Optional dependecies for ASR pipeline are not installed, skipping import. WARNING: Some ASR models/features will not work! Encountered error: {e}")
 
 try:
     from diffusers import FluxPipeline, FluxTransformer2DModel
-except Exception:
-    print("diffusers is not installed. Skipping import.")
+except Exception as e:
+    print(f"diffusers is not installed. Skipping import. Encountered error: {e}")
 
 try:
     from optimum.quanto import freeze, qfloat8, quantize
-except Exception:
-    print("optimum.quanto is not installed. Skipping import.")
+except Exception as e:
+    print(f"optimum.quanto is not installed. Skipping import. Encountered error: {e}")
 
 try:
     from transformers import MllamaForConditionalGeneration
-except Exception:
-    print("transformers version is below 4.45.0 required from Llama3.2-Vision. Skipping MllamaForConditionalGeneration import.")
+except Exception as e:
+    print(f"transformers version is below 4.45.0 required from Llama3.2-Vision. Skipping MllamaForConditionalGeneration import. Encountered error: {e}")
+
+try:
+    import soundfile as sf
+    from qwen_tts import Qwen3TTSModel
+except Exception as e:
+    print(f"qwen_tts or its dependencies are not installed. Skipping import. Encountered error: {e}")
 
 from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
@@ -526,6 +532,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'flux_low_vram_optimizations':True,
                     'load_quantized_flux':False,
                     'vision':False,
+                    'tts':False,
                     'asr':False,
                     'asr_temperature':0.0,
                     'asr_max_new_tokens':1500,
@@ -1236,6 +1243,7 @@ def parse_arguments():
                 'flux_low_vram_optimizations',
                 'load_quantized_flux',
                 'vision',
+                'tts',
                 'asr',
                 'gguf_model_id',
                 'gguf_filename',
@@ -1373,6 +1381,7 @@ def parse_arguments():
                     'flux_low_vram_optimizations',
                     'load_quantized_flux',
                     'vision',
+                    'tts',
                     'asr',
                     'gguf_model_id',
                     'gguf_filename',
@@ -1446,9 +1455,17 @@ def parse_arguments():
                 elif ("ibm-granite/granite-speech-3.3" in args.model_id.lower()):
                     print("IBM Granite Speech 3.3 model auto-detected, setting asr=True")
                     args.asr = True
+
+                elif ("tts" in args.model_id.lower()):
+                    print("TTS model auto-detected, setting tts=True")
+                    args.tts = True
+                    args.asr = False
+                    args.quantize = 'n'
+                    args.use_flash_attention_2 = True
                 
                 else:
                     args.asr = False
+                    args.tts = False
 
                 print(f"asr: {args.asr}")
                 
@@ -1475,6 +1492,7 @@ def parse_arguments():
                     'exl3_use_per_device':args.exl3_use_per_device,
                     'exl3_max_chunk_size':args.exl3_max_chunk_size,
                     'asr':args.asr,
+                    'tts':args.tts,
                     'gguf':args.gguf,
                     'awq':args.awq,
                     'gguf_model_id':args.gguf_model_id,
@@ -1911,6 +1929,29 @@ def load_asr_pipeline():
     
     except Exception as e:
         handle_local_error("Could not load ASR pipeline, encountered error: ", e)
+
+
+def load_tts_pipeline():
+    print("\n\nTTS Model Selected - Loading...\n\n")
+    global MODEL
+
+    try:
+        config = read_config(['model_id','torch_device_map'])
+    except Exception as e:
+        handle_local_error("Could not read values from hf_config.json when attempting to load tts-pipeline, encountered error: ", e)
+
+    try:
+        MODEL = Qwen3TTSModel.from_pretrained(
+            config['model_id'],
+            device_map=config['torch_device_map'],
+            dtype=torch.bfloat16,
+            attn_implementation="flash_attention_2",
+        )
+    except Exception as e:
+        handle_model_loading_error("Could not load TTS Model, encountered error: ", e)
+        return False
+    print(f"\nTTS Model Loaded Successfully!\n")
+    return True
 
 
 def exl2_background_worker():
@@ -2500,7 +2541,7 @@ def restart_server_stream():
     safe_empty_cuda_cache()
 
     try:
-        read_return = read_config(['model_id', 'trust_remote_code', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'exl2', 'exl3'])
+        read_return = read_config(['model_id', 'trust_remote_code', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'tts', 'exl2', 'exl3'])
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not read values from hf_config.json when attempting restart-server-stream, encountered error: ", e)
@@ -2549,6 +2590,9 @@ def restart_server_stream():
                 elif read_return['asr']:
                     print("\nASR Model Selected - Loading...\n")
                     load_asr_pipeline() # Not all ASR models define a pipeline, those that do will set the global PIPE via appropriate helper functions!
+                elif read_return['tts']:
+                    print("\nTTS Model Selected - Loading...\n")
+                    load_tts_pipeline()
                 else:
                     model = AutoModelForCausalLM.from_pretrained(read_return['model_id'], **model_params)
                     global AUTO_TOKENIZER
@@ -2601,7 +2645,7 @@ def initialize_model():
     global PIPE
 
     try:
-        read_return = read_config(['model_id', 'trust_remote_code', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'exl2', 'exl3'])
+        read_return = read_config(['model_id', 'trust_remote_code', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'tts', 'exl2', 'exl3'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
     
@@ -2633,6 +2677,9 @@ def initialize_model():
             elif read_return['asr']:
                 print("\n\nASR Model Selected - Loading...\n\n")
                 load_asr_pipeline() # Not all ASR models define a pipeline, those that do will set the global PIPE via appropriate helper functions!
+            elif read_return['tts']:
+                print("\n\nTTS Model Selected - Loading...\n\n")
+                load_tts_pipeline()
             else:
                 model = AutoModelForCausalLM.from_pretrained(read_return['model_id'], **model_params)
                 global AUTO_TOKENIZER
@@ -3000,13 +3047,43 @@ def extract_tool_calls_from_response(full_response_text:str) -> list[dict]:
         raise Exception(f"Failed to extract tool calls from response, encountered error: {e}")
 
 
+def print_templated_output(templated_output: dict, tokenize: bool):
+    try:
+        if tokenize:
+            try:
+                # Handle dict-like objects (dict or BatchEncoding)
+                ids_to_decode = templated_output
+                if hasattr(templated_output, 'keys') and 'input_ids' in templated_output:
+                    ids_to_decode = templated_output['input_ids']
+
+                # Handle batched tensors (e.g. [[1, 2, 3]]) by taking the first sequence
+                # Checks if it supports indexing and has nested structure
+                if hasattr(ids_to_decode, '__len__') and len(ids_to_decode) > 0:
+                    # Check if the first element is also a sequence/tensor (2D structure)
+                    first_elem = ids_to_decode[0]
+                    if hasattr(first_elem, '__len__') and not isinstance(first_elem, (str, int)):
+                        ids_to_decode = first_elem
+
+                print(f"\n\ntemplated_output: {AUTO_TOKENIZER.decode(ids_to_decode, skip_special_tokens=False)}\n\n")
+            except Exception as decode_err:
+                # Fallback to raw print if decoding fails
+                print(f"\n\ntemplated_output (raw): {templated_output} | Decode Error: {decode_err}\n\n")
+        else:
+            print(f"\n\ntemplated_output: {templated_output}\n\n")
+    except Exception as e:
+        handle_error_no_return("Error printing templated output, encountered error: ", e)
+        return False
+    return True
+
+
 def auto_tokenizer_apply_chat_template(
         conversation: Union[list[dict[str, str]], list[list[dict[str, str]]]],
         tools: Optional[list[Union[dict, Callable]]] = None,
         add_generation_prompt: bool = False,
         tokenize: bool = True,
         return_tensors: Optional[Union[str, TensorType]] = None,
-        return_dict: bool = False
+        return_dict: bool = False,
+        verbose: bool = True
     ) -> dict:
     '''
     Acts as a wrapper around the Transformers apply-chat_template() method, which converts a list of dictionaries 
@@ -3043,7 +3120,7 @@ def auto_tokenizer_apply_chat_template(
     `tokenization_auto.py` and from there, navigate to the above module via the `from ...tokenization_utils_base` import.
     '''
     try:
-        return AUTO_TOKENIZER.apply_chat_template(
+        templated_output = AUTO_TOKENIZER.apply_chat_template(
             conversation=conversation,
             tools=tools,
             add_generation_prompt=add_generation_prompt,
@@ -3051,6 +3128,9 @@ def auto_tokenizer_apply_chat_template(
             return_tensors=return_tensors,
             tokenize=tokenize
         )
+        if verbose:
+            print_templated_output(templated_output, tokenize)
+        return templated_output
     except Exception as e:
         handle_local_error("Error invoking Transformers-AutoTokenizer's apply-chat_template() method, encountered error: ", e)
 
@@ -3666,6 +3746,87 @@ def transcribe():
     except Exception as e:
         return handle_api_error("Server-side error, could not transcribe audio, encountered error: ", e)
 
+
+def synth_to_wav_bytes_with_qwen3_tts(model_id: str, text: str, language: str, speaker: str, instruction: str) -> bytes:
+    global MODEL
+
+    print(f"\n\nGenerating TTS audio with model: {model_id}...\n\n")
+    try:
+        if 'CustomVoice' in model_id:
+            wavs, sr = MODEL.generate_custom_voice(
+                text=text,
+                language=language,
+                speaker=speaker,
+                instruct=instruction
+            )
+        elif 'VoiceDesign' in model_id:
+            wavs, sr = MODEL.generate_voice_design(
+                text=text,
+                language=language,
+                instruct=instruction
+            )
+        else:
+            raise Exception("Invalid model ID")
+
+        # 1. Select the first audio track
+        audio_data = wavs[0]
+
+        # 2. Convert PyTorch Tensor to NumPy (CPU) if necessary 
+        # This is REQUIRED because sf.write cannot handle PyTorch Tensors or bfloat16
+        if hasattr(audio_data, 'detach'):
+            audio_data = audio_data.detach().cpu().numpy().astype(np.float32)
+        else:
+            # Fallback if already a NumPy array (bfloat16 is not a std audio format)
+            audio_data = np.array(audio_data, dtype=np.float32)
+        
+        # 3. Write to buffer with explicit format (required for BytesIO)
+        '''
+        format='WAV' is REQUIRED because we're writing to a memory buffer (no filename extenstion)
+        subtype='PCM_16' is not strictly required, since the input is float32 it will default to 'FLOAT', creating a 32-bit WAV file.
+        However, PCM_16 is classic CD quality and has a smaller file size and better compatibility with most audio players.
+        '''
+        buf = io.BytesIO()
+        sf.write(buf, audio_data, sr, format='WAV', subtype='PCM_16')
+        
+        return buf.getvalue()
+
+    except Exception as e:
+        raise Exception("Could not synthesize TTS audio with Qwen3 TTS, encountered error: ", e)
+
+
+@app.route('/tts', methods=['POST'])
+def tts():
+    """
+    Accepts a posted text under form field 'text' and returns TTS audio.
+    Content-Type should be application/json.
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        text = (payload.get('text') or '').strip()
+        language = (payload.get('language') or 'English').strip()
+        speaker = (payload.get('speaker') or 'Aiden').strip()
+        instruction = (payload.get('instruction') or '').strip()
+    except Exception as e:
+        return handle_api_error("Invalid request, encountered error: ", e)
+
+    try:
+        config = read_config(['model_id'])
+        filename = config['model_id'].split('/')[-1] + '_' + language + '_' + speaker + '.wav'
+    except Exception as e:
+        return handle_api_error("Could not read values from hf_config.json when attempting to synthesize TTS audio, encountered error: ", e)
+
+    try:
+        wav_bytes = synth_to_wav_bytes_with_qwen3_tts(config['model_id'], text, language, speaker, instruction)
+        return Response(
+            wav_bytes,
+            mimetype='audio/wav',
+            headers={
+                'Content-Disposition': f'inline; filename="{filename}"',
+                'Cache-Control': 'no-store'
+            }
+        )
+    except Exception as e:
+        return handle_api_error("Server-side error, could not synthesize TTS audio, encountered error: ", e)
 
 
 class CustomTextStreamer(TextStreamer):
@@ -4444,7 +4605,8 @@ def get_openai_stop_chunk(
     chunk_id: str,
     created: int,
     backend: str,
-    model_id: str
+    model_id: str,
+    finish_reason: str
 ) -> dict:
 
     return {
@@ -4458,7 +4620,7 @@ def get_openai_stop_chunk(
                 "index": 0,
                 "delta": {},
                 "logprobs": None,
-                "finish_reason": "stop"
+                "finish_reason": finish_reason
             }
         ]
     }
@@ -4560,7 +4722,11 @@ def generate_openai_stream_chunks(user_queue: queue.Queue, chunk_id: str, create
     tool_parsing_result = extract_tool_calls_from_response(full_response_text)
     tool_calls = tool_parsing_result.get('tool_calls', None)
 
+    finish_reason = "stop"
+
     if tool_calls:
+
+        finish_reason = "tool_calls"
         
         for i, tool in enumerate(tool_calls):
             tool['index'] = i   # OpenAI Stream Spec requires an 'index' for each tool call
@@ -4569,7 +4735,7 @@ def generate_openai_stream_chunks(user_queue: queue.Queue, chunk_id: str, create
         yield f"data: {json.dumps(tool_calls_chunk)}\n\n"
 
     # Send final closing chunk
-    final_chunk = get_openai_stop_chunk(chunk_id, created, backend, model_id)
+    final_chunk = get_openai_stop_chunk(chunk_id, created, backend, model_id, finish_reason)
     yield f"data: {json.dumps(final_chunk)}\n\n"
     yield "data: [DONE]\n\n"
 
@@ -4637,8 +4803,8 @@ def generate_openai_non_streaming_response(
         "choices": [{
             "index": 0,
             "message": message,
-            "logprobs": None,  # ADD THIS
-            "finish_reason": "stop"
+            "logprobs": None,
+            "finish_reason": "tool_calls" if tool_calls else "stop"
         }],
         "usage": {
             "prompt_tokens": prompt_token_usage,
@@ -6124,15 +6290,16 @@ def health():
         exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, EXL2_GENERATOR, AUTO_TOKENIZER])
         exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, EXL3_GENERATOR, STOP_TOKENS, AUTO_TOKENIZER])
         asr_ready = MODEL is not None
+        tts_ready = MODEL is not None
         
-        print(f"\n\nhealth readiness → pipe={pipe_ready}, exl2={exl2_ready}, exl3={exl3_ready}, asr={asr_ready}\n\n")
+        print(f"\n\nhealth readiness → pipe={pipe_ready}, exl2={exl2_ready}, exl3={exl3_ready}, asr={asr_ready}, tts={tts_ready}\n\n")
 
-        if not (pipe_ready or exl2_ready or exl3_ready or asr_ready):
-            return jsonify(status="error", message="None of the core backends (transformers, exl2, exl3, asr) are loaded"), 503 # Service Unavailable
+        if not (pipe_ready or exl2_ready or exl3_ready or asr_ready or tts_ready):
+            return jsonify(status="error", message="None of the core backends (transformers, exl2, exl3, asr, tts) are loaded"), 503 # Service Unavailable
 
         model_info = {}
 
-        if pipe_ready and not exl2_ready and not exl3_ready and not asr_ready: # Implies only Transformers backend is loaded!
+        if pipe_ready and not exl2_ready and not exl3_ready and not asr_ready and not tts_ready: # Implies only Transformers backend is loaded!
             model_info = get_transformers_model_info()
         
         print(f"HF-Waitress LLM-server health-check completed successfully, returning.\n")
