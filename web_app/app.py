@@ -3097,7 +3097,7 @@ def store_to_chat_history_db(
         user_query: str,
         user_query_html: str,
         model_response_for_history_db: str,
-        fully_formatted_prompt: str,
+        messages_object: str,
         local_llm_server: str,
         local_llm_chat_template_format: str
     ) -> tuple[str, str]:
@@ -3170,7 +3170,7 @@ def store_to_chat_history_db(
                 str(user_query_html),
                 str(model_response_for_history_db),
                 str(model_choice),
-                str(fully_formatted_prompt),
+                str(messages_object),
                 str(local_llm_server),
                 str(local_llm_chat_template_format),
                 str(formatted_datetime)
@@ -6133,6 +6133,37 @@ def generate_llm_response_html(llm_response: str, stream_session_id: str, user_r
         handle_local_error("Could not generate LLM response HTML, encountered error: ", e)
 
 
+def load_messages_list_from_history_db(cursor: sqlite3.Cursor, chat_id: int, sequence_id: int = None) -> list:
+    messages_list = None
+    try:
+        if sequence_id is None:
+            sequence_id = determine_sequence_id_for_chat(chat_id)
+        
+        if sequence_id > 0:
+            cursor.execute("SELECT prompt_template FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (chat_id, sequence_id))
+            result = cursor.fetchone()
+
+            if result:
+                messages_object = result[0]
+
+                # Parse if it's a string (JSON)
+                if isinstance(messages_object, str):
+                    try:
+                        messages_object = json.loads(messages_object)   # since this is JSON.stringified by the cleint when invoking get-references(), we deserialize it with json.loads()
+                    except Exception as e:
+                        messages_object = {}
+
+                if isinstance(messages_object, dict):
+                    messages_list = messages_object.get('messages', [])
+                elif isinstance(messages_object, list):
+                    messages_list = messages_object
+    
+        return messages_list
+                
+    except Exception as e:
+        handle_local_error("Could not load messages_list from chat history DB, encountered error: ", e)
+
+
 @app.route('/load_chat_history', methods=['POST'])
 def load_chat_history():
 
@@ -6170,8 +6201,6 @@ def load_chat_history():
             )
             result = c.fetchone()
             if result is None:  # No more history to retrieve, so break out of the while loop
-                c.close()
-                conn.close()
                 break
             
             try:
@@ -6193,7 +6222,15 @@ def load_chat_history():
     except Exception as e:
         return handle_api_error("Could not determine sequence_id, encountered error: ", e)
 
-    return jsonify({'success': True, 'chat_history': chat_history, 'old_chat_model': old_chat_model, 'sequence_id': sequence_id})
+    try:
+        messages_list = load_messages_list_from_history_db(c, chat_id, sequence_id)
+    except Exception as e:
+        handle_error_no_return("Could not load messages_list from chat history DB, encountered error: ", e)
+        messages_list = None
+    
+    c.close()
+    conn.close()
+    return jsonify({'success': True, 'chat_history': chat_history, 'old_chat_model': old_chat_model, 'sequence_id': sequence_id, 'messages_list': messages_list})
 
 
 def determine_latest_chat_id(c: sqlite3.Cursor) -> int:
@@ -6321,9 +6358,15 @@ def delete_messages():
         print(f"Deleted {deleted_count} rows of chat history for chat with chat_id: {chat_id} beginning with sequence_id: {sequence_id}")
     except Exception as e:
         handle_local_error(f"Could not delete chat history for chat with chat_id: {chat_id} beginning with sequence_id: {sequence_id}, encountered error: ", e)
+    
+    try:
+        messages_list = load_messages_list_from_history_db(c, int(chat_id), (int(sequence_id) - 1))
+    except Exception as e:
+        handle_error_no_return("Could not load messages_list from chat history DB, encountered error: ", e)
+        messages_list = None
 
     conn.close()
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'messages_list': messages_list})
 
 
 def update_record_in_history_db(
@@ -6414,12 +6457,12 @@ def get_formatted_prompt_from_history_db(chat_id, sequence_id):
     return formatted_prompt
 
 
-def get_hf_waitress_formatted_user_prompt(formatted_user_prompt: str, llm_response: str) -> str:
-    history_prompt_json = json.loads(formatted_user_prompt)
+def get_hf_waitress_formatted_user_prompt(messages_object: str, llm_response: str) -> str:
+    messages_dict = json.loads(messages_object)
     new_response = {"role":"assistant", "content":llm_response}
-    history_prompt_json['messages'].append(new_response)
-    updated_history_prompt_json = json.dumps(history_prompt_json, indent=4)
-    return str(updated_history_prompt_json)
+    messages_dict['messages'].append(new_response)
+    updated_messages_object = json.dumps(messages_dict, indent=4)
+    return str(updated_messages_object)
 
 
 def get_session_id_and_vector_key(reusable_ssid:str = None) -> tuple[str, str]:
@@ -7098,11 +7141,11 @@ def get_request_parameters_for_get_references(request: Request) -> tuple[str, st
         user_query = request.json['user_query']
         user_query_html = request.json['user_query_html']
         llm_response = request.json['llm_response']
-        formatted_user_prompt = request.json['formatted_user_prompt']
+        messages_object = request.json['formatted_user_prompt']
         chat_id = request.json['chat_id']
         sequence_id = request.json['sequence_id']
         regeneration_request = request.json['regeneration_request']
-        return stream_session_id, user_query, user_query_html, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request
+        return stream_session_id, user_query, user_query_html, llm_response, messages_object, chat_id, sequence_id, regeneration_request
     except Exception as e:
         handle_local_error("Could not read request content in method get-request_parameters_for_get_references(), encountered error: ", e)
 
@@ -7127,7 +7170,7 @@ def get_references():
         return handle_api_error("Missing values in config.json when attempting to get-references. Error: ", e)
 
     try:
-        stream_session_id, user_query, user_query_html, llm_response, formatted_user_prompt, chat_id, sequence_id, regeneration_request = get_request_parameters_for_get_references(request)
+        stream_session_id, user_query, user_query_html, llm_response, messages_object, chat_id, sequence_id, regeneration_request = get_request_parameters_for_get_references(request)
     except Exception as e:
         return handle_api_error("Could not read request content in method get-references, encountered error: ", e)
     
@@ -7144,27 +7187,28 @@ def get_references():
     
         if perform_graph_rag:
             try:
-                last_context_index = formatted_user_prompt.rindex("The following context might be helpful in answering the user query above.")
-                graph_context_trimmed_prompt = formatted_user_prompt[:last_context_index]
-                formatted_user_prompt = graph_context_trimmed_prompt + '"}]}'   # proper closing of the JSON array
+                last_context_index = messages_object.rindex("The following context might be helpful in answering the user query above.")
+                graph_context_trimmed_prompt = messages_object[:last_context_index]
+                messages_object = graph_context_trimmed_prompt + '"}]}'   # proper closing of the JSON array
             except Exception as e:
                 handle_error_no_return("Trimming RAG context unnecessary, skipping. Encountered error: ", e)
+        
+        messages_object = get_hf_waitress_formatted_user_prompt(messages_object, llm_response)
     else:
         _, do_rag = rag_core_module.fetch_rag_context(stream_session_id, persist_in_db=False)
-    
-    formatted_user_prompt = get_hf_waitress_formatted_user_prompt(formatted_user_prompt, llm_response)
+        messages_object = json.dumps(messages_object, indent=4)
 
     if not do_rag:
         print("\n\nRAG Citations unnecessary, storing chat history and returning\n\n")
         try:
             if not regeneration_request:
-                stored_datetime, chat_id = store_to_chat_history_db(chat_id, sequence_id, stream_session_id, user_query, user_query_html, llm_response, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+                stored_datetime, chat_id = store_to_chat_history_db(chat_id, sequence_id, stream_session_id, user_query, user_query_html, llm_response, messages_object, local_llm_server, local_llm_chat_template_format)
             else:
                 stored_datetime, chat_id = update_record_in_history_db(chat_id, stream_session_id, user_query, user_query_html, llm_response)
         except Exception as e:
             handle_error_no_return("Could not store or update chat history DB in get-references(), encountered error: ", e)
-        return jsonify({'success': True, 'response': llm_response, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
-    
+        
+        return jsonify({'success': True, 'response': llm_response, 'pdf_frame': None, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
 
     print("\n\nFetching Citations\n\n")
 
@@ -7185,14 +7229,13 @@ def get_references():
 
     try:
         if not regeneration_request:
-            stored_datetime, chat_id = store_to_chat_history_db(chat_id, sequence_id, stream_session_id, user_query, user_query_html, model_response_for_history_db, formatted_user_prompt, local_llm_server, local_llm_chat_template_format)
+            stored_datetime, chat_id = store_to_chat_history_db(chat_id, sequence_id, stream_session_id, user_query, user_query_html, model_response_for_history_db, messages_object, local_llm_server, local_llm_chat_template_format)
         else:
             stored_datetime, chat_id = update_record_in_history_db(chat_id, stream_session_id, user_query, user_query_html, model_response_for_history_db)
     except Exception as e:
         handle_error_no_return("Could not store or update chat history DB in get-references(), encountered error: ", e)
 
     return jsonify({'success': True, 'response': llm_response_with_citation_links, 'pdf_frame':pdf_section_html, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
-
 
 
 def parse_arguments():

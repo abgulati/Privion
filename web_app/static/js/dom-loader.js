@@ -2082,7 +2082,16 @@ document.addEventListener("DOMContentLoaded", function() {
             loadChatHistoryMenu();  // should be done regardless of errors
             handleGoogleDrivePostAuth();
             hideStreamSpinner();
+
+            // >>> NEW: Initialize conversation state for fresh chat <<<
+            if (window.chatState) {
+                window.chatState.init({
+                    sysPrompt: getSysPromptConfig().base_template,
+                    skipSystemPrompt: getSysPromptConfig().skip_system_prompt
+                });
             setSequenceId(0);   // init new chat
+            }
+            
             appendStreamInfo("All loaded up & ready to chat!", 'success');
         })
         .catch(error => {

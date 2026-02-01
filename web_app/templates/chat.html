@@ -2481,6 +2481,16 @@
         <script src="{{ url_for('static', filename='js/dom-loader.js') }}"></script>
         <script src="{{ url_for('static', filename='js/voices.js') }}"></script>
 
+        <!-- NEW: State module - loads deferred, executes before DOMContentLoaded -->
+        <script type="module">
+            import { chatState } from './static/js/state/chatState.js';
+
+            // Bridge to global scope for global scripts above
+            window.chatState = chatState;
+
+            console.log("ConversationState module loaded and exposed as window.chatState");
+        </script>
+
     </body>
 
 </html>

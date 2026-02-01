@@ -435,6 +435,9 @@ async function delete_messages(chatId, sequenceId, userMessageDiv) {
             deleteChatAreaElementsFromCurrentElement(userMessageDiv); // Delete everything from this user message onwards
             if (sequenceId == 1) {
                location.reload();
+            } else {
+                chatState.clear();
+                chatState.hydrate(data.messages_list);
             }
         } else {
             throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
@@ -831,6 +834,18 @@ function loadChatHistory(chatID, chatTitle) {
                         }
                     }
                 }
+            }
+
+            if (data.messages_list) {
+                chatState.clear();
+                chatState.hydrate(data.messages_list);
+            } else {
+                console.warn("Backend did not return messages_list - conversation history not loaded into state!");
+                chatState.clear();
+                chatState.init({
+                    sysPrompt: getSysPromptConfig().base_template, 
+                    skipSystemPrompt: getSysPromptConfig().skip_system_prompt 
+                });
             }
 
             var defaultTabs = document.getElementsByClassName("defaultTabs");
