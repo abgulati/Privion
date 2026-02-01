@@ -6243,3 +6243,34 @@ def execute_butler_tool(service_name:str, **kwargs) -> dict:
     except Exception as e:
         print(f"Error executing butler tool: {str(e)}")
         return {'success': False, 'message': f"Error executing butler tool for {service_name} service: {str(e)}"}
+
+tool_caller_extras = {
+    'quantize_dedicated_tool_caller_model_bits':'int8',
+    'dedicated_tool_caller_hqq_group_size':64,
+    'tool_caller_exl2':False,
+    'tool_caller_exl2_bpw':8.0,
+    'tool_caller_exl2_cache_type':'ExLlamaV2Cache',
+    'tool_caller_exl2_max_seq_len':2048,
+    'tool_caller_exl2_force_regenerate_measurement':False,
+    'tool_caller_exl2_no_flash_attn':False,
+    'tool_caller_exl3':False,
+    'tool_caller_exl3_bpw':8.0,
+    'tool_caller_exl3_device':'cuda:0',
+    'tool_caller_exl3_cache_type':'CacheLayer_fp16',
+    'tool_caller_exl3_k_bits':8,
+    'tool_caller_exl3_v_bits':8,
+    'tool_caller_exl3_resume_quant_job':False,
+    'tool_caller_exl3_total_context':2048,
+    'tool_caller_exl3_tensor_parallel':False,
+    'tool_caller_exl3_tp_output_device':None,
+    'tool_caller_exl3_use_per_device':None,
+    'tool_caller_exl3_max_chunk_size':2048,
+    'tool_caller_exl3_max_batch_size':256,
+    'tool_caller_exl3_show_gen_visualizer':False,
+    'dedicated_tool_caller_min_p':0.05,
+    'dedicated_tool_caller_rep_p':1.0,
+    'dedicated_tool_caller_pres_p':0.0,
+    'dedicated_tool_caller_freq_p':0.0,
+    'dedicated_tool_caller_rep_sustain_range':int(10e7),
+    'dedicated_tool_caller_rep_decay_range':0
+}

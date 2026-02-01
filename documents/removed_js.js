@@ -156,3 +156,55 @@ function sendMessageAndProcessResponseStream() {
     });
 }
 
+
+
+
+function updateMessagesObjectWithToolResult(
+    tool_calls,
+    tool_result_list,
+    plain_text,
+    toolResponseMode = "role_tool"  // "role_tool" | "user_tool_response_tag"
+) {
+    // 1. HANDLE THE ASSISTANT MESSAGE
+    if (toolResponseMode == "role_tool") {
+        // Standard OpenAI: Structured tool_calls, content is null (usually)
+        MESSAGES_OBJECT['messages'].push({
+            role: 'assistant',
+            content: null,
+            tool_calls: tool_calls
+        });
+    } else {
+        // XML Mode: Custom/Nvidia/Qwen Style Tool Role
+        MESSAGES_OBJECT['messages'].push({
+            role: 'assistant',
+            content: plain_text || "", // Safety fallback
+            tool_calls: tool_calls
+        });
+    }
+
+    for (const tool_result of tool_result_list) {
+
+        // Normalize tool_result.content - ensure objects are stringified, and strings are left alone
+        const normalizedContent = typeof tool_result.content === 'object' ? JSON.stringify(tool_result.content) : String(tool_result.content);
+        
+        if (toolResponseMode == "role_tool") {
+            // Standard OpenAI Style Tool Role
+            MESSAGES_OBJECT['messages'].push({
+                role: 'tool',
+                tool_call_id: tool_result.tool_call_id,
+                name: tool_result.name,
+                content: normalizedContent // OpenAI expects a string here
+            });
+        }
+        else if (toolResponseMode == "user_tool_response_tag") {
+            // Custom/Nvidia/Qwen Style Tool Role (for models like Orchestrator-8B, etc. that require <tool_result>...</tool_result> tags in 'user' role)
+            MESSAGES_OBJECT['messages'].push({
+                role: 'user',
+                content: `<tool_response>${normalizedContent}</tool_response>`
+            });
+        }
+        
+    }
+    // console.log("messages_object: ", messages_object);
+    // return messages_object;
+}
