@@ -27,7 +27,7 @@ function getLlmConfig() {
             config.llama_cpp_cpu_only_moe = document.getElementById('CpuOnlyMoe').checked;
             config.llama_cpp_num_cpu_moe = parseInt(document.getElementById('LlamaCppNumCpuMoe').value);
             config.llama_cpp_mlock = document.getElementById('Mlock').checked;
-            config.llama_cpp_no_nmap = document.getElementById('NoNmap').checked;
+            config.llama_cpp_no_mmap = document.getElementById('NoMmap').checked;
             config.llama_cpp_split_mode = document.getElementById('SplitMode').value;
             config.llama_cpp_tensor_split = document.getElementById('TensorSplit').value;
             config.llama_cpp_override_tensor = document.getElementById('OverrideTensor').value;
@@ -43,6 +43,22 @@ function getLlmConfig() {
             config.llama_cpp_repetition_penalty = parseFloat(document.getElementById('repetitionPenaltySlider').value);
             config.llama_cpp_presence_penalty = parseFloat(document.getElementById('presencePenaltySlider').value);
             config.llama_cpp_frequency_penalty = parseFloat(document.getElementById('frequencyPenaltySlider').value);
+            config.llama_cpp_fit = document.getElementById('LlamaCppFit').checked;
+            config.llama_cpp_fit_target = parseInt(document.getElementById('LlamaCppFitTarget').value);
+            config.llama_cpp_fit_min_ctx = parseInt(document.getElementById('LlamaCppFitMinCtx').value);
+            config.llama_cpp_flash_attn = document.getElementById('LlamaCppFlashAttn').value;
+            config.llama_cpp_access_url = document.getElementById('LlamaCppAccessUrl').value;
+            config.llama_cpp_server_port = parseInt(document.getElementById('LlamaCppServingPort').value);
+            config.llama_cpp_serving_url = document.getElementById('LlamaCppServingHost').value;
+            config.llama_cpp_warmup = document.getElementById('LlamaCppWarmup').checked;
+            config.llama_cpp_alias = document.getElementById('LlamaCppAlias').value;
+            config.llama_cpp_misc_args = document.getElementById('LlamaCppMiscArgs').value;
+            config.llama_cpp_check_tensors = document.getElementById('LlamaCppCheckTensors').checked;
+            config.llama_cpp_verbose = document.getElementById('LlamaCppVerbose').checked;
+            config.llama_cpp_special_tokens_output = document.getElementById('LlamaCppSpecialTokensOutput').checked;
+            config.llama_cpp_reasoning_budget = parseInt(document.getElementById('LlamaCppReasoningBudget').value);
+            config.llama_cpp_dio = document.getElementById('LlamaCppDio').checked;
+            config.llama_cpp_main_gpu_index = parseInt(document.getElementById('LlamaCppMainGpuIndex').value);
         } else if (config.local_llm_server === "hf-waitress") {
             config.hf_waitress_serving_url = document.getElementById('HfwServingUrl').value;
             config.hf_waitress_access_url = document.getElementById('HfwAccessUrl').value;
@@ -164,7 +180,7 @@ function getGraphRAGConfig() {
         'graph_model_max_new_tokens': document.getElementById('graph_extractor_max_new_tokens').value,
         'graph_model_max_seq_len': document.getElementById('graph_extractor_max_seq_len').value,
         'graph_model_temperature': document.getElementById('graph_extractor_temperature').value,
-        'graph_model_do_sample': document.getElementById('graph_extractor_temperature').value > 0.0 ? true : false,
+        'graph_model_do_sample': parseFloat(document.getElementById('graph_extractor_temperature').value) > 0.0 ? true : false,
         'graph_model_top_k': document.getElementById('graph_extractor_top_k').value,
         'graph_model_top_p': document.getElementById('graph_extractor_top_p').value,
         'graph_model_min_p': document.getElementById('graph_extractor_min_p').value,
@@ -181,7 +197,7 @@ function getGraphRAGConfig() {
         'graph_summarizer_max_new_tokens': document.getElementById('graph_summarizer_max_new_tokens').value,
         'graph_summarizer_max_seq_len': document.getElementById('graph_summarizer_max_seq_len').value,
         'graph_summarizer_temperature': document.getElementById('graph_summarizer_temperature').value,
-        'graph_summarizer_do_sample': document.getElementById('graph_summarizer_temperature').value > 0.0 ? true : false,
+        'graph_summarizer_do_sample': parseFloat(document.getElementById('graph_summarizer_temperature').value) > 0.0 ? true : false,
         'graph_summarizer_top_k': document.getElementById('graph_summarizer_top_k').value,
         'graph_summarizer_top_p': document.getElementById('graph_summarizer_top_p').value,
         'graph_summarizer_min_p': document.getElementById('graph_summarizer_min_p').value,

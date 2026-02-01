@@ -156,6 +156,19 @@ function loadCoreLarsConfig() {
         'vision_ocr_prompt',
         'llama_cpp_use_gpu',
         'llama_cpp_gpu_layers',
+        'llama_cpp_fit',
+        'llama_cpp_fit_target',
+        'llama_cpp_fit_min_ctx',
+        'llama_cpp_flash_attn',
+        'llama_cpp_warmup',
+        'llama_cpp_alias',
+        'llama_cpp_misc_args',
+        'llama_cpp_check_tensors',
+        'llama_cpp_verbose',
+        'llama_cpp_special_tokens_output',
+        'llama_cpp_reasoning_budget',
+        'llama_cpp_dio',
+        'llama_cpp_main_gpu_index',
         'llama_cpp_context_length',
         'llama_cpp_batch_size',
         'llama_cpp_ubatch_size',
@@ -169,7 +182,7 @@ function loadCoreLarsConfig() {
         'llama_cpp_cpu_only_moe',
         'llama_cpp_num_cpu_moe',
         'llama_cpp_mlock',
-        'llama_cpp_no_nmap',
+        'llama_cpp_no_mmap',
         'llama_cpp_split_mode',
         'llama_cpp_tensor_split',
         'llama_cpp_override_tensor',
@@ -665,12 +678,25 @@ function setLlamaCppCheckboxes(values) {
     document.getElementById('DisableKvOffloading').checked = values.llama_cpp_disable_kv_offloading;
     document.getElementById('CpuOnlyMoe').checked = values.llama_cpp_cpu_only_moe;
     document.getElementById('Mlock').checked = values.llama_cpp_mlock;
-    document.getElementById('NoNmap').checked = values.llama_cpp_no_nmap;
+    document.getElementById('NoMmap').checked = values.llama_cpp_no_mmap;
 }
 
 
 function setLlamaCppValues(values) {
     document.getElementById('NumbGpuLayers').value = values.llama_cpp_gpu_layers;
+    document.getElementById('LlamaCppWarmup').checked = values.llama_cpp_warmup;
+    document.getElementById('LlamaCppAlias').value = values.llama_cpp_alias;
+    document.getElementById('LlamaCppMiscArgs').value = values.llama_cpp_misc_args;
+    document.getElementById('LlamaCppCheckTensors').checked = values.llama_cpp_check_tensors;
+    document.getElementById('LlamaCppVerbose').checked = values.llama_cpp_verbose;
+    document.getElementById('LlamaCppSpecialTokensOutput').checked = values.llama_cpp_special_tokens_output;
+    document.getElementById('LlamaCppReasoningBudget').value = values.llama_cpp_reasoning_budget;
+    document.getElementById('LlamaCppDio').checked = values.llama_cpp_dio;
+    document.getElementById('LlamaCppMainGpuIndex').value = values.llama_cpp_main_gpu_index;
+    document.getElementById('LlamaCppFit').checked = values.llama_cpp_fit;
+    document.getElementById('LlamaCppFitTarget').value = values.llama_cpp_fit_target;
+    document.getElementById('LlamaCppFitMinCtx').value = values.llama_cpp_fit_min_ctx;
+    document.getElementById('LlamaCppFlashAttn').value = values.llama_cpp_flash_attn;
     document.getElementById('LlmCtxLgt').value = values.llama_cpp_context_length;
     document.getElementById('LlamaCppBatchSize').value = values.llama_cpp_batch_size;
     document.getElementById('LlamaCppUbatchSize').value = values.llama_cpp_ubatch_size;
@@ -695,6 +721,10 @@ function setLlamaCppValues(values) {
     document.getElementById('presencePenaltySliderValue').textContent = values.llama_cpp_presence_penalty;
     document.getElementById('frequencyPenaltySlider').value = values.llama_cpp_frequency_penalty;
     document.getElementById('frequencyPenaltySliderValue').textContent = values.llama_cpp_frequency_penalty;
+    document.getElementById('LlamaCppServingHost').value = values.llama_cpp_serving_url;
+    document.getElementById('LlamaCppAccessUrl').value = values.llama_cpp_access_url;
+    document.getElementById('LlamaCppServingPort').value = values.llama_cpp_server_port;
+    setLlamaCppUrl(values.llama_cpp_access_url, values.llama_cpp_server_port);
 }
 
 
@@ -1424,7 +1454,7 @@ function initializeGraphRAGCustomDropdowns(values) {
 
     addExtractorInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter' && this.value) {
-            addNewGraphExtractorModel(this.value); //TODO: add function
+            addNewGraphExtractorModel(this.value);
             addExtractorInput.value = '';
             addExtractorInput.style.display = 'none';
             addExtractorBtn.style.display = 'block';
@@ -1434,7 +1464,6 @@ function initializeGraphRAGCustomDropdowns(values) {
     // Summarizer Server:
     initializeGraphSummarizerCustomDropdown(values.graph_summarizer_model_list, values.graph_summarizer_model);
     
-    // UNCOMMENT IN THE FUTURE IF MAKING THIS USER-SELECTABLE!
     document.getElementById('graph-summarizer-custom-select-header').addEventListener('click', function() {
         document.getElementById('graph-summarizer-custom-dropdown-content').classList.toggle('show');
     });
@@ -1454,7 +1483,7 @@ function initializeGraphRAGCustomDropdowns(values) {
 
     addSummarizerInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter' && this.value) {
-            addNewGraphSummarizerModel(this.value); //TODO: add function
+            addNewGraphSummarizerModel(this.value);
             addSummarizerInput.value = '';
             addSummarizerInput.style.display = 'none';
             addSummarizerBtn.style.display = 'block';

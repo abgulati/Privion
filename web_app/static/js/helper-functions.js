@@ -16,6 +16,10 @@ function setOldLlmModel(model) {
     document.getElementById('chatState').setAttribute('data-old-llm-model', model);
 }
 
+function setLlamaCppUrl(host, port) {
+    document.getElementById('chatState').setAttribute('data-llama-cpp-url', `http://${host}:${port}`);
+}
+
 function setHfwUrl(host, port) {
     document.getElementById('chatState').setAttribute('data-hf-waitress-url', `http://${host}:${port}`);
 }
@@ -104,6 +108,10 @@ function getLlmModel() {
 
 function getOldLlmModel() {
     return document.getElementById('chatState').getAttribute('data-old-llm-model');
+}
+
+function getLlamaCppUrl() {
+    return document.getElementById('chatState').getAttribute('data-llama-cpp-url');
 }
 
 function getHfwUrl() {

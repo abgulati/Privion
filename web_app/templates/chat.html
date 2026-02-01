@@ -820,43 +820,43 @@
                                                             </tr>
                                                             <tr class="settings-table-row" id="temperature_value">
                                                                 <td class="settings_table_setting_name">Temperature</td>
-                                                                <td class="settings_table_setting_description">Set LLM temperature on a scale of 0.0 to 2.0. [Default: 0.1]</td>
+                                                                <td class="settings_table_setting_description">Set LLM temperature on a scale of 0.0 to 2.0. [Default: 0.1 | 0 = Disabled]</td>
                                                                 <td class="settings_table_setting_value"><input type="range" id="tempSlider" min="0" max="2" step="0.01" value="0.3"><span id="tempSliderValue">0.3</span></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="topk_value">
                                                                 <td class="settings_table_setting_name">Top-K</td>
-                                                                <td class="settings_table_setting_description">Limit the next token selection to the K most probable tokens. [Default: 40]</td>
-                                                                <td class="settings_table_setting_value"><input type="range" id="topkSlider" min="-1" max="100" step="1" value="40"><span id="topkSliderValue">40</span></td>
+                                                                <td class="settings_table_setting_description">Limit the next token selection to the K most probable tokens. [Default: 40 | 0 = Disabled]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="topkSlider" min="0" max="100" step="1" value="40"><span id="topkSliderValue">40</span></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="topp_value">
                                                                 <td class="settings_table_setting_name">Top-P</td>
-                                                                <td class="settings_table_setting_description">Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P. [Default: 0.9]</td>
-                                                                <td class="settings_table_setting_value"><input type="range" id="toppSlider" min="0" max="1" step="0.01" value="0.95"><span id="toppSliderValue">0.95</span></td>
+                                                                <td class="settings_table_setting_description">Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P. [Default: 0.9 | 1.0 = Disabled]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="toppSlider" min="0.0" max="1.0" step="0.01" value="0.95"><span id="toppSliderValue">0.95</span></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="minp_value">
                                                                 <td class="settings_table_setting_name">Min-P</td>
-                                                                <td class="settings_table_setting_description">The minimum probability for a token to be considered, relative to the probability of the most likely token. [Default: 0.1]</td>
-                                                                <td class="settings_table_setting_value"><input type="range" id="minpSlider" min="0" max="1" step="0.01" value="0.05"><span id="minpSliderValue">0.05</span></td>
+                                                                <td class="settings_table_setting_description">The minimum probability for a token to be considered, relative to the probability of the most likely token. [Default: 0.1 | 0.0 = Disabled]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="minpSlider" min="0.0" max="1" step="0.01" value="0.05"><span id="minpSliderValue">0.05</span></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="nkeep_value">
                                                                 <td class="settings_table_setting_name">N-Keep</td>
-                                                                <td class="settings_table_setting_description">Prompt-tokens retained when context-size exceeded. [Default: 0 | Retain All: -1]</td>
+                                                                <td class="settings_table_setting_description">Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded. The number excludes the BOS token. By default, this value is set to 0, meaning no tokens are kept. Use -1 to retain all tokens from the prompt. [Default: 0 | Retain All: -1]</td>
                                                                 <td class="settings_table_setting_value"><input type="number" id="nkeepSlider" name="nkeepSlider" min="-1" class="settings-input-fields" value="0"></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="repetition_penalty_value">
                                                                 <td class="settings_table_setting_name">Repetition Penalty</td>
-                                                                <td class="settings_table_setting_description">Repetition penalty to discourage the generation of repeated tokens. [Default: 1.0]</td>
-                                                                <td class="settings_table_setting_value"><input type="range" id="repetitionPenaltySlider" min="0" max="2" step="0.01" value="1.0"><span id="repetitionPenaltySliderValue">1.0</span></td>
+                                                                <td class="settings_table_setting_description">Repetition penalty to discourage the generation of repeated tokens. [Default: 1.0 | 1.0 = Disabled]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="repetitionPenaltySlider" min="1.0" max="2" step="0.01" value="1.0"><span id="repetitionPenaltySliderValue">1.0</span></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="presence_penalty_value">
                                                                 <td class="settings_table_setting_name">Presence Penalty</td>
-                                                                <td class="settings_table_setting_description">Presence penalty to discourage the generation of repeated tokens. [Default: 0.0]</td>
-                                                                <td class="settings_table_setting_value"><input type="range" id="presencePenaltySlider" min="-2" max="2" step="0.01" value="0.0"><span id="presencePenaltySliderValue">0.0</span></td>
+                                                                <td class="settings_table_setting_description">Repeat alpha presence penalty. [Default: 0.0 | 0.0 = Disabled]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="presencePenaltySlider" min="0.0" max="2" step="0.01" value="0.0"><span id="presencePenaltySliderValue">0.0</span></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="frequency_penalty_value">
                                                                 <td class="settings_table_setting_name">Frequency Penalty</td>
-                                                                <td class="settings_table_setting_description">Frequency penalty to discourage the generation of repeated tokens. [Default: 0.0]</td>
-                                                                <td class="settings_table_setting_value"><input type="range" id="frequencyPenaltySlider" min="-2" max="2" step="0.01" value="0.0"><span id="frequencyPenaltySliderValue">0.0</span></td>
+                                                                <td class="settings_table_setting_description">Repeat alpha frequency penalty. [Default: 0.0 | 0.0 = Disabled]</td>
+                                                                <td class="settings_table_setting_value"><input type="range" id="frequencyPenaltySlider" min="0.0" max="2" step="0.01" value="0.0"><span id="frequencyPenaltySliderValue">0.0</span></td>
                                                             </tr>
                                                         </table>
                                                     </div>
@@ -870,6 +870,51 @@
                                                                 <th>Description</th>
                                                                 <th style="width: 20%;">Value</th>
                                                             </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_serving_host">
+                                                                <td class="settings_table_setting_name">--host</td>
+                                                                <td class="settings_table_setting_description">Llama-CPP Server Serving Host - This is the host passed to the llama-server command. [default: 127.0.0.1]</td>
+                                                                <td class="settings_table_setting_value"><input type="text" id="LlamaCppServingHost" name="LlamaCppServingHost" class="settings-input-fields" value="127.0.0.1"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_access_url">
+                                                                <td class="settings_table_setting_name">--llama_cpp_access_url</td>
+                                                                <td class="settings_table_setting_description">Llama-CPP Server Access URL - This is the access URL passed to the llama-server command. [default: localhost]</td>
+                                                                <td class="settings_table_setting_value"><input type="text" id="LlamaCppAccessUrl" name="LlamaCppAccessUrl" class="settings-input-fields" value="localhost"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_serving_port">
+                                                                <td class="settings_table_setting_name">--port</td>
+                                                                <td class="settings_table_setting_description">Llama-CPP Server Serving Port - This is the port passed to the llama-server command. [default: 8080]</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="LlamaCppServingPort" name="LlamaCppServingPort" min="0" max="65535" class="settings-input-fields" value="8080"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_alias">
+                                                                <td class="settings_table_setting_name">--alias</td>
+                                                                <td class="settings_table_setting_description">Set alias for model name (to be used by REST API)</td>
+                                                                <td class="settings_table_setting_value"><input type="text" id="LlamaCppAlias" name="LlamaCppAlias" class="settings-input-fields" value=""></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_warmup">
+                                                                <td class="settings_table_setting_name">--warmup</td>
+                                                                <td class="settings_table_setting_description">Whether to perform warmup with an empty run [default: enabled]</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="LlamaCppWarmup" name="LlamaCppWarmup" style="margin-left: 7px;" checked></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_check_tensors">
+                                                                <td class="settings_table_setting_name">--check-tensors</td>
+                                                                <td class="settings_table_setting_description">Check model tensor data for invalid values [default: false]</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="LlamaCppCheckTensors" name="LlamaCppCheckTensors" style="margin-left: 7px;"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_verbose">
+                                                                <td class="settings_table_setting_name">--verbose</td>
+                                                                <td class="settings_table_setting_description">Set verbosity level to infinity (i.e. log all messages, useful for debugging)</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="LlamaCppVerbose" name="LlamaCppVerbose" style="margin-left: 7px;"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_special_tokens_output">
+                                                                <td class="settings_table_setting_name">--special</td>
+                                                                <td class="settings_table_setting_description">Special tokens output enabled [default: false]</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="LlamaCppSpecialTokensOutput" name="LlamaCppSpecialTokensOutput" style="margin-left: 7px;"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_reasoning_budget">
+                                                                <td class="settings_table_setting_name">--reasoning-budget</td>
+                                                                <td class="settings_table_setting_description">Controls the amount of thinking allowed; currently only one of: -1 for unrestricted thinking budget, or 0 to disable thinking [default: -1]</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="LlamaCppReasoningBudget" name="LlamaCppReasoningBudget" min="-1" class="settings-input-fields" value="-1"></td>
+                                                            </tr>
                                                             <tr class="settings-table-row" id="use_gpu">
                                                                 <td class="settings_table_setting_name">--use-gpu</td>
                                                                 <td class="settings_table_setting_description">Use GPU for inference</td>
@@ -877,12 +922,33 @@
                                                             </tr>
                                                             <tr class="settings-table-row" id="llm_numb_gpu_layers">
                                                                 <td class="settings_table_setting_name">--n-gpu-layers</td>
-                                                                <td class="settings_table_setting_description">Number of layers to store in VRAM</td>
-                                                                <td class="settings_table_setting_value"><input type="number" id="NumbGpuLayers" name="NumbGpuLayers" min="-1" class="settings-input-fields" value="0" disabled></td>
+                                                                <td class="settings_table_setting_description">Max. number of layers to store in VRAM, either an exact number, 'auto', or 'all' (default: auto)</td>
+                                                                <td class="settings_table_setting_value"><input type="text" id="NumbGpuLayers" name="NumbGpuLayers" class="settings-input-fields" value="auto" disabled></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_flash_attn">
+                                                                <td class="settings_table_setting_name">--flash-attn</td>
+                                                                <td class="settings_table_setting_description">Use Flash Attention for inference ['on', 'off', or 'auto' | Default: 'auto']</td>
+                                                                <td class="settings_table_setting_value"><input type="text" id="LlamaCppFlashAttn" name="LlamaCppFlashAttn" style="margin-left: 7px;" value="auto"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_fit">
+                                                                <td class="settings_table_setting_name">--fit</td>
+                                                                <td class="settings_table_setting_description">Use fit mode for inference ['on', 'off' | Default: 'on']<br><br>NOTE: The following flags will be IGNORED if fit is ON:
+                                                                    <br>--ctx-size, --device, --split-mode, --tensor-split, --override-tensor, --n-gpu-layers, --cpu-moe, --n-cpu-moe</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="LlamaCppFit" name="LlamaCppFit" style="margin-left: 7px;" checked></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_fit_target">
+                                                                <td class="settings_table_setting_name">--fit-target</td>
+                                                                <td class="settings_table_setting_description">Target context size for fit mode (default: 1024)</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="LlamaCppFitTarget" name="LlamaCppFitTarget" min="128" class="settings-input-fields" value="1024"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_fit_min_ctx">
+                                                                <td class="settings_table_setting_name">--fit-min-ctx</td>
+                                                                <td class="settings_table_setting_description">Minimum context size for fit mode (default: 4096)</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="LlamaCppFitMinCtx" name="LlamaCppFitMinCtx" min="128" class="settings-input-fields" value="4096"></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="llm_ctx_length">
                                                                 <td class="settings_table_setting_name">--ctx-size</td>
-                                                                <td class="settings_table_setting_description">Size of the prompt context (default: 4096, 0 = loaded from model)</td>
+                                                                <td class="settings_table_setting_description">Size of the prompt context (default: 4096, 0 = loaded from model)<br>NOTE: This flag will be IGNORED if fit is ON.</td>
                                                                 <td class="settings_table_setting_value"><input type="number" id="LlmCtxLgt" name="LlmCtxLgt" min="128" class="settings-input-fields" value="4096"></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="llama_cpp_batch_size">
@@ -952,23 +1018,23 @@
                                                             </tr>
                                                             <tr class="settings-table-row" id="llm_no_of_seqs_to_par_decode">
                                                                 <td class="settings_table_setting_name">--parallel</td>
-                                                                <td class="settings_table_setting_description">Number of parallel sequences to decode (default: 1)</td>
+                                                                <td class="settings_table_setting_description">Number of parallel sequences to decode (default: 1)<br><br>WARNING: THIS WILL DEVIDE THE TOTAL CONTEXT!<br>Eg: ctx: 4096, parallel: 3, context per sequence: 1536</td>
                                                                 <td class="settings_table_setting_value"><input type="number" id="NoOfSeqsToParDecode" name="NoOfSeqsToParDecode" min="1" class="settings-input-fields" value="1"></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="llm_offload_to_devices">
                                                                 <td class="settings_table_setting_name">--device</td>
                                                                 <td class="settings_table_setting_description">Comma-separated list of devices to use for offloading (none = don't offload).
-                                                                    Use `llama-server --list-devices` to see a list of available devices.</td>
+                                                                    Use `llama-server --list-devices` to see a list of available devices. <br>NOTE: This flag will be IGNORED if fit is ON.</td>
                                                                 <td class="settings_table_setting_value"><input type="text" id="OffloadToDevices" name="OffloadToDevices" value="none"></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="llm_cpu_only_moe">
                                                                 <td class="settings_table_setting_name">--cpu-moe</td>
-                                                                <td class="settings_table_setting_description">Keep all Mixture of Experts (MoE) weights in the CPU.</td>
+                                                                <td class="settings_table_setting_description">Keep all Mixture of Experts (MoE) weights in the CPU.<br>NOTE: This flag will be IGNORED if fit is ON.</td>
                                                                 <td class="settings_table_setting_value"><input type="checkbox" id="CpuOnlyMoe" name="CpuOnlyMoe" style="margin-left: 7px;"></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="llama_cpp_num_cpu_moe">
                                                                 <td class="settings_table_setting_name">--n-cpu-moe</td>
-                                                                <td class="settings_table_setting_description">Keep the Mixture of Experts (MoE) weights of the first N layers in the CPU</td>
+                                                                <td class="settings_table_setting_description">Keep the Mixture of Experts (MoE) weights of the first N layers in the CPU<br>NOTE: This flag will be IGNORED if fit is ON.</td>
                                                                 <td class="settings_table_setting_value"><input type="number" id="LlamaCppNumCpuMoe" name="LlamaCppNumCpuMoe" min="0" class="settings-input-fields" value="0"></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="llm_mlock">
@@ -976,10 +1042,15 @@
                                                                 <td class="settings_table_setting_description">Force system to keep model in RAM rather than swapping or compressing</td>
                                                                 <td class="settings_table_setting_value"><input type="checkbox" id="Mlock" name="Mlock" style="margin-left: 7px;"></td>
                                                             </tr>
-                                                            <tr class="settings-table-row" id="llm_no_nmap">
+                                                            <tr class="settings-table-row" id="llm_no_mmap">
                                                                 <td class="settings_table_setting_name">--no-mmap</td>
-                                                                <td class="settings_table_setting_description">Do not memory-map model (slower load but may reduce pageouts if not using mlock)</td>
-                                                                <td class="settings_table_setting_value"><input type="checkbox" id="NoNmap" name="NoNmap" style="margin-left: 7px;"></td>
+                                                                <td class="settings_table_setting_description">Whether to memory-map model. Explicitly enabling mmap disables direct-io. (if mmap disabled, slower load but may reduce pageouts if not using mlock) [default: unchecked, internally-enabled]</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="NoMmap" name="NoMmap" style="margin-left: 7px;"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_dio">
+                                                                <td class="settings_table_setting_name">--direct-io (-dio)</td>
+                                                                <td class="settings_table_setting_description">Use DirectIO if available. Takes precedence over --mmap (default: unchecked, internally-enabled)</td>
+                                                                <td class="settings_table_setting_value"><input type="checkbox" id="LlamaCppDio" name="LlamaCppDio" style="margin-left: 7px;"></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="llm_split_mode">
                                                                 <td class="settings_table_setting_name">--split-mode</td>
@@ -987,19 +1058,26 @@
                                                                     1] none: use one GPU only
                                                                     2] layer (default): split layers and KV across GPUs
                                                                     3] row: split rows across GPUs
+                                                                    <br>NOTE: This flag will be IGNORED if fit is ON.
                                                                 </td>
                                                                 <td class="settings_table_setting_value">
                                                                     <select class="modal-selects" id="SplitMode">
                                                                         <option value="none">none</option>
-                                                                        <option value="auto">auto</option>
-                                                                        <option value="manual">manual</option>
+                                                                        <option value="layer">layer</option>
+                                                                        <option value="row">row</option>
                                                                     </select>
                                                                 </td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_main_gpu_index">
+                                                                <td class="settings_table_setting_name">--main-gpu</td>
+                                                                <td class="settings_table_setting_description">The GPU (INDEX) to use for the model (with split-mode = none), or for intermediate results and KV (with split-mode = row) [default: 0]</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="LlamaCppMainGpuIndex" name="LlamaCppMainGpuIndex" min="0" class="settings-input-fields" value="0"></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="llm_tensor_split">
                                                                 <td class="settings_table_setting_name">--tensor-split</td>
                                                                 <td class="settings_table_setting_description">Fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 
-                                                                    3,1 to specify a 75/35 split or 1,1 for a 50/50. Specify this as preferred: 7.5,3.5 and 0.5,0.5 have the same respective meanings!</td>
+                                                                    3,1 to specify a 75/35 split or 1,1 for a 50/50. Specify this as preferred: 7.5,3.5 and 0.5,0.5 have the same respective meanings!
+                                                                    <br>NOTE: This flag will be IGNORED if fit is ON.</td>
                                                                 <td class="settings_table_setting_value"><input type="text" id="TensorSplit" name="TensorSplit" value="none"></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="llm_override_tensor">
@@ -1009,8 +1087,8 @@
                                                                     It's recommended to write the RegEx in a text editor with RegEx support, and copy-paste into the text area here. <br><br>
                                                                     Example RegEx:<br>'blk\.(0|2|4|6|8|10)\.ffn_(down|gate|up)_exps\.weight=CUDA0,blk\.(1|3|5|7|9|11)\.ffn_(down|gate|up)_exps\.weight=CUDA1,blk\.([1][2-9]|[2-5][0-9]|6[01])\.ffn_(down|gate|up)_exps\.weight=CPU'<br><br>
                                                                     This translates to an interleaved (even/odd) split of the first 12 expert Feed-Forward-Network (MoE FFN) layers between GPUs 1 & 2,
-                                                                    while the rest (12-19, 20-59, 60 & 61) are sent to the CPU. <br> Use this with --n-gpu-layer to 99 to ensure all non-MoE layers
-                                                                    (output, token_embed, prompt processing etc) are kept on the GPU!</td>
+                                                                    while the rest (12-19, 20-59, 60 & 61) are sent to the CPU. <br> Usage guide: Set --n-gpu-layer to 99 to ensure all non-MoE layers
+                                                                    (output, token_embed, prompt processing etc) are kept on the GPU, and disable --cpu-moe and --n-cpu-moe since the RegEx specifies the load. <br><br>NOTE: This flag will be IGNORED if fit is ON.</td>
                                                                 <td class="settings_table_setting_value">
                                                                     <textarea class="adv-settings-textarea" id="OverrideTensor" name="OverrideTensor" rows="23" value="None"></textarea>
                                                                 </td>
@@ -1020,6 +1098,11 @@
                                                                 <td class="settings_table_setting_value" colspan="2">
                                                                     <textarea class="adv-settings-textarea" id="GgufDetails" name="GgufDetails" rows="10" disabled></textarea>
                                                                 </td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_misc_args">
+                                                                <td class="settings_table_setting_name">--misc-args</td>
+                                                                <td class="settings_table_setting_description">Miscellaneous arguments to bepassed to the llama-server command</td>
+                                                                <td class="settings_table_setting_value"><input type="text" id="LlamaCppMiscArgs" name="LlamaCppMiscArgs" class="settings-input-fields" value=""></td>
                                                             </tr>
                                                         </table>
                                                     </div>

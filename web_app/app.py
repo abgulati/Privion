@@ -5263,7 +5263,20 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
         read_return = read_config(
             [
                 'model_dir',
-                'model_choice', 
+                'model_choice',
+                'llama_cpp_warmup',
+                'llama_cpp_alias',
+                'llama_cpp_misc_args',
+                'llama_cpp_check_tensors',
+                'llama_cpp_verbose',
+                'llama_cpp_special_tokens_output',
+                'llama_cpp_reasoning_budget',
+                'llama_cpp_dio',
+                'llama_cpp_main_gpu_index',
+                'llama_cpp_fit',
+                'llama_cpp_fit_min_ctx',
+                'llama_cpp_fit_target',
+                'llama_cpp_flash_attn',
                 'llama_cpp_context_length',
                 'llama_cpp_batch_size',
                 'llama_cpp_ubatch_size',
@@ -5278,13 +5291,15 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                 'llama_cpp_value_cache_data_type',
                 'llama_cpp_no_of_seqs_to_par_decode',
                 'llama_cpp_mlock',
-                'llama_cpp_no_nmap',
+                'llama_cpp_no_mmap',
                 'llama_cpp_offload_to_devices',
                 'llama_cpp_cpu_only_moe',
                 'llama_cpp_num_cpu_moe',
                 'llama_cpp_split_mode',
                 'llama_cpp_tensor_split',
-                'llama_cpp_override_tensor'
+                'llama_cpp_override_tensor',
+                'llama_cpp_serving_url',
+                'llama_cpp_server_port'
             ]
         )
         llama_cpp_base_url = get_url_for_server('llama-cpp')
@@ -5296,48 +5311,108 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
         read_return['llama_cpp_gpu_layers'] = 0
 
     try:
-        # Build arg list (no shell; each token separate)
-        llama_cpp_args = [
+        # ---------------------------------------------------------
+        # Branch 0: Init with Base Arguments
+        # ---------------------------------------------------------
+        llama_cpp_safe_launch_args = [
             'llama-server',
+            '--warmup' if read_return['llama_cpp_warmup'] else '--no-warmup',
+            '--reasoning-budget', str(read_return['llama_cpp_reasoning_budget']),
             '--model', cpp_model,
-            '--n-gpu-layers', str(read_return["llama_cpp_gpu_layers"]),
-            '--ctx-size', str(read_return["llama_cpp_context_length"]),
             '--batch-size', str(read_return["llama_cpp_batch_size"]),
             '--ubatch-size', str(read_return["llama_cpp_ubatch_size"]),
             '--n-predict', str(read_return["llama_cpp_max_new_tokens"]),
             '--cache-type-k', str(read_return["llama_cpp_key_cache_data_type"]),
             '--cache-type-v', str(read_return["llama_cpp_value_cache_data_type"]),
             '--parallel', str(read_return["llama_cpp_no_of_seqs_to_par_decode"]),
-            '--device', str(read_return["llama_cpp_offload_to_devices"]),
-            '--split-mode', str(read_return["llama_cpp_split_mode"]),
             '--jinja',
-            '--host', '127.0.0.1',
-            '--port', '8080'
+            '--host', read_return['llama_cpp_serving_url'],
+            '--port', str(read_return['llama_cpp_server_port'])
         ]
-        if read_return['llama_cpp_unified_kv_buffer']:
-            llama_cpp_args.append('--kv-unified')
-        if flash_attention_is_installed():  
-            llama_cpp_args.extend(['--flash-attn', 'on'])
-        if read_return['llama_cpp_disable_kv_offloading']:
-            llama_cpp_args.append('--no-kv-offload')
-        if read_return['llama_cpp_mlock']:
-            llama_cpp_args.append('--mlock')
-        if read_return['llama_cpp_no_nmap']:
-            llama_cpp_args.append('--no-mmap')
-        if read_return['llama_cpp_tensor_split']:
-            llama_cpp_args.extend(['--tensor-split', str(read_return['llama_cpp_tensor_split'])])
-        
-        # MoE Management:
-        if read_return['llama_cpp_override_tensor'] and read_return['llama_cpp_override_tensor'] != '':
-            llama_cpp_args.extend(['--override-tensor', str(read_return['llama_cpp_override_tensor'])])
-        else:
-            if int(read_return['llama_cpp_num_cpu_moe']) == 0 and read_return['llama_cpp_cpu_only_moe']:
-                llama_cpp_args.append('--cpu-moe')
-            elif int(read_return['llama_cpp_num_cpu_moe']) > 0:
-                llama_cpp_args.extend(['--n-cpu-moe', str(read_return['llama_cpp_num_cpu_moe'])])
 
-        print(f"\n\nLaunching llama.cpp server with command: {' '.join(llama_cpp_args)}\n\n")
-        # full_command = ' '.join(llama_cpp_args)
+        if read_return['llama_cpp_alias'] and read_return['llama_cpp_alias'] != '':
+            llama_cpp_safe_launch_args.extend(['--alias', read_return['llama_cpp_alias']])
+
+        if read_return['llama_cpp_verbose']:
+            llama_cpp_safe_launch_args.append('--verbose')
+
+        if read_return['llama_cpp_check_tensors']:
+            llama_cpp_safe_launch_args.append('--check-tensors')
+
+        if read_return['llama_cpp_special_tokens_output']:
+            llama_cpp_safe_launch_args.append('--special')
+
+        # ---------------------------------------------------------
+        # Branch 1: Context / Layers / Fit
+        # ---------------------------------------------------------
+        if read_return['llama_cpp_fit']:
+            llama_cpp_safe_launch_args.extend([
+                '--fit', 'on',
+                '--fit-target', str(read_return['llama_cpp_fit_target']),
+                '--fit-ctx', str(read_return['llama_cpp_fit_min_ctx'])
+            ])
+        else:
+            llama_cpp_safe_launch_args.extend([
+                '--fit', 'off',
+                '--ctx-size', str(read_return["llama_cpp_context_length"]),
+                '--device', str(read_return["llama_cpp_offload_to_devices"]),
+                '--split-mode', str(read_return["llama_cpp_split_mode"])
+            ])
+
+            if read_return['llama_cpp_split_mode'] == 'none':
+                llama_cpp_safe_launch_args.extend(['--main-gpu', str(read_return['llama_cpp_main_gpu_index'])])
+
+            if read_return['llama_cpp_tensor_split']:
+                llama_cpp_safe_launch_args.extend(['--tensor-split', str(read_return['llama_cpp_tensor_split'])])
+
+            # MoE Management:
+            if read_return['llama_cpp_override_tensor'] and read_return['llama_cpp_override_tensor'] != '':
+                llama_cpp_safe_launch_args.extend([
+                    '--override-tensor', str(read_return['llama_cpp_override_tensor']),
+                    '--n-gpu-layers', '99'
+                ])
+            else:
+                llama_cpp_safe_launch_args.extend(['--n-gpu-layers', str(read_return["llama_cpp_gpu_layers"])])
+                
+                # MoE specific logic
+                num_cpu_moe = int(read_return.get('llama_cpp_num_cpu_moe', 0))
+                if num_cpu_moe == 0 and read_return['llama_cpp_cpu_only_moe']:
+                    llama_cpp_safe_launch_args.append('--cpu-moe')
+                elif num_cpu_moe > 0:
+                    llama_cpp_safe_launch_args.extend(['--n-cpu-moe', str(num_cpu_moe)])
+        
+        # ---------------------------------------------------------
+        # Branch 2: Optimizations & Flags
+        # ---------------------------------------------------------
+            
+        if read_return['llama_cpp_unified_kv_buffer']:
+            llama_cpp_safe_launch_args.append('--kv-unified')
+
+        # Flash Attention requires GPU KV Cache - it cannot be enabled if kv-offload is disabled!
+        want_flash_attn = (read_return['llama_cpp_flash_attn'] in ['auto', 'on'])
+        kv_offload_disabled = read_return.get('llama_cpp_disable_kv_offloading', False)
+
+        if want_flash_attn and flash_attention_is_installed() and not kv_offload_disabled:  
+            llama_cpp_safe_launch_args.extend(['--flash-attn', 'on'])
+        
+        if kv_offload_disabled:
+            llama_cpp_safe_launch_args.append('--no-kv-offload')
+        
+        if read_return['llama_cpp_mlock']:
+            llama_cpp_safe_launch_args.append('--mlock')
+        
+        if read_return['llama_cpp_no_mmap']:
+            llama_cpp_safe_launch_args.append('--no-mmap')
+
+        if read_return['llama_cpp_dio']:
+            llama_cpp_safe_launch_args.append('--direct-io')
+
+        if read_return['llama_cpp_misc_args'] and read_return['llama_cpp_misc_args'] != '':
+            llama_cpp_safe_launch_args.append(read_return['llama_cpp_misc_args'].strip())
+        
+
+        print(f"\n\nLaunching llama.cpp server with command: {' '.join(llama_cpp_safe_launch_args)}\n\n")
+        # full_command = ' '.join(llama_cpp_safe_launch_args)
         # print(f"Full command: {full_command}\n\n")
 
         if platform.system() == 'Windows':
@@ -5346,13 +5421,13 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
 
             # with open('llama_cpp_server_output_log.txt', 'w') as f:
             #     LLAMA_CPP_PROCESS = subprocess.Popen(
-            #         llama_cpp_args,
+            #         llama_cpp_safe_launch_args,
             #         stdout=f,
             #         stderr=subprocess.STDOUT,
             #         text=True,
             #         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
             #     )
-            LLAMA_CPP_PROCESS = subprocess.Popen(llama_cpp_args, creationflags=subprocess.CREATE_NEW_CONSOLE)   # only for testing & debugging, see note below!
+            LLAMA_CPP_PROCESS = subprocess.Popen(llama_cpp_safe_launch_args, creationflags=subprocess.CREATE_NEW_CONSOLE)   # only for testing & debugging, see note below!
             '''
             ## Why CREATE_NEW_CONSOLE is less reliable than CREATE_NEW_PROCESS_GROUP:
             
@@ -5370,7 +5445,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
         else:           
             # Platform & container agnostic:
             with open('llama_cpp_server_output_log.txt', 'w') as f:
-                LLAMA_CPP_PROCESS = subprocess.Popen(llama_cpp_args, stdout=f, stderr=subprocess.STDOUT, text=True)    #stdout has already been redirected to the file, so simply direct stderr to stdout!
+                LLAMA_CPP_PROCESS = subprocess.Popen(llama_cpp_safe_launch_args, stdout=f, stderr=subprocess.STDOUT, text=True)    #stdout has already been redirected to the file, so simply direct stderr to stdout!
 
     except Exception as e:
         handle_local_error("Could not launch llama.cpp process, encountered error: ", e)

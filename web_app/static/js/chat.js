@@ -514,12 +514,13 @@ function printErrorToChatArea(responseContentID, error_message) {
 
 
 async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer, tools_schema=null) {
-    const url = "http://localhost:8080/v1/chat/completions";
+    const url = getLlamaCppUrl() + "/v1/chat/completions";
     let formattedPromptCopy = structuredClone(formattedPrompt); // objects passed by reference so appending tools to the passed object will make it persistent even when tools_schema is null in a future call!
 
     const requestData = coerceToObject(formattedPromptCopy, "llama.cpp request");
     if (tools_schema) { requestData.tools = tools_schema; }
     else delete requestData.tools;  // if the incoming formattedPrompt already has a .tools property from any earlier mutation (or from elsewhere), so best to explicitly remove it when tools_schema is null
+    requestData.model = document.getElementById('modelDropdown').value;
     requestData.stream = true;
     requestData.temperature = parseFloat(document.getElementById('tempSlider').value);
     requestData.top_k = parseInt(document.getElementById('topkSlider').value);
@@ -529,6 +530,8 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
     requestData.repeat_penalty = parseFloat(document.getElementById('repetitionPenaltySlider').value);
     requestData.presence_penalty = parseFloat(document.getElementById('presencePenaltySlider').value);
     requestData.frequency_penalty = parseFloat(document.getElementById('frequencyPenaltySlider').value);
+
+    console.log("llama.cpp requestData: ", requestData);
 
     try {
 
@@ -541,11 +544,17 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
         scrollChatAreaToBottom();
 
         const reader = response.body.getReader();   // To handle the Fetch API's 'Response' object when involving a ReadableStream.  By calling getReader(), a 'ReadableStreamDefaultReader' object is obtained
-        let totalContent = '';  //String to accumulate content
+        let full_content = '';  //String to accumulate content
+        let plain_text = '';
         let receivedComplete = false;
         let loaderHidden = false;
         let reasoningContentStream = false;
         let reasoningContentFirstToken = true;
+        let invoke_tools = false;
+        
+        // We use an object/map to accumulate tools because indices might come out of order
+        // or interleaved (though usually sequential).
+        let accumulatedTools = {}; 
 
         // Function to process each text chunk
         async function processChunk() {
@@ -575,25 +584,70 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
                                 receivedComplete = true;
                             } else {
                                 const dataObj = JSON.parse(jsonStr);
+                                const choice = dataObj.choices[0];
+                                const delta = choice.delta;
                                 let streamedText = "";
-                                if (dataObj.choices[0].delta.reasoning_content) {
+                                let append_to_plain_text = true;
+                                
+                                // --- 1. HANDLE REASONING ---
+                                if (delta.reasoning_content) {
                                     if (reasoningContentFirstToken) {
                                         reasoningContentStream = true;
-                                        streamedText = '<think>' + dataObj.choices[0].delta.reasoning_content;
+                                        streamedText = '<think>' + delta.reasoning_content;
                                         reasoningContentFirstToken = false;
                                     } else {
-                                        streamedText = dataObj.choices[0].delta.reasoning_content;
+                                        streamedText = delta.reasoning_content;
                                     }
+                                
+                                // --- 2. HANDLE TOOL CALLS (The Fix) ---
+                                } else if (delta.tool_calls) {
+                                    invoke_tools = true;
+                                    append_to_plain_text = false;
+
+                                    // Iterate over the tool_calls in this chunk (usually just one, but spec allows array)
+                                    delta.tool_calls.forEach((toolChunk) => {
+                                        const index = toolChunk.index;
+
+                                        // Initialize if this is the first time we see this index
+                                        if (!accumulatedTools[index]) {
+                                            accumulatedTools[index] = {
+                                                id: "",
+                                                type: "function",
+                                                function: { name: "", arguments: "" }
+                                            };
+                                        }
+
+                                        // Merge ID (usually only in the first chunk)
+                                        if (toolChunk.id) {
+                                            accumulatedTools[index].id = toolChunk.id;
+                                        }
+
+                                        // Merge Name (usually only in the first chunk)
+                                        if (toolChunk.function && toolChunk.function.name) {
+                                            accumulatedTools[index].function.name += toolChunk.function.name;
+                                        }
+
+                                        // Merge Arguments (This is the fragmentation part!)
+                                        if (toolChunk.function && toolChunk.function.arguments) {
+                                            accumulatedTools[index].function.arguments += toolChunk.function.arguments;
+                                        }
+                                    });
+
+                                // --- 3. HANDLE STANDARD CONTENT ---
                                 } else {
                                     if (reasoningContentStream) {
-                                        streamedText = '</think>' + dataObj.choices[0].delta.content || "";
+                                        streamedText = '</think>' + (delta.content || "");
                                         reasoningContentStream = false;
                                     } else {
-                                        streamedText = dataObj.choices[0].delta.content || "";
+                                        streamedText = delta.content || "";
                                     }
                                 }
+
                                 appendStreamChunkAndRender(responseContentID, streamedText);
-                                totalContent += streamedText;
+                                full_content += streamedText;
+                                if (append_to_plain_text) {
+                                    plain_text += streamedText;
+                                }
                                 handleAutoScroll(chatContainer);
                             }
                         } catch (error) {
@@ -610,7 +664,27 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
         }
 
         await processChunk();   // processChunk() is an async-Fn and thus returns a promise. Here, via await, we pause execution until the promise is resolved or rejected.
-        return totalContent;
+        
+        // Convert the accumulated object back to a standard Array for your return
+        let tool_calls = Object.values(accumulatedTools);
+        if (tool_calls.length > 0) {
+            full_content += '<tool_call>' + JSON.stringify(tool_calls) + '</tool_call>';
+        }
+
+        // Optional: Attempt to verify JSON validity of arguments now that stream is done
+        /*
+        tool_calls.forEach(tool => {
+            try {
+                // This confirms the stream stitched together correctly
+                const argsObj = JSON.parse(tool.function.arguments); 
+                console.log("Parsed Tool Args:", argsObj);
+            } catch (e) {
+                console.error("Tool arguments were incomplete/invalid JSON", e);
+            }
+        }); 
+        */
+        
+        return { full_content, plain_text, invoke_tools, tool_calls };
 
     } catch (error) {
         errorHandlerNoAlert("fetching llama.cpp event-streaming response", "localhost:8080/completions", String(error));
@@ -728,7 +802,6 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         hfwHeaders.append("X-Frequency-Penalty", document.getElementById('HfwFrequencyPenaltySlider').value);
 
         const requestObj = coerceToObject(formattedPromptCopy, "exl3 request");
-        console.log("tools_schema: ", tools_schema);
         if (tools_schema) requestObj.tools = tools_schema;
         else delete requestObj.tools;
         rawBodyJSONStringified = JSON.stringify(requestObj);
@@ -756,7 +829,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
     try {
 
         const request_body = vision === "true" ? formdata : rawBodyJSONStringified;
-        console.log("request_body: ", request_body);
+        // console.log("request_body: ", request_body);
 
         const hfwResponse = await fetch(url, {
             method: 'POST',
@@ -778,8 +851,8 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         document.getElementById('chat-area').scrollTop = document.getElementById('chat-area').scrollHeight;     //Scroll to the bottom of the page
 
         const hfwReader = hfwResponse.body.getReader();
-        let hfwTotalContent = '';
-        if (file) { hfwTotalContent += document.getElementById(responseContentID).innerHTML + '<br>'; } // Ensure the file download link generated above is appended to hfwTotalContent!
+        let full_content = '';
+        if (file) { full_content += document.getElementById(responseContentID).innerHTML + '<br>'; } // Ensure the file download link generated above is appended to hfwTotalContent!
         let hfwReceivedComplete = false;
         let loaderHidden = false;
 
@@ -816,7 +889,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
                             hfwReceivedComplete = true;
                         } else {
                             appendStreamChunkAndRender(responseContentID, chunkText);
-                            hfwTotalContent += chunkText;
+                            full_content += chunkText;
                             handleAutoScroll(chatContainer);
                         }
 
@@ -833,7 +906,8 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         }
 
         await hfwProcessChunk();
-        return hfwTotalContent;
+        const { plain_text, invoke_tools, tool_calls } = extractToolCallsFromResponse(full_content);
+        return { full_content, plain_text, invoke_tools, tool_calls};
 
     } catch (error) {
         errorHandlerNoAlert("fetching event-streaming response", "fetchHfWaitressEventStream", String(error));
@@ -891,7 +965,7 @@ async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, 
             removeLoadingAnimation();
             handleAutoScroll(chatContainer);
             // console.log("returning imageDiv.outerHTML: ", imageDiv.outerHTML);
-            return imageDiv.outerHTML;
+            return { full_content: imageDiv.outerHTML, plain_text: "", invoke_tools: false, tool_calls: [] };
         } else {
             throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
         }
@@ -917,7 +991,7 @@ async function fetchEventStream(serverType, formattedPrompt, responseContentID, 
 }
 
 
-function handleFetchedReferences(do_rag, data, responseContentID, masterWrapperID, stream_session_id, user_message_html_unique_id, regeneration_request) {
+function handleFetchedReferences(data, responseContentID, masterWrapperID, stream_session_id, user_message_html_unique_id, regeneration_request) {
     const latest_sequence_id = getSequenceId();
     const current_chat_id = data.chat_id;
 
@@ -984,7 +1058,7 @@ function handleFetchedReferences(do_rag, data, responseContentID, masterWrapperI
     stateObj.scheduled = false;
     finalizeStreamRender(responseContentID);
 
-    if (do_rag && data.pdf_frame != "" && data.pdf_frame != null) {
+    if (data.pdf_frame != "" && data.pdf_frame != null) {
         document.getElementById(masterWrapperID).innerHTML += data.pdf_frame;
         var defaultTabs = document.getElementsByClassName("defaultTabs");
         for (let i = 0; i < defaultTabs.length; i++) {
@@ -995,7 +1069,7 @@ function handleFetchedReferences(do_rag, data, responseContentID, masterWrapperI
     }
 }
 
-async function getReferences(do_rag, params, responseContentID, masterWrapperID, user_message_html_unique_id) {
+async function getReferences(params, responseContentID, masterWrapperID, user_message_html_unique_id) {
     try {
         const response = await fetch('/get_references', {
             method: 'POST',
@@ -1014,12 +1088,13 @@ async function getReferences(do_rag, params, responseContentID, masterWrapperID,
             throw new Error(`Internal Server Error: Check server-log and server command-line for more details. Error: ${data.error}`);
         }
 
-        handleFetchedReferences(do_rag, data, responseContentID, masterWrapperID, params.stream_session_id, user_message_html_unique_id, params.regeneration_request);
+        handleFetchedReferences(data, responseContentID, masterWrapperID, params.stream_session_id, user_message_html_unique_id, params.regeneration_request);
     } catch (error) {
         errorHandlerNoAlert("fetching relevant reference material", "get-References()", String(error));
         // return printErrorToChatArea(responseContentID, String(error));
     }
 }
+
 
 let currentTtsSourceNode = null;
 
@@ -1041,7 +1116,7 @@ window.stopTTSPlayback = stopTTSPlayback;   // make it available globally for th
 function cleanTtsVoiceText(text) {
     // Find last index of </think> (if it exists) and </tool_call> (if it exists)
     // For whichever index is later, split text at that index and return the second part
-    console.log("cleaning text for voice: ", text);
+    // console.log("cleaning text for voice: ", text);
     const thinkIndex = text.lastIndexOf("</think>");
     const toolCallIndex = text.lastIndexOf("</tool_call>");
     const splitIndex = Math.max(thinkIndex+8, toolCallIndex+12);
@@ -1161,7 +1236,7 @@ async function requestFormattedPrompt(
         // 2- fetch-EventStream()
         traceManager.startStep('Generating Response...');
         const chatContainer = document.getElementById('chat-area');
-        const totalContent = await fetchEventStream(final_server_type, final_formatted_user_prompt, responseIDs.responseContentID, chatContainer, file);
+        const { full_content: totalContent, plain_text: totalPlainText, invoke_tools: totalInvokeTools, tool_calls: totalToolCalls } = await fetchEventStream(final_server_type, final_formatted_user_prompt, responseIDs.responseContentID, chatContainer, file);
 
         // 3- get-References()
         if (tool_use && !llm_set_rag_config.butler_mode) {
@@ -1181,7 +1256,7 @@ async function requestFormattedPrompt(
             'regenerate_with_citations_force_enabled': regenerate_with_citations_force_enabled
         };
 
-        await getReferences(tool_use, getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);
+        await getReferences(getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);
 
         // Complete final step
         traceManager.completeCurrentStep();
@@ -1219,14 +1294,17 @@ async function executePrompt(
         );  // must await so we don't simply return a promise immediately, rather wait for the request-FormattedPrompt() to complete!
     }
 
+    console.log("MESSAGES_OBJECT at execute-Prompt() invocation: ", chatState.inspect());
     initializePromptRequest();
-        
+
     const current_sequence_id = regeneration_request ? regen_sequence_id : incrementSequenceId();
     const current_chat_id = getChatId();
     const {userInput, file} = getUserInput();
     const userInputForHtml = regeneration_request ? userInput : formatTabsAndSpaces(userInput); // Old input need-not be re-formatted!
-    const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);  // The use of the uniqueId is explained in the docstring of updateChatAreaWithUserInput().
     
+    chatState.addUserMessage(userInputForHtml);
+
+    const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);  // The use of the uniqueId is explained in the docstring of updateChatAreaWithUserInput().
     const userMessageElement = regeneration_request ? document.querySelector(`.user-message[data-stream-session-id="${regen_stream_session_id}"]`) : document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
     const traceManager = userMessageElement._traceManager;  // created and stored in the userMessageElement at time of create-UserMessageHTML()!
     
@@ -1251,22 +1329,54 @@ async function executePrompt(
             appendResponseContainerToChatArea(responseIDs.masterWrapperID, responseIDs.responseWrapperID, responseIDs.responseContentID, stream_session_id, current_sequence_id);
         }
         
-        let apiMessages = getMessagesObject(regeneration_request, regen_sequence_id);
         const tools_schema = await getToolsSchema();
         const chatContainer = document.getElementById('chat-area');
-        let totalContent = await fetchEventStream(getServerType(), apiMessages, responseIDs.responseContentID, chatContainer, file, tools_schema);
-        const { plain_text, invoke_tools, tool_calls } = extractToolCallsFromResponse(totalContent);
+        
+        let totalContent = "";
+        // let toolIteration = 0;
+        // const MAX_TOOL_ITERATIONS = 5; // Prevent infinite loops
+        
+        // while (toolIteration < MAX_TOOL_ITERATIONS) {
+        //     let { full_content, plain_text, invoke_tools, tool_calls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file, tools_schema);
+        //     totalContent += full_content;
+        //     if (invoke_tools == true) {
+        //         toolIteration++;
+        //         console.log("invoke_tools is true, toolIteration: ", toolIteration);
+        //         const tool_execution_response = await executeTools(tool_calls, stream_session_id);
+        //         const tool_execution_data = await tool_execution_response.json();
+        //         const tool_result = tool_execution_data.tool_result_list;
+        //         const toolResponseMode = document.getElementById('tool_response_mode').value;
+        //         chatState.addToolExchange(plain_text, tool_calls, tool_result, toolResponseMode);
+        //     } else {
+        //         console.log("breaking out of tool iteration loop");
+        //         chatState.addAssistantMessage(plain_text);
+        //         break;
+        //     }
+        // }
+
+        // if (toolIteration >= MAX_TOOL_ITERATIONS) {
+        //     console.warn("Max tool iterations reached, forcing final response");
+        //     // Optional: Force one final call without tools_schema to get a definitive answer
+        //     // Or show error to user
+        // }
+
+        let { full_content, plain_text, invoke_tools, tool_calls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file, tools_schema);
+        totalContent += full_content;
         if (invoke_tools == true) {
             console.log("invoke_tools is true");
-            // TODO: handle tool-call div creation
             const tool_execution_response = await executeTools(tool_calls, stream_session_id);
             const tool_execution_data = await tool_execution_response.json();
             const tool_result = tool_execution_data.tool_result_list;
             const toolResponseMode = document.getElementById('tool_response_mode').value;
-            apiMessages = updateMessagesObjectWithToolResult(apiMessages, tool_calls, tool_result, plain_text, toolResponseMode);
-            totalContent += await fetchEventStream(getServerType(), apiMessages, responseIDs.responseContentID, chatContainer, file);
+            chatState.addToolExchange(plain_text, tool_calls, tool_result, toolResponseMode);
+            let { full_content: followUpFullContent, plain_text: followUpPlainText, invoke_tools: followUpInvokeTools, tool_calls: followUpToolCalls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file);
+            chatState.addAssistantMessage(followUpPlainText);
+            totalContent += followUpFullContent;
+        } else {
+            chatState.addAssistantMessage(plain_text);
         }
         
+        console.log("MESSAGES_OBJECT at get-References() invocation: ", chatState.inspect());
         const getReferencesParams = {
             'chat_id':current_chat_id,
             'sequence_id': current_sequence_id,
@@ -1274,22 +1384,20 @@ async function executePrompt(
             'user_query': userInputForHtml,
             'user_query_html': userMessageElement.outerHTML,
             'llm_response': totalContent,
-            'formatted_user_prompt': JSON.stringify(apiMessages),
+            'formatted_user_prompt': chatState.getForAPI(),
             'regeneration_request': regeneration_request,
             'regenerate_with_citations_force_enabled': regenerate_with_citations_force_enabled
         };
 
-        await getReferences(invoke_tools, getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);
+        await getReferences(getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);
 
-        // Complete final step
-        traceManager.completeCurrentStep();
+        traceManager.completeCurrentStep();     // Complete final step
 
         if (document.getElementById('enable_tts').checked) { await fetchTTSVoice(totalContent); }   // Not using getTts() here so simple checkbox change is enough, rather than a config save!
 
     } catch (error) {
         decrementSequenceId();
-        // Stop timer on error
-        if (traceManager) {
+        if (traceManager) {     // Stop timer on error
             traceManager.completeCurrentStep();
         }
         errorHandlerNoAlert("chatting with the LLM", "execute-Prompt()", String(error.message));
