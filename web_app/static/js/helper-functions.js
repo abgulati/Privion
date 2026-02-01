@@ -178,7 +178,7 @@ function coerceToObject(maybeJson, label = "prompt") {
         try{
             return JSON.parse(s);
         } catch (e) {
-            errorHandlerNoAlert("coercing to object", "coerceToObject()", `Error parsing ${label} as JSON: ${e.message}`);
+            errorHandlerNoAlert("coercing to object", "coerce-ToObject()", `Error parsing ${label} as JSON: ${e.message}`);
             return null;
         }
     }
@@ -1404,7 +1404,7 @@ function removeModelFromCustomDropdown(model) {
         initializeHfWaitressCustomDropdown(model_list, hf_values.model_id);
     })
     .catch(error => {
-        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeModelFromCustomDropdown()", String(error.message));
+        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeHfwModelFromCustomDropdown()", String(error.message));
     });
 }
 
@@ -1418,7 +1418,7 @@ function removeKnowledgeBaseFromCustomDropdown(model) {
         initializeKnowledgeDomainCustomDropdown(model_list, values.selected_knowledge_domain);
     })
     .catch(error => {
-        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeModelFromCustomDropdown()", String(error.message));
+        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeKnowledgeBaseFromCustomDropdown()", String(error.message));
     });
 }
 
@@ -1432,7 +1432,7 @@ function removeEmbeddingModelFromCustomDropdown(model) {
         initializeEmbeddingCustomDropdown(model_list, values.selected_embedding_model);
     })
     .catch(error => {
-        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeModelFromCustomDropdown()", String(error.message));
+        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeEmbeddingModelFromCustomDropdown()", String(error.message));
     });
 }
 
@@ -1446,7 +1446,7 @@ function removeRerankerModelFromCustomDropdown(model) {
         initializeRerankerCustomDropdown(model_list, values.selected_reranker_model);
     })
     .catch(error => {
-        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeModelFromCustomDropdown()", String(error.message));
+        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeRerankerModelFromCustomDropdown()", String(error.message));
     });
 }
 
@@ -1460,7 +1460,7 @@ function removeGraphExtractorModelFromCustomDropdown(model) {
         initializeGraphExtractorCustomDropdown(model_list, values.graph_generator_model);
     })
     .catch(error => {
-        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeModelFromCustomDropdown()", String(error.message));
+        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeGraphExtractorModelFromCustomDropdown()", String(error.message));
     });
 }
 

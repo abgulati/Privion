@@ -88,7 +88,6 @@ function extractToolCallsFromResponse(fullResponseText) {
 
     try {
         console.log("\n--- Starting tool parsing ---");
-        console.log("Full response text: ", fullResponseText);
 
         const toolCalls = [];
         
@@ -203,7 +202,7 @@ function extractToolCallsFromResponse(fullResponseText) {
         return result;
 
     } catch (e) {
-        errorHandlerNoAlert("extracting tool calls from response", "extractToolCallsFromResponse()", "Error extracting tool calls from response: " + e.message);
+        errorHandlerNoAlert("extracting tool calls from response", "extract-ToolCallsFromResponse()", "Error extracting tool calls from response: " + e.message);
         return { 'invoke_tools': false, 'tool_calls': null };
     }
 }

@@ -324,7 +324,7 @@ function connectAsrWebSocket() {
 
     // Construct the final WebSocket URL with query parameters
     const asrWsUrlWithQueryParams = asrWsUrl + '?' + queryParams.toString();
-    console.log('asrWsUrlWithQueryParams:', asrWsUrlWithQueryParams);
+    // console.log('asrWsUrlWithQueryParams:', asrWsUrlWithQueryParams);
 
     ws = new WebSocket(asrWsUrlWithQueryParams);
     ws.binaryType = 'arraybuffer';  // binaryType is used to specify the type of data that will be sent and received from the WebSocket.

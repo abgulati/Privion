@@ -6185,7 +6185,7 @@ def load_chat_history():
         
         except Exception as e:
             return handle_api_error("Could not retrieve chat history, encountered error: ", e)
-
+    
     print(f'\n\nChat history loaded for chat with model: {old_chat_model}\n\n')
 
     try:
