@@ -1985,9 +1985,9 @@ function handleHfWaitressShutdown(server_to_shutdown) {
     if (!server_to_shutdown || server_to_shutdown == '') {
         throw new Error('Invalid server choice: ' + server_to_shutdown);
     }
-    console.log("ASR shutdown requested");
+    console.log(`HF-Waitress shutdown requested for server: ${server_to_shutdown}`);
     showStreamSpinner();
-    appendStreamInfo("Shutting down ASR server...", 'waiting');
+    appendStreamInfo(`Shutting down ${server_to_shutdown} server...`, 'waiting');
     fetch('/shutdown_local_llm_server', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -2001,9 +2001,9 @@ function handleHfWaitressShutdown(server_to_shutdown) {
     }).then(data => {
         console.log(data);
         if (!data.success) {
-            throw new Error('Failed to Hard-Reboot Speech Transcription Server. Check server-log and server command-line for more details.');
+            throw new Error(`Failed to shutdown ${server_to_shutdown} Server. Check server-log and server command-line for more details.`);
         }
-        appendStreamInfo("Speech Transcription Server Shutting Down Successfully.", 'success');
+        appendStreamInfo(`${server_to_shutdown} Server successfully shutdown.`, 'success');
     }).catch(error => {
         appendStreamInfo(error.message);
     }).finally(() => {
