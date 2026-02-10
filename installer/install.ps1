@@ -196,7 +196,7 @@ Write-Host "    - [OK] ExLlamaV2 installed." -ForegroundColor Green
 
 Write-Host "    - [9] Installing ExLlamaV3..." -ForegroundColor Yellow
 if (-not (Test-Path "exllamav3")) {
-    git clone -b v0.0.17 https://github.com/turboderp-org/exllamav3.git
+    git clone -b v0.0.21 https://github.com/turboderp-org/exllamav3.git
 }
 pip install ./exllamav3 --no-build-isolation
 Write-Host "    - [OK] ExLlamaV3 installed." -ForegroundColor Green
