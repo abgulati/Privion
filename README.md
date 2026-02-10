@@ -56,54 +56,53 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 1. [Privion](https://github.com/abgulati/LAR-Enterprise?tab=readme-ov-file#privion)
     - [Comprehensive Feature List](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#heres-a-list-detailing-privions-feature-set-as-it-stands-today)
     - [A demonstration video showcasing these features](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#a-video-playlist-showcasing-some-of-these-features-is-at-the-link-below)
-2. [Installation](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#installation)
+2. [Dependencies & Requirements](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#dependencies--requirements)
     - [1. GPU Drivers](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#1-gpu-drivers)
-    - [2. Python](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#2-python)
-    - [3. Visual Studio](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#3-visual-studio)
-    - [4. Visual Studio Build Tools](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#4-visual-studio-build-tools)
-    - [5. Nvidia CUDA](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#5-nvidia-cuda)
-    - [6. Core Python Libs](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#6-core-python-libs)
-    - [7. PyTorch](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#7-pytorch)
-    - [8. Flash-Attention 2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#8-flash-attention-2)
-    - [9. Speech Features - ASR & TTS ](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#9-speech-features---asr--tts)
-    - [10. Docker Desktop](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#10-docker)
-    - [11. ExLlamaV2 and ExLlamaV3](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#11-exllamav2-and-exllamav3)
+    - [2. Visual Studio](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#2-visual-studio)
+    - [3. Visual Studio Build Tools](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#3-visual-studio-build-tools)
+    - [4. Nvidia CUDA](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#4-nvidia-cuda)
+    - [5. Python](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#5-python)
+    - [6. Git](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#6-git)
+    - [7. Docker](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#7-docker)
+3. [Installation - Automated Script](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#installation---automated-script)
+4. [Installation - Manual](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#installation---manual)
+    - [1. Core Python Libs](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#1-core-python-libs)
+    - [2. PyTorch](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#2-pytorch)
+    - [3. Flash-Attention 2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#3-flash-attention-2)
+    - [4. Speech Features - ASR & TTS ](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#4-speech-features---asr--tts)
+    - [5. ExLlamaV2 and ExLlamaV3](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#5-exllamav2-and-exllamav3)
         - [Note on OneDrive & Other Cloud Sync Services](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#note-on-onedrive--other-cloud-sync-services)
         - [Proper Installation Procedure](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#proper-installation-procedure)
         - [Permission Errors ](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#permission-errors)
-3. [Usage - First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#usage---first-run)
+5. [Usage - First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#usage---first-run)
     - [Laptop Powerplan Recommendation](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#laptop-powerplan-recommendation)
-4. [Optional Dependencies](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#optional-dependencies)
+6. [Optional Dependencies](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#optional-dependencies)
     - [Transformers Dev Versions](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#transformers-dev-versions)
     - [llama.cpp](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#llamacpp)
     - [LibreOffice](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#libreoffice)
     - [Poppler](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#poppler)
     - [PyTesseract (optional)](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#pytesseract-optional)
-5. [Troubleshooting Installation Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting-installation-issues)
+7. [Troubleshooting Installation Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting-installation-issues)
     - [Ninja Build Errors](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#ninja-build-errors)
     - [Python Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#python-issues)
     - [Other Issues](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#other-issues)
-6. [First Run with llama.cpp](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#first-run-with-llamacpp)
-7. [General User Guide - Post First-Run Steps](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#general-user-guide---post-first-run-steps)
-8. [Troubleshooting](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting)
-9. [Docker - Deploying Containerized LARS](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#docker---deploying-containerized-lars)
+8. [First Run with llama.cpp](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#first-run-with-llamacpp)
+9. [General User Guide - Post First-Run Steps](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#general-user-guide---post-first-run-steps)
+10. [Troubleshooting](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#troubleshooting)
+11. [Docker - Deploying Containerized LARS](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#docker---deploying-containerized-lars)
     - [Background and Setup](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#background-and-setup)
     - [Building & Running the CPU-Inferencing Container](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#building--running-the-cpu-inferencing-container)
     - [Building & Running the Nvidia-CUDA GPU-Enabled Container](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#building--running-the-nvidia-cuda-gpu-enabled-container)
     - [Special Note for Containers - Troubleshooting Networking Issues and Errors on First Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#special-note-for-containers---troubleshooting-networking-issues-and-errors-on-first-run)
     - [Special Note for Containers - Updating the Container Image Post-First-Run](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#special-note-for-containers---updating-the-container-image-post-first-run)
 
-## Installation
+## Dependencies & Requirements
 
 ### 1. GPU Drivers
 
 - Install Nvidia [GPU Drivers](https://www.nvidia.com/Download/index.aspx?lang=en-us)
 
-### 2. Python
-
-- Download and install [Python 3.11.5](https://www.python.org/downloads/release/python-3115/) (should also work with any `3.10.x` or `3.11.x` versions)
-
-### 3. Visual Studio
+### 2. Visual Studio
 
 - Download and install the Visual Studio IDE:
 
@@ -127,7 +126,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - [For more information see](https://stackoverflow.com/questions/57450317/confusion-about-cuda-installation-instructions-what-exactly-is-microsoft-visual)
 
-### 4. Visual Studio Build Tools
+### 3. Visual Studio Build Tools
 
 - See above section for notes on VS2026 and download BuildTools for VS2022 from your preferred link below:
 
@@ -154,7 +153,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
-### 5. Nvidia CUDA
+### 4. Nvidia CUDA
 
 - Download and install Nvidia's [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit-archive)
 
@@ -238,16 +237,99 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
-### 6. Core Python Libs
+### 5. Python
+
+- Download and install [Python 3.11.5](https://www.python.org/downloads/release/python-3115/) (should also work with any `3.10.x` or `3.11.x` versions)
+
+### 6. Git
+
+- NOTE: Git is required by the automated installer script
+
+- Download and install [Git](https://git-scm.com/)
+
+- NOTE: Override default branch name from 'master' to 'main' during installation!
 
 - Clone the repository:
     ```
     git clone https://github.com/abgulati/LARS-Enterprise
-    cd LARS
+    cd LARS-Enterprise
     ```
 
-    - If prompted for GitHub authentication, use a [Personal Access Token](https://github.com/settings/tokens) as passwords are deprecated. Also accessible via:      
+    - If browser sign-in is unavailable and you're prompted for GitHub authentication, use a [Personal Access Token](https://github.com/settings/tokens) as passwords are deprecated. Also accessible via:      
         ```GitHub Settings -> Developer settings (located on the bottom left!) -> Personal access tokens```
+
+### 7. Docker
+
+- Privion uses Docker to pull & run the latest FalkorDB Graph Database container - without Docker, GraphRAG features will NOT work! 
+
+- Your CPU should support virtualization, and it should be enabled in your system's BIOS/UEFI
+
+- If on Windows, you need to install the Windows Subsystem for Linux if it's not already present. To do so, open PowerShell as an Administrator and run the following:
+    ```
+    wsl --install -d Ubuntu-22.04
+    ```
+
+- Ensure the correct distro is set as the default:
+    ```
+    wsl --set-default Ubuntu-22.04
+    ```
+
+- Ensure you have WSL version 2 by running:
+    ```
+    wsl -v
+    # or
+    wsl --status
+    ```
+
+- Update WSL if required:
+    ```
+    wsl --update
+    ```
+
+- Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
+- Ensure Docker Desktop is up and running, then open a Command Prompt / Terminal and execute the following command to ensure Docker is correctly installed and up and running:
+    ```
+    docker ps
+    ```
+
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
+
+## Installation - Automated Script
+
+- On Windows, run PowerShell as an Administrator and navigate (`cd`) to the 'installer' directory in the cloned repo
+
+- Verify the current ExecutionPolicy:
+    ```
+    Get-ExecutionPolicy
+    ```
+
+- By default, script execution is disabled for safety, enable this with:
+    ```
+    Set-ExecutionPolicy RemoteSigned
+    ```
+
+- NOTE: For security, it is recommended to revert the above once done via:
+    ```
+    Set-ExecutionPolicy Restricted
+    ```
+
+- Having installed all dependencies and verified/set a permissive ExecutionPolicy, Privion is ready for Installation via the automated script
+
+- From an Administrator PowerShell, run:
+    ```
+    ./install.ps1
+    ```
+
+- NOTE: Installation may take upwards of an hour! Ensure internet access throughout. If errors are encountered midway, it's safe to rerun the script after attending to the issue.
+
+[Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
+
+## Installation - Manual
+
+- If you prefer to install Privion manually, work through the below subsections:
+
+### 1. Core Python Libs
 
 - Install Core Python Dependencies:
     - Windows via PIP:
@@ -272,7 +354,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     pip install -r reqs_butler.txt
     ``` 
 
-### 7. PyTorch
+### 2. PyTorch
 
 - Install [Pytorch](https://pytorch.org/get-started/locally/)
 
@@ -283,7 +365,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
     ```
 
-### 8. Flash-Attention 2
+### 3. Flash-Attention 2
 
 - Flash-Attention 2 is used to reduce the memory footprint of a model's KV-Cache context space and speed up inferencing.
 
@@ -357,7 +439,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
-### 9. Speech Features - ASR & TTS 
+### 4. Speech Features - ASR & TTS 
 
 - Privion, via HF-Waitress, can leverage various Automatic Speech Recogniton (ASR) models for Speech Transcription, so you can interact using your voice.
 
@@ -463,42 +545,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
         - This is why we downloaded the *shared* version of FFmpeg earlier: The other versions only have the FFmpeg executables but not the DLLs!
 
-### 10. Docker
-
-- Privion uses Docker to pull & run the latest FalkorDB Graph Database container - without Docker, GraphRAG features will NOT work! 
-
-- Your CPU should support virtualization, and it should be enabled in your system's BIOS/UEFI
-
-- If on Windows, you need to install the Windows Subsystem for Linux if it's not already present. To do so, open PowerShell as an Administrator and run the following:
-    ```
-    wsl --install -d Ubuntu-22.04
-    ```
-
-- Ensure the correct distro is set as the default:
-    ```
-    wsl --set-default Ubuntu-22.04
-    ```
-
-- Ensure you have WSL version 2 by running:
-    ```
-    wsl -v
-    # or
-    wsl --status
-    ```
-
-- Update WSL if required:
-    ```
-    wsl --update
-    ```
-
-- Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-
-- Ensure Docker Desktop is up and running, then open a Command Prompt / Terminal and execute the following command to ensure Docker is correctly installed and up and running:
-    ```
-    docker ps
-    ```
-
-### 11. ExLlamaV2 and ExLlamaV3
+### 5. ExLlamaV2 and ExLlamaV3
 
 - ExLlama is a highly optimized LLM inference library specifically for consumer GPUs.
 
