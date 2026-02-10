@@ -545,7 +545,7 @@
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl3_device">
                                                                     <td class="settings_table_setting_name">--exl3_device</td>
-                                                                    <td class="settings_table_setting_description">If specified, load to single device, e.g. "cuda:0"</td>
+                                                                    <td class="settings_table_setting_description">If specified, load to single device, e.g. "cuda:0". Ignored if tensor_parallel is enabled.</td>
                                                                     <td class="settings_table_setting_value"><input type="text" id="HfwExl3Device" class="settings-input-fields" value="cuda:0"></td>
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl3_cache_type">
@@ -586,13 +586,13 @@
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl3_tp_output_device">
                                                                     <td class="settings_table_setting_name">--exl3_tp_output_device</td>
-                                                                    <td class="settings_table_setting_description">(optional) If loading with tensor_p == True, device on which to gather output logits. 
+                                                                    <td class="settings_table_setting_description">(optional - only used if tensor_parallel is enabled) If loading with tensor_p == True, device on which to gather output logits. 
                                                                         Must be one of the active devices in the split. Default is first device in split</td>
                                                                     <td class="settings_table_setting_value"><input type="text" id="HfwExl3TpOutputDevice" class="settings-input-fields" value="None"></td>
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl3_use_per_device">
                                                                     <td class="settings_table_setting_name">--exl3_use_per_device</td>
-                                                                    <td class="settings_table_setting_description">(optional) Amount of memory to use per device. Eg: use up to 23 GB on cuda:0 and 
+                                                                    <td class="settings_table_setting_description">(optional - only used if tensor_parallel is enabled) Amount of memory to use per device. Eg: use up to 23 GB on cuda:0 and 
                                                                         cuda:2, do not load on cuda:1 and cuda:3 (if present) model.load(use_per_device = [23, 0, 23])</td>
                                                                     <td class="settings_table_setting_value"><input type="text" id="HfwExl3UsePerDevice" class="settings-input-fields" value="None"></td>
                                                                 </tr>
