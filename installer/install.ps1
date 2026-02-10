@@ -1,8 +1,12 @@
-# ---------------------------------------------------------
+# --------------------------------------------------------------------------------------------
 # Installation script for LARS-Enterprise/Privion
-# Automates Installation steps 6-11 from the README.md file
-# ---------------------------------------------------------
+# Automates 'Installation - Manual' section from the README.md file
+# --------------------------------------------------------------------------------------------
 # NOTE: This script MUST be run as Administrator to update System PATH and Git System Config.
+# --------------------------------------------------------------------------------------------
+# Must `Set-ExecutionPolicy RemoteSigned` to run this script!
+# Revert with `Set-ExecutionPolicy Restricted` Once Done!
+# --------------------------------------------------------------------------------------------
 
 $ErrorActionPreference = "Stop"
 
