@@ -76,7 +76,38 @@ if (Test-Path "setup.py") {
     Write-Warning "    - [WARNING] setup.py not found in current directory. Using default." -ForegroundColor Yellow
 }
 
-pip install ./flash-attention --no-build-isolation
+# Set MAX_JOBS only for this install step and restore afterwards
+# Capturing prior env state first so `finally` is always safe!
+$prevMaxJobs = $env:MAX_JOBS
+$hadPrevMaxJobs = Test-Path Env:MAX_JOBS
+
+try{
+    # Auto-tune MAX_JOBS for Flash-Attention build (safe default: keep 2 threads free)
+    $logicalThreads = (Get-CimInstance Win32_Processor | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum
+    if (-not $logicalThreads -or $logicalThreads -lt 1) {
+        $logicalThreads = [Environment]::ProcessorCount
+    }
+
+    $reserveThreads = 2
+    $maxJobs = [Math]::Max(1, $logicalThreads - $reserveThreads)
+
+    Write-Host "      > Detected $logicalThreads logical threads. Setting MAX_JOBS=$maxJobs for FA2 build..." -ForegroundColor DarkCyan
+    $env:MAX_JOBS = "$maxJobs"
+    pip install ./flash-attention --no-build-isolation
+
+} catch {
+    Write-Host "      > Error determining Logical Thread count for Flash-Attention 2 installation. Proceeding with default (1 CPU core)." -ForegroundColor Yellow
+    $env:MAX_JOBS = "1"
+    pip install ./flash-attention --no-build-isolation
+    
+} finally {
+    if ($hadPrevMaxJobs) {
+        $env:MAX_JOBS = $prevMaxJobs
+    } else {
+        Remove-Item Env:MAX_JOBS -ErrorAction SilentlyContinue
+    }
+}
+
 Write-Host "    - [OK] Flash-Attention 2 installed." -ForegroundColor Green
 
 
