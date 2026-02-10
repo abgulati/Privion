@@ -105,7 +105,19 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 ### 3. Visual Studio
 
-- Download and install the [Visual Studio IDE](https://visualstudio.microsoft.com/thank-you-downloading-visual-studio/?sku=Community&channel=Release&version=VS2022&source=VSLandingPage&cid=2030&passive=false)
+- Download and install the Visual Studio IDE:
+
+    - NOTE: The latest VS 2026 is NOT compatible with CUDA yet! Make sure to install VS 2022!
+
+    - However, MS has decided to play dirty since releasing VS2026, and has not only obsured the location of its download page, but also mandates a sign-in to your MS/GitHub account to download it! Trusted third party download sites come to the rescue here. 
+    
+    - Pick your preferred source accordingly: 
+    
+    - [Official Visual Studio 2022 Download Link](https://visualstudio.microsoft.com/vs/older-downloads/)
+
+    - [GitHub-Gist (RECOMMENDED - Also contains link for VS-BuildTools)](https://gist.github.com/Mr-Precise/9967e3fcf03f2df0282b76841d2f3876)
+
+    - [TechSpot](https://www.techspot.com/downloads/7493-visual-studio-2022.html)
 
 - **NOTE: Make sure to select "Desktop Development with C++"!**
 
@@ -117,7 +129,11 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 ### 4. Visual Studio Build Tools
 
-- Download and install [Microsoft Visual Studio Build Tools 2022](https://visualstudio.microsoft.com/downloads/)
+- See above section for notes on VS2026 and download BuildTools for VS2022 from your preferred link below:
+
+    - [Official Visual Studio 2022 Download Link](https://visualstudio.microsoft.com/vs/older-downloads/)
+
+    - [GitHub-Gist (RECOMMENDED - Also contains link for VS-BuildTools)](https://gist.github.com/Mr-Precise/9967e3fcf03f2df0282b76841d2f3876)
 
 - **NOTE: Scroll down to "Tools for Visual Studio"**
 
@@ -455,7 +471,12 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - If on Windows, you need to install the Windows Subsystem for Linux if it's not already present. To do so, open PowerShell as an Administrator and run the following:
     ```
-    wsl --install
+    wsl --install -d Ubuntu-22.04
+    ```
+
+- Ensure the correct distro is set as the default:
+    ```
+    wsl --set-default Ubuntu-22.04
     ```
 
 - Ensure you have WSL version 2 by running:
@@ -467,15 +488,15 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - Update WSL if required:
     ```
-    wsl --upgrade
+    wsl --update
     ```
+
+- Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
 - Ensure Docker Desktop is up and running, then open a Command Prompt / Terminal and execute the following command to ensure Docker is correctly installed and up and running:
     ```
     docker ps
     ```
-
-- Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
 ### 11. ExLlamaV2 and ExLlamaV3
 
