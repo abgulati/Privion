@@ -11,3 +11,11 @@ llama-server --model .\MiniMax-M2-UD-Q3_K_XL-00001-of-00003.gguf --n-gpu-layers 
 blk\.(0|1|2|3|4|5|6|7|8|9) matches blocks 0–9 → assign expert tensors to CUDA0
 blk\.(1[0-9]) matches blocks 10–19 → assign expert tensors to CUDA1
 blk\.([2-5][0-9]|6[01]) matches blocks 20–61 → assign expert tensors to CPU
+
+
+# For Qwen3-Coder-Next-UD-Q6_K_XL-00001-of-00003.gguf:
+
+blk\.([0-9]|1[0-7])\.ffn_(down|gate|up)_exps\.weight=CUDA0,blk\.(1[8-9]|2[0-9]|3[0-2])\.ffn_(down|gate|up)_exps\.weight=CUDA1,blk\.(3[3-9]|4[0-7])\.ffn_(down|gate|up)_exps\.weight=CUDA2
+
+
+# For gpt-oss-120b: Use --fit !
