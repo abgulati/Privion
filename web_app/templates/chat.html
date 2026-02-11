@@ -938,7 +938,7 @@
                                                             </tr>
                                                             <tr class="settings-table-row" id="llama_cpp_fit_target">
                                                                 <td class="settings_table_setting_name">--fit-target</td>
-                                                                <td class="settings_table_setting_description">Target context size for fit mode (default: 1024)</td>
+                                                                <td class="settings_table_setting_description">Target margin per device for --fit, comma-separated list of values, single value is broadcast across all devices, default: 1024</td>
                                                                 <td class="settings_table_setting_value"><input type="number" id="LlamaCppFitTarget" name="LlamaCppFitTarget" min="128" class="settings-input-fields" value="1024"></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="llama_cpp_fit_min_ctx">
@@ -2411,7 +2411,7 @@
                                                 <td class="settings_table_setting_description">How to respond to tool calls. One of:
                                                     <ul>
                                                         <li>role_tool: Use the role_tool format (OpenAI-style tool role)</li>
-                                                        <li>user_tool_response_tag: Use the user_tool_response_tag format (For models like Orchestrator-8B, etc. that require <tool_result>...</tool_result> tags in user roles)</li>
+                                                        <li>user_tool_response_tag: Use the user_tool_response_tag format (For Qwen3, Orchestrator-8B, etc. that require <tool_result>...</tool_result> tags in user roles)</li>
                                                         <li>both: Use both formats (experimental)</li>
                                                     </ul>
                                                     <p>Default: user_tool_response_tag</p>
