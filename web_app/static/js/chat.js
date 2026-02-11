@@ -574,7 +574,6 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
                     if (message.startsWith('data: ')) {
                         
                         if (!loaderHidden) {
-                            removeLoadingAnimation();
                             loaderHidden = true;
                         }
                         
@@ -583,6 +582,7 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
                             if (jsonStr == '[DONE]') {
                                 receivedComplete = true;
                             } else {
+                                console.log("jsonStr: ", jsonStr);
                                 const dataObj = JSON.parse(jsonStr);
                                 const choice = dataObj.choices[0];
                                 const delta = choice.delta;
@@ -872,7 +872,6 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
                     if (message.startsWith('data: ')) {
 
                         if (!loaderHidden) {
-                            removeLoadingAnimation();
                             loaderHidden = true;
                         }
 
@@ -962,7 +961,6 @@ async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, 
             img.src = `${hfWaitress_URL}/serve_generated_image/${data.image_name}`;
             imageDiv.appendChild(img);
             document.getElementById(responseContentID).appendChild(imageDiv);
-            removeLoadingAnimation();
             handleAutoScroll(chatContainer);
             // console.log("returning imageDiv.outerHTML: ", imageDiv.outerHTML);
             return { full_content: imageDiv.outerHTML, plain_text: "", invoke_tools: false, tool_calls: [] };
@@ -1333,26 +1331,28 @@ async function executePrompt(
         const chatContainer = document.getElementById('chat-area');
         
         let totalContent = "";
-        // let toolIteration = 0;
-        // const MAX_TOOL_ITERATIONS = 5; // Prevent infinite loops
+        let toolIteration = 0;
+        const MAX_TOOL_ITERATIONS = 5; // Prevent infinite loops
         
-        // while (toolIteration < MAX_TOOL_ITERATIONS) {
-        //     let { full_content, plain_text, invoke_tools, tool_calls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file, tools_schema);
-        //     totalContent += full_content;
-        //     if (invoke_tools == true) {
-        //         toolIteration++;
-        //         console.log("invoke_tools is true, toolIteration: ", toolIteration);
-        //         const tool_execution_response = await executeTools(tool_calls, stream_session_id);
-        //         const tool_execution_data = await tool_execution_response.json();
-        //         const tool_result = tool_execution_data.tool_result_list;
-        //         const toolResponseMode = document.getElementById('tool_response_mode').value;
-        //         chatState.addToolExchange(plain_text, tool_calls, tool_result, toolResponseMode);
-        //     } else {
-        //         console.log("breaking out of tool iteration loop");
-        //         chatState.addAssistantMessage(plain_text);
-        //         break;
-        //     }
-        // }
+        while (toolIteration < MAX_TOOL_ITERATIONS) {
+            let { full_content, plain_text, invoke_tools, tool_calls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file, tools_schema);
+            totalContent += full_content;
+            if (invoke_tools == true) {
+                traceManager.startStep(`Executing Tools... iteration ${toolIteration + 1} of maximum ${MAX_TOOL_ITERATIONS} iterations`);
+                console.log("invoke_tools is true, toolIteration: ", toolIteration);
+                const tool_execution_response = await executeTools(tool_calls, stream_session_id);
+                const tool_execution_data = await tool_execution_response.json();
+                const tool_result = tool_execution_data.tool_result_list;
+                const toolResponseMode = document.getElementById('tool_response_mode').value;
+                chatState.addToolExchange(plain_text, tool_calls, tool_result, toolResponseMode);
+                traceManager.startStep(`Fetching Follow-Up Response for tool iteration ${toolIteration + 1}`);
+                toolIteration++;
+            } else {
+                console.log("Tool calls complete, proceeding");
+                chatState.addAssistantMessage(plain_text);
+                break;
+            }
+        }
 
         // if (toolIteration >= MAX_TOOL_ITERATIONS) {
         //     console.warn("Max tool iterations reached, forcing final response");
@@ -1360,21 +1360,23 @@ async function executePrompt(
         //     // Or show error to user
         // }
 
-        let { full_content, plain_text, invoke_tools, tool_calls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file, tools_schema);
-        totalContent += full_content;
-        if (invoke_tools == true) {
-            console.log("invoke_tools is true");
-            const tool_execution_response = await executeTools(tool_calls, stream_session_id);
-            const tool_execution_data = await tool_execution_response.json();
-            const tool_result = tool_execution_data.tool_result_list;
-            const toolResponseMode = document.getElementById('tool_response_mode').value;
-            chatState.addToolExchange(plain_text, tool_calls, tool_result, toolResponseMode);
-            let { full_content: followUpFullContent, plain_text: followUpPlainText, invoke_tools: followUpInvokeTools, tool_calls: followUpToolCalls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file);
-            chatState.addAssistantMessage(followUpPlainText);
-            totalContent += followUpFullContent;
-        } else {
-            chatState.addAssistantMessage(plain_text);
-        }
+        // let { full_content, plain_text, invoke_tools, tool_calls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file, tools_schema);
+        // totalContent += full_content;
+        // if (invoke_tools == true) {
+        //     traceManager.startStep("Executing Tools...");
+        //     console.log("invoke_tools is true");
+        //     const tool_execution_response = await executeTools(tool_calls, stream_session_id);
+        //     const tool_execution_data = await tool_execution_response.json();
+        //     const tool_result = tool_execution_data.tool_result_list;
+        //     const toolResponseMode = document.getElementById('tool_response_mode').value;
+        //     chatState.addToolExchange(plain_text, tool_calls, tool_result, toolResponseMode);
+        //     traceManager.startStep("Fetching Follow-Up Response...");
+        //     let { full_content: followUpFullContent, plain_text: followUpPlainText, invoke_tools: followUpInvokeTools, tool_calls: followUpToolCalls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file);
+        //     chatState.addAssistantMessage(followUpPlainText);
+        //     totalContent += followUpFullContent;
+        // } else {
+        //     chatState.addAssistantMessage(plain_text);
+        // }
         
         console.log("MESSAGES_OBJECT at get-References() invocation: ", chatState.inspect());
         const getReferencesParams = {
@@ -1391,6 +1393,7 @@ async function executePrompt(
 
         await getReferences(getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);
 
+        removeLoadingAnimation();
         traceManager.completeCurrentStep();     // Complete final step
 
         if (document.getElementById('enable_tts').checked) { await fetchTTSVoice(totalContent); }   // Not using getTts() here so simple checkbox change is enough, rather than a config save!
