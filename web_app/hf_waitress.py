@@ -599,6 +599,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                                     'Qwen/Qwen3-30B-A3B-Instruct-2507-FP8',
                                     'Qwen/Qwen3-Coder-30B-A3B-Instruct',
                                     'Qwen/Qwen3-14B',
+                                    'Qwen/Qwen3-1.7B',
                                     'Qwen/Qwen3-0.6B',
                                     'mistralai/Mistral-Nemo-Instruct-2407',
                                     'mistralai/Mistral-Small-24B-Instruct-2501',
@@ -2351,14 +2352,21 @@ def define_exllamav3_generator_components(quantized_model_path: os.PathLike):
 
     try:
         print(f"\nLoading model...\n")
-        EXL3_MODEL.load(
+        load_kwargs = dict(
             progressbar=True,
-            device=exl3_config['exl3_device'],
             max_chunk_size=exl3_config['exl3_max_chunk_size'],
-            tensor_p=exl3_config['exl3_tensor_parallel'],
-            tp_output_device=exl3_config['exl3_tp_output_device'],
-            use_per_device=exl3_config['exl3_use_per_device']
         )
+        if exl3_config['exl3_tensor_parallel']:
+            load_kwargs.update(
+                tensor_p=True,
+                tp_output_device=exl3_config['exl3_tp_output_device'],
+                use_per_device=[int(device_number) for device_number in exl3_config['exl3_use_per_device'].split(',')],
+            )
+        else:
+            load_kwargs.update(
+                device=exl3_config['exl3_device'],
+            )
+        EXL3_MODEL.load(**load_kwargs)
         print("\nExl3 model loaded successfully\n")
     except Exception as e:
         handle_local_error("Could not load ExLlamaV3 model, encountered error: ", e)
