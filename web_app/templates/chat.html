@@ -2407,19 +2407,19 @@
                                                 <td class="settings_table_setting_value"><input class="settings-input-fields" type="checkbox" id="legacy_mode" name="legacy_mode" value="false"></td>
                                             </tr>
                                             <tr class="settings-table-row">
-                                                <td class="settings_table_setting_name">Tool Response Mode</td>
-                                                <td class="settings_table_setting_description">How to respond to tool calls. One of:
+                                                <td class="settings_table_setting_name">Tool Call Handling Mode</td>
+                                                <td class="settings_table_setting_description">How to handle tool calls WRT chat template. One of:
                                                     <ul>
-                                                        <li>role_tool: Use the role_tool format (OpenAI-style tool role)</li>
-                                                        <li>user_tool_response_tag: Use the user_tool_response_tag format (For Qwen3, Orchestrator-8B, etc. that require <tool_result>...</tool_result> tags in user roles)</li>
+                                                        <li>role: 'tool': Append tool results using the 'tool' tag, formatted as per OpenAI completions API spec (GPT-OSS models, llama.cpp, etc.)</li>
+                                                        <li>role: 'user': Append tool results using the 'user' tag, for Qwen3, Orchestrator-8B, etc. that append plain-text tool results within <tool_result>...</tool_result> tags using the 'user' role itself</li>
                                                         <li>both: Use both formats (experimental)</li>
                                                     </ul>
                                                     <p>Default: user_tool_response_tag</p>
                                                 </td>
                                                 <td class="settings_table_setting_value">
                                                     <select id="tool_response_mode" name="tool_response_mode" class="modal-selects">
-                                                        <option value="role_tool">role_tool</option>
-                                                        <option value="user_tool_response_tag">user_tool_response_tag [Default]</option>
+                                                        <option value="role_tool">role: 'tool'</option>
+                                                        <option value="user_tool_response_tag">role: 'user' [Default]</option>
                                                         <option value="both">both</option>
                                                     </select>
                                                 </td>
