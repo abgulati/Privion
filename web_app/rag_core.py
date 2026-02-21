@@ -764,25 +764,39 @@ def rerank_results_ml(query:str, documents:list[Document], top_n:int=5, ascendin
         return []
 
     try:
-        read_return = config_manager.read_config(['use_embedding_model_for_reranking', 'selected_embedding_model', 'selected_reranker_model'])
+        read_return = config_manager.read_config(
+            [
+                'use_embedding_model_for_reranking',
+                'selected_embedding_model',
+                'selected_reranker_model',
+                'reranker_torch_device',
+                'embedding_torch_device'
+            ]
+        )
+        
         use_embedding_model_for_reranking = str(read_return['use_embedding_model_for_reranking']).lower() == 'true'
         selected_embedding_model = str(read_return['selected_embedding_model'])
         selected_reranker_model = str(read_return['selected_reranker_model'])
+        reranker_torch_device = str(read_return['reranker_torch_device'])
+        embedding_torch_device = str(read_return['embedding_torch_device'])
     except Exception as e:
         print(f"Could not read reranker config, using defaults. Error: {e}")
         # FALLBACKS defined here so the code doesn't crash later
         use_embedding_model_for_reranking = True 
         selected_embedding_model = 'all-MiniLM-L6-v2' 
         selected_reranker_model = 'all-MiniLM-L6-v2'
+        reranker_torch_device = 'cpu'
+        embedding_torch_device = 'cpu'
     
     if use_embedding_model_for_reranking:
         selected_reranker_model = selected_embedding_model
+        reranker_torch_device = embedding_torch_device
 
     print(f"\n\nSelected model for re-ranking: {selected_reranker_model}\n\n")
 
     model = None
     try:
-        model = SentenceTransformer(selected_reranker_model)
+        model = SentenceTransformer(selected_reranker_model, trust_remote_code=True, device=reranker_torch_device)
         
         ## Bi-Encoder Logic (do NOT use cross-encoder Re-Ranking models here, stick to embedding models only for now!)
         query_embedding = model.encode(query, convert_to_tensor=True)
@@ -973,6 +987,8 @@ def search_whoosh_index(query:str) -> list[dict]:
 def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results_from_vectordb: int) -> list[Document]:
     print("Searching vectorDB")
 
+    torch_device = config_manager.read_config(['embedding_torch_device'])['embedding_torch_device']
+
     min_semantic_similarity_threshold = float(config_manager.read_config(['min_semantic_similarity_threshold'])['min_semantic_similarity_threshold'])
 
     path_to_knowledge_domain = rag_support_module.get_path_to_knowledge_domain()
@@ -983,7 +999,7 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
      # Load Embedding Model
     embedding_model = None
     try:
-        embedding_model = SentenceTransformer(embedding_function, trust_remote_code=True)
+        embedding_model = SentenceTransformer(embedding_function, trust_remote_code=True, device=torch_device)
     except Exception as e:
         print(f"Could not load embedding model for searching the vector database, encountered error: {e}")
 

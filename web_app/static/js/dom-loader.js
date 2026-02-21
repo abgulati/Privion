@@ -74,6 +74,8 @@ function loadCoreLarsConfig() {
         'exclusive_server_mode',
         'model_choice',
         'use_local_llm',
+        'embedding_torch_device',
+        'reranker_torch_device',
         'embedding_models_list',
         'selected_embedding_model',
         'reranker_models_list',
@@ -1193,17 +1195,19 @@ function toggleRerankerDropdownEnabledState() {
     // disable the click event listener for 'hf-waitress-reranker-custom-select-header' and set its background-color to darkgray
 
     const header = document.getElementById('hf-waitress-reranker-custom-select-header');
-    const rerankerCheckbox = document.getElementById('use_embedding_model_for_reranking');
+    const reuseEmbeddingCheckbox = document.getElementById('use_embedding_model_for_reranking');
 
-    header.style.backgroundColor = rerankerCheckbox.checked ? 'darkgray' : 'white';
+    header.style.backgroundColor = reuseEmbeddingCheckbox.checked ? 'darkgray' : 'white';
     
     // Remove or add the click event listener based on checkbox state
-    if (rerankerCheckbox.checked) {
+    if (reuseEmbeddingCheckbox.checked) {
         header.removeEventListener('click', toggleRerankerDropdown);
         header.style.cursor = 'not-allowed';
+        document.getElementById('reranker_torch_device').disabled = true;
     } else {
         header.addEventListener('click', toggleRerankerDropdown);
         header.style.cursor = 'pointer';
+        document.getElementById('reranker_torch_device').disabled = false;
     }
 }
 
@@ -1318,6 +1322,8 @@ function initializeEmbeddingModelTabComponents(values) {
     initializeEmbeddingCustomDropdown(values.embedding_models_list, values.selected_embedding_model);
     initializeRerankerCustomDropdown(values.reranker_models_list, values.selected_reranker_model);
     document.getElementById('use_embedding_model_for_reranking').checked = values.use_embedding_model_for_reranking;
+    document.getElementById('embedding_torch_device').value = values.embedding_torch_device;
+    document.getElementById('reranker_torch_device').value = values.reranker_torch_device;
     initializeEventListenersForEmbeddingModelTab();
     toggleRerankerDropdownEnabledState();
     clearDocsLoadedTable();
@@ -2089,7 +2095,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     sysPrompt: getSysPromptConfig().base_template,
                     skipSystemPrompt: getSysPromptConfig().skip_system_prompt
                 });
-            setSequenceId(0);   // init new chat
+                setSequenceId(0);   // init new chat
             }
             
             appendStreamInfo("All loaded up & ready to chat!", 'success');

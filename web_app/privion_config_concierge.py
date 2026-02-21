@@ -469,6 +469,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                             "Thank you!"
                 ),
                 'skip_system_prompt':False,
+                'embedding_torch_device':'cpu',
                 'embedding_models_list':[
                     'sentence-transformers/all-mpnet-base-v2',
                     'Qwen/Qwen3-Embedding-0.6B',
@@ -480,6 +481,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'nvidia/NV-Embed-v2'
                 ],
                 'selected_embedding_model':'sentence-transformers/all-mpnet-base-v2',
+                'reranker_torch_device':'cpu',
                 'reranker_models_list':[
                     'all-MiniLM-L6-v2',
                     'Qwen/Qwen3-Reranker-0.6B',

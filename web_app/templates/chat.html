@@ -1253,6 +1253,13 @@
                                             <br>
 
                                             <div class="form-group">
+                                                <label for="embedding_torch_device">Embedding Torch Device [Default: cpu | recommend: cuda:0]:</label>
+                                                <input type="text" id="embedding_torch_device" name="embedding_torch_device" class="settings-input-fields" value="cpu">
+                                            </div>
+
+                                            <br>
+
+                                            <div class="form-group">
                                                 <input type="checkbox" id="use_embedding_model_for_reranking" name="use_embedding_model_for_reranking" checked>
                                                 <label for="use_embedding_model_for_reranking">Use Embedding Model for Re-Ranking (Default: Enabled)</label>
                                             </div>
@@ -1277,6 +1284,13 @@
                                                     </div>
                                                     <div class="hf-waitress-reranker-custom-dropdown-items-list" id="hf-waitress-reranker-custom-dropdown-items-list"></div>
                                                 </div>
+                                            </div>
+
+                                            <br>
+
+                                            <div class="form-group">
+                                                <label for="reranker_torch_device">Reranker Torch Device [Default: cpu | recommend: cuda:0]:</label>
+                                                <input type="text" id="reranker_torch_device" name="reranker_torch_device" class="settings-input-fields" value="cpu">
                                             </div>
 
                                         </div>

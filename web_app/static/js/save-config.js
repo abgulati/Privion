@@ -85,6 +85,8 @@ function getVectorEmbeddingsConfig() {
         'selected_embedding_model': document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent,
         'selected_knowledge_domain': document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent,
         'selected_reranker_model': document.getElementById('hf-waitress-reranker-custom-dropdown-selected-value').textContent,
+        'embedding_torch_device': document.getElementById('embedding_torch_device').value,
+        'reranker_torch_device': document.getElementById('reranker_torch_device').value,
         'use_embedding_model_for_reranking': document.getElementById('use_embedding_model_for_reranking').checked
     }
 }
