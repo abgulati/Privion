@@ -51,7 +51,7 @@ function renderMarkdownWithThinkAndTools(markdown) {
         let m, last = 0, html = "";
         while ((m = re.exec(text)) !== null) {
         if (m.index > last) html += md.render(text.slice(last, m.index));
-        const inner = md.render(m[1] || "");    // m[1] is the content inside the <think> tags, and will skip the <think> and </think> tags themselves!
+        const inner = md.render(m[1] || "");    // m[1] is the content inside the <think> tags, and will skip the <think> & </think> tags themselves!
         html += `<details class="llm-think"><summary>Reasoning</summary><div class="llm-think-body">${inner}</div></details>`;
         last = re.lastIndex;
         }
@@ -135,7 +135,10 @@ function renderMarkdownWithThinkAndTools(markdown) {
         // Assuming you want them rendered as part of the block:
         const toolsHtml = toolCalls.map(tc => md.render(tc)).join('\n');
         
-        html += `<details class="llm-tool-calls"><summary>Tool calls (${toolCalls.length})</summary><div class="llm-tool-calls-body">${toolsHtml}</div></details>`;
+        html += `<details class="llm-tool-calls">` +
+                `<summary>Tool calls (${toolCalls.length})</summary>` +
+                `<div class="llm-tool-calls-body">${toolsHtml}</div>` +
+                `</details>`;
 
         // Update main index to continue after the last consumed tool call
         idx = nextStartIdx;
@@ -285,14 +288,26 @@ function initializePromptRequest() {
 }
 
 function handleServiceSelectionMessage(llm_set_rag_config, traceManager) {
+    
     if (llm_set_rag_config['do_rag'] && !llm_set_rag_config['perform_graph_rag']) {
-        traceManager.startStep("The LLM has Elected to Use Search-Tools. Executing Tech Stack: RAG - Semantic & Lexical Search with Re-Ranking & Filtering...");
+        traceManager.startStep(
+            "The LLM has Elected to Use Search-Tools. Executing Tech Stack: RAG - Semantic & Lexical Search with Re-Ranking & Filtering..."
+        );
+
     } else if (llm_set_rag_config['do_rag'] && llm_set_rag_config['perform_graph_rag']) {
-        traceManager.startStep("The LLM has Elected to Use Deep Research Mode. Executing Tech Stack: RAG [Semantic & Lexical Search] + GraphRAG [In-Depth Analysis] with Re-Ranking & Filtering...");
+        traceManager.startStep(
+            "The LLM has Elected to Use Deep Research Mode. Executing Tech Stack: RAG [Semantic & Lexical Search] + GraphRAG [In-Depth Analysis] with Re-Ranking & Filtering..."
+        );
+
     } else if (llm_set_rag_config['butler_mode']) {
-        traceManager.startStep("Butler Mode Engaged! Navigating Real-World to Perform Requested Action...");
+        traceManager.startStep(
+            "Butler Mode Engaged! Navigating Real-World to Perform Requested Action..."
+        );
+
     } else {
-        traceManager.startStep("The LLM has Elected to Respond Directly - No Tools Required...");
+        traceManager.startStep(
+            "The LLM has Elected to Respond Directly - No Tools Required..."
+        );
     }
 }
 
@@ -424,42 +439,101 @@ function appendContentToResponse(responseContentID, content) {
 }
 
 
-function setupLLMResponse(userInput, file_attached, current_chat_id, regeneration_request, regen_stream_session_id, regen_sequence_id, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled) { //no need to async-await here as fetch() inherently returns a promise, so by returning fetch() directly we're providing the same Promise that the async function with await would return.
+function setupLLMResponse(
+    userInput,
+    file_attached,
+    current_chat_id,
+    regeneration_request,
+    regen_stream_session_id,
+    regen_sequence_id,
+    regenerate_with_citations_force_enabled,
+    regenerate_with_citations_force_disabled
+) { 
+    
+    // no need to async-await here as fetch() inherently returns a promise, so by returning fetch() 
+    // directly we're providing the same Promise that the async function with await would return.
+    
     return fetch('/determine_service_and_ids_for_query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({'user_query': userInput, 'chat_id': current_chat_id, 'file_attached': file_attached, 'regeneration_request': regeneration_request, 'stream_session_id': regen_stream_session_id, 'sequence_id': regen_sequence_id, 'regenerate_with_citations_force_enabled': regenerate_with_citations_force_enabled, 'regenerate_with_citations_force_disabled': regenerate_with_citations_force_disabled})
+        body: JSON.stringify({
+            'user_query': userInput,
+            'chat_id': current_chat_id,
+            'file_attached': file_attached,
+            'regeneration_request': regeneration_request,
+            'stream_session_id': regen_stream_session_id,
+            'sequence_id': regen_sequence_id,
+            'regenerate_with_citations_force_enabled': regenerate_with_citations_force_enabled,
+            'regenerate_with_citations_force_disabled': regenerate_with_citations_force_disabled
+        })
     });
 }
 
-function invokeTools(stream_session_id, userInput, current_chat_id, llm_set_rag_config, regeneration_request, sequence_id) {
+
+function invokeTools(stream_session_id,
+    userInput,
+    current_chat_id,
+    llm_set_rag_config,
+    regeneration_request,
+    sequence_id
+) {
+
     return fetch('/invoke_tools_for_query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({'stream_session_id': stream_session_id, 'user_query': userInput, 'chat_id': current_chat_id, 'llm_set_rag_config': llm_set_rag_config, 'regeneration_request': regeneration_request, 'sequence_id': sequence_id})
+        body: JSON.stringify({
+            'stream_session_id': stream_session_id,
+            'user_query': userInput,
+            'chat_id': current_chat_id,
+            'llm_set_rag_config': llm_set_rag_config,
+            'regeneration_request': regeneration_request,
+            'sequence_id': sequence_id
+        })
     });
 }
 
-async function handleToolUse(stream_session_id, userInput, current_chat_id, llm_set_rag_config, regeneration_request, uniqueId, sequence_id_from_previous_request) {
-    const invoke_tools_response = await invokeTools(stream_session_id, userInput, current_chat_id, llm_set_rag_config, regeneration_request, sequence_id_from_previous_request);
+
+async function handleToolUse(
+    stream_session_id,
+    userInput,
+    current_chat_id,
+    llm_set_rag_config,
+    regeneration_request,
+    uniqueId,
+    sequence_id_from_previous_request
+) {
+
+    const invoke_tools_response = await invokeTools(
+        stream_session_id,
+        userInput,
+        current_chat_id,
+        llm_set_rag_config,
+        regeneration_request,
+        sequence_id_from_previous_request
+    );
     const invoke_tools_data = await invoke_tools_response.json();
+    
     const {reused_stream_session_id, tool_formatted_user_prompt, sequence_id, reconfirmed_server_type} = invoke_tools_data;
-    console.log("tool_formatted_user_prompt: ", JSON.parse(tool_formatted_user_prompt));
+    
     setSequenceId(sequence_id);
     if (!regeneration_request) { appendSequenceIdToUserMessage(uniqueId, sequence_id); }
     return {reused_stream_session_id, tool_formatted_user_prompt, reconfirmed_server_type};
 }
 
+
 function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, responseContentID, stream_session_id, sequence_id) {
+    
     // Not called again for regen requests, as the response container is already present in the chat area.
     const chatArea = document.getElementById('chat-area');
     
     // Create the new element without using innerHTML on the main chat area - SEE COMMENT IN create-UserMessageHTML() TO UNDERSTAND WHY!
     const responseContainer = document.createElement('div');
+    
     responseContainer.className = 'response-and-viewer-container';
     responseContainer.id = masterWrapperID;
     responseContainer.setAttribute('data-stream-session-id', stream_session_id);
     responseContainer.setAttribute('data-sequence-id', sequence_id);
+    
     responseContainer.innerHTML = `
         <div class="llm-wrapper" style="display:none;" id="${responseWrapperID}">
             <div class="llm-response" id="${responseContentID}"></div>
@@ -473,11 +547,16 @@ function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, r
     scrollChatAreaToBottom();
 }
 
+
 function handleSetupResponse(data) {
-    const {llm_set_rag_config, stream_session_id, formatted_user_prompt, sequence_id, server_type} = data;   // using object-destructuring (ES6-2015) to extract and set specific values from the data object in a single step!
+
+    // using object-destructuring (ES6-2015) to extract and set specific values from the data object in a single step!
+    const {llm_set_rag_config, stream_session_id, formatted_user_prompt, sequence_id, server_type} = data;
     const {do_rag, perform_graph_rag, butler_mode} = llm_set_rag_config;
-    const tool_use = (do_rag || perform_graph_rag || butler_mode) ? true : false;
+
     console.log("formatted_user_prompt: ", JSON.parse(formatted_user_prompt));
+    
+    const tool_use = (do_rag || perform_graph_rag || butler_mode) ? true : false;
     setSequenceId(sequence_id);
 
     const responseIDs = {
@@ -487,7 +566,15 @@ function handleSetupResponse(data) {
     }
 
     if (!data.regeneration_request) { 
-        appendResponseContainerToChatArea(responseIDs.masterWrapperID, responseIDs.responseWrapperID, responseIDs.responseContentID, stream_session_id, sequence_id); 
+        
+        appendResponseContainerToChatArea(
+            responseIDs.masterWrapperID,
+            responseIDs.responseWrapperID,
+            responseIDs.responseContentID,
+            stream_session_id,
+            sequence_id
+        );
+
         appendSequenceIdToUserMessage(data.user_message_html_unique_id, sequence_id);
     }
     displayProcessingStatus('Generating...');
@@ -497,29 +584,44 @@ function handleSetupResponse(data) {
 
 
 function printErrorToChatArea(responseContentID, error_message) {
+    
     // Escape HTML characters to prevent the browser from interpreting parts of the error as tags
     const safeErrorMessage = String(error_message)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 
-    let userFriendlyErrorMessage = `An error occured when attempting to generate the response. Details follow, contact support if the issue persists. Error: <br><br>${safeErrorMessage}`;
+    
+    let userFriendlyErrorMessage = 
+        `An error occured when attempting to generate the response. ` +
+        `Details follow, contact support if the issue persists. Error: <br><br>${safeErrorMessage}`;
+    
     console.error(userFriendlyErrorMessage);
+    
     // Use div instead of span. span is an inline element and markdown-it breaks it when it encounters newlines/blocks in the error message.
     let spannedErrorMessage = `<div class='chat-area-error-message'>${userFriendlyErrorMessage}</div>`;
+    
     appendStreamChunkAndRender(responseContentID, spannedErrorMessage);
     finalizeStreamRender(responseContentID);
     return spannedErrorMessage;
 }
 
 
-async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer, tools_schema=null) {
+async function fetchLlamacppEventStream(
+    formattedPrompt,
+    responseContentID,
+    chatContainer,
+    tools_schema=null
+) {
+
     const url = getLlamaCppUrl() + "/v1/chat/completions";
+    
     let formattedPromptCopy = structuredClone(formattedPrompt); // objects passed by reference so appending tools to the passed object will make it persistent even when tools_schema is null in a future call!
 
     const requestData = coerceToObject(formattedPromptCopy, "llama.cpp request");
     if (tools_schema) { requestData.tools = tools_schema; }
     else delete requestData.tools;  // if the incoming formattedPrompt already has a .tools property from any earlier mutation (or from elsewhere), so best to explicitly remove it when tools_schema is null
+    
     requestData.model = document.getElementById('modelDropdown').value;
     requestData.stream = true;
     requestData.temperature = parseFloat(document.getElementById('tempSlider').value);
@@ -582,7 +684,7 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
                             if (jsonStr == '[DONE]') {
                                 receivedComplete = true;
                             } else {
-                                console.log("jsonStr: ", jsonStr);
+                                // console.log("jsonStr: ", jsonStr);
                                 const dataObj = JSON.parse(jsonStr);
                                 const choice = dataObj.choices[0];
                                 const delta = choice.delta;
@@ -694,24 +796,31 @@ async function fetchLlamacppEventStream(formattedPrompt, responseContentID, chat
 
 // modify to open the file in a new tab instead of downloading it
 function createDownloadLinkForFile(filename) {
-    const downloadLink = document.createElement('a');
+    
     const hfWaitress_URL = getHfwUrl();
+    const downloadLink = document.createElement('a');
+    
     downloadLink.href = `${hfWaitress_URL}/serve_uploaded_file/${filename}`;
     downloadLink.target = '_blank';
     downloadLink.download = filename;   // HTML5 attribute that specifies that the linked resource should be downloaded when a user clicks on the hyperlink
+    
     downloadLink.innerHTML = `<i class="fa-solid fa-file-arrow-down"></i> ${filename} Appended to Conversation`;
+    
     downloadLink.classList.add('plain-text-download-link-for-vision-appended-file');
     return downloadLink;
 }
 
 
 function createDownloadContainerForFile(filename) {
+    
     filename = secure_filename(filename);       // get secure filename similar to how it's done in Python - to prevent directory traversal attacks. secure_filename() is implemented in helper-functions.js
+    
     const downloadContainer = document.createElement('div');
     downloadContainer.classList.add('download-container-for-vision-appended-file');
 
     const downloadLink = document.createElement('a');
     const hfWaitress_URL = getHfwUrl();
+    
     downloadLink.href = `${hfWaitress_URL}/serve_uploaded_file/${filename}`;
     downloadLink.target = '_blank';
     downloadLink.download = filename;   // HTML5 attribute that specifies that the linked resource should be downloaded when a user clicks on the hyperlink
@@ -744,7 +853,14 @@ function createDownloadContainerForFile(filename) {
 }
 
 
-async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer, file=null, tools_schema=null) {
+async function fetchHfWaitressEventStream(
+    formattedPrompt,
+    responseContentID,
+    chatContainer,
+    file=null,
+    tools_schema=null
+) {
+
     let url;
     let hfwHeaders = new Headers();
     let formdata = null;
@@ -756,6 +872,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
     const exl3 = getExl3();
     if (vision === "true") {
         console.log("Invoking vision_stream");
+        
         const hfWaitress_URL = getHfwUrl();
         url = `${hfWaitress_URL}/vision_stream`;
 
@@ -767,9 +884,12 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
 
         const parsedPrompt = coerceToObject(formattedPromptCopy, "vision prompt");
         formdata.append("messages", JSON.stringify(parsedPrompt.messages));
+        
         if (file) { formdata.append("file", file); }
+
     } else if (exl2 === "true") {
         console.log("Invoking exl2_stream");
+
         const hfWaitress_URL = getHfwUrl();
         url = `${hfWaitress_URL}/exl2_stream`;
 
@@ -783,10 +903,12 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         const requestObj = coerceToObject(formattedPromptCopy, "exl2 request");
         if (tools_schema) requestObj.tools = tools_schema;
         else delete requestObj.tools;
+        
         rawBodyJSONStringified = JSON.stringify(requestObj);
 
     } else if (exl3 === "true") {
         console.log("Invoking exl3_stream");
+        
         const hfWaitress_URL = getHfwUrl();
         url = `${hfWaitress_URL}/exl3_stream`;
 
@@ -804,6 +926,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
         const requestObj = coerceToObject(formattedPromptCopy, "exl3 request");
         if (tools_schema) requestObj.tools = tools_schema;
         else delete requestObj.tools;
+        
         rawBodyJSONStringified = JSON.stringify(requestObj);
 
     } else {
@@ -852,7 +975,11 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
 
         const hfwReader = hfwResponse.body.getReader();
         let full_content = '';
-        if (file) { full_content += document.getElementById(responseContentID).innerHTML + '<br>'; } // Ensure the file download link generated above is appended to hfwTotalContent!
+        
+        if (file) { 
+            full_content += document.getElementById(responseContentID).innerHTML + '<br>'; 
+        } // Ensure the file download link generated above is appended to hfwTotalContent!
+        
         let hfwReceivedComplete = false;
         let loaderHidden = false;
 
@@ -916,6 +1043,7 @@ async function fetchHfWaitressEventStream(formattedPrompt, responseContentID, ch
 }
 
 async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, chatContainer) {
+    
     const hfWaitress_URL = getHfwUrl();
     const url = `${hfWaitress_URL}/completions`;
 
@@ -952,21 +1080,25 @@ async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, 
         if (data.success) {
             console.log("Diffusers Image Generation Successful");
             console.log("data: ", data);
-            const hfWaitress_URL = getHfwUrl();
 
             // create image div with source = data.image_name (local file path) and append to responseContentID.innerHTML
             const imageDiv = document.createElement('div');
+            
             const img = document.createElement('img');
             img.alt = "Generated Image";
             img.src = `${hfWaitress_URL}/serve_generated_image/${data.image_name}`;
+            
             imageDiv.appendChild(img);
             document.getElementById(responseContentID).appendChild(imageDiv);
+            
             handleAutoScroll(chatContainer);
             // console.log("returning imageDiv.outerHTML: ", imageDiv.outerHTML);
             return { full_content: imageDiv.outerHTML, plain_text: "", invoke_tools: false, tool_calls: [] };
+
         } else {
             throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
         }
+
     } catch (error) {
         errorHandlerNoAlert("fetching diffusers response", "HF-Waitress/completions", String(error));
         return printErrorToChatArea(responseContentID, String(error));
@@ -974,34 +1106,79 @@ async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, 
     
 }
 
-async function fetchEventStream(serverType, formattedPrompt, responseContentID, chatContainer, file=null, tools_schema=null) {
+async function fetchEventStream(
+    serverType,
+    formattedPrompt,
+    responseContentID,
+    chatContainer,
+    file=null,
+    tools_schema=null
+) {
     if (serverType == 'llama-cpp') {
-        return fetchLlamacppEventStream(formattedPrompt, responseContentID, chatContainer, tools_schema);
+        return fetchLlamacppEventStream(
+            formattedPrompt,
+            responseContentID,
+            chatContainer,
+            tools_schema
+        );
+
     } else if (serverType == 'hf-waitress') {
-        return fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer, file=null, tools_schema=tools_schema);
+        return fetchHfWaitressEventStream(
+            formattedPrompt,
+            responseContentID,
+            chatContainer,
+            file=null,
+            tools_schema=tools_schema
+        );
+
     } else if (serverType == 'hfw-diffusers') {
-        return fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, chatContainer);
+        return fetchHfwDiffusersEventStream(
+            formattedPrompt,
+            responseContentID,
+            chatContainer
+        );
+
     } else if (serverType == 'hfw-vision') {
-        return fetchHfWaitressEventStream(formattedPrompt, responseContentID, chatContainer, file, tools_schema);
+        return fetchHfWaitressEventStream(
+            formattedPrompt,
+            responseContentID,
+            chatContainer,
+            file,
+            tools_schema
+        );
+
     } else {
         throw new Error(`Invalid server type: ${serverType}`);
     }
 }
 
 
-function handleFetchedReferences(data, responseContentID, masterWrapperID, stream_session_id, user_message_html_unique_id, regeneration_request) {
+function handleFetchedReferences(
+    data,
+    responseContentID,
+    masterWrapperID,
+    stream_session_id,
+    user_message_html_unique_id,
+    regeneration_request
+) {
+
     const latest_sequence_id = getSequenceId();
     const current_chat_id = data.chat_id;
 
     const chatState_chat_id = document.getElementById('chatState').getAttribute('data-ongoing-chat-id');
+    
     if (chatState_chat_id != current_chat_id) {
         console.log("Updating chatID in the InfoBox");
         setChatId(current_chat_id);
         setModelHeaderInfoBox(current_chat_id, getLlmModel());
-        if (!regeneration_request) { appendChatIdToUserMessage(user_message_html_unique_id, current_chat_id); }
+        
+        if (!regeneration_request) { 
+            appendChatIdToUserMessage(user_message_html_unique_id, current_chat_id); 
+        }
     }
 
     if (parseInt(latest_sequence_id) == 1 && document.querySelector(`.nav-item[data-chat-id="${getChatId()}"]`) == null) {
+        
         const sidenav = document.getElementById('sidenav-content');
 
         new_chat = {
@@ -1013,8 +1190,8 @@ function handleFetchedReferences(data, responseContentID, masterWrapperID, strea
         }
 
         const newDiv = createChatHistoryMenuItem(new_chat);
-
         const newChatLink = document.getElementById('dynamicChatLink');
+        
         if (newChatLink.nextSibling) {
             sidenav.insertBefore(newDiv, newChatLink.nextSibling);
         } else {
@@ -1050,15 +1227,19 @@ function handleFetchedReferences(data, responseContentID, masterWrapperID, strea
         stateObj = { buffer: '', scheduled: false };
         streamState.set(stream_session_id, stateObj);
     }
+    
     stateObj.buffer = '';
     document.getElementById(responseContentID).innerHTML = `${finalResponse}${llm_star_rating_full_div}`;
     stateObj.buffer = `${finalResponse}${llm_star_rating_full_div}`;
     stateObj.scheduled = false;
+    
     finalizeStreamRender(responseContentID);
 
     if (data.pdf_frame != "" && data.pdf_frame != null) {
+        
         document.getElementById(masterWrapperID).innerHTML += data.pdf_frame;
         var defaultTabs = document.getElementsByClassName("defaultTabs");
+        
         for (let i = 0; i < defaultTabs.length; i++) {
             if (defaultTabs[i].getAttribute('stream-session-id') === stream_session_id) {
                 defaultTabs[i].click(); // Open the first tab by default
@@ -1086,7 +1267,15 @@ async function getReferences(params, responseContentID, masterWrapperID, user_me
             throw new Error(`Internal Server Error: Check server-log and server command-line for more details. Error: ${data.error}`);
         }
 
-        handleFetchedReferences(data, responseContentID, masterWrapperID, params.stream_session_id, user_message_html_unique_id, params.regeneration_request);
+        handleFetchedReferences(
+            data,
+            responseContentID,
+            masterWrapperID,
+            params.stream_session_id,
+            user_message_html_unique_id,
+            params.regeneration_request
+        );
+
     } catch (error) {
         errorHandlerNoAlert("fetching relevant reference material", "get-References()", String(error));
         // return printErrorToChatArea(responseContentID, String(error));
@@ -1201,13 +1390,19 @@ async function requestFormattedPrompt(
 
     const current_chat_id = getChatId();
     const {userInput, file} = getUserInput();
+    
     const userInputForHtml = regeneration_request ? userInput : formatTabsAndSpaces(userInput); // Old input need-not be re-formatted!
     const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);  // The use of the uniqueId is explained in the docstring of update-ChatAreaWithUserInput().
     
-    const userMessageElement = regeneration_request ? document.querySelector(`.user-message[data-stream-session-id="${regen_stream_session_id}"]`) : document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
+    const userMessageElement = regeneration_request 
+        ? document.querySelector(`.user-message[data-stream-session-id="${regen_stream_session_id}"]`) 
+        : document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
+    
     const traceManager = userMessageElement._traceManager;  // created and stored in the userMessageElement at time of create-UserMessageHTML()!
     
-    if (regeneration_request) { resetResponseAndViewerContainerWithStreamSessionId(regen_stream_session_id); }
+    if (regeneration_request) { 
+        resetResponseAndViewerContainerWithStreamSessionId(regen_stream_session_id); 
+    }
 
     let file_attached = false;
     if (file) { file_attached = true; }
@@ -1215,17 +1410,53 @@ async function requestFormattedPrompt(
     try {
         // 1- setup-for_local_llm_response
         traceManager.startStep("Analyzing Query & Determining Required Tools and Settings...");
-        const setup_response = await setupLLMResponse(userInput, file_attached, current_chat_id, regeneration_request, regen_stream_session_id, regen_sequence_id, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled);
+        
+        const setup_response = await setupLLMResponse(
+            userInput,
+            ile_attached,
+            current_chat_id,
+            regeneration_request,
+            regen_stream_session_id,
+            regen_sequence_id,
+            regenerate_with_citations_force_enabled,
+            regenerate_with_citations_force_disabled
+        );
+        
         const setup_data = await setup_response.json();
         setup_data.user_message_html_unique_id = uniqueId;
         setup_data.regeneration_request = regeneration_request;
-        const {tool_use, llm_set_rag_config, stream_session_id, formatted_user_prompt, responseIDs, sequence_id, server_type} = handleSetupResponse(setup_data);
         
-        let final_stream_session_id = stream_session_id, final_formatted_user_prompt = formatted_user_prompt, final_server_type = server_type;
+        const {
+            tool_use,
+            llm_set_rag_config,
+            stream_session_id,
+            formatted_user_prompt,
+            responseIDs,
+            sequence_id,
+            server_type
+        } = handleSetupResponse(setup_data);
+        
+        let final_stream_session_id = stream_session_id
+        let final_formatted_user_prompt = formatted_user_prompt
+        let final_server_type = server_type;
+        
         handleServiceSelectionMessage(llm_set_rag_config, traceManager);
 
         // 1b- invoke-tools_if_necessitated_by_llm
-        tool_use && ({reused_stream_session_id: final_stream_session_id, tool_formatted_user_prompt: final_formatted_user_prompt, reconfirmed_server_type: final_server_type} = await handleToolUse(stream_session_id, userInput, current_chat_id, llm_set_rag_config, regeneration_request, uniqueId, sequence_id));
+        tool_use &&
+            ({
+                reused_stream_session_id: final_stream_session_id,
+                tool_formatted_user_prompt: final_formatted_user_prompt,
+                reconfirmed_server_type: final_server_type
+            } = await handleToolUse(
+                stream_session_id,
+                userInput,
+                current_chat_id,
+                llm_set_rag_config,
+                regeneration_request,
+                uniqueId,
+                sequence_id
+            ));
 
         if (!regeneration_request) { 
             appendStreamSessionIdToUserMessage(uniqueId, final_stream_session_id); 
@@ -1234,7 +1465,19 @@ async function requestFormattedPrompt(
         // 2- fetch-EventStream()
         traceManager.startStep('Generating Response...');
         const chatContainer = document.getElementById('chat-area');
-        const { full_content: totalContent, plain_text: totalPlainText, invoke_tools: totalInvokeTools, tool_calls: totalToolCalls } = await fetchEventStream(final_server_type, final_formatted_user_prompt, responseIDs.responseContentID, chatContainer, file);
+        
+        const {
+            full_content: totalContent,
+            plain_text: totalPlainText,
+            invoke_tools: totalInvokeTools,
+            tool_calls: totalToolCalls
+        } = await fetchEventStream(
+            final_server_type,
+            final_formatted_user_prompt,
+            responseIDs.responseContentID,
+            chatContainer,
+            file
+        );
 
         // 3- get-References()
         if (tool_use && !llm_set_rag_config.butler_mode) {
@@ -1254,19 +1497,27 @@ async function requestFormattedPrompt(
             'regenerate_with_citations_force_enabled': regenerate_with_citations_force_enabled
         };
 
-        await getReferences(getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);
+        await getReferences(
+            getReferencesParams,
+            responseIDs.responseContentID,
+            responseIDs.masterWrapperID,
+            uniqueId
+        );
 
         // Complete final step
         traceManager.completeCurrentStep();
 
-        if (document.getElementById('enable_tts').checked) { await fetchTTSVoice(totalContent); }   // Not using getTts() here so simple checkbox change is enough, rather than a config save!
+        if (document.getElementById('enable_tts').checked) { await fetchTTSVoice(totalContent); }   
+            // Not using getTts() here so simple checkbox change is enough, rather than a config save!
 
     } catch (error) {
-        // Stop timer on error
+        
         if (traceManager) {
             traceManager.completeCurrentStep();
-        }
+        }   // Stop timer on error
+        
         errorHandlerNoAlert("chatting with the LLM", "request-FormattedPrompt()", String(error.message));
+
     } finally {
         enableSendButton();
         displayProcessingStatus(false);
@@ -1297,16 +1548,23 @@ async function executePrompt(
 
     const current_sequence_id = regeneration_request ? regen_sequence_id : incrementSequenceId();
     const current_chat_id = getChatId();
+    
     const {userInput, file} = getUserInput();
     const userInputForHtml = regeneration_request ? userInput : formatTabsAndSpaces(userInput); // Old input need-not be re-formatted!
     
     chatState.addUserMessage(userInputForHtml);
 
-    const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);  // The use of the uniqueId is explained in the docstring of updateChatAreaWithUserInput().
-    const userMessageElement = regeneration_request ? document.querySelector(`.user-message[data-stream-session-id="${regen_stream_session_id}"]`) : document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
+    const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);  // uniqueId explainer: see updateChatAreaWithUserInput()
+    
+    const userMessageElement = regeneration_request 
+        ? document.querySelector(`.user-message[data-stream-session-id="${regen_stream_session_id}"]`) 
+        : document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
+    
     const traceManager = userMessageElement._traceManager;  // created and stored in the userMessageElement at time of create-UserMessageHTML()!
     
-    if (regeneration_request) { resetResponseAndViewerContainerWithStreamSessionId(regen_stream_session_id); }
+    if (regeneration_request) { 
+        resetResponseAndViewerContainerWithStreamSessionId(regen_stream_session_id); 
+    }
 
     let file_attached = false;
     if (file) { file_attached = true; }
@@ -1314,7 +1572,8 @@ async function executePrompt(
     try {
         traceManager.startStep("Processing Prompt...");
 
-        const stream_session_id = regeneration_request? regen_stream_session_id : getUniqueId();
+        const stream_session_id = regeneration_request ? regen_stream_session_id : getUniqueId();
+        
         const responseIDs = {
             responseWrapperID: `ResponseWrapper${stream_session_id}`,
             responseContentID: `ResponseContent${stream_session_id}`,
@@ -1324,7 +1583,14 @@ async function executePrompt(
         if (!regeneration_request) {
             appendSequenceIdToUserMessage(uniqueId, current_sequence_id);
             appendStreamSessionIdToUserMessage(uniqueId, stream_session_id);
-            appendResponseContainerToChatArea(responseIDs.masterWrapperID, responseIDs.responseWrapperID, responseIDs.responseContentID, stream_session_id, current_sequence_id);
+            
+            appendResponseContainerToChatArea(
+                responseIDs.masterWrapperID,
+                responseIDs.responseWrapperID,
+                responseIDs.responseContentID,
+                stream_session_id,
+                current_sequence_id
+            );
         }
         
         const tools_schema = await getToolsSchema();
@@ -1335,18 +1601,30 @@ async function executePrompt(
         const MAX_TOOL_ITERATIONS = 5; // Prevent infinite loops
         
         while (toolIteration < MAX_TOOL_ITERATIONS) {
-            let { full_content, plain_text, invoke_tools, tool_calls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file, tools_schema);
+            
+            let { full_content, plain_text, invoke_tools, tool_calls } = await fetchEventStream(
+                getServerType(),
+                chatState.getForAPI(),
+                responseIDs.responseContentID,
+                chatContainer,
+                file,
+                tools_schema
+            );
+
             totalContent += full_content;
+            
             if (invoke_tools == true) {
                 traceManager.startStep(`Executing Tools... iteration ${toolIteration + 1} of maximum ${MAX_TOOL_ITERATIONS} iterations`);
-                console.log("invoke_tools is true, toolIteration: ", toolIteration);
+                
                 const tool_execution_response = await executeTools(tool_calls, stream_session_id);
                 const tool_execution_data = await tool_execution_response.json();
                 const tool_result = tool_execution_data.tool_result_list;
                 const toolResponseMode = document.getElementById('tool_response_mode').value;
+                
                 chatState.addToolExchange(plain_text, tool_calls, tool_result, toolResponseMode);
                 traceManager.startStep(`Fetching Follow-Up Response for tool iteration ${toolIteration + 1}`);
                 toolIteration++;
+
             } else {
                 console.log("Tool calls complete, proceeding");
                 chatState.addAssistantMessage(plain_text);
@@ -1379,6 +1657,7 @@ async function executePrompt(
         // }
         
         console.log("MESSAGES_OBJECT at get-References() invocation: ", chatState.inspect());
+        
         const getReferencesParams = {
             'chat_id':current_chat_id,
             'sequence_id': current_sequence_id,
@@ -1391,19 +1670,28 @@ async function executePrompt(
             'regenerate_with_citations_force_enabled': regenerate_with_citations_force_enabled
         };
 
-        await getReferences(getReferencesParams, responseIDs.responseContentID, responseIDs.masterWrapperID, uniqueId);
+        await getReferences(
+            getReferencesParams,
+            responseIDs.responseContentID,
+            responseIDs.masterWrapperID,
+            uniqueId
+        );
 
         removeLoadingAnimation();
         traceManager.completeCurrentStep();     // Complete final step
 
-        if (document.getElementById('enable_tts').checked) { await fetchTTSVoice(totalContent); }   // Not using getTts() here so simple checkbox change is enough, rather than a config save!
+        if (document.getElementById('enable_tts').checked) { await fetchTTSVoice(totalContent); }   
+            // Not using getTts() here so simple checkbox change is enough, rather than a config save!
 
     } catch (error) {
+
         decrementSequenceId();
         if (traceManager) {     // Stop timer on error
             traceManager.completeCurrentStep();
         }
+        
         errorHandlerNoAlert("chatting with the LLM", "execute-Prompt()", String(error.message));
+        
     } finally {
         enableSendButton();
         displayProcessingStatus(false);
@@ -1493,13 +1781,16 @@ const textAttachmentFileName = document.getElementById("textAttachmentFileName")
 
 textAttachmentInput.addEventListener('change', function(event) {
     console.log("textAttachmentInput: ", event);
+    
     if (event.target.files.length > 0) {
+        
         console.log("file detected: ", event.target.files[0]);
         const file = event.target.files[0];
         textAttachmentFileName.textContent = `Attached: ${file.name}`;
         textAttachmentPreview.style.display = 'block';
     }
 });
+
 
 function removeTextAttachment() {
     textAttachmentInput.value = "";
@@ -1508,7 +1799,6 @@ function removeTextAttachment() {
 }
 
 textAttachmentRemoveBtn.addEventListener('click', removeTextAttachment);
-
 
 // Store user rating & update UI - confirm the associated route does not contain print() statements as the stdout is redirected during response generation!
 document.getElementById('chat-area').addEventListener('click', function(e) {
