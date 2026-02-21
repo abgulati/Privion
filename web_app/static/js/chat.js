@@ -1080,7 +1080,7 @@ async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, 
         if (data.success) {
             console.log("Diffusers Image Generation Successful");
             console.log("data: ", data);
-
+            
             // create image div with source = data.image_name (local file path) and append to responseContentID.innerHTML
             const imageDiv = document.createElement('div');
             
@@ -1598,7 +1598,8 @@ async function executePrompt(
         
         let totalContent = "";
         let toolIteration = 0;
-        const MAX_TOOL_ITERATIONS = 5; // Prevent infinite loops
+        const MAX_TOOL_ITERATIONS = 11; // Prevent infinite loops
+        let completedNormally = false;
         
         while (toolIteration < MAX_TOOL_ITERATIONS) {
             
@@ -1626,10 +1627,25 @@ async function executePrompt(
                 toolIteration++;
 
             } else {
-                console.log("Tool calls complete, proceeding");
                 chatState.addAssistantMessage(plain_text);
+                completedNormally = true;
                 break;
             }
+        }
+
+        if (!completedNormally && toolIteration >= MAX_TOOL_ITERATIONS) {
+            const toolCapNotice = 
+                `[Notice] I reached the tool-call safety limit (${MAX_TOOL_ITERATIONS}). ` +
+                `I stopped additional tool execution to prevent a loop. ` +
+                `Please refine the request and retry.`;
+
+                traceManager.startStep(`Tool-call limit reach (${MAX_TOOL_ITERATIONS}). Ending gracefully...`);
+
+                appendStreamChunkAndRender(responseIDs.responseContentID, `\n\n${toolCapNotice}`);
+                finalizeStreamRender(responseIDs.responseContentID);
+
+                chatState.addAssistantMessage(toolCapNotice);
+                totalContent += `\n\n${toolCapNotice}`;
         }
 
         // if (toolIteration >= MAX_TOOL_ITERATIONS) {
