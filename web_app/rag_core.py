@@ -823,12 +823,12 @@ def rerank_results_ml(query:str, documents:list[Document], top_n:int=5, ascendin
         print(f"Reranking failed: {e}")
         return documents[:top_n]
 
-    finally:
-        # if model is not None:
-        #     del model
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        gc.collect()
+    # finally:
+    #     # if model is not None:
+    #     #     del model
+    #     if torch.cuda.is_available():
+    #         torch.cuda.empty_cache()
+    #     gc.collect()
 
 
 def combine_and_deduplicate_search_results(whoosh_results:list[dict], vector_results:list[Document]) -> tuple[list[Document], dict]:
@@ -1023,12 +1023,12 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
     except Exception as e:
         print(f"Could not perform similarity_search to determine do_rag when attempting to setup_for_streaming_response, encountered error: {e}")
         return []
-    finally:
-        # if embedding_model is not None:
-        #     del embedding_model
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        gc.collect()
+    # finally:
+    #     # if embedding_model is not None:
+    #     #     del embedding_model
+    #     if torch.cuda.is_available():
+    #         torch.cuda.empty_cache()
+    #     gc.collect()
 
 
 def search_searxng(user_query:str, category:str='general') -> list[Document]:
