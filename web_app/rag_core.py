@@ -8,12 +8,18 @@ from whoosh.query import Term, Or
 from whoosh import scoring
 from falkordb import FalkorDB
 
+from urllib.parse import urlparse
+from bs4 import BeautifulSoup
+from protego import Protego
+import trafilatura
+
 import requests
 import chromadb
 import datetime
 import sqlite3
 import pathlib
 import torch
+import time
 import uuid
 import ast
 import gc
@@ -1100,6 +1106,149 @@ def search_searxng(user_query:str, category:str='general') -> list[Document]:
     except Exception as e:
         print(f"Could not search SearXNG, encountered error: {e}")
         return []
+
+
+def _fetch_webpage_fallback(
+    url: str,
+    user_agent: str,
+    max_chars: int = 11000,
+    timeout: int = 10
+) -> dict:
+    
+    '''Fallback using requests and BeautifulSoup.'''
+    
+    try:
+
+        headers = {
+            'User-agent': user_agent
+        }
+
+        response = requests.get(url, headers=headers, timeout=timeout)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Remove boilerplate
+        for element in soup(['script', 'style', 'nav', 'footer', 'header', 
+                            'aside', 'advertisement', 'ad', 'iframe', 'noscript']):
+            element.decompose()
+        
+        # Find main content
+        main_content = None
+        for selector in ['main', 'article', '[role="main"]', '.content', '.post', 
+                        '#content', '#main', '.article']:
+            main_content = soup.select_one(selector)
+            if main_content:
+                break
+        
+        text_source = main_content if main_content else soup.body
+
+        if not text_source:
+            raise Exception("Could not parse content with bs4.")
+
+        text = text_source.get_text(separator='\n', strip=True)
+        lines = [line.strip() for line in text.splitlines if line.strip()]
+        text = '\n'.join(lines)
+
+        if len(text) > max_chars:
+            text = text[:max_chars] + f"\n\n[Content truncated to top {max_chars} from total {len(text)} chars.]"
+
+        print(f"\n\nSuccessfully extracted main content from URL using backup method (BS4): {url}\n\n{text}\n\n")
+
+        return {
+            'success': True,
+            'message': f"Successfully extracted main content from URL: {url}\n\n{text}",
+            'content': text,
+            'url': url
+        }
+
+    except Exception as e:
+        return {
+            "success": False, 
+            "message": f"Error processing URL: {url}. Extraction via trafilatura and backup bs4 failed. Error: {str(e)}"
+        } 
+
+
+def _get_robots_parser_protego(url: str, timeout: int = 10) -> bool:
+    '''Checks robots.txt for a given url'''
+    parsed = urlparse(url)
+    robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
+
+    try:
+        response = requests.get(robots_url, timeout=timeout)
+        if response.status_code == 200:
+            return Protego.parse(response.text)
+        return None # No robots.txt = allow all
+    except Exception:
+        return None # Network error = assume allowed
+
+
+def fetch_webpage(url: str, **kwargs) -> dict:
+    '''
+    Fetches and extracts the main content from a webpage.
+    Respects robots.txt before fetching
+    '''
+
+    # 0. Read config
+    config_read = config_manager.read_config([
+        'respect_robots', 
+        'max_url_context_chars',
+        'fetch_url_timeout_seconds'
+    ])
+    timeout = config_read['fetch_url_timeout_seconds']
+    max_chars = int(config_read['max_url_context_chars'])
+
+    # 1. Check robots.txt first
+    user_agent = "Privion-LE-Research-Bot/1.0"
+
+    if config_read['respect_robots']:
+        parser = _get_robots_parser_protego(url, timeout)
+
+        if parser and not parser.can_fetch(user_agent, url):
+            return {"success": False, "message": f"Access to {url} denied by robots.txt"}
+
+    # 2. Rate limiting - be polite!
+    time.sleep(0.5)  # 500ms delay between requests
+
+    # 3. Proceed with content extraction (same as before)
+    try:
+
+        downloaded = trafilatura.fetch_url(url)
+        if not downloaded:
+            raise Exception(f"Could not download page content.")
+
+        text = trafilatura.extract(
+            downloaded,
+            include_comments=False,
+            include_tables=True,
+            deduplicate=True,
+            output_format="markdown"
+        )
+
+        if not text:
+            raise Exception(f"No meaningful content found.")
+
+        # Truncate if too long
+        if len(text) > max_chars:
+            text = text[:max_chars] + f"\n\n[Content truncated to top {max_chars} from total {len(text)} chars.]"
+
+        print(f"\n\nSuccessfully extracted main content from URL using Trafilatura: {url}\n\n{text}\n\n")
+
+        return {
+            'success': True,
+            'message': f"Successfully extracted main content from URL: {url}\n\n{text}",
+            'content': text,
+            'url': url
+        }
+
+    except requests.exceptions.Timeout:
+        return {"success": False, "message": f"Request timed out for URL: {url}"}
+    except requests.exceptions.RequestException as e:
+        return {"success": False, "message": f"Failed to fetch URL: {url}. Error: {str(e)}"}
+    except Exception as e:
+        return _fetch_webpage_fallback(
+            url, user_agent, max_chars, timeout
+        )
 
 
 def legacy_execute_search_tools_on_query(

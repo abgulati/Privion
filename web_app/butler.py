@@ -178,6 +178,13 @@ def search(query:str, category:str, **kwargs) -> dict:
     return rag_core_module.execute_full_search(query, category, stream_session_id)
 
 
+def fetch_url(url:str, **kwargs) -> dict:
+    '''
+    Fetches and extracts the main content from a webpage.
+    '''
+    return rag_core_module.fetch_webpage(url)
+
+
 def wol_turn_on_tv(mac_address:str, target_ip: Optional[str] = None, port: str | int = '9', **kwargs):
     '''
     Uses Wake-On-LAN (WOL) to turn on a TV.

@@ -3,7 +3,7 @@
 
         "search": {
             "name": "Local & Web RAG Search",
-            "description": "RAG tool for local & web search. Performs best when given a detailed and comprehensive, yet focused search-optimized query encompassing all relevant information from the conversational context.",
+            "description": "RAG tool for local & web search. Performs best when given a detailed and comprehensive, yet focused search-optimized query encompassing all relevant information from the conversational context.  When detailed information is needed from a specific URL (other than internal 'http://llm-citations-database.net' addresses), use the 'fetch_url' tool with the URL to retrieve the full article content.",
             "fields": {
                 "query": {
                     "required": true,
@@ -24,6 +24,18 @@
                         "social_media"
                     ],
                     "default": "web"
+                }
+            }
+        },
+
+        "fetch_url": {
+            "name": "Fetch Webpage Content",
+            "description": "Fetches and extracts the main text content from a given URL. Use this when you need to read the full contents of a webpage, such as after finding relevant URLs from a search. DOES NOT WORK FOR 'http://llm-citations-database.net' ADDRESSES!",
+            "fields": {
+                "url": {
+                    "required": true,
+                    "type": "string",
+                    "description": "The full URL of the webpage to fetch and extract content from (DOES NOT WORK FOR 'http://llm-citations-database.net' ADDRESSES!)"
                 }
             }
         },
