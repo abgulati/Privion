@@ -1601,11 +1601,16 @@ async function executePrompt(
         const MAX_TOOL_ITERATIONS = 25; // Prevent infinite loops
         let completedNormally = false;
         
+        const edge_case_llms_list = [
+            'nvidia/Nemotron-Orchestrator-8B',
+            'nvidia/Orchestrator-8B'
+        ]
+        
         while (toolIteration < MAX_TOOL_ITERATIONS) {
 
             const effectiveToolSchema = (
                 toolIteration > 0 &&
-                getLlmModel() === 'nvidia/Nemotron-Orchestrator-8B'
+                edge_case_llms_list.includes(getLlmModel())
             ) ? null : tools_schema;
             
             let { full_content, plain_text, invoke_tools, tool_calls } = await fetchEventStream(
