@@ -1598,10 +1598,15 @@ async function executePrompt(
         
         let totalContent = "";
         let toolIteration = 0;
-        const MAX_TOOL_ITERATIONS = 11; // Prevent infinite loops
+        const MAX_TOOL_ITERATIONS = 25; // Prevent infinite loops
         let completedNormally = false;
         
         while (toolIteration < MAX_TOOL_ITERATIONS) {
+
+            const effectiveToolSchema = (
+                toolIteration > 0 &&
+                getLlmModel() === 'nvidia/Nemotron-Orchestrator-8B'
+            ) ? null : tools_schema;
             
             let { full_content, plain_text, invoke_tools, tool_calls } = await fetchEventStream(
                 getServerType(),
@@ -1609,7 +1614,7 @@ async function executePrompt(
                 responseIDs.responseContentID,
                 chatContainer,
                 file,
-                tools_schema
+                effectiveToolSchema
             );
 
             totalContent += full_content;
@@ -1647,12 +1652,7 @@ async function executePrompt(
                 chatState.addAssistantMessage(toolCapNotice);
                 totalContent += `\n\n${toolCapNotice}`;
         }
-
-        // if (toolIteration >= MAX_TOOL_ITERATIONS) {
-        //     console.warn("Max tool iterations reached, forcing final response");
-        //     // Optional: Force one final call without tools_schema to get a definitive answer
-        //     // Or show error to user
-        // }
+        
 
         // let { full_content, plain_text, invoke_tools, tool_calls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file, tools_schema);
         // totalContent += full_content;
