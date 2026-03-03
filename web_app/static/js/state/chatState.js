@@ -79,12 +79,21 @@ class ConversationState {
                 content: null,
                 tool_calls: toolCalls
             });
-        } else {
+        } else if (toolResponseMode == "user_tool_response_tag") {
             // XML Mode: Custom/Nvidia/Qwen Style Tool Role
             this.messages['messages'].push({
                 role: 'assistant',
                 content: plainText || "",
                 tool_calls: toolCalls
+            });
+        } else if (toolResponseMode == "qwen_3_5") {
+            let tool_calls_list = [];
+            for (const toolCall of toolCalls) {
+                tool_calls_list.push(toolCall.function);
+            }
+            this.messages['messages'].push({
+                role: 'assistant',
+                content: plainText + "\n<|tool_call|>" + JSON.stringify(tool_calls_list)
             });
         }
 
@@ -107,6 +116,11 @@ class ConversationState {
                 this.messages['messages'].push({
                     role: 'user',
                     content: `<tool_response>${normalizedContent}</tool_response>`
+                });
+            } else if (toolResponseMode == "qwen_3_5") {
+                this.messages['messages'].push({
+                    role: 'tool',
+                    content: `{ "name": "${toolResult.name}", "result": "${normalizedContent}" }`
                 });
             }
 
