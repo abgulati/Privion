@@ -555,6 +555,10 @@ body {
     box-sizing: border-box; /* Include padding in height calculations */
 }
 
+#user-input:focus {
+    background-color: #c2c2ef !important;
+}
+
 #textAttachmentButton {
     position: absolute;
     right: 60px;
