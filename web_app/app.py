@@ -5319,6 +5319,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             '--warmup' if read_return['llama_cpp_warmup'] else '--no-warmup',
             '--reasoning-budget', str(read_return['llama_cpp_reasoning_budget']),
             '--model', cpp_model,
+            '--ctx-size', str(read_return["llama_cpp_context_length"]),
             '--batch-size', str(read_return["llama_cpp_batch_size"]),
             '--ubatch-size', str(read_return["llama_cpp_ubatch_size"]),
             '--n-predict', str(read_return["llama_cpp_max_new_tokens"]),
