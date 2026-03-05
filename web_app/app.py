@@ -5394,6 +5394,8 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
 
         if want_flash_attn and flash_attention_is_installed() and not kv_offload_disabled:  
             llama_cpp_safe_launch_args.extend(['--flash-attn', 'on'])
+            llama_cpp_safe_launch_args.extend(['--cache-type-k', str(read_return["llama_cpp_key_cache_data_type"])])
+            llama_cpp_safe_launch_args.extend(['--cache-type-v', str(read_return["llama_cpp_value_cache_data_type"])])
         
         if kv_offload_disabled:
             llama_cpp_safe_launch_args.append('--no-kv-offload')
