@@ -2421,7 +2421,7 @@
                                                 <td class="settings_table_setting_value"><input class="settings-input-fields" type="checkbox" id="legacy_mode" name="legacy_mode" value="false"></td>
                                             </tr>
                                             <tr class="settings-table-row">
-                                                <td class="settings_table_setting_name">Tool Call Handling Mode</td>
+                                                <td class="settings_table_setting_name">Chat Template Mode</td>
                                                 <td class="settings_table_setting_description">How to handle tool calls WRT chat template. One of:
                                                     <ul>
                                                         <li>OpenAI-API Spec: Append tool results using the `role: 'tool'` tag for use with the Completions API (GPT-OSS models, llama.cpp, etc.)</li>
@@ -2432,9 +2432,9 @@
                                                 </td>
                                                 <td class="settings_table_setting_value">
                                                     <select id="tool_response_mode" name="tool_response_mode" class="modal-selects">
-                                                        <option value="role_tool">role: 'tool'</option>
-                                                        <option value="user_tool_response_tag">role: 'user' [Default]</option>
-                                                        <option value="qwen_3_5">Qwen-3.5</option>
+                                                        <option value="role_tool">OpenAI-API Spec</option>
+                                                        <option value="user_tool_response_tag">Orchestrator / Qwen3 Spec</option>
+                                                        <option value="qwen_3_5">Qwen-3.5 Spec</option>
                                                     </select>
                                                 </td>
                                             </tr>
