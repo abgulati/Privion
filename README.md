@@ -712,12 +712,16 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - To self-build, start by downloading the `Source code (zip)` of the latest release from the [Official Repo's Releases Page](https://github.com/ggml-org/llama.cpp/releases)
 
-- Ensure VSBuildTools is installed if on Windows as per [Installation - Step 4](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#4-visual-studio-build-tools)
+- Ensure VS20222 & VSBuildTools (both with CMake) are installed if on Windows as per [Dependencies & Requirements #2](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#2-visual-studio)
 
-- Install CMAKE on Windows from the [Official Site](https://cmake.org/download/)
+- Launch a Visual Studio Developer PowerShell from `Start Menu -> Visual Studio 2022 -> Developer PowerShell for VS2022`
 
-    - add to PATH (if you didn't already elect to add to PATH in CMake's installer):   
-    ```C:\Program Files\CMake\bin```
+- You might see two versions of the above `Developer PowerShell for VS2022` and `Developer PowerShell for VS2022(2)`, this is due to the VS2022 + VSBuildTools installation and is no issue, launch either (I just go with the VS2022 prompt rather than the BuildTools `(2)` prompt)
+
+- **NOTE: In case `cmake` fails with an `unrecognized` error, run the following command within the Developer PowerShell and retry:**
+    ```
+    & "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64 -HostArch amd64
+    ```
 
 - Build llama.cpp with CMAKE:
 
@@ -725,10 +729,10 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
     - Open a command window in llama.cpp dir
 
-    - Build with CUDA:   
+    - Build with CUDA (see notes below BEFORE running):   
         ```
         cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="52;61;70;75;80;86"
-        cmake --build build  --config Release
+        cmake --build build  --config Release -j 8
         ```
     
     - **NOTE: Check the [Official llama.cpp CUDA Guide](https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md#cuda) for the latest instructions**
@@ -736,13 +740,26 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     - **Check [Nvidia's CUDA GPU Compatibility Chart here](https://developer.nvidia.com/cuda-gpus). Example:**
         ```
         # If building on a system with a 3090 and a 5090, which have CUDA compatibility 8.6 and 12.0 respectively, set archs as follows:
-        make -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="86;120"
+        cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="86;120"
         ```
+    
+    - **NOTE: In case Flash Attention is setup on your system and llama.cpp will be run with `-fa=on/auto`, ensure the following lauch arg is included too:**
+        ```
+        cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="86;120" `DGGML_CUDA_FA_ALL_QUANTS=ON
+        ```
+
+        - What it does in practice:
+
+            - Without the flag (default OFF): Only three FlashAttention vector kernel variants are compiled — q4_0, q8_0, and f16 (K and V types must match).
+
+            - With the flag (ON): All fattn-vec*.cu template instances are compiled, enabling every KV cache quantization type combination (e.g., different quant types for K and V caches, plus additional model quant types like q4_1, q5_0, q5_1 and notable, Unsloth UD_K_XL quants). The tradeoff is significantly longer compilation times.
+
+    - **NOTE: Flash-Attention is REQUIRED for KV-cache quantization!**
 
     - Build without CUDA:   
         ```
         cmake -B build
-        cmake --build build  --config Release
+        cmake --build build  --config Release -j 8
         ```
 
 - If you face issues when attempting to run ```CMake -B build```, check the extensive [CMake Installation Troubleshooting steps below](https://github.com/abgulati/LARS/tree/main?tab=readme-ov-file#troubleshooting-installation-issues)
@@ -1000,9 +1017,11 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 - This typically indicates an issue with your Microsoft Visual Studio build tools, as CMake is unable to find the nmake tool, which is part of the Microsoft Visual Studio build tools. Try the below steps to resolve the issue:
 
+0. Ensure you've followed [llama.cpp setup instructions](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#llamacpp) mentioned above, especially trying the `& ... -Arch amd64 -HostArch amd64` command in the Developer PowerShell. 
+
 1. Ensure Visual Studio Build Tools are Installed:
 
-    - Make sure you have the Visual Studio build tools installed, including nmake. You can install these tools through the Visual Studio Installer by selecting the ```Desktop development with C++``` workload, and the ```MSVC and C++ CMake``` Optionals  
+    - Make sure you have the Visual Studio build tools installed, including cmake. You can install these tools through the Visual Studio Installer by selecting the ```Desktop development with C++``` workload, and the ```MSVC and C++ CMake``` Optionals  
 
     - Check Step 0 of the [Dependencies](https://github.com/abgulati/LARS/tree/main?tab=readme-ov-file#dependencies) section, specifically the screenshot therein
 
@@ -1029,6 +1048,8 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     ```
 
 5. If problems persist, consider opening an issue on the [LARS GitHub repository](https://github.com/abgulati/LARS/issues) for support.
+
+6. On WSL, if installing `pip` packages fails with UNKNOWN, be sure to update PIP: `python3 -m pip install --upgrade pip`
 
 [Back to Table of Contents](https://github.com/abgulati/LARS-Enterprise?tab=readme-ov-file#table-of-contents)
 
@@ -1334,33 +1355,88 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
         - In this Ubuntu command-line that opens, perform the following steps:
 
+        - Install the prerequisites:
+            ```
+            sudo apt-get update && sudo apt-get install -y --no-install-recommends \
+            ca-certificates \
+            curl \
+            gnupg2
+            ```
+
         - Configure the production repository:
 
             ```
             curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
-            && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
-                sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-                sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+                && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+                    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+                    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
             ```
 
         - Update the packages list from the repository & Install the Nvidia Container Toolkit Packages: 
 
             ```
-            sudo apt-get update && apt-get install -y nvidia-container-toolkit
+            sudo apt-get update
             ```
 
-        - Configure the container runtime by using the nvidia-ctk command, which modifies the /etc/docker/daemon.json file so that Docker can use the Nvidia Container Runtime:
-
+        - Install the NVIDIA Container Toolkit packages:
             ```
-            sudo nvidia-ctk runtime configure --runtime=docker
-            ```
-
-        - Restart the Docker daemon: 
-
-            ```
-            sudo systemctl restart docker
+            export NVIDIA_CONTAINER_TOOLKIT_VERSION=1.19.0-1
+            sudo apt-get install -y \
+                nvidia-container-toolkit=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+                nvidia-container-toolkit-base=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+                libnvidia-container-tools=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+                libnvidia-container1=${NVIDIA_CONTAINER_TOOLKIT_VERSION}
             ```
 
+    - [Optional] Install CUDA (in WSL):
+
+        - Do NOT install NVIDIA Linux display drivers inside WSL. Since NVIDIA drivers are already working on the native Windows 11 host, they are automatically "mapped" into your WSL 2 environment through a process called GPU Paravirtualization.
+
+        - On the CUDA download page, select `Linux->x86_64->WSL->2.0->local runfile` which then provides the following instructions:
+            ```
+            wget https://developer.download.nvidia.com/compute/cuda/12.8.1/local_installers/cuda_12.8.1_570.124.06_linux.run
+            sudo sh cuda_12.8.1_570.124.06_linux.run
+            ```
+
+        - On running `sudo sh cuda_12.8.1_570.124.06_linux.run`, a text-based menu will appear in your terminal. Follow these steps:
+            1. Accept the EULA: Type accept when prompted.
+            2. Uncheck the "Driver" option: You will see a list of components with [X] next to them. Use the arrow keys and spacebar to uncheck the box for "Driver" so it looks like [ ].
+            3. Keep the Toolkit checked: Ensure "CUDA Toolkit 12.8" is still selected [X].
+            4. Select Install: Move the cursor to the "Install" button at the bottom and press Enter.
+
+        - The wsl cmd may blank out when trying to select `driver options`, and pressing enter after a while may show `Segmentation fault (core dumped)`
+
+        - That Segmentation fault is a common headache with the CUDA .run file in WSL. It usually happens because the installer's "ncurses" UI (the interactive menu) crashes when trying to render in the WSL terminal.
+
+        - Bypass this by running in silent mode:
+            ```
+            sudo sh cuda_12.8.1_570.124.06_linux.run --silent --toolkit --no-opengl-libs
+            ```
+
+        - Once it finishes (it might take a minute and won't show a progress bar), check if the directory exists:
+            ```
+            ls /usr/local/cuda-12.8
+            ```
+
+        - Now, add these new paths to `~/.bashrc` automatically so nvcc starts working:
+            ```
+            echo 'export PATH=/usr/local/cuda-12.8/bin${PATH:+:${PATH}}' >> ~/.bashrc
+            echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}' >> ~/.bashrc
+            ```
+        
+        - And restart to apply changes:
+            ```
+            source ~/.bashrc
+            ```
+
+        - Test:
+            ```
+            nvcc --version
+            ```
+            ```
+            nvidia-smi
+            ```
+    
     - Now your Ubuntu setup is complete, time to complete the WSL and Docker Integrations:
 
         - Open a new PowerShell window and set this Ubuntu installation as the WSL default:
