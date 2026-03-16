@@ -5323,8 +5323,6 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             '--batch-size', str(read_return["llama_cpp_batch_size"]),
             '--ubatch-size', str(read_return["llama_cpp_ubatch_size"]),
             '--n-predict', str(read_return["llama_cpp_max_new_tokens"]),
-            '--cache-type-k', str(read_return["llama_cpp_key_cache_data_type"]),
-            '--cache-type-v', str(read_return["llama_cpp_value_cache_data_type"]),
             '--parallel', str(read_return["llama_cpp_no_of_seqs_to_par_decode"]),
             '--jinja',
             '--host', read_return['llama_cpp_serving_url'],
@@ -5355,7 +5353,6 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
         else:
             llama_cpp_safe_launch_args.extend([
                 '--fit', 'off',
-                '--ctx-size', str(read_return["llama_cpp_context_length"]),
                 '--device', str(read_return["llama_cpp_offload_to_devices"]),
                 '--split-mode', str(read_return["llama_cpp_split_mode"])
             ])
