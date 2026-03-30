@@ -3,7 +3,7 @@
 
         "search": {
             "name": "Local & Web RAG Search",
-            "description": "RAG tool for local & web search. Performs best when given a detailed and comprehensive, yet focused search-optimized query encompassing all relevant information from the conversational context.  When detailed information is needed from a specific URL (other than internal 'http://llm-citations-database.net' addresses), use the 'fetch_url' tool with the URL to retrieve the full article content.",
+            "description": "Unified RAG tool for local (documents) & web (search engine) search. Performs best when given a detailed and comprehensive, yet focused search-optimized query encompassing all relevant information from the conversational context.  When detailed information is needed from a specific URL (other than internal 'http://llm-citations-database.net' addresses), use the 'fetch_url' tool with the URL to retrieve the full article content.",
             "fields": {
                 "query": {
                     "required": true,
