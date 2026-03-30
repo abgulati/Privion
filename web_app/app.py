@@ -4913,15 +4913,27 @@ def asr_server_starter(hard_reboot_required: bool = False):
     try:
         precheck_result = run_prechecks_for_asr_server_starter(hard_reboot_required)
     except Exception as e:
-        handle_error_no_return("Could not run prechecks for HF-Waitress server starter, proceeding with safe defaults for first launch. Encountered error: ", e)
+        handle_error_no_return(
+            "Could not run prechecks for HF-Waitress server starter, proceeding with safe defaults for first launch. Encountered error: ",
+            e
+        )
         precheck_result = {}
     
     if precheck_result.get('skip_fresh_start', False):
         return precheck_result
         
     try:
-        config_data = read_config(['asr_model', 'asr_waitress_server_port', 'voice_base_directory_name', 'asr_subdirectory_name', 'asr_torch_device', 'hf_waitress_server_retry_attempts', 'hf_waitress_server_timeout_seconds'])
+        config_data = read_config([
+            'asr_model',
+            'asr_waitress_server_port',
+            'voice_base_directory_name',
+            'asr_subdirectory_name',
+            'asr_torch_device',
+            'hf_waitress_server_retry_attempts',
+            'hf_waitress_server_timeout_seconds'
+        ])
         asr_base_url = get_url_for_server('asr-waitress')
+        
         hf_waitress_asr_server_path = pathlib.Path.cwd() / str(config_data['voice_base_directory_name']) / str(config_data['asr_subdirectory_name'])
         print(f"\nLaunching HF-Waitress instance for ASR at path: {hf_waitress_asr_server_path}\n")
     except Exception as e:
