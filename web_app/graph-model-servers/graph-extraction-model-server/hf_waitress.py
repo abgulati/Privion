@@ -1290,8 +1290,8 @@ def parse_arguments():
         parser.add_argument("--flux_low_vram_optimizations", action="store_true", default=read_return['flux_low_vram_optimizations'], help="Save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power")
         parser.add_argument("--load_quantized_flux", action="store_true", default=read_return['load_quantized_flux'], help="Add this flag when loading quantized FLUX models directly off the HF-Hub.")
         parser.add_argument("--vision", action="store_true", default=False, help="Add this flag when loading vision models directly off the HF-Hub.")
-        parser.add_argument("--tts", action="store_true", default=False, help="Add this flag when loading TTS models directly off the HF-Hub. Defaults to False.")
-        parser.add_argument("--asr", action="store_true", default=False, help="Add this flag when loading ASR models directly off the HF-Hub. Defaults to False.")
+        parser.add_argument("--tts", action="store_true", default=False, help="Internally managed flag. Defaults to False.")
+        parser.add_argument("--asr", action="store_true", default=False, help="Internally managed flag. Defaults to False.")
         parser.add_argument("--gguf_model_id", type=str, default=None, help="GGUF model_id of the target repo. Defaults to None")
         parser.add_argument("--gguf_filename", type=str, default=None, help="GGUF filename from the target repo. Defaults to None")
         parser.add_argument("--quantize", type=str, default=read_return['quantize'], help="Quantization method to be utilized. Simply type 'n' to not use quantization. Remembers previously set value. Default: bitsandbytes")
@@ -3719,7 +3719,7 @@ def get_final_asr_config(request) -> dict:
         'asr_min_context_s': float(request.headers.get('X-ASR-Min-Context-S', str(asr_config['asr_min_context_s']))),
         'asr_stale_buffer_timeout_s': float(request.headers.get('X-ASR-Stale-Buffer-Timeout-S', str(asr_config['asr_stale_buffer_timeout_s']))),
         'asr_min_meaningful_samples_factor': float(request.headers.get('X-ASR-Min-Meaningful-Samples-Factor', str(asr_config['asr_min_meaningful_samples_factor']))),
-        'asvad_threshold': float(request.headers.get('X-ASR-VAD-Threshold', str(asr_config['asr_vad_threshold']))),
+        'asr_vad_threshold': float(request.headers.get('X-ASR-VAD-Threshold', str(asr_config['asr_vad_threshold']))),
         'asr_vad_min_speech_ms': float(request.headers.get('X-ASR-VAD-Min-Speech-MS', str(asr_config['asr_vad_min_speech_ms']))),
         'asr_vad_min_silence_ms': float(request.headers.get('X-ASR-VAD-Min-Silence-MS', str(asr_config['asr_vad_min_silence_ms']))),
         'asr_vad_window_size_samples': float(request.headers.get('X-ASR-VAD-Window-Size-Samples', str(asr_config['asr_vad_window_size_samples']))),
@@ -5931,7 +5931,7 @@ def exl2_graph_extractor():
                 source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
                 extraction_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_extraction_cache.json")
                 update_and_save_json_file({chunk_number: chunk_data}, extraction_cache_file_path)
-                print(f"\nSaved identified nodes and relationships from chunk {chunk_number} of document {source_doc_name} to cache file at path {extraction_cache_file_path}\n")
+                print(f"\nSaved identified nodes and relationships to cache file at path {extraction_cache_file_path}\n")
         except Exception as e:
             handle_error_no_return(f"Could not cache identified nodes and relationships from document {source_doc_name} to cache file at path {extraction_cache_file_path}, skipping. Encountered error: ", e)
 
