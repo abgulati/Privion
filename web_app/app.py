@@ -7198,7 +7198,7 @@ def get_references():
         _, do_rag = rag_core_module.fetch_rag_context(stream_session_id, persist_in_db=False)
         messages_object = json.dumps(messages_object, indent=4)
 
-    if not do_rag:
+    if not do_rag and not 'http://llm-citations-database.net' in llm_response:
         print("\n\nRAG Citations unnecessary, storing chat history and returning\n\n")
         try:
             if not regeneration_request:
