@@ -21,6 +21,7 @@ try:
     from transformers import AutoModelForSpeechSeq2Seq
     import sounddevice as sd
     import numpy as np
+    import torchaudio
     import librosa
     import torch
     import queue
@@ -58,6 +59,11 @@ try:
     from qwen_tts import Qwen3TTSModel
 except Exception as e:
     print(f"qwen_tts or its dependencies are not installed. Skipping import. Encountered error: {e}")
+
+try:
+    from nemo_streaming_asr import NemoStreamingASRService
+except Exception as e:
+    print(f"Nemotron-Streaming ASR Offline - Missing Required Depenedencies")
 
 from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
@@ -539,6 +545,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'vision':False,
                     'tts':False,
                     'asr':False,
+                    'streaming_asr':False,
                     'asr_temperature':0.0,
                     'asr_max_new_tokens':1500,
                     'asr_samplerate':16000,
@@ -546,6 +553,8 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'asr_silence_duration_s':1.5,
                     'asr_min_chunk_duration_s':0.25,
                     'asr_min_context_s':11,
+                    'asr_streaming_min_context_secs':0.08,  # 80ms
+                    'asr_streaming_attn_context_size':'70,13', # {num_frames_left_context, num_frame_right_context}; [70, 0|1|6|13]; [70, 13]: Chunk size = 14 (14 × 80ms = 1.12s)
                     'asr_stale_buffer_timeout_s':20.0,
                     'asr_min_meaningful_samples_factor':0.5,
                     'asr_padding_text':' tony is quiet silent for too long I must not keep master waiting bad dooby must obey and transcribe dooby good servant will transcribe otherwise I will be severely punished',
@@ -1251,6 +1260,7 @@ def parse_arguments():
                 'vision',
                 'tts',
                 'asr',
+                'streaming_asr',
                 'gguf_model_id',
                 'gguf_filename',
                 'quantize',
@@ -1295,8 +1305,9 @@ def parse_arguments():
         parser.add_argument("--flux_low_vram_optimizations", action="store_true", default=read_return['flux_low_vram_optimizations'], help="Save some VRAM by offloading the model to CPU. Remove this if you have enough GPU power")
         parser.add_argument("--load_quantized_flux", action="store_true", default=read_return['load_quantized_flux'], help="Add this flag when loading quantized FLUX models directly off the HF-Hub.")
         parser.add_argument("--vision", action="store_true", default=False, help="Add this flag when loading vision models directly off the HF-Hub.")
-        parser.add_argument("--tts", action="store_true", default=False, help="Add this flag when loading TTS models directly off the HF-Hub. Defaults to False.")
-        parser.add_argument("--asr", action="store_true", default=False, help="Add this flag when loading ASR models directly off the HF-Hub. Defaults to False.")
+        parser.add_argument("--tts", action="store_true", default=False, help="Internally managed flag. Defaults to False.")
+        parser.add_argument("--asr", action="store_true", default=False, help="Internally managed flag. Defaults to False.")
+        parser.add_argument("--streaming_asr", action="store_true", default=False, help="Internally managed flag. Defaults to False.")
         parser.add_argument("--gguf_model_id", type=str, default=None, help="GGUF model_id of the target repo. Defaults to None")
         parser.add_argument("--gguf_filename", type=str, default=None, help="GGUF filename from the target repo. Defaults to None")
         parser.add_argument("--quantize", type=str, default=read_return['quantize'], help="Quantization method to be utilized. Simply type 'n' to not use quantization. Remembers previously set value. Default: bitsandbytes")
@@ -1391,6 +1402,7 @@ def parse_arguments():
                     'vision',
                     'tts',
                     'asr',
+                    'streaming_asr',
                     'gguf_model_id',
                     'gguf_filename',
                     'quantize',
@@ -1455,7 +1467,12 @@ def parse_arguments():
                     "nvidia/parakeet-tdt-0.6b",
                     "nvidia/canary-qwen-2.5b",
                     "nvidia/canary-1b-v2",
-                    "ibm-granite/granite-speech-3.3"
+                    "ibm-granite/granite-speech-3.3",
+                    "nvidia/nemotron-speech-streaming-en-0.6b"
+                ]
+
+                streaming_asr_model_list = [
+                    "nvidia/nemotron-speech-streaming-en-0.6b"
                 ]
 
                 if any(model in args.model_id.lower() for model in asr_model_list):
@@ -1467,7 +1484,9 @@ def parse_arguments():
                     args.exl2 = False
                     args.exl3 = False
                     args.gguf = False
-                    args.awq = False
+                    args.awq = False      
+                    if any(model in args.model_id.lower() for model in streaming_asr_model_list):
+                        args.streaming_asr = True
 
                 elif ("tts" in args.model_id.lower()):
                     print("TTS model auto-detected, setting tts=True")
@@ -1506,6 +1525,7 @@ def parse_arguments():
                     'exl3_use_per_device':args.exl3_use_per_device,
                     'exl3_max_chunk_size':args.exl3_max_chunk_size,
                     'asr':args.asr,
+                    'streaming_asr':args.streaming_asr,
                     'tts':args.tts,
                     'gguf':args.gguf,
                     'awq':args.awq,
@@ -1914,6 +1934,38 @@ def load_ibm_granite_speech_3_3_asr_pipeline(model_id: str, torch_device: str):
     return True
 
 
+def load_nv_nemotron_streaming_asr_pipeline(model_id: str, torch_device: str, attn_context_size: list[int] | str):
+    print(f"\n\n{model_id} Streaming ASR Model Selected - Loading...\n\n")
+    global MODEL
+
+    try:
+        if not isinstance(attn_context_size, list):
+            attn_context_size_list = [int(val) for val in attn_context_size.split(',')]
+        else:
+            attn_context_size_list = attn_context_size
+        if len(attn_context_size_list) != 2:
+            raise ValueError(f"Invalid attn_context_size for streaming nemotron: {attn_context_size_list}")
+    except Exception as e:
+        handle_local_error(
+            "Could not parse attn_context_size for streaming nemotron, setting to default [70, 13]. Encountered error: ",
+            e
+        )
+        attn_context_size_list = [70, 13]
+
+    try:
+        MODEL = NemoStreamingASRService(
+            model=model_id,
+            att_context_size=attn_context_size_list,
+            device=torch_device,
+        )
+    except Exception as e:
+        handle_model_loading_error("Could not load NVIDIA Nemotron Streaming ASR Model, encountered error: ", e)
+        return False
+
+    print(f"\n{model_id} Streaming ASR Model Loaded Successfully!\n")
+    return True
+
+
 def load_vad_pipeline():
     global SILERO_VAD, SILERO_UTILS
 
@@ -1936,7 +1988,7 @@ def load_asr_pipeline():
     print("\n\nASR Model Selected - Loading...\n\n")
 
     try:
-        read_return = read_config(['model_id', 'torch_device_map'])
+        read_return = read_config(['model_id', 'torch_device_map', 'streaming_asr', 'asr_streaming_attn_context_size'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to load asr-pipeline, encountered error: ", e)
 
@@ -1956,6 +2008,13 @@ def load_asr_pipeline():
         elif ("ibm-granite/granite-speech-3.3" in read_return['model_id']):
             load_ibm_granite_speech_3_3_asr_pipeline(read_return['model_id'], read_return['torch_device_map'])
 
+        elif ("nvidia/nemotron-speech-streaming-en-0.6b" in read_return['model_id']):
+            load_nv_nemotron_streaming_asr_pipeline(
+                model_id=read_return['model_id'],
+                torch_device=read_return['torch_device_map'],
+                attn_context_size=read_return['asr_streaming_attn_context_size']
+            )
+
         else:
             raise ValueError(f"Invalid ASR model ID: {read_return['model_id']}")
 
@@ -1963,7 +2022,8 @@ def load_asr_pipeline():
         handle_local_error("Could not load ASR pipeline, encountered error: ", e)
 
     try:
-        load_vad_pipeline()
+        if not read_return['streaming_asr']:
+            load_vad_pipeline()
     except Exception as e:
         handle_local_error("Could not load VAD pipeline, encountered error: ", e)
 
@@ -3603,6 +3663,10 @@ def transcribe_with_ibm_granite_speech_3_3(audio_data: np.ndarray, asr_config: d
         return ""
 
 
+def transcribe_with_nv_nemotron_streaming_asr(audio_data: np.ndarray, asr_config: dict) -> str:
+    pass
+
+
 def transcribe_audio_data_with_asr_model(audio_data: np.ndarray, asr_config: dict) -> dict:
     try:
         if ("openai/whisper" in asr_config['model_id']) and ("v3" in asr_config['model_id']):
@@ -3619,6 +3683,9 @@ def transcribe_audio_data_with_asr_model(audio_data: np.ndarray, asr_config: dic
 
         elif ("ibm-granite/granite-speech-3.3" in asr_config['model_id']):
             return transcribe_with_ibm_granite_speech_3_3(audio_data, asr_config)
+
+        elif ("nvidia/nemotron-speech-streaming-en-0.6b" in asr_config['model_id']):
+            return transcribe_with_nv_nemotron_streaming_asr(audio_data, asr_config)
 
         else:
             raise ValueError(f"Invalid ASR model ID: {asr_config['model_id']}")
@@ -3708,6 +3775,7 @@ def read_asr_config() -> dict:
             [
                 'model_id',
                 'torch_device_map',
+                'streaming_asr',
                 'asr_samplerate',
                 'asr_temperature',
                 'asr_max_new_tokens',
@@ -3715,6 +3783,7 @@ def read_asr_config() -> dict:
                 'asr_silence_duration_s',
                 'asr_min_chunk_duration_s',
                 'asr_min_context_s',
+                'asr_streaming_min_context_secs',
                 'asr_stale_buffer_timeout_s',
                 'asr_min_meaningful_samples_factor',
                 'asr_padding_text',
@@ -3749,7 +3818,7 @@ def get_final_asr_config(request) -> dict:
         'asr_min_context_s': float(request.headers.get('X-ASR-Min-Context-S', str(asr_config['asr_min_context_s']))),
         'asr_stale_buffer_timeout_s': float(request.headers.get('X-ASR-Stale-Buffer-Timeout-S', str(asr_config['asr_stale_buffer_timeout_s']))),
         'asr_min_meaningful_samples_factor': float(request.headers.get('X-ASR-Min-Meaningful-Samples-Factor', str(asr_config['asr_min_meaningful_samples_factor']))),
-        'asvad_threshold': float(request.headers.get('X-ASR-VAD-Threshold', str(asr_config['asr_vad_threshold']))),
+        'asr_vad_threshold': float(request.headers.get('X-ASR-VAD-Threshold', str(asr_config['asr_vad_threshold']))),
         'asr_vad_min_speech_ms': float(request.headers.get('X-ASR-VAD-Min-Speech-MS', str(asr_config['asr_vad_min_speech_ms']))),
         'asr_vad_min_silence_ms': float(request.headers.get('X-ASR-VAD-Min-Silence-MS', str(asr_config['asr_vad_min_silence_ms']))),
         'asr_vad_window_size_samples': float(request.headers.get('X-ASR-VAD-Window-Size-Samples', str(asr_config['asr_vad_window_size_samples']))),
@@ -3831,13 +3900,18 @@ class ASRWebSocket(WebSocketEndpoint):
             if bkey in qp: self.asr_cfg[bkey] = qp[bkey].lower() == 'true'
 
         self.asr_cfg['source_samplerate'] = int(qp.get('source_samplerate', 48000))
+        self.resampler = torchaudio.transforms.Resample(
+            orig_freq=self.asr_cfg['source_samplerate'],
+            new_freq=self.asr_cfg['asr_samplerate']
+        ).to(self.asr_cfg['torch_device_map'])
 
         # print all final config values
         print(f"Final ASR config: {self.asr_cfg}")
 
         # 3) With config loaded, init core data structures and utils:
-        (self.get_speech_timestamps, _, _, _, _) = SILERO_UTILS     # Classes, just like methods, can access global/module scoped variables
-        self.silero_vad = SILERO_VAD
+        if not self.asr_cfg['streaming_asr']:
+            (self.get_speech_timestamps, _, _, _, _) = SILERO_UTILS     # Classes, just like methods, can access global/module scoped variables
+            self.silero_vad = SILERO_VAD
         self.padding_audio = generate_padding_audio(self.asr_cfg['asr_padding_text'], sr=self.asr_cfg['asr_samplerate'])
         self.pad_rms = np.sqrt(np.mean(self.padding_audio**2) + 1e-12)
         self.audio_buffer = np.array([], dtype=np.float32)
@@ -3858,15 +3932,35 @@ class ASRWebSocket(WebSocketEndpoint):
     async def on_receive(self, websocket, data):
 
         # Binary PCM16 frame -> float32 [-1,1]
-        chunk = np.frombuffer(data, dtype=np.int16).astype(np.float32)
-        chunk = np.clip(chunk / 32768.0, -1.0, 1.0)
+        chunk_float32 = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
 
         # Resample to 16k if needed
         if self.asr_cfg['source_samplerate'] != self.asr_cfg['asr_samplerate']:
-            chunk = librosa.resample(chunk, orig_sr=self.asr_cfg['source_samplerate'], target_sr=self.asr_cfg['asr_samplerate'])
+            chunk_tensor = torch.from_numpy(chunk_float32).to(self.asr_cfg['torch_device_map'])
+            chunk_16k_gpu = self.resampler(chunk_tensor)    # GPU torch.Tensor
+            chunk_float32 = chunk_16k_gpu.cpu().numpy()  # CPU numpy array
+
+        if self.asr_cfg['streaming_asr']:
+
+            try:
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(None, MODEL.transcribe_float32, chunk_float32)
+
+                if result.text.strip():
+                    await websocket.send_text(json.dumps({
+                        "type": "transcript",
+                        "text": result.text
+                    }))
+
+            except Exception as e:
+                print(f"Streaming ASR error: {e}")
+            
+            return
+
+        # ==================== BATCH/VAD PATH (also uses 16kHz) ====================
 
         # Accumulate
-        self.audio_buffer = np.concatenate((self.audio_buffer, chunk))
+        self.audio_buffer = np.concatenate((self.audio_buffer, chunk_float32))
 
         # VAD when we have enough audio (~0.5s)
         if len(self.audio_buffer) >= self.asr_cfg['asr_min_meaningful_samples_factor'] * self.asr_cfg['asr_samplerate']:
@@ -6185,7 +6279,7 @@ def exl2_graph_extractor():
                 source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
                 extraction_cache_file_path = os.path.join(knowledge_graph_cache_dir, f"{source_doc_name}_extraction_cache.json")
                 update_and_save_json_file({chunk_number: chunk_data}, extraction_cache_file_path)
-                print(f"\nSaved identified nodes and relationships from chunk {chunk_number} of document {source_doc_name} to cache file at path {extraction_cache_file_path}\n")
+                print(f"\nSaved identified nodes and relationships to cache file at path {extraction_cache_file_path}\n")
         except Exception as e:
             handle_error_no_return(f"Could not cache identified nodes and relationships from document {source_doc_name} to cache file at path {extraction_cache_file_path}, skipping. Encountered error: ", e)
 
@@ -6559,7 +6653,8 @@ def health():
         pipe_ready = PIPE is not None
         exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, EXL2_GENERATOR, AUTO_TOKENIZER])
         exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, EXL3_GENERATOR, STOP_TOKENS, AUTO_TOKENIZER])
-        asr_ready = all([MODEL, SILERO_VAD, SILERO_UTILS]) # MODEL & VAD components are the common denominator for all ASR backends
+        # asr_ready = all([MODEL, SILERO_VAD, SILERO_UTILS]) # MODEL & VAD components are the common denominator for all ASR backends
+        asr_ready = MODEL is not None
         tts_ready = MODEL is not None
         
         print(f"\n\nhealth readiness → pipe={pipe_ready}, exl2={exl2_ready}, exl3={exl3_ready}, asr={asr_ready}, tts={tts_ready}\n\n")
