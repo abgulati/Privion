@@ -1671,6 +1671,7 @@ function loadAsrPipeline() {
     .then(data => {
         if (!data.success) throw new Error('ASR Start Failed - Internal Server Error: Check server-log and server command-line for more details.');
         setAsr(true);
+        setAsrModel(data.asr_model);
         if (data.reboot_failed) { alert("The ASR server is online but the updated settings were not applied. Check application and browser logs for more details."); }
         return true;
     })

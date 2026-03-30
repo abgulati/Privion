@@ -7,7 +7,7 @@ let processorNode = null; // fallback only - the ScriptProcessorNode is deprecat
 let workletNode = null;   // preferred path - the AudioWorkletNode is the preferred path for audio processing
 let recording = false; // holds the boolean value that indicates whether the recording is active or not
 let chunks = []; // holds the array of Float32Array objects that represent the audio chunks
-let inputSampleRate = 48000; // default; will update from AudioContext
+let inputSampleRate = 48000; // safe default - will update from AudioContext
 
 let ws = null;   // WebSocket object that holds the connection to the ASGI server
 let streamBuffer = [];  // Array of Float32Array objects that represent the audio chunks awaiting framing
@@ -16,6 +16,8 @@ let streamSampleRate = 48000; // Sample rate of the audio stream
 let streaming = false; // Boolean value that indicates whether the streaming is active or not
 let reconnectAttempts = 0; // Number of times to attempt to reconnect to the ASGI server
 const MAX_RECONNECT_ATTEMPTS = 9; // Maximum number of times to attempt to reconnect to the ASGI server
+
+let streamingAsr = false;
 
 
 function float32ToPCM16(float32) {
@@ -331,9 +333,9 @@ function connectAsrWebSocket() {
 
     ws.onopen = () => {
         console.log('WebSocket opened successfully!');
-        // Prepare 20ms frames at source SR
+        // Prepare 80ms frames at source SR (was previously 20ms for unknown reasons - this is why it's important to document design decisions!)
         streamSampleRate = inputSampleRate || 48000;
-        streamBytesPerFrame = Math.round(0.02 * streamSampleRate); // 20ms
+        streamBytesPerFrame = Math.round(0.08 * streamSampleRate); // 80ms, as per spec - https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b#setting-up-streaming-configuration
 
         const btnEl = document.getElementById('recordBtn');
         if (btnEl) {
@@ -346,15 +348,18 @@ function connectAsrWebSocket() {
     ws.onmessage = (evt) => {
         try {
             const msg = JSON.parse(typeof evt.data === 'string' ? evt.data : '');
-            if (msg.type === 'transcript' && msg.text) {
+            if (msg.type === 'transcript' && msg.text && !streamingAsr) {
                 determineLlmUse(msg.text);
+            } else if (msg.type === 'transcript' && msg.text && streamingAsr) {
+                document.getElementById('user-input').value += msg.text;
+                autoAdjustHeight();
             }
         } catch {}
     };
 
     ws.onerror = (err) => { 
         console.error('WebSocket error:', err);
-     };
+    };
 
     ws.onclose = (event) => { 
         console.log(`Websocket closed. Code: ${event.code}, Reason: ${event.reason}`);
@@ -378,7 +383,7 @@ function connectAsrWebSocket() {
 async function startStreamingASR() {
     if (streaming) return;
     streaming = true;
-    await startRecording(); // Start mic capture (reusing your existing start-Recording graph)
+    await startRecording(); // Start mic capture (reusing existing start-Recording graph)
     connectAsrWebSocket(); // Connect to the ASGI server
 
     // Hook worklet delivery into the streaming buffer
@@ -499,6 +504,12 @@ async function toggleStreaming(btnEl) {
         alert('Speech Transcription is unavailable as ASR is not enabled. Please enable ASR in the settings!');
         return;
     }
+
+    const asrModel = getAsrModel();
+    const streamingAsrModelList = [
+        "nvidia/nemotron-speech-streaming-en-0.6b"
+    ]
+    streamingAsr = streamingAsrModelList.includes(asrModel);
     
     if (!streaming) {
         btnEl.classList.add('connecting');

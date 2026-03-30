@@ -492,6 +492,8 @@ function requestASRWaitressHardReboot() {
         if (!data.success) {
             throw new Error('Failed to Hard-Reboot Speech Transcription Server. Check server-log and server command-line for more details.');
         }
+        setAsr(true);
+        setAsrModel(data.asr_model);
         appendStreamInfo("Speech Transcription Server Hard-Rebooted Successfully.", 'success');
         return true; // asr_check = true to check ASR-Waitress server status
     }).catch(error => {

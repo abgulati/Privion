@@ -54,6 +54,10 @@ function setAsr(asr) {
     document.getElementById('chatState').setAttribute('data-asr', asr);
 }
 
+function setAsrModel(asr_model) {
+    document.getElementById('chatState').setAttribute('data-asr-model', asr_model);
+}
+
 function setTts(tts) {
     document.getElementById('chatState').setAttribute('data-tts', tts);
 }
@@ -80,6 +84,10 @@ function getTts() {
 
 function getAsr() {
     return document.getElementById('chatState').getAttribute('data-asr');
+}
+
+function getAsrModel() {
+    return document.getElementById('chatState').getAttribute('data-asr-model');
 }
 
 function getVision() {
