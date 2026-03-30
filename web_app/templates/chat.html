@@ -273,26 +273,34 @@
                                         <br>
 
                                         <div id="hf_waitress_div" style="display: none;">
-
-                                            <div class="hf-waitress-llm-custom-select llm-settings-standard-styling" id="hf-waitress-llm-custom-select">
-                                                <label style="margin-bottom: 3px;">Select a local LLM:</label>
+                                            
+                                            <!-- Generic template - just change the data-type and label -->
+                                            <div class="custom-dropdown"
+                                                 data-type="llm"
+                                                 data-config-source="hf"
+                                                 data-list-key="model_list"
+                                                 data-selected-key="model_id"
+                                                 data-disabled="false">
+                                                <label>Select a local LLM:</label>
                                                 <br>
-                                                <div class="hf-waitress-llm-custom-select-header" id="hf-waitress-llm-custom-select-header">
-                                                    <span class="hf-waitress-llm-custom-dropdown-selected-value" id="hf-waitress-llm-custom-dropdown-selected-value">Select an item</span>
-                                                    <span class="hf-waitress-llm-custom-dropdown-arrow" id="hf-waitress-llm-custom-dropdown-arrow">▼</span>
+                                                <div class="custom-dropdown-header">
+                                                    <span class="custom-dropdown-selected">Select an item</span>
+                                                    <span class="custom-dropdown-arrow">▼</span>
                                                 </div>
-                                                <div class="hf-waitress-llm-custom-dropdown-content" id="hf-waitress-llm-custom-dropdown-content">
-                                                    <div class="hf-waitress-llm-custom-dropdown-search-and-sort-header">
-                                                        <button class="hf-waitress-llm-custom-dropdown-sort-btn" id="hf-waitress-llm-custom-dropdown-sort-btn" onclick="reverseSortCustomDropdown()">Sort</button>
-                                                        <input type="text" class="hf-waitress-llm-custom-dropdown-search-input" id="hf-waitress-llm-custom-dropdown-search-input" placeholder="Search...">
+                                                <div class="custom-dropdown-content">
+                                                    <div class="custom-dropdown-controls">
+                                                        <button class="custom-dropdown-sort-btn">Sort</button>
+                                                        <input type="text" class="custom-dropdown-search" placeholder="Search...">
                                                     </div>
-                                                    <div class="hf-waitress-llm-custom-dropdown-add-item-container">
-                                                        <button class="hf-waitress-llm-custom-dropdown-add-btn" id="hf-waitress-llm-custom-dropdown-add-btn">+ Add</button>
-                                                        <input type="text" class="hf-waitress-llm-custom-dropdown-add-input" id="hf-waitress-llm-custom-dropdown-add-input" style="display: none;" placeholder="Enter new model id...">
+                                                    <div class="custom-dropdown-add-container">
+                                                        <button class="custom-dropdown-add-btn">+ Add</button>
+                                                        <input type="text" class="custom-dropdown-add-input" style="display: none;" placeholder="Enter new model id...">
                                                     </div>
-                                                    <div class="hf-waitress-llm-custom-dropdown-items-list" id="hf-waitress-llm-custom-dropdown-items-list"></div>
+                                                    <div class="custom-dropdown-items-list"></div>
                                                 </div>
                                             </div>
+
+                                            <br>
 
                                             <div id="hf_waitress_exl2" class="llm-settings-standard-styling">
                                                 <label class="hf-select-settings-labels-group">Exl2 Backend (--exl2):</label>
@@ -1162,23 +1170,29 @@
 
                                     <br>
 
-                                    <div class="hf-waitress-kb-custom-select" id="hf-waitress-kb-custom-select">
-                                        <label style="margin-bottom: 3px;">Select a Knowledge Domain:</label>
+                                    <!-- Generic template - just change the data-type and label -->
+                                    <div class="custom-dropdown"
+                                         data-type="kb"
+                                         data-config-source="lars"
+                                         data-list-key="knowledge_domain_list"
+                                         data-selected-key="selected_knowledge_domain"
+                                         data-disabled="false">
+                                        <label>Select a Knowledge Domain:</label>
                                         <br>
-                                        <div class="hf-waitress-kb-custom-select-header" id="hf-waitress-kb-custom-select-header">
-                                            <span class="hf-waitress-kb-custom-dropdown-selected-value" id="hf-waitress-kb-custom-dropdown-selected-value">Select an item</span>
-                                            <span class="hf-waitress-kb-custom-dropdown-arrow" id="hf-waitress-kb-custom-dropdown-arrow">▼</span>
+                                        <div class="custom-dropdown-header">
+                                            <span class="custom-dropdown-selected">Select an item</span>
+                                            <span class="custom-dropdown-arrow">▼</span>
                                         </div>
-                                        <div class="hf-waitress-kb-custom-dropdown-content" id="hf-waitress-kb-custom-dropdown-content">
-                                            <div class="hf-waitress-kb-custom-dropdown-search-and-sort-header">
-                                                <button class="hf-waitress-kb-custom-dropdown-sort-btn" id="hf-waitress-kb-custom-dropdown-sort-btn" onclick="reverseSortCustomKbDropdown()">Sort</button>
-                                                <input type="text" class="hf-waitress-kb-custom-dropdown-search-input" id="hf-waitress-kb-custom-dropdown-search-input" placeholder="Search...">
+                                        <div class="custom-dropdown-content">
+                                            <div class="custom-dropdown-controls">
+                                                <button class="custom-dropdown-sort-btn">Sort</button>
+                                                <input type="text" class="custom-dropdown-search" placeholder="Search...">
                                             </div>
-                                            <div class="hf-waitress-kb-custom-dropdown-add-item-container">
-                                                <button class="hf-waitress-kb-custom-dropdown-add-btn" id="hf-waitress-kb-custom-dropdown-add-btn">+ Add</button>
-                                                <input type="text" class="hf-waitress-kb-custom-dropdown-add-input" id="hf-waitress-kb-custom-dropdown-add-input" style="display: none;" placeholder="Enter a name for a new knowledge base...">
+                                            <div class="custom-dropdown-add-container">
+                                                <button class="custom-dropdown-add-btn">+ Add</button>
+                                                <input type="text" class="custom-dropdown-add-input" style="display: none;" placeholder="Enter a name for a new knowledge base...">
                                             </div>
-                                            <div class="hf-waitress-kb-custom-dropdown-items-list" id="hf-waitress-kb-custom-dropdown-items-list"></div>
+                                            <div class="custom-dropdown-items-list"></div>
                                         </div>
                                     </div>
 
@@ -1227,26 +1241,30 @@
 
                                     <div class="collapse" id="advancedEmbedSettings">
                                         <div class="card card-body" style="background-color: #181A1B; border: none;">
-                                            
-                                            <!-- Add options here | TODO: style "Advanced Settings" button! -->
 
-                                            <div class="hf-waitress-embed-custom-select" id="hf-waitress-embed-custom-select">
-                                                <label style="margin-bottom: 3px;">Select an Embedding Model:</label>
+                                            <!-- Generic template - just change the data-type and label -->
+                                            <div class="custom-dropdown"
+                                                 data-type="embed"
+                                                 data-config-source="lars"
+                                                 data-list-key="embedding_models_list"
+                                                 data-selected-key="selected_embedding_model"
+                                                 data-disabled="false">
+                                                <label>Select an Embedding Model:</label>
                                                 <br>
-                                                <div class="hf-waitress-embed-custom-select-header" id="hf-waitress-embed-custom-select-header">
-                                                    <span class="hf-waitress-embed-custom-dropdown-selected-value" id="hf-waitress-embed-custom-dropdown-selected-value">Select an item</span>
-                                                    <span class="hf-waitress-embed-custom-dropdown-arrow" id="hf-waitress-embed-custom-dropdown-arrow">▼</span>
+                                                <div class="custom-dropdown-header">
+                                                    <span class="custom-dropdown-selected">Select an item</span>
+                                                    <span class="custom-dropdown-arrow">▼</span>
                                                 </div>
-                                                <div class="hf-waitress-embed-custom-dropdown-content" id="hf-waitress-embed-custom-dropdown-content">
-                                                    <div class="hf-waitress-embed-custom-dropdown-search-and-sort-header">
-                                                        <button class="hf-waitress-embed-custom-dropdown-sort-btn" id="hf-waitress-embed-custom-dropdown-sort-btn" onclick="reverseSortCustomEmbedDropdown()">Sort</button>
-                                                        <input type="text" class="hf-waitress-embed-custom-dropdown-search-input" id="hf-waitress-embed-custom-dropdown-search-input" placeholder="Search...">
+                                                <div class="custom-dropdown-content">
+                                                    <div class="custom-dropdown-controls">
+                                                        <button class="custom-dropdown-sort-btn">Sort</button>
+                                                        <input type="text" class="custom-dropdown-search" placeholder="Search...">
                                                     </div>
-                                                    <div class="hf-waitress-embed-custom-dropdown-add-item-container">
-                                                        <button class="hf-waitress-embed-custom-dropdown-add-btn" id="hf-waitress-embed-custom-dropdown-add-btn">+ Add</button>
-                                                        <input type="text" class="hf-waitress-embed-custom-dropdown-add-input" id="hf-waitress-embed-custom-dropdown-add-input" style="display: none;" placeholder="Select an embedding model...">
+                                                    <div class="custom-dropdown-add-container">
+                                                        <button class="custom-dropdown-add-btn">+ Add</button>
+                                                        <input type="text" class="custom-dropdown-add-input" style="display: none;" placeholder="Select an embedding model...">
                                                     </div>
-                                                    <div class="hf-waitress-embed-custom-dropdown-items-list" id="hf-waitress-embed-custom-dropdown-items-list"></div>
+                                                    <div class="custom-dropdown-items-list"></div>
                                                 </div>
                                             </div>
 
@@ -1266,23 +1284,29 @@
 
                                             <br>
 
-                                            <div class="hf-waitress-reranker-custom-select" id="hf-waitress-reranker-custom-select">
-                                                <label style="margin-bottom: 3px;">Select a Reranker Model:</label>
+                                            <!-- Generic template - just change the data-type and label -->
+                                            <div class="custom-dropdown"
+                                                 data-type="reranker"
+                                                 data-config-source="lars"
+                                                 data-list-key="reranker_models_list"
+                                                 data-selected-key="selected_reranker_model"
+                                                 data-disabled="false">
+                                                <label>Select a Reranker Model:</label>
                                                 <br>
-                                                <div class="hf-waitress-reranker-custom-select-header" id="hf-waitress-reranker-custom-select-header">
-                                                    <span class="hf-waitress-reranker-custom-dropdown-selected-value" id="hf-waitress-reranker-custom-dropdown-selected-value">Select an item</span>
-                                                    <span class="hf-waitress-reranker-custom-dropdown-arrow" id="hf-waitress-reranker-custom-dropdown-arrow">▼</span>
+                                                <div class="custom-dropdown-header">
+                                                    <span class="custom-dropdown-selected">Select an item</span>
+                                                    <span class="custom-dropdown-arrow">▼</span>
                                                 </div>
-                                                <div class="hf-waitress-reranker-custom-dropdown-content" id="hf-waitress-reranker-custom-dropdown-content">
-                                                    <div class="hf-waitress-reranker-custom-dropdown-search-and-sort-header">
-                                                        <button class="hf-waitress-reranker-custom-dropdown-sort-btn" id="hf-waitress-reranker-custom-dropdown-sort-btn" onclick="reverseSortCustomRerankerDropdown()">Sort</button>
-                                                        <input type="text" class="hf-waitress-reranker-custom-dropdown-search-input" id="hf-waitress-reranker-custom-dropdown-search-input" placeholder="Search...">
+                                                <div class="custom-dropdown-content">
+                                                    <div class="custom-dropdown-controls">
+                                                        <button class="custom-dropdown-sort-btn">Sort</button>
+                                                        <input type="text" class="custom-dropdown-search" placeholder="Search...">
                                                     </div>
-                                                    <div class="hf-waitress-reranker-custom-dropdown-add-item-container">
-                                                        <button class="hf-waitress-reranker-custom-dropdown-add-btn" id="hf-waitress-reranker-custom-dropdown-add-btn">+ Add</button>
-                                                        <input type="text" class="hf-waitress-reranker-custom-dropdown-add-input" id="hf-waitress-reranker-custom-dropdown-add-input" style="display: none;" placeholder="Select a reranker model...">
+                                                    <div class="custom-dropdown-add-container">
+                                                        <button class="custom-dropdown-add-btn">+ Add</button>
+                                                        <input type="text" class="custom-dropdown-add-input" style="display: none;" placeholder="Select a reranker model...">
                                                     </div>
-                                                    <div class="hf-waitress-reranker-custom-dropdown-items-list" id="hf-waitress-reranker-custom-dropdown-items-list"></div>
+                                                    <div class="custom-dropdown-items-list"></div>
                                                 </div>
                                             </div>
 
@@ -1394,23 +1418,29 @@
 
                                     <br>
 
-                                    <div class="graph-extractor-custom-select" id="graph-extractor-custom-select">
-                                        <label style="margin-bottom: 3px;">Select a Graph Extractor Model:</label>
+                                    <!-- Generic template - just change the data-type and label -->
+                                    <div class="custom-dropdown"
+                                         data-type="extractor"
+                                         data-config-source="lars"
+                                         data-list-key="graph_generator_model_list"
+                                         data-selected-key="graph_generator_model"
+                                         data-disabled="true">  <!-- CHANGE IN THE FUTURE IF MAKING THIS USER-SELECTABLE! -->
+                                        <label>Select a Graph Extractor Model:</label>
                                         <br>
-                                        <div class="graph-extractor-custom-select-header" id="graph-extractor-custom-select-header" style="cursor: not-allowed; background-color: darkgray;">
-                                            <span class="graph-extractor-custom-dropdown-selected-value" id="graph-extractor-custom-dropdown-selected-value">Select an item</span>
-                                            <span class="graph-extractor-custom-dropdown-arrow" id="graph-extractor-custom-dropdown-arrow">▼</span>
+                                        <div class="custom-dropdown-header">
+                                            <span class="custom-dropdown-selected">Select an item</span>
+                                            <span class="custom-dropdown-arrow">▼</span>
                                         </div>
-                                        <div class="graph-extractor-custom-dropdown-content" id="graph-extractor-custom-dropdown-content">
-                                            <div class="graph-extractor-custom-dropdown-search-and-sort-header">
-                                                <button class="graph-extractor-custom-dropdown-sort-btn" id="graph-extractor-custom-dropdown-sort-btn" onclick="reverseSortCustomGraphExtractorDropdown()">Sort</button>
-                                                <input type="text" class="graph-extractor-custom-dropdown-search-input" id="graph-extractor-custom-dropdown-search-input" placeholder="Search...">
+                                        <div class="custom-dropdown-content">
+                                            <div class="custom-dropdown-controls">
+                                                <button class="custom-dropdown-sort-btn">Sort</button>
+                                                <input type="text" class="custom-dropdown-search" placeholder="Search...">
                                             </div>
-                                            <div class="graph-extractor-custom-dropdown-add-item-container">
-                                                <button class="graph-extractor-custom-dropdown-add-btn" id="graph-extractor-custom-dropdown-add-btn">+ Add</button>
-                                                <input type="text" class="graph-extractor-custom-dropdown-add-input" id="graph-extractor-custom-dropdown-add-input" style="display: none;" placeholder="Select a graph extractor model...">
+                                            <div class="custom-dropdown-add-container">
+                                                <button class="custom-dropdown-add-btn">+ Add</button>
+                                                <input type="text" class="custom-dropdown-add-input" style="display: none;" placeholder="Select a graph extractor model...">
                                             </div>
-                                            <div class="graph-extractor-custom-dropdown-items-list" id="graph-extractor-custom-dropdown-items-list"></div>
+                                            <div class="custom-dropdown-items-list"></div>
                                         </div>
                                     </div>
 
@@ -1528,23 +1558,29 @@
 
                                     <br>
 
-                                    <div class="graph-summarizer-custom-select" id="graph-summarizer-custom-select">
-                                        <label style="margin-bottom: 3px;">Select a Graph Summarizer Model:</label>
+                                    <!-- Generic template - just change the data-type and label -->
+                                    <div class="custom-dropdown"
+                                         data-type="summarizer"
+                                         data-config-source="lars"
+                                         data-list-key="graph_summarizer_model_list"
+                                         data-selected-key="graph_summarizer_model"
+                                         data-disabled="false">
+                                        <label>Select a Graph Summarizer Model:</label>
                                         <br>
-                                        <div class="graph-summarizer-custom-select-header" id="graph-summarizer-custom-select-header">
-                                            <span class="graph-summarizer-custom-dropdown-selected-value" id="graph-summarizer-custom-dropdown-selected-value">Select an item</span>
-                                            <span class="graph-summarizer-custom-dropdown-arrow" id="graph-summarizer-custom-dropdown-arrow">▼</span>
+                                        <div class="custom-dropdown-header">
+                                            <span class="custom-dropdown-selected">Select an item</span>
+                                            <span class="custom-dropdown-arrow">▼</span>
                                         </div>
-                                        <div class="graph-summarizer-custom-dropdown-content" id="graph-summarizer-custom-dropdown-content">
-                                            <div class="graph-summarizer-custom-dropdown-search-and-sort-header">
-                                                <button class="graph-summarizer-custom-dropdown-sort-btn" id="graph-summarizer-custom-dropdown-sort-btn" onclick="reverseSortCustomGraphSummarizerDropdown()">Sort</button>
-                                                <input type="text" class="graph-summarizer-custom-dropdown-search-input" id="graph-summarizer-custom-dropdown-search-input" placeholder="Search...">
+                                        <div class="custom-dropdown-content">
+                                            <div class="custom-dropdown-controls">
+                                                <button class="custom-dropdown-sort-btn">Sort</button>
+                                                <input type="text" class="custom-dropdown-search" placeholder="Search...">
                                             </div>
-                                            <div class="graph-summarizer-custom-dropdown-add-item-container">
-                                                <button class="graph-summarizer-custom-dropdown-add-btn" id="graph-summarizer-custom-dropdown-add-btn">+ Add</button>
-                                                <input type="text" class="graph-summarizer-custom-dropdown-add-input" id="graph-summarizer-custom-dropdown-add-input" style="display: none;" placeholder="Select a graph summarizer model...">
+                                            <div class="custom-dropdown-add-container">
+                                                <button class="custom-dropdown-add-btn">+ Add</button>
+                                                <input type="text" class="custom-dropdown-add-input" style="display: none;" placeholder="Select a graph summarizer model...">
                                             </div>
-                                            <div class="graph-summarizer-custom-dropdown-items-list" id="graph-summarizer-custom-dropdown-items-list"></div>
+                                            <div class="custom-dropdown-items-list"></div>
                                         </div>
                                     </div>
 
@@ -2486,14 +2522,15 @@
 
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
         
+        <Script src="{{ url_for('static', filename='js/custom-dropdown-class.js') }}"></Script>
         <script src="{{ url_for('static', filename='js/helper-functions.js') }}"></script>
         <script src="{{ url_for('static', filename='js/save-config.js') }}"></script>
         <script src="{{ url_for('static', filename='js/tool-support.js') }}"></script>
         <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
         <script src="{{ url_for('static', filename='js/upload-functions.js') }}"></script>
         <script src="{{ url_for('static', filename='js/privion-js-classes.js') }}"></script>
-        <script src="{{ url_for('static', filename='js/dom-loader.js') }}"></script>
         <script src="{{ url_for('static', filename='js/voices.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/dom-loader.js') }}"></script>
 
         <!-- NEW: State module - loads deferred, executes before DOMContentLoaded -->
         <script type="module">

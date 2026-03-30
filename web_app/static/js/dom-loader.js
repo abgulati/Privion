@@ -59,7 +59,7 @@ function initializeFileUploadButtons() {
 
 
 function initializeUI() {
-    attachWindowEvents();
+    // attachWindowEvents();
     initializeChatLink();
     initializeScrollDownButton();
     initializeRegenerateResponseButton();
@@ -347,192 +347,6 @@ function loadCoreHfConfig() {
 }
 
 
-function initializeHfWaitressCustomDropdown(model_list, model_id) {
-    const customDropdownList = document.getElementById('hf-waitress-llm-custom-dropdown-items-list');
-    customDropdownList.innerHTML = '';
-
-    const selectedValue = document.getElementById('hf-waitress-llm-custom-dropdown-selected-value');
-
-    model_list.forEach(model => {
-        if (model.toLowerCase() == model_id.toLowerCase()) {
-            selectedValue.textContent = model;
-            if (model_id.toLowerCase().includes('vision-instruct')) {
-                document.getElementById('textAttachmentButton').disabled = false;
-            }
-        }
-        const div = document.createElement('div');
-        div.className = 'hf-waitress-llm-custom-dropdown-item';
-        div.innerHTML = `
-            <span>${model}</span>
-            <span class="hf-waitress-llm-custom-dropdown-delete-btn">×</span>
-        `;
-        const deleteButton = div.querySelector('.hf-waitress-llm-custom-dropdown-delete-btn');
-        deleteButton.addEventListener('click', (event) => { // instead of deleteButton.onclick = (event) => {
-            event.stopPropagation();    //This prevents the click event from bubbling up to the parent div onclick event, which would immediately close the dropdown
-            removeModelFromCustomDropdown(model);
-        });
-        div.addEventListener('click', () => {   // instead of div.onclick = () => {
-            selectedValue.textContent = model;
-            document.getElementById('hf-waitress-llm-custom-dropdown-content').classList.remove('show');
-        });
-        customDropdownList.appendChild(div);
-    });
-}
-
-
-
-function initializeKnowledgeDomainCustomDropdown(model_list, model_id) {
-    const customDropdownList = document.getElementById('hf-waitress-kb-custom-dropdown-items-list');
-    customDropdownList.innerHTML = '';
-
-    const selectedValue = document.getElementById('hf-waitress-kb-custom-dropdown-selected-value');
-
-    model_list.forEach(model => {
-        if (model.toLowerCase() == model_id.toLowerCase()) {
-            selectedValue.textContent = model;
-        }
-        const div = document.createElement('div');
-        div.className = 'hf-waitress-kb-custom-dropdown-item';
-        div.innerHTML = `
-            <span class="hf-waitress-kb-custom-dropdown-item-text">${model}</span>
-            <span class="hf-waitress-kb-custom-dropdown-delete-btn">×</span>
-        `;
-        const deleteButton = div.querySelector('.hf-waitress-kb-custom-dropdown-delete-btn');
-        deleteButton.addEventListener('click', (event) => { // instead of deleteButton.onclick = (event) => {
-            event.stopPropagation();    //This prevents the click event from bubbling up to the parent div onclick event, which would immediately close the dropdown
-            removeKnowledgeBaseFromCustomDropdown(model);
-        });
-        div.addEventListener('click', () => {   // instead of div.onclick = () => {
-            selectedValue.textContent = model;
-            document.getElementById('hf-waitress-kb-custom-dropdown-content').classList.remove('show');
-        });
-        customDropdownList.appendChild(div);
-    });
-}
-
-
-
-function initializeEmbeddingCustomDropdown(model_list, model_id) {
-    const customDropdownList = document.getElementById('hf-waitress-embed-custom-dropdown-items-list');
-    customDropdownList.innerHTML = '';
-
-    const selectedValue = document.getElementById('hf-waitress-embed-custom-dropdown-selected-value');
-
-    model_list.forEach(model => {
-        if (model.toLowerCase() == model_id.toLowerCase()) {
-            selectedValue.textContent = model;
-        }
-        const div = document.createElement('div');
-        div.className = 'hf-waitress-embed-custom-dropdown-item';
-        div.innerHTML = `
-            <span class="hf-waitress-embed-custom-dropdown-item-text">${model}</span>
-            <span class="hf-waitress-embed-custom-dropdown-delete-btn">×</span>
-        `;
-        const deleteButton = div.querySelector('.hf-waitress-embed-custom-dropdown-delete-btn');
-        deleteButton.addEventListener('click', (event) => { // instead of deleteButton.onclick = (event) => {
-            event.stopPropagation();    //This prevents the click event from bubbling up to the parent div onclick event, which would immediately close the dropdown
-            removeEmbeddingModelFromCustomDropdown(model);
-        });
-        div.addEventListener('click', () => {   // instead of div.onclick = () => {
-            selectedValue.textContent = model;
-            document.getElementById('hf-waitress-embed-custom-dropdown-content').classList.remove('show');
-        });
-        customDropdownList.appendChild(div);
-    });
-}
-
-
-function initializeRerankerCustomDropdown(model_list, model_id) {
-    const customDropdownList = document.getElementById('hf-waitress-reranker-custom-dropdown-items-list');
-    customDropdownList.innerHTML = '';
-
-    const selectedValue = document.getElementById('hf-waitress-reranker-custom-dropdown-selected-value');
-    
-    model_list.forEach(model => {
-        if (model.toLowerCase() == model_id.toLowerCase()) {
-            selectedValue.textContent = model;
-        }
-        const div = document.createElement('div');
-        div.className = 'hf-waitress-reranker-custom-dropdown-item';
-        div.innerHTML = `
-            <span class="hf-waitress-reranker-custom-dropdown-item-text">${model}</span>
-            <span class="hf-waitress-reranker-custom-dropdown-delete-btn">×</span>
-        `;
-        const deleteButton = div.querySelector('.hf-waitress-reranker-custom-dropdown-delete-btn');
-        deleteButton.addEventListener('click', (event) => {
-            event.stopPropagation();
-            removeRerankerModelFromCustomDropdown(model);
-        });
-        div.addEventListener('click', () => {
-            selectedValue.textContent = model;
-            document.getElementById('hf-waitress-reranker-custom-dropdown-content').classList.remove('show');
-        });
-        customDropdownList.appendChild(div);
-    });
-
-}
-
-
-function initializeGraphExtractorCustomDropdown(model_list, model_id) {
-    const customDropdownList = document.getElementById('graph-extractor-custom-dropdown-items-list');
-    customDropdownList.innerHTML = '';
-
-    const selectedValue = document.getElementById('graph-extractor-custom-dropdown-selected-value');
-
-    model_list.forEach(model => {
-        if (model.toLowerCase() == model_id.toLowerCase()) {
-            selectedValue.textContent = model;
-        }
-        const div = document.createElement('div');
-        div.className = 'graph-extractor-custom-dropdown-item';
-        div.innerHTML = `
-            <span class="graph-extractor-custom-dropdown-item-text">${model}</span>
-            <span class="graph-extractor-custom-dropdown-delete-btn">×</span>
-        `;
-        const deleteButton = div.querySelector('.graph-extractor-custom-dropdown-delete-btn');
-        deleteButton.addEventListener('click', (event) => {
-            event.stopPropagation();
-            removeGraphExtractorModelFromCustomDropdown(model);
-        });
-        div.addEventListener('click', () => {
-            selectedValue.textContent = model;
-            document.getElementById('graph-extractor-custom-dropdown-content').classList.remove('show');
-        });
-        customDropdownList.appendChild(div);
-    });
-}
-
-
-function initializeGraphSummarizerCustomDropdown(model_list, model_id) {
-    const customDropdownList = document.getElementById('graph-summarizer-custom-dropdown-items-list');
-    customDropdownList.innerHTML = '';
-
-    const selectedValue = document.getElementById('graph-summarizer-custom-dropdown-selected-value');
-
-    model_list.forEach(model => {
-        if (model.toLowerCase() == model_id.toLowerCase()) {
-            selectedValue.textContent = model;
-        }
-        const div = document.createElement('div');
-        div.className = 'graph-summarizer-custom-dropdown-item';
-        div.innerHTML = `
-            <span class="graph-summarizer-custom-dropdown-item-text">${model}</span>
-            <span class="graph-summarizer-custom-dropdown-delete-btn">×</span>
-        `;
-        const deleteButton = div.querySelector('.graph-summarizer-custom-dropdown-delete-btn');
-        deleteButton.addEventListener('click', (event) => {
-            event.stopPropagation();
-            removeGraphSummarizerModelFromCustomDropdown(model);
-        });
-        div.addEventListener('click', () => {
-            selectedValue.textContent = model;
-            document.getElementById('graph-summarizer-custom-dropdown-content').classList.remove('show');
-        });
-        customDropdownList.appendChild(div);
-    });
-}
-
-
 function toggleHfwExl3CacheType() {
     const exl3CacheType = document.getElementById('hf_waitress_exl3_cache_type_choice').value;
     document.getElementById('hf_waitress_exl3_k_bits').style.display = exl3CacheType == 'CacheLayer_quant' ? 'table-row' : 'none';
@@ -636,7 +450,8 @@ function initializeHfwServerConfig() {
             setVision(hf_values.vision);
             setExl2(hf_values.exl2);
             setExl3(hf_values.exl3);
-            initializeHfWaitressCustomDropdown(hf_values.model_list, hf_values.model_id);
+            // initializeHfWaitressCustomDropdown(hf_values.model_list, hf_values.model_id);
+            initializeAllCustomDropdowns({ types: ['llm'] });
             initializeHfSettingsDropdowns(hf_values);
             initializeHfRadioButtons(hf_values);
             setHfSlidersAndTextAreas(hf_values);
@@ -1078,34 +893,6 @@ function initializeEventListenersForLLMTab() {
     document.getElementById('update_hf_access_token').addEventListener('change', function() {
         document.getElementById('hf_access_token').disabled = !this.checked;   
     });
-
-    // Event listener to toggle custom dropdown:
-    document.getElementById('hf-waitress-llm-custom-select-header').addEventListener('click', function() {
-        document.getElementById('hf-waitress-llm-custom-dropdown-content').classList.toggle('show');
-    });
-
-    // Event listener to filter custom dropdown:
-    document.getElementById('hf-waitress-llm-custom-dropdown-search-input').addEventListener('input', function() {
-        filterCustomDropdown(this.value);
-    });
-
-    // Event listener to add new item to custom dropdown:
-    const addInput = document.getElementById('hf-waitress-llm-custom-dropdown-add-input');
-    const addBtn = document.getElementById('hf-waitress-llm-custom-dropdown-add-btn');
-
-    addBtn.addEventListener('click', function() {
-        addBtn.style.display = 'none';
-        addInput.style.display = 'block';
-    });
-
-    addInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && this.value) {
-            addNewHfwModel(this.value);
-            addInput.value = '';
-            addInput.style.display = 'none';
-            addBtn.style.display = 'block';
-        }
-    });
 }
 
 
@@ -1212,120 +999,39 @@ function toggleRerankerDropdownEnabledState() {
 }
 
 
+function toggleRerankerState() {
+    const reuseEmbed = document.getElementById('use_embedding_model_for_reranking');
+    const rerankerDropdown = CustomDropdown.registry.get('reranker');
+
+    if (reuseEmbed.checked) {
+        rerankerDropdown.disable();
+        document.getElementById('reranker_torch_device').disabled = true;
+    } else {
+        rerankerDropdown.enable();
+        document.getElementById('reranker_torch_device').disabled = false;
+    }
+}
+
+
 function initializeEventListenersForEmbeddingModelTab() {
 
     // Add Event Listener for ResetDB button:
     document.getElementById('resetVectorDB').addEventListener('click', resetVectorDBtoBlank);
 
-    // Event listener to toggle custom dropdown:
-    document.getElementById('hf-waitress-kb-custom-select-header').addEventListener('click', function() {
-        document.getElementById('hf-waitress-kb-custom-dropdown-content').classList.toggle('show');
-    });
-
-    document.getElementById('hf-waitress-embed-custom-select-header').addEventListener('click', function() {
-        document.getElementById('hf-waitress-embed-custom-dropdown-content').classList.toggle('show');
-    });
-
-    document.getElementById('hf-waitress-reranker-custom-select-header').addEventListener('click', toggleRerankerDropdown);
-
-    // Event listener for use_embedding_model_for_reranking checkbox:
-    document.getElementById('use_embedding_model_for_reranking').addEventListener('change', toggleRerankerDropdownEnabledState);
-
-    // Event listener to filter custom dropdown:
-    document.getElementById('hf-waitress-kb-custom-dropdown-search-input').addEventListener('input', function() {
-        filterCustomKbDropdown(this.value);
-    });
-
-    document.getElementById('hf-waitress-embed-custom-dropdown-search-input').addEventListener('input', function() {
-        filterCustomEmbedDropdown(this.value);
-    });
-
-    document.getElementById('hf-waitress-reranker-custom-dropdown-search-input').addEventListener('input', function() {
-        filterCustomRerankerDropdown(this.value);
-    });
-
-    // Event listener to populate docs table when a different embedding model is selected:
-    document.getElementById('hf-waitress-embed-custom-dropdown-items-list').addEventListener('click', function(e) {
-        if (e.target.matches('.hf-waitress-embed-custom-dropdown-item') || e.target.matches('.hf-waitress-embed-custom-dropdown-item-text')) {
-            clearDocsLoadedTable();
-            populateDocsLoadedTable();
-        }
-    });
-
-    // Event listener to populate docs table when a different knowledge domain is selected:
-    document.getElementById('hf-waitress-kb-custom-dropdown-items-list').addEventListener('click', function(e) {
-        if (e.target.matches('.hf-waitress-kb-custom-dropdown-item') || e.target.matches('.hf-waitress-kb-custom-dropdown-item-text')) {
-            clearDocsLoadedTable();
-            populateDocsLoadedTable();
-        }
-    });
-
-    // Event listener to add new item to KB-custom dropdown:
-    const addKbInput = document.getElementById('hf-waitress-kb-custom-dropdown-add-input');
-    const addKbBtn = document.getElementById('hf-waitress-kb-custom-dropdown-add-btn');
-
-    addKbBtn.addEventListener('click', function() {
-        addKbBtn.style.display = 'none';
-        addKbInput.style.display = 'block';
-    });
-
-    addKbInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && this.value) {
-            addNewKnowledgeDomain(this.value);
-            addKbInput.value = '';
-            addKbInput.style.display = 'none';
-            addKbBtn.style.display = 'block';
-        }
-    });
-
-    // Event listener to add new item to Embedding-custom dropdown:
-    const addEmbedInput = document.getElementById('hf-waitress-embed-custom-dropdown-add-input');
-    const addEmbedBtn = document.getElementById('hf-waitress-embed-custom-dropdown-add-btn');
-
-    addEmbedBtn.addEventListener('click', function() {
-        addEmbedBtn.style.display = 'none';
-        addEmbedInput.style.display = 'block';
-    });
-
-    addEmbedInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && this.value) {
-            addNewEmbeddingModel(this.value);
-            addEmbedInput.value = '';
-            addEmbedInput.style.display = 'none';
-            addEmbedBtn.style.display = 'block';
-        }
-    });
-
-    // Event listener to add new item to Reranker-custom dropdown:
-    const addRerankerInput = document.getElementById('hf-waitress-reranker-custom-dropdown-add-input');
-    const addRerankerBtn = document.getElementById('hf-waitress-reranker-custom-dropdown-add-btn');
-
-    addRerankerBtn.addEventListener('click', function() {
-        addRerankerBtn.style.display = 'none';
-        addRerankerInput.style.display = 'block';
-    });
-
-    addRerankerInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && this.value) {
-            addNewRerankerModel(this.value);
-            addRerankerInput.value = '';
-            addRerankerInput.style.display = 'none';
-            addRerankerBtn.style.display = 'block';
-        }
-    });
-
+    // Event listener to handle embedding model reuse for reranking:
+    document.getElementById('use_embedding_model_for_reranking').addEventListener('click', toggleRerankerState);
 }
 
 
 function initializeEmbeddingModelTabComponents(values) {
-    initializeKnowledgeDomainCustomDropdown(values.knowledge_domain_list, values.selected_knowledge_domain);
-    initializeEmbeddingCustomDropdown(values.embedding_models_list, values.selected_embedding_model);
-    initializeRerankerCustomDropdown(values.reranker_models_list, values.selected_reranker_model);
+    // initializeKnowledgeDomainCustomDropdown(values.knowledge_domain_list, values.selected_knowledge_domain);
+    // initializeEmbeddingCustomDropdown(values.embedding_models_list, values.selected_embedding_model);
+    // initializeRerankerCustomDropdown(values.reranker_models_list, values.selected_reranker_model);
     document.getElementById('use_embedding_model_for_reranking').checked = values.use_embedding_model_for_reranking;
     document.getElementById('embedding_torch_device').value = values.embedding_torch_device;
     document.getElementById('reranker_torch_device').value = values.reranker_torch_device;
     initializeEventListenersForEmbeddingModelTab();
-    toggleRerankerDropdownEnabledState();
+    // toggleRerankerDropdownEnabledState();
     clearDocsLoadedTable();
     populateDocsLoadedTable();
 }
@@ -1436,69 +1142,6 @@ function initializeGraphRAGEventListeners() {
 }
 
 
-function initializeGraphRAGCustomDropdowns(values) {
-    // Extractor Server:
-    initializeGraphExtractorCustomDropdown(values.graph_generator_model_list, values.graph_generator_model);
-    
-    // UNCOMMENT IN THE FUTURE IF MAKING THIS USER-SELECTABLE!
-    // document.getElementById('graph-extractor-custom-select-header').addEventListener('click', function() {
-    //     document.getElementById('graph-extractor-custom-dropdown-content').classList.toggle('show');
-    // });
-
-    document.getElementById('graph-extractor-custom-dropdown-search-input').addEventListener('input', function() {
-        filterCustomGraphExtractorDropdown(this.value);
-    });
-
-    // Event listener to add new item to Extractor-custom dropdown:
-    const addExtractorInput = document.getElementById('graph-extractor-custom-dropdown-add-input');
-    const addExtractorBtn = document.getElementById('graph-extractor-custom-dropdown-add-btn');
-
-    addExtractorBtn.addEventListener('click', function() {
-        addExtractorBtn.style.display = 'none';
-        addExtractorInput.style.display = 'block';
-    });
-
-    addExtractorInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && this.value) {
-            addNewGraphExtractorModel(this.value);
-            addExtractorInput.value = '';
-            addExtractorInput.style.display = 'none';
-            addExtractorBtn.style.display = 'block';
-        }
-    });
-
-    // Summarizer Server:
-    initializeGraphSummarizerCustomDropdown(values.graph_summarizer_model_list, values.graph_summarizer_model);
-    
-    document.getElementById('graph-summarizer-custom-select-header').addEventListener('click', function() {
-        document.getElementById('graph-summarizer-custom-dropdown-content').classList.toggle('show');
-    });
-
-    document.getElementById('graph-summarizer-custom-dropdown-search-input').addEventListener('input', function() {
-        filterCustomGraphSummarizerDropdown(this.value);
-    });
-
-    // Event listener to add new item to Summarizer-custom dropdown:
-    const addSummarizerInput = document.getElementById('graph-summarizer-custom-dropdown-add-input');
-    const addSummarizerBtn = document.getElementById('graph-summarizer-custom-dropdown-add-btn');
-
-    addSummarizerBtn.addEventListener('click', function() {
-        addSummarizerBtn.style.display = 'none';
-        addSummarizerInput.style.display = 'block';
-    });
-
-    addSummarizerInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && this.value) {
-            addNewGraphSummarizerModel(this.value);
-            addSummarizerInput.value = '';
-            addSummarizerInput.style.display = 'none';
-            addSummarizerBtn.style.display = 'block';
-        }
-    });
-
-}
-
-
 function initializeGraphRAGTabComponents(values) {
     // General Settings:
     document.getElementById('enable_graph_rag_checkbox').checked = values.enable_graph_rag;
@@ -1515,7 +1158,7 @@ function initializeGraphRAGTabComponents(values) {
     document.getElementById('apply_clustering_to_graph_db_on_doc_load_checkbox').checked = values.apply_clustering_to_graph_db_on_doc_load;
 
     // GraphRAG Custom Dropdowns:
-    initializeGraphRAGCustomDropdowns(values);
+    // initializeGraphRAGCustomDropdowns(values);
     initializeGraphRAGEventListeners();
 
     // Gearp-Extraction Model Settings:
@@ -1911,6 +1554,45 @@ function initializeSettingsModalTabCycleListener() {
 }
 
 
+function initializeAllCustomDropdowns(config = {}) {
+    const { types = null } = config;
+
+    document.querySelectorAll('.custom-dropdown').forEach(dropdown => {
+        const type = dropdown.dataset.type;
+
+        // Skip if already initialized, or type excluded
+        if (dropdown.dataset.initialized === 'true' || (types && !types.includes(type))) {
+            return; // in a forEach loop, `continue` is unavailable & `return` only skips the current iter!
+        }
+
+        const dropdownOptions  = {};
+
+        // Add vision-instruct handler for ALL HF-sourced dropdowns
+        if (dropdown.dataset.configSource === 'hf') {
+            dropdownOptions .onItemSelect = (model) => {
+                const textAttachmentBtn = document.getElementById('textAttachmentButton');
+                if (textAttachmentBtn) {
+                    textAttachmentBtn.disabled = !model.toLowerCase().includes('vision-instruct');
+                }
+            };
+        }
+
+        // KB/Embed handler
+        if (dropdown.dataset.type === 'kb' || dropdown.dataset.type === 'embed') {
+            dropdownOptions .onItemSelect = (model) => {
+                clearDocsLoadedTable();
+                populateDocsLoadedTable();
+            };
+        }
+
+        // Marking before to prevent retries on recurring calls if CustomDropdown is failing anyways
+        dropdown.dataset.initialized = 'true';
+
+        new CustomDropdown(dropdown, dropdownOptions);
+    });
+}
+
+
 function updateUIWithChatInfo(chat_id, llm_model) {
     curr_chat_id = chat_id
     setModelHeaderInfoBox(curr_chat_id, llm_model);
@@ -2061,6 +1743,8 @@ document.addEventListener("DOMContentLoaded", function() {
         .then(values => {
             startFalkorDB();
             startSearXNG();
+            local_llm_server = values.local_llm_server;
+            initializeAllCustomDropdowns({ types: ['kb', 'embed', 'reranker', 'extractor', 'summarizer', 'helper'] });
             initializeLLMTabComponents(values);
             initializeEmbeddingModelTabComponents(values);
             initializeSystemPromptTabComponents(values);
@@ -2072,9 +1756,9 @@ document.addEventListener("DOMContentLoaded", function() {
             initializeAsrTabComponents(values);
             initializeTTSTabComponents(values);
             initializeWebSearchTabComponents(values);
+            initializeToolCallerTabComponents(values);
             initializeAdvancedSettingsTabComponents(values);
             initializeSettingsModalTabCycleListener();
-            local_llm_server = values.local_llm_server;
             if (getTts() === "true") { loadTTSPipeline(); }
             if (getAsr() === "true") { return Promise.all([startLLMServer(), loadAsrPipeline()]); }
             else { return startLLMServer(); }
@@ -2085,6 +1769,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 initializeHfwServerConfig();
                 showStopGenerationButton();
             }
+            toggleRerankerState();
             loadChatHistoryMenu();  // should be done regardless of errors
             handleGoogleDrivePostAuth();
             hideStreamSpinner();

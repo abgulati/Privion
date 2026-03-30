@@ -1106,8 +1106,10 @@ function clearGoogleDriveTable() {
 
 function populateDocsLoadedTable() {
     let formData = new FormData();
-    formData.append('selected_knowledge_domain', document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent);
-    formData.append('selected_embedding_model', document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent);
+    // formData.append('selected_knowledge_domain', document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent);
+    // formData.append('selected_embedding_model', document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent);
+    formData.append('selected_knowledge_domain', CustomDropdown.registry.get('kb').getSelectedValue());
+    formData.append('selected_embedding_model', CustomDropdown.registry.get('embed').getSelectedValue());
 
     fetch('/fetch_file_list_for_vector_db', {
         method: 'POST',
@@ -1167,8 +1169,10 @@ function resetVectorDBtoBlank() {
     }
 
     let formData = new FormData();
-    formData.append('selected_embedding_model', document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent);
-    formData.append('selected_knowledge_domain', document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent);
+    // formData.append('selected_embedding_model', document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent);
+    // formData.append('selected_knowledge_domain', document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent);
+    formData.append('selected_embedding_model', CustomDropdown.registry.get('embed').getSelectedValue());
+    formData.append('selected_knowledge_domain', CustomDropdown.registry.get('kb').getSelectedValue());
 
     fetch('/reset_vector_db_on_disk', {
         method: 'POST',
@@ -1410,168 +1414,6 @@ function checkLocalLLMServerStatus(asr_check = false) {
 }
 
 
-function removeModelFromCustomDropdown(model) {
-    loadCoreHfConfig()
-    .then(hf_values => {
-        let model_list = hf_values.model_list;
-        model_list = model_list.filter(m => m.toLowerCase() !== model.toLowerCase());   // The .filter() function returns a new array with all elements that pass the test implemented by the provided function.
-        updateHfModelList(model_list);
-        initializeHfWaitressCustomDropdown(model_list, hf_values.model_id);
-    })
-    .catch(error => {
-        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeHfwModelFromCustomDropdown()", String(error.message));
-    });
-}
-
-
-function removeKnowledgeBaseFromCustomDropdown(model) {
-    loadCoreLarsConfig()
-    .then(values => {
-        let model_list = values.knowledge_domain_list;
-        model_list = model_list.filter(m => m.toLowerCase() !== model.toLowerCase());   // The .filter() function returns a new array with all elements that pass the test implemented by the provided function.
-        updateLarsCustomModelList('knowledge_domain_list', model_list);
-        initializeKnowledgeDomainCustomDropdown(model_list, values.selected_knowledge_domain);
-    })
-    .catch(error => {
-        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeKnowledgeBaseFromCustomDropdown()", String(error.message));
-    });
-}
-
-
-function removeEmbeddingModelFromCustomDropdown(model) {
-    loadCoreLarsConfig()
-    .then(values => {
-        let model_list = values.embedding_models_list;
-        model_list = model_list.filter(m => m.toLowerCase() !== model.toLowerCase());   // The .filter() function returns a new array with all elements that pass the test implemented by the provided function.
-        updateLarsCustomModelList('embedding_models_list', model_list);
-        initializeEmbeddingCustomDropdown(model_list, values.selected_embedding_model);
-    })
-    .catch(error => {
-        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeEmbeddingModelFromCustomDropdown()", String(error.message));
-    });
-}
-
-
-function removeRerankerModelFromCustomDropdown(model) {
-    loadCoreLarsConfig()
-    .then(values => {
-        let model_list = values.reranker_models_list;
-        model_list = model_list.filter(m => m.toLowerCase() !== model.toLowerCase());   // The .filter() function returns a new array with all elements that pass the test implemented by the provided function.
-        updateLarsCustomModelList('reranker_models_list', model_list);
-        initializeRerankerCustomDropdown(model_list, values.selected_reranker_model);
-    })
-    .catch(error => {
-        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeRerankerModelFromCustomDropdown()", String(error.message));
-    });
-}
-
-
-function removeGraphExtractorModelFromCustomDropdown(model) {
-    loadCoreLarsConfig()
-    .then(values => {
-        let model_list = values.graph_generator_model_list;
-        model_list = model_list.filter(m => m.toLowerCase() !== model.toLowerCase());   // The .filter() function returns a new array with all elements that pass the test implemented by the provided function.
-        updateLarsCustomModelList('graph_generator_model_list', model_list);
-        initializeGraphExtractorCustomDropdown(model_list, values.graph_generator_model);
-    })
-    .catch(error => {
-        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeGraphExtractorModelFromCustomDropdown()", String(error.message));
-    });
-}
-
-
-function removeGraphSummarizerModelFromCustomDropdown(model) {
-    loadCoreLarsConfig()
-    .then(values => {
-        let model_list = values.graph_summarizer_model_list;
-        model_list = model_list.filter(m => m.toLowerCase() !== model.toLowerCase());   // The .filter() function returns a new array with all elements that pass the test implemented by the provided function.
-        updateLarsCustomModelList('graph_summarizer_model_list', model_list);
-        initializeGraphSummarizerCustomDropdown(model_list, values.graph_summarizer_model);
-    })
-    .catch(error => {
-        errorHandler("removing the model_id from the list of LLMs (likely means the HF-Waitress server is offline)", "removeModelFromCustomDropdown()", String(error.message));
-    });
-}
-
-
-function reverseSortCustomKbDropdown() {
-    loadCoreLarsConfig()
-    .then(values => {
-        let reversed_model_list = values.knowledge_domain_list.reverse();
-        updateLarsCustomModelList('knowledge_domain_list', reversed_model_list);
-        initializeKnowledgeDomainCustomDropdown(reversed_model_list, values.selected_knowledge_domain);
-    })
-    .catch(error => {
-        errorHandler("reversing the LLM list (likely means the HF-Waitress server is offline)", "reverseSortCustomKbDropdown()", String(error.message));
-    });
-}
-
-
-function reverseSortCustomEmbedDropdown() {
-    loadCoreLarsConfig()
-    .then(values => {
-        let reversed_model_list = values.embedding_models_list.reverse();
-        updateLarsCustomModelList('embedding_models_list', reversed_model_list);
-        initializeEmbeddingCustomDropdown(reversed_model_list, values.selected_embedding_model);
-    })
-    .catch(error => {
-        errorHandler("reversing the LLM list (likely means the HF-Waitress server is offline)", "reverseSortCustomEmbedDropdown()", String(error.message));
-    });
-}
-
-
-function reverseSortCustomRerankerDropdown() {
-    loadCoreLarsConfig()
-    .then(values => {
-        let reversed_model_list = values.reranker_models_list.reverse();
-        updateLarsCustomModelList('reranker_models_list', reversed_model_list);
-        initializeRerankerCustomDropdown(reversed_model_list, values.selected_reranker_model);
-    })
-    .catch(error => {
-        errorHandler("reversing the LLM list (likely means the HF-Waitress server is offline)", "reverseSortCustomRerankerDropdown()", String(error.message));
-    });
-}
-
-
-function reverseSortCustomGraphExtractorDropdown() {
-    loadCoreLarsConfig()
-    .then(values => {
-        let reversed_model_list = values.graph_generator_model_list.reverse();
-        updateLarsCustomModelList('graph_generator_model_list', reversed_model_list);
-        initializeGraphExtractorCustomDropdown(reversed_model_list, values.graph_generator_model);
-    })
-    .catch(error => {
-        errorHandler("reversing the LLM list (likely means the HF-Waitress server is offline)", "reverseSortCustomGraphExtractorDropdown()", String(error.message));
-    });
-}
-
-
-function reverseSortCustomGraphSummarizerDropdown() {
-    loadCoreLarsConfig()
-    .then(values => {
-        let reversed_model_list = values.graph_summarizer_model_list.reverse();
-        updateLarsCustomModelList('graph_summarizer_model_list', reversed_model_list);
-        initializeGraphSummarizerCustomDropdown(reversed_model_list, values.graph_summarizer_model);
-    })
-    .catch(error => {
-        errorHandler("reversing the LLM list (likely means the HF-Waitress server is offline)", "reverseSortCustomGraphSummarizerDropdown()", String(error.message));
-    });
-}
-
-
-function reverseSortCustomDropdown() {
-    loadCoreHfConfig()
-    .then(hf_values => {
-        let reversed_model_list = hf_values.model_list.reverse();
-        updateHfModelList(reversed_model_list);
-        initializeHfWaitressCustomDropdown(reversed_model_list, hf_values.model_id);
-    })
-    .catch(error => {
-        errorHandler("reversing the LLM list (likely means the HF-Waitress server is offline)", "reverseSortCustomDropdown()", String(error.message));
-    });
-}
-
-
 function coreFilterFunction(search_words, items) {
     const searchQuery = search_words.toLowerCase();
 
@@ -1583,62 +1425,6 @@ function coreFilterFunction(search_words, items) {
             item.style.display = 'none';
         }
     })
-}
-
-
-function coreFilterVectorListRowsFunction(search_words, items) {
-    const searchQuery = search_words.toLowerCase();
-    Array.from(items).forEach(item => {
-        const text = item.textContent.toLowerCase();
-        const row_id = item.getAttribute('data-vector-list-row-id');
-        const row = document.getElementById(`vector_list_row_${row_id}`);
-        if (text.includes(searchQuery)) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    })
-}
-
-function filterCustomDropdown(search_words) {
-    const customDropdownList = document.getElementById('hf-waitress-llm-custom-dropdown-items-list');
-    const items = customDropdownList.getElementsByClassName('hf-waitress-llm-custom-dropdown-item');
-    coreFilterFunction(search_words, items);
-}
-
-
-function filterCustomKbDropdown(search_words) {
-    const customDropdownList = document.getElementById('hf-waitress-kb-custom-dropdown-items-list');
-    const items = customDropdownList.getElementsByClassName('hf-waitress-kb-custom-dropdown-item');
-    coreFilterFunction(search_words, items);
-}
-
-
-function filterCustomEmbedDropdown(search_words) {
-    const customDropdownList = document.getElementById('hf-waitress-embed-custom-dropdown-items-list');
-    const items = customDropdownList.getElementsByClassName('hf-waitress-embed-custom-dropdown-item');
-    coreFilterFunction(search_words, items);
-}
-
-
-function filterCustomRerankerDropdown(search_words) {
-    const customDropdownList = document.getElementById('hf-waitress-reranker-custom-dropdown-items-list');
-    const items = customDropdownList.getElementsByClassName('hf-waitress-reranker-custom-dropdown-item');
-    coreFilterFunction(search_words, items);
-}
-
-
-function filterCustomGraphExtractorDropdown(search_words) {
-    const customDropdownList = document.getElementById('graph-extractor-custom-dropdown-items-list');
-    const items = customDropdownList.getElementsByClassName('graph-extractor-custom-dropdown-item');
-    coreFilterFunction(search_words, items);
-}
-
-
-function filterCustomGraphSummarizerDropdown(search_words) {
-    const customDropdownList = document.getElementById('graph-summarizer-custom-dropdown-items-list');
-    const items = customDropdownList.getElementsByClassName('graph-summarizer-custom-dropdown-item');
-    coreFilterFunction(search_words, items);
 }
 
 
@@ -1681,88 +1467,7 @@ function filterVectorListTable(search_words) {
 }
 
 
-function addNewHfwModel(model) {
-    loadCoreHfConfig()
-    .then(hf_values => {
-        let model_list = hf_values.model_list;
-        model_list.push(model);
-        updateHfModelList(model_list);
-        initializeHfWaitressCustomDropdown(model_list, hf_values.model_id);
-    })
-    .catch(error => {
-        errorHandler("adding a new model_id to the list of LLMs (likely means the HF-Waitress server is offline)", "addNewHfwModel()", String(error.message));
-    });
-}
 
-
-function addNewKnowledgeDomain(model) {
-    loadCoreLarsConfig()
-    .then(values => {
-        let model_list = values.knowledge_domain_list;
-        model_list.push(model);
-        updateLarsCustomModelList('knowledge_domain_list', model_list);
-        initializeKnowledgeDomainCustomDropdown(model_list, values.selected_knowledge_domain);
-    })
-    .catch(error => {
-        errorHandler("adding a new model_id to the list of LLMs (likely means the HF-Waitress server is offline)", "addNewKnowledgeDomain()", String(error.message));
-    });
-}
-
-
-function addNewEmbeddingModel(model) {
-    loadCoreLarsConfig()
-    .then(values => {
-        let model_list = values.embedding_models_list;
-        model_list.push(model);
-        updateLarsCustomModelList('embedding_models_list', model_list);
-        initializeEmbeddingCustomDropdown(model_list, values.selected_embedding_model);
-    })
-    .catch(error => {
-        errorHandler("adding a new model_id to the list of LLMs (likely means the HF-Waitress server is offline)", "addNewEmbeddingModel()", String(error.message));
-    });
-}
-
-
-function addNewRerankerModel(model) {
-    loadCoreLarsConfig()
-    .then(values => {
-        let model_list = values.reranker_models_list;
-        model_list.push(model);
-        updateLarsCustomModelList('reranker_models_list', model_list);
-        initializeRerankerCustomDropdown(model_list, values.selected_reranker_model);
-    })
-    .catch(error => {
-        errorHandler("adding a new model_id to the list of LLMs (likely means the HF-Waitress server is offline)", "addNewRerankerModel()", String(error.message));
-    });
-}
-
-
-function addNewGraphExtractorModel(model) {
-    loadCoreLarsConfig()
-    .then(values => {
-        let model_list = values.graph_generator_model_list;
-        model_list.push(model);
-        updateLarsCustomModelList('graph_generator_model_list', model_list);
-        initializeGraphExtractorCustomDropdown(model_list, values.graph_generator_model);
-    })
-    .catch(error => {
-        errorHandler("adding a new model_id to the list of LLMs (likely means the HF-Waitress server is offline)", "addNewGraphExtractorModel()", String(error.message));
-    });
-}
-
-
-function addNewGraphSummarizerModel(model) {
-    loadCoreLarsConfig()
-    .then(values => {
-        let model_list = values.graph_summarizer_model_list;
-        model_list.push(model);
-        updateLarsCustomModelList('graph_summarizer_model_list', model_list);
-        initializeGraphSummarizerCustomDropdown(model_list, values.graph_summarizer_model);
-    })
-    .catch(error => {
-        errorHandler("adding a new model_id to the list of LLMs (likely means the HF-Waitress server is offline)", "addNewGraphSummarizerModel()", String(error.message));
-    });
-}
 
 
 // Transformers-specific settings:

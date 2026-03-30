@@ -82,9 +82,12 @@ function getLlmConfig() {
 
 function getVectorEmbeddingsConfig() {
     return config = {
-        'selected_embedding_model': document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent,
-        'selected_knowledge_domain': document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent,
-        'selected_reranker_model': document.getElementById('hf-waitress-reranker-custom-dropdown-selected-value').textContent,
+        // 'selected_embedding_model': document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent,
+        // 'selected_knowledge_domain': document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent,
+        // 'selected_reranker_model': document.getElementById('hf-waitress-reranker-custom-dropdown-selected-value').textContent,
+        'selected_embedding_model': CustomDropdown.registry.get('embed').getSelectedValue(),
+        'selected_knowledge_domain': CustomDropdown.registry.get('kb').getSelectedValue(),
+        'selected_reranker_model': CustomDropdown.registry.get('reranker').getSelectedValue(),
         'embedding_torch_device': document.getElementById('embedding_torch_device').value,
         'reranker_torch_device': document.getElementById('reranker_torch_device').value,
         'use_embedding_model_for_reranking': document.getElementById('use_embedding_model_for_reranking').checked
@@ -173,7 +176,8 @@ function getGraphRAGConfig() {
 
     return {
         // Extractor Settings:
-        'graph_generator_model': document.getElementById('graph-extractor-custom-dropdown-selected-value').textContent,
+        // 'graph_generator_model': document.getElementById('graph-extractor-custom-dropdown-selected-value').textContent,
+        'graph_generator_model': CustomDropdown.registry.get('extractor').getSelectedValue(),
         'reuse_graph_extraction_cache_without_validation': reuse_graph_extraction_cache_without_validation,
         'reuse_graph_extraction_cache_with_validation': reuse_graph_extraction_cache_with_validation,
         'exl2_quantize_graph_model': document.getElementById('graph_extractor_exl2_yes').checked,
@@ -190,7 +194,8 @@ function getGraphRAGConfig() {
         'graph_model_server_port': document.getElementById('graph_extractor_server_port').value,
 
         // Summarizer Settings:
-        'graph_summarizer_model': document.getElementById('graph-summarizer-custom-dropdown-selected-value').textContent,
+        // 'graph_summarizer_model': document.getElementById('graph-summarizer-custom-dropdown-selected-value').textContent,
+        'graph_summarizer_model': CustomDropdown.registry.get('summarizer').getSelectedValue(),
         'reuse_graph_summary_cache_without_validation': reuse_graph_summary_cache_without_validation,
         'reuse_graph_summary_cache_with_validation': reuse_graph_summary_cache_with_validation,
         'exl2_quantize_graph_summarizer_model': document.getElementById('graph_summarizer_exl2_yes').checked,
@@ -400,7 +405,8 @@ function getAdvancedSettingsConfig() {
 
 function getHfWaitressConfig() {
     let hf_config = {
-        'model_id': document.getElementById('hf-waitress-llm-custom-dropdown-selected-value').textContent,
+        // 'model_id': document.getElementById('hf-waitress-llm-custom-dropdown-selected-value').textContent,
+        'model_id': CustomDropdown.registry.get('llm').getSelectedValue(),
         'torch_device_map': document.getElementById('hf_waitress_torch_device_map_choice').value,
         'torch_dtype': document.getElementById('hf_waitress_torch_dtype_choice').value,
         'use_flash_attention_2': document.getElementById('hf_waitress_use_flash_attention_2_checkbox').checked,

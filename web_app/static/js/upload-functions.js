@@ -37,8 +37,10 @@ async function handleFileOrFolderSelection(event) {
     const confirmed = confirm('Make sure to verify that the following Settings pertaining to File Uploading are correct:\n\n- Text Extraction Method: ' 
         + (document.getElementById('ocr_yes_radio_button').checked ? 'OCR' : 'Non-OCR (Plain-Text Extraction)') 
         + '\n- OCR Service Choice: ' + (document.getElementById('ocr_yes_radio_button').checked ? document.getElementById('ocrApiDropdown').value : 'Not Applicable') 
-        + '\n- Embedding Model: ' + document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent
-        + '\n- Knowledge Domain: ' + document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent
+        // + '\n- Embedding Model: ' + document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent
+        // + '\n- Knowledge Domain: ' + document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent
+        + '\n- Embedding Model: ' + CustomDropdown.registry.get('embed').getSelectedValue()
+        + '\n- Knowledge Domain: ' + CustomDropdown.registry.get('kb').getSelectedValue()
         + '\n\nIf unsure, click Cancel to abort the file upload process.');
     
     if (!confirmed) {
@@ -60,8 +62,10 @@ async function handleFileOrFolderSelection(event) {
         const userId = "default_user"; // For future use, will be set to the user's ID when user is logged in.
         const uploadId = getUniqueId();
         const uploadInitiatedDatetime = new Date().toISOString();
-        const selectedEmbeddingModel = document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent;
-        const selectedKnowledgeDomain = document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent;
+        // const selectedEmbeddingModel = document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent;
+        // const selectedKnowledgeDomain = document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent;
+        const selectedEmbeddingModel = CustomDropdown.registry.get('embed').getSelectedValue();
+        const selectedKnowledgeDomain = CustomDropdown.registry.get('kb').getSelectedValue();
         const selectedTextExtractionMethod = document.getElementById('ocr_yes_radio_button').checked ? document.getElementById('ocrApiDropdown').value : 'default';
         const source = "Local Drive";
 
@@ -158,8 +162,10 @@ function triggerSyncGoogleDrive() {
     const confirmed = confirm('Make sure to verify that the following Settings pertaining to File Uploading are correct:\n\n- Text Extraction Method: ' 
         + (document.getElementById('ocr_yes_radio_button').checked ? 'OCR' : 'Non-OCR (Plain-Text Extraction)') 
         + '\n- OCR Service Choice: ' + (document.getElementById('ocr_yes_radio_button').checked ? document.getElementById('ocrApiDropdown').value : 'Not Applicable') 
-        + '\n- Embedding Model: ' + document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent 
-        + '\n- Knowledge Domain: ' + document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent 
+        // + '\n- Embedding Model: ' + document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent
+        // + '\n- Knowledge Domain: ' + document.getElementById('hf-waitress-kb-custom-dropdown-selected-value').textContent
+        + '\n- Embedding Model: ' + CustomDropdown.registry.get('embed').getSelectedValue() 
+        + '\n- Knowledge Domain: ' + CustomDropdown.registry.get('kb').getSelectedValue() 
         + '\n\nIf unsure, click Cancel to abort the file upload process.');
 
     if (!confirmed) {
