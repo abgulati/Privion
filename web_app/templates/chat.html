@@ -2462,7 +2462,7 @@
                                                 <td class="settings_table_setting_description">How to handle tool calls WRT chat template. One of:
                                                     <ul>
                                                         <li>OpenAI-API Spec: Append tool results using the `role: 'tool'` tag for use with the Completions API (GPT-OSS models, llama.cpp, etc.)</li>
-                                                        <li>Orchestrator / Qwen3 Spec: Append tool results using the `role: 'user'` tag, for models that append plain-text tool results within <tool_result>...</tool_result> tags using the 'user' role itself</li>
+                                                        <li>Qwen3 / Gemma-4 / Nv-Orchestrator Spec: Append tool results using the `role: 'user'` tag, for models that append plain-text tool results within <tool_result>...</tool_result> tags using the 'user' role itself</li>
                                                         <li>Qwen-3.5 Spec: Appends tool results using `role: 'tool'` and simplified 'content' field, and appends tool calls using |tool_call| delimiter to the assistant message itself</li>
                                                     </ul>
                                                     <p>Default: user_tool_response_tag</p>
@@ -2470,7 +2470,7 @@
                                                 <td class="settings_table_setting_value">
                                                     <select id="tool_response_mode" name="tool_response_mode" class="modal-selects">
                                                         <option value="role_tool">OpenAI-API Spec</option>
-                                                        <option value="user_tool_response_tag">Orchestrator / Qwen3 Spec</option>
+                                                        <option value="user_tool_response_tag">Qwen3 / Gemma-4 / Nv-Orchestrator Spec</option>
                                                         <option value="qwen_3_5">Qwen-3.5 Spec</option>
                                                     </select>
                                                 </td>
