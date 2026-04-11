@@ -203,7 +203,6 @@ function loadCoreLarsConfig() {
         'kosmos_local_url',
         'kosmos_task',
         'kosmos_threshold',
-        'llm_filter_citations',
         'hf_waitress_serving_url',
         'hf_waitress_access_url',
         'hf_waitress_server_port',
@@ -1101,9 +1100,9 @@ function initializeRAGTabCheckbox(force_enable_rag, force_disable_rag) {
 
 function initializeRAGTabComponents(values) {
     initializeRAGTabCheckbox(values.force_enable_rag , values.force_disable_rag);
-    if (values.llm_filter_citations) {
-        document.getElementById('llm_filter_citations_checkbox').checked = true;
-    }
+    // if (values.llm_filter_citations) {
+    //     document.getElementById('llm_filter_citations_checkbox').checked = true;
+    // }
     document.getElementById('fetch_top_k_results_from_whoosh').value = values.fetch_top_k_results_from_whoosh;
     document.getElementById('fetch_top_k_results_from_vectordb').value = values.fetch_top_k_results_from_vectordb;
     document.getElementById('filter_top_k_results_by_reranking').value = values.filter_top_k_results_by_reranking;
@@ -1757,7 +1756,7 @@ document.addEventListener("DOMContentLoaded", function() {
             initializeAsrTabComponents(values);
             initializeTTSTabComponents(values);
             initializeWebSearchTabComponents(values);
-            initializeToolCallerTabComponents(values);
+            // initializeToolCallerTabComponents(values);
             initializeAdvancedSettingsTabComponents(values);
             initializeSettingsModalTabCycleListener();
             if (getTts() === "true") { loadTTSPipeline(); }

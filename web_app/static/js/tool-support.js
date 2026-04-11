@@ -71,7 +71,7 @@ function getToolsSchema() {
             return data.tools_schema;
         })
         .catch(error => {
-            errorHandlerNoAlert("getting tools schema", "getToolsSchema()", "Error getting tools schema: " + error);
+            errorHandlerNoAlert("getting tools schema", "get-ToolsSchema()", "Error getting tools schema: " + error);
             return null;
         });
 }

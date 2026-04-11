@@ -124,14 +124,14 @@ function getRagConfig() {
         force_disable_rag = true;
     }
 
-    if (document.getElementById('llm_filter_citations_checkbox').checked) { 
-        llm_filter_citations = true;
-    }
+    // if (document.getElementById('llm_filter_citations_checkbox').checked) { 
+    //     llm_filter_citations = true;
+    // }
 
     return {
         'force_enable_rag': force_enable_rag, 
         'force_disable_rag': force_disable_rag, 
-        'llm_filter_citations': llm_filter_citations,
+        // 'llm_filter_citations': llm_filter_citations,
         'fetch_top_k_results_from_whoosh': document.getElementById('fetch_top_k_results_from_whoosh').value,
         'fetch_top_k_results_from_vectordb': document.getElementById('fetch_top_k_results_from_vectordb').value,
         'filter_top_k_results_by_reranking': document.getElementById('filter_top_k_results_by_reranking').value,
