@@ -3091,6 +3091,7 @@ def extract_tool_calls_from_response(full_response_text:str) -> list[dict]:
         if tool_calls:
             result['tool_calls'] = tool_calls
 
+        print("\n--- Done ---")
         return result
     except Exception as e:
         raise Exception(f"Failed to extract tool calls from response, encountered error: {e}")
@@ -4341,7 +4342,7 @@ def exl2_fim_stream():
     try:
         job = ExLlamaV2DynamicJob(
             input_ids= exl_encoded_fim_input_ids,
-            max_new_tokens = config_data['max_new_tokens'],
+            max_new_tokens = int(config_data.get('max_new_tokens')),
             stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_PROC_TOK.eos_token_id],
             gen_settings = gen_settings
         )
@@ -4391,7 +4392,13 @@ def exl2_fim_stream():
 def get_exl3_sampler(request):
 
     try:
-        config_data = read_config(['max_new_tokens', 'temperature', 'top_k', 'top_p', 'min_p', 'rep_p', 'pres_p', 'freq_p', 'rep_sustain_range', 'rep_decay_range', 'exl3_total_context'])
+        config_data = read_config([
+            'max_new_tokens','temperature',
+            'top_k','top_p','min_p',
+            'rep_p','pres_p','freq_p',
+            'rep_sustain_range','rep_decay_range',
+            'exl3_total_context'
+        ])
     except Exception as e:  # Not using `handle_local_error` as the necessary params may be in the request headers so why error out here?
         handle_error_no_return("Could not read values from hf_config.json when attempting exl3-sampler, relying on request headers instead. Encountered error: ", e)
         config_data = {}
@@ -4401,8 +4408,8 @@ def get_exl3_sampler(request):
             rep_p = float(request.headers.get('X-Repetition-Penalty', str(config_data.get('repetition_penalty', '1')))),
             pres_p = float(request.headers.get('X-Presence-Penalty', str(config_data.get('presence_penalty', '0')))),
             freq_p = float(request.headers.get('X-Frequency-Penalty', str(config_data.get('frequency_penalty', '0')))),
-            rep_sustain_range = int(float(request.headers.get('X-Repetition-Sustain-Range', str(config_data.get('penalty_range', '10e7'))))),
-            rep_decay_range = int(request.headers.get('X-Repetition-Decay-Range', str(config_data.get('penalty_range', '0')))),
+            rep_sustain_range = int(float(request.headers.get('X-Repetition-Sustain-Range', str(config_data.get('rep_sustain_range', '10e7'))))),
+            rep_decay_range = int(request.headers.get('X-Repetition-Decay-Range', str(config_data.get('rep_decay_range', '0')))),
             temperature = float(request.headers.get('X-Temperature', str(config_data.get('temperature', '0.1')))),
             min_p = float(request.headers.get('X-Min-P', str(config_data.get('min_p', '0.1')))),
             top_k = int(request.headers.get('X-Top-K', str(config_data.get('top_k', '40')))),
@@ -4449,7 +4456,7 @@ def exl3_stream():
     try:
         job = Job(
             input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = config_data['max_new_tokens'],
+            max_new_tokens = int(config_data.get('max_new_tokens')),
             stop_conditions = STOP_TOKENS,
             sampler = exl3_sampler
         )
@@ -4531,7 +4538,7 @@ def exl3_fim_stream():
     try:
         job = Job(
             input_ids= exl_encoded_fim_input_ids,
-            max_new_tokens = config_data['max_new_tokens'],
+            max_new_tokens = int(config_data.get('max_new_tokens')),
             stop_conditions = STOP_TOKENS,
             sampler = exl3_sampler
         )
@@ -4915,14 +4922,14 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
 
     try:
         read_return = read_config(['model_id', 'max_new_tokens', 'temperature', 'do_sample', 'top_k', 'top_p'])
-        temp = int(temperature) if temperature is not None else read_return['temperature']
+        temp = float(temperature or read_return.get('temperature'))
         
         generation_config = {
-            "max_new_tokens": max_tokens or int(read_return['max_new_tokens']),
+            "max_new_tokens": int(max_tokens or read_return.get('max_new_tokens')),
             "temperature": temp,
             "do_sample": temp > 0,
-            "top_k": top_k or int(read_return['top_k']),
-            "top_p": float(top_p) if top_p is not None else read_return['top_p'],
+            "top_k": int(top_k or read_return.get('top_k')),
+            "top_p": float(top_p or read_return.get('top_p')),
             "use_cache": True
         }
 
@@ -5003,13 +5010,14 @@ def handle_transformers_non_streaming_openai(messages, tools, max_tokens, temper
 
         try:
             read_return = read_config(['model_id', 'max_new_tokens', 'temperature', 'do_sample', 'top_k', 'top_p'])
+            temp = float(temperature or read_return.get('temperature'))
             
             generation_config = {
-                "max_new_tokens": max_tokens or int(read_return['max_new_tokens']),
-                "temperature": temperature,
-                "do_sample": temperature > 0,
-                "top_k": top_k or int(read_return['top_k']),
-                "top_p": top_p,
+                "max_new_tokens": int(max_tokens or read_return.get('max_new_tokens')),
+                "temperature": temp,
+                "do_sample": temp > 0,
+                "top_k": int(top_k or read_return.get('top_k')),
+                "top_p": float(top_p or read_return.get('top_p')),
                 "use_cache": True
             }
 
@@ -5054,10 +5062,9 @@ def handle_exl2_streaming_openai(messages, tools, max_tokens, temperature, top_p
 
         # 2. Get generator & other config settings
         gen_settings, config_data  = get_exl2_gen_settings(request)
-        if max_tokens: config_data['max_new_tokens'] = max_tokens
-        if temperature is not None: gen_settings.temperature = temperature
-        if top_p is not None: gen_settings.top_p = top_p
-        if top_k is not None: gen_settings.top_k = top_k
+        if temperature: gen_settings.temperature = float(temperature)
+        if top_p: gen_settings.top_p = float(top_p)
+        if top_k: gen_settings.top_k = int(top_k)
         
         # 3. Setup stop conditions
         stop_tokens = [EXL2_TOKENIZER.eos_token_id, AUTO_PROC_TOK.eos_token_id]
@@ -5072,7 +5079,7 @@ def handle_exl2_streaming_openai(messages, tools, max_tokens, temperature, top_p
         
         job = ExLlamaV2DynamicJob(
             input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = config_data['max_new_tokens'],
+            max_new_tokens = int(max_tokens or config_data.get('max_new_tokens')),
             stop_conditions = stop_tokens,
             gen_settings = gen_settings
         )
@@ -5114,10 +5121,9 @@ def handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, t
 
         # 2. Get generator & other config settings
         gen_settings, config_data  = get_exl2_gen_settings(request)
-        if max_tokens: config_data['max_new_tokens'] = max_tokens
-        if temperature is not None: gen_settings.temperature = temperature
-        if top_p is not None: gen_settings.top_p = top_p
-        if top_k is not None: gen_settings.top_k = top_k
+        if temperature: gen_settings.temperature = float(temperature)
+        if top_p: gen_settings.top_p = float(top_p)
+        if top_k: gen_settings.top_k = int(top_k)
 
         # 3. Setup stop conditions
         stop_token_list = [EXL2_TOKENIZER.eos_token_id, AUTO_PROC_TOK.eos_token_id]
@@ -5132,7 +5138,7 @@ def handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, t
         
         job = ExLlamaV2DynamicJob(
             input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = config_data['max_new_tokens'],
+            max_new_tokens = int(max_tokens or config_data.get('max_new_tokens')),
             stop_conditions = stop_token_list,
             gen_settings = gen_settings
         )
@@ -5174,19 +5180,26 @@ def handle_exl3_streaming_openai(messages, tools, max_tokens, temperature, top_p
         user_queue = queue.Queue()
 
         # 2. Get generator & other config settings
-        config_data = read_config(['model_id', 'max_new_tokens', 'temperature', 'top_k', 'top_p', 'min_p', 'rep_p', 'pres_p', 'freq_p', 'rep_sustain_range', 'rep_decay_range', 'exl3_total_context'])
-        config_data['max_new_tokens'] = max_tokens or int(config_data['max_new_tokens'])
+        config_data = read_config([
+            'model_id',
+            'max_new_tokens',
+            'temperature',
+            'top_k','top_p','min_p',
+            'rep_p','pres_p','freq_p', 
+            'rep_sustain_range','rep_decay_range',
+            'exl3_total_context'
+        ])
     
         exl3_sampler = ComboSampler(
-            rep_p = config_data['rep_p'],
-            pres_p = presence_penalty or config_data['pres_p'],
-            freq_p = frequency_penalty or config_data['freq_p'],
-            rep_sustain_range = config_data['rep_sustain_range'],
-            rep_decay_range = config_data['rep_decay_range'],
-            temperature = temperature or config_data['temperature'],
-            min_p = config_data['min_p'],
-            top_k = top_k or config_data['top_k'],
-            top_p = top_p or config_data['top_p']
+            rep_p = float(config_data.get('rep_p')),
+            pres_p = float(presence_penalty or config_data.get('pres_p')),
+            freq_p = float(frequency_penalty or config_data.get('freq_p')),
+            rep_sustain_range = int(float(str(config_data.get('rep_sustain_range', '10e7')))),
+            rep_decay_range = int(config_data.get('rep_decay_range', '0')),
+            temperature = float(temperature or config_data.get('temperature')),
+            min_p = float(config_data.get('min_p')),
+            top_k = int(top_k or config_data.get('top_k')),
+            top_p = float(top_p or config_data.get('top_p'))
         )
 
         # 3. Setup stop conditions
@@ -5203,7 +5216,7 @@ def handle_exl3_streaming_openai(messages, tools, max_tokens, temperature, top_p
 
         job = Job(
             input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = config_data['max_new_tokens'],
+            max_new_tokens = int(max_tokens or config_data.get('max_new_tokens')),
             stop_conditions = stop_token_list,
             sampler = exl3_sampler
         )
@@ -5244,19 +5257,26 @@ def handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, t
         user_queue = queue.Queue()
 
         # 2. Get generator & other config settings
-        config_data = read_config(['model_id', 'max_new_tokens', 'temperature', 'top_k', 'top_p', 'min_p', 'rep_p', 'pres_p', 'freq_p', 'rep_sustain_range', 'rep_decay_range', 'exl3_total_context'])
-        config_data['max_new_tokens'] = max_tokens or int(config_data['max_new_tokens'])
+        config_data = read_config([
+            'model_id',
+            'max_new_tokens',
+            'temperature',
+            'top_k','top_p','min_p',
+            'rep_p','pres_p','freq_p', 
+            'rep_sustain_range','rep_decay_range',
+            'exl3_total_context'
+        ])
     
         exl3_sampler = ComboSampler(
-            rep_p = config_data['rep_p'],
-            pres_p = presence_penalty or config_data['pres_p'],
-            freq_p = frequency_penalty or config_data['freq_p'],
-            rep_sustain_range = config_data['rep_sustain_range'],
-            rep_decay_range = config_data['rep_decay_range'],
-            temperature = temperature or config_data['temperature'],
-            min_p = config_data['min_p'],
-            top_k = top_k or config_data['top_k'],
-            top_p = top_p or config_data['top_p']
+            rep_p = float(config_data.get('rep_p')),
+            pres_p = float(presence_penalty or config_data.get('pres_p')),
+            freq_p = float(frequency_penalty or config_data.get('freq_p')),
+            rep_sustain_range = int(float(str(config_data.get('rep_sustain_range', '10e7')))),
+            rep_decay_range = int(config_data.get('rep_decay_range', '0')),
+            temperature = float(temperature or config_data.get('temperature')),
+            min_p = float(config_data.get('min_p')),
+            top_k = int(top_k or config_data.get('top_k')),
+            top_p = float(top_p or config_data.get('top_p'))
         )
 
         # 3. Setup stop conditions
@@ -5273,7 +5293,7 @@ def handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, t
 
         job = Job(
             input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = config_data['max_new_tokens'],
+            max_new_tokens = int(max_tokens or config_data.get('max_new_tokens')),
             stop_conditions = stop_token_list,
             sampler = exl3_sampler
         )
