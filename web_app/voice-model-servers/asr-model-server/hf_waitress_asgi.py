@@ -1,4 +1,4 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel, CLIPTextModel, AutoProcessor, GenerationConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel
 from transformers import StoppingCriteria, StoppingCriteriaList
 from transformers.utils import TensorType
 from huggingface_hub import login, snapshot_download, scan_cache_dir
@@ -144,9 +144,9 @@ def serve_uploaded_file(filename:str):
 #########################------------------GLOBALS!----------------------###############################
 PIPE = None
 MODEL = None
-TOKENIZER = None
 PROCESSOR = None
 VISION_MODEL = None
+ASR_TOKENIZER = None
 
 EXL2_MODEL = None   # for cache-fit checking
 EXL2_CACHE = None   # for global generator
@@ -163,7 +163,7 @@ EXL3_WORKER_THREAD = None
 EXL3_WORKER_STOP_EVENT = threading.Event()
 
 STOP_TOKENS = None
-AUTO_TOKENIZER = None
+AUTO_PROC_TOK = None    # Either Auto-Processor (Transformers) or Auto-Tokenizer (Exl2/3/Fallback)
 STOP_GENERATION = False
 
 llm_semaphore = threading.Semaphore(1)
@@ -599,6 +599,23 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'host':'0.0.0.0',
                     'load_safe_defaults':False,
                     'model_list': [
+                                    'microsoft/Phi-4-reasoning-vision-15B',
+                                    'Qwen/Qwen3.5-0.8B',
+                                    'Qwen/Qwen3.5-2B',
+                                    'Qwen/Qwen3.5-4B',
+                                    'Qwen/Qwen3.5-9B',
+                                    'Qwen/Qwen3.5-27B',
+                                    'Qwen/Qwen3.5-27B-FP8',
+                                    'Qwen/Qwen3.5-35B-A3B',
+                                    'Qwen/Qwen3.5-35B-A3B-FP8',
+                                    'Qwen/Qwen3.5-122B-A10B',
+                                    'Qwen/Qwen3.5-122B-A10B-FP8',
+                                    'Qwen/Qwen3.5-397B-A17B',
+                                    'Qwen/Qwen3.5-397B-A17B-FP8',
+                                    'Qwen/Qwen3-Coder-Next-FP8',
+                                    'Qwen/Qwen3-4B-Instruct-2507',
+                                    'google/functiongemma-270m-it',
+                                    'nvidia/Nemotron-Orchestrator-8B',
                                     'microsoft/phi-4',
                                     'zai-org/GLM-4.5-Air',
                                     'zai-org/GLM-4.5',
@@ -608,6 +625,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                                     'google/gemma-3-27b-it',
                                     'google/gemma-3-12b-it',
                                     'google/gemma-2-2b-it',
+                                    'Metin/Gemma-2-2B-TR-Knowledge-Graph',
                                     'Qwen/Qwen3-235B-A22B-Thinking-2507-FP8',
                                     'Qwen/Qwen3-235B-A22B-Instruct-2507',
                                     'Qwen/Qwen3-30B-A3B-Instruct-2507-FP8',
@@ -1111,11 +1129,11 @@ def safe_empty_cuda_cache(timeout=10):
 def shutdown_all():
     print("\n\nShutting down all models and pipelines\n\n")
     
-    global_vars = [
-        'VISION_MODEL', 'PIPE', 'MODEL', 'TOKENIZER', 
-        'AUTO_TOKENIZER', 'PROCESSOR', 'STOP_TOKENS',
+    global_vars = [ 
+        'AUTO_PROC_TOK', 'PROCESSOR', 'STOP_TOKENS',
         'EXL2_MODEL', 'EXL2_CACHE', 'EXL2_TOKENIZER',
-        'EXL3_MODEL', 'EXL3_CACHE', 'EXL3_TOKENIZER'
+        'EXL3_MODEL', 'EXL3_CACHE', 'EXL3_TOKENIZER',
+        'VISION_MODEL', 'PIPE', 'MODEL', 'ASR_TOKENIZER'
     ]
     
     # Clear all references
@@ -1619,7 +1637,7 @@ def get_model_params():
         try:
             tokenizer = AutoTokenizer.from_pretrained(config['gguf_model_id'], gguf_file=config['gguf_filename'])
         except Exception as e:
-            handle_local_error("Could not set AutoTokenizer, encountered error: ", e)
+            handle_local_error("Could not set Auto-Tokenizer, encountered error: ", e)
         try:
             PIPE = pipeline(config['pipeline_task'], model=model, tokenizer=tokenizer)
         except Exception as e:
@@ -1815,7 +1833,7 @@ def load_vision_pipeline(pipeline, model_params):
             handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
 
         print(f"\nInitializing processor for vision model: {config['model_id']}\n")
-        pipeline = AutoProcessor.from_pretrained(config['model_id'])  # Using 'pipeline' instead of 'processor' to maintain consistency with the server code. AutoProcessor is used to process images and text inputs for the vision model.
+        pipeline = AutoProcessor.from_pretrained(config['model_id'])  # Using 'pipeline' instead of 'processor' to maintain consistency with the server code.
         
         print(f"\nVision Model & Processor Loaded Successfully!\n")
         return pipeline
@@ -1841,7 +1859,7 @@ def load_openai_whisper_v3_asr_pipeline(model_id: str, torch_device: str):
     try:
         PROCESSOR = AutoProcessor.from_pretrained(model_id)
     except Exception as e:
-        handle_model_loading_error("Could not load AutoProcessor for OpenAI Whisper V3 ASR Model, encountered error: ", e)
+        handle_model_loading_error("Could not load Auto-Processor for OpenAI Whisper V3 ASR Model, encountered error: ", e)
         return False
 
     try:
@@ -1907,16 +1925,16 @@ def load_nv_canary_1b_v2_asr_pipeline(model_id: str, torch_device: str):
 
 def load_ibm_granite_speech_3_3_asr_pipeline(model_id: str, torch_device: str):
     print("\n\nIBM Granite Speech 3.3 ASR Model Selected - Loading...\n\n")
-    global MODEL, PROCESSOR, TOKENIZER
+    global MODEL, PROCESSOR, ASR_TOKENIZER
 
     try:
         PROCESSOR = AutoProcessor.from_pretrained(model_id)
     except Exception as e:
-        handle_model_loading_error("Could not load AutoProcessor for IBM Granite Speech 3.3 ASR Model, encountered error: ", e)
+        handle_model_loading_error("Could not load Auto-Processor for IBM Granite Speech 3.3 ASR Model, encountered error: ", e)
         return False
 
     try:
-        TOKENIZER = PROCESSOR.tokenizer
+        ASR_TOKENIZER = PROCESSOR.tokenizer
     except Exception as e:
         handle_model_loading_error("Could not load tokenizer for IBM Granite Speech 3.3 ASR Model, encountered error: ", e)
         return False
@@ -2270,7 +2288,7 @@ def load_exllama_pipeline():
     print("\n\nLoading ExLlamaV2 Pipeline\n\n")
     
     try:
-        config = read_config(['model_id', 'exl2_bpw', 'exl2_no_flash_attn'])
+        config = read_config(['model_id', 'exl2_bpw', 'exl2_no_flash_attn', 'trust_remote_code'])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to load the ExLlamaV2 pipeline, encountered error: ", e)
 
@@ -2309,11 +2327,12 @@ def load_exllama_pipeline():
         handle_local_error(f"Error defining ExLlamaV2 generator components. Encountered error: ", e)
 
     try:
-        global AUTO_TOKENIZER
-        AUTO_TOKENIZER = AutoTokenizer.from_pretrained(config['model_id'], trust_remote_code=True)    # Using Transformers' AutoTokenizer as ExLlamaV2's ExLlamaV2Tokenizer does not contain an equivalent apply-chat_template() method!
-        print("\nTransformers-AutoTokenizer configured successfully for automated prompt-formatting\n")
+        # Using Transformers' Auto-Tokenizer as ExLlamaV2's ExLlamaV2Tokenizer does not contain an equivalent apply-chat_template() method!
+        global AUTO_PROC_TOK
+        AUTO_PROC_TOK = AutoTokenizer.from_pretrained(config['model_id'], trust_remote_code=config['trust_remote_code'])
+        print("\nTransformers-Auto-Tokenizer configured successfully for automated prompt-formatting\n")
     except Exception as e:
-        handle_local_error(f"Error loading AutoTokenizer for {config['model_id']}. Encountered error: ", e)
+        handle_local_error(f"Error loading Auto-Tokenizer for {config['model_id']}. Encountered error: ", e)
 
     try:
         print(f"Model's context-length (max_seq_len) is: {EXL2_MODEL.config.max_seq_len}")
@@ -2481,7 +2500,7 @@ def get_raw_stop_token_ids(quantized_model_path: os.PathLike) -> list | int:
         raw_stop_token_ids = raw_model_config['eos_token_id']
         return raw_stop_token_ids
     except Exception as e:
-        handle_local_error("Could not get raw stop token ids for model {quantized_model_path}, encountered error: ", e)
+        handle_local_error(f"Could not get raw stop token ids for model {quantized_model_path}, encountered error: ", e)
 
 
 def set_full_exl3_model_stop_token_list(raw_stop_token_ids: list | int):
@@ -2489,7 +2508,7 @@ def set_full_exl3_model_stop_token_list(raw_stop_token_ids: list | int):
 
     global STOP_TOKENS
 
-    print(f"AUTO_TOKENIZER.eos_token_id: {AUTO_TOKENIZER.eos_token_id}")
+    print(f"AUTO_PROC_TOK.eos_token_id: {AUTO_PROC_TOK.eos_token_id}")
     print(f"EXL3_TOKENIZER.eos_token_id: {EXL3_TOKENIZER.eos_token_id}")
     print(f"Raw stop token ids: {raw_stop_token_ids}")
     
@@ -2501,11 +2520,11 @@ def set_full_exl3_model_stop_token_list(raw_stop_token_ids: list | int):
         else:
             full_list.append(EXL3_TOKENIZER.eos_token_id)
         
-        if isinstance(AUTO_TOKENIZER.eos_token_id, list):
-            for token_ids in AUTO_TOKENIZER.eos_token_id:
+        if isinstance(AUTO_PROC_TOK.eos_token_id, list):
+            for token_ids in AUTO_PROC_TOK.eos_token_id:
                 full_list.append(token_ids)
         else:
-            full_list.append(AUTO_TOKENIZER.eos_token_id)
+            full_list.append(AUTO_PROC_TOK.eos_token_id)
         
         if isinstance(raw_stop_token_ids, list):
             for token_ids in raw_stop_token_ids:
@@ -2554,7 +2573,15 @@ def load_exllamav3_pipeline():
     print("\n\nLoading ExLlamaV3 Pipeline\n\n")
 
     try:
-        read_return = read_config(['model_id', 'exl3_bpw', 'exl3_total_context', 'exl3_max_batch_size', 'exl3_max_chunk_size', 'exl3_show_gen_visualizer'])
+        read_return = read_config([
+            'model_id',
+            'exl3_bpw',
+            'exl3_total_context',
+            'exl3_max_batch_size',
+            'exl3_max_chunk_size',
+            'exl3_show_gen_visualizer',
+            'trust_remote_code'
+        ])
     except Exception as e:
         handle_local_error("Could not read values from hf_config.json when attempting to load the ExLlamaV3 pipeline, encountered error: ", e)
 
@@ -2588,11 +2615,12 @@ def load_exllamav3_pipeline():
         handle_local_error(f"Error defining ExLlamaV3 generator components. Encountered error: ", e)
 
     try:
-        global AUTO_TOKENIZER
-        AUTO_TOKENIZER = AutoTokenizer.from_pretrained(read_return['model_id'], trust_remote_code=True)    # Using Transformers' AutoTokenizer as ExLlamaV3's Tokenizer does not contain an equivalent apply-chat_template() method!
-        print("\nTransformers-AutoTokenizer configured successfully for automated prompt-formatting\n")
+        # Using Transformers' Auto-Tokenizer as ExLlamaV3's Tokenizer does not contain an equivalent apply-chat_template() method!
+        global AUTO_PROC_TOK
+        AUTO_PROC_TOK = AutoTokenizer.from_pretrained(read_return['model_id'], trust_remote_code=True)
+        print("\nTransformers-Auto-Tokenizer configured successfully for automated prompt-formatting\n")
     except Exception as e:
-        handle_local_error(f"Error loading AutoTokenizer for {read_return['model_id']}. Encountered error: ", e)
+        handle_local_error(f"Error loading Auto-Tokenizer for {read_return['model_id']}. Encountered error: ", e)
 
     try:
         raw_stop_token_ids = get_raw_stop_token_ids(quantized_model_path)
@@ -2670,7 +2698,7 @@ def restart_server_stream():
 
     def model_initialization_task():
 
-        global PIPE
+        global PIPE, MODEL, AUTO_PROC_TOK
 
         try:
             sys.stdout = custom_stdout
@@ -2700,18 +2728,18 @@ def restart_server_stream():
                     print("\nTTS Model Selected - Loading...\n")
                     load_tts_pipeline()
                 else:
-                    model = AutoModelForCausalLM.from_pretrained(read_return['model_id'], **model_params)
-                    global AUTO_TOKENIZER
-                    AUTO_TOKENIZER = AutoTokenizer.from_pretrained(read_return['model_id'], trust_remote_code=read_return['trust_remote_code'])
                     print("\nInitializing inference pipeline...")
-                    PIPE = pipeline(
-                        read_return['pipeline_task'],
-                        model=model,
-                        tokenizer=AUTO_TOKENIZER,
-                    )
+                    MODEL = AutoModelForCausalLM.from_pretrained(read_return['model_id'], **model_params)
+                    
+                    try:
+                        AUTO_PROC_TOK = PIPE = AutoProcessor.from_pretrained(read_return['model_id'], trust_remote_code=read_return['trust_remote_code'])
+                    except Exception as e:
+                        handle_error_no_return(f"Could not load Auto-Processor for {read_return['model_id']}, falling back to Auto-Tokenizer. Encountered error: ", e)
+                        AUTO_PROC_TOK = AutoTokenizer.from_pretrained(read_return['model_id'], trust_remote_code=read_return['trust_remote_code'])
+                        PIPE = pipeline(read_return['pipeline_task'], model=MODEL, tokenizer=AUTO_PROC_TOK)
 
                     try:
-                        print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
+                        print(f"Your model's memory footprint is: {MODEL.get_memory_footprint()}")
                     except Exception as e:
                         handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
 
@@ -2748,12 +2776,12 @@ def restart_server_stream():
 
 def initialize_model():
 
-    global PIPE
+    global PIPE, MODEL, AUTO_PROC_TOK
 
     try:
         read_return = read_config(['model_id', 'trust_remote_code', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'tts', 'exl2', 'exl3'])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when trying to initialize_model(), encountered error: ", e)
+        handle_local_error("Could not read values from hf_config.json when trying to initialize-model(), encountered error: ", e)
 
     print(f"\n\nInitializing HF-Waitress LLM Server for {read_return['model_id']}\n\n")
 
@@ -2787,14 +2815,18 @@ def initialize_model():
                 print("\n\nTTS Model Selected - Loading...\n\n")
                 load_tts_pipeline()
             else:
-                model = AutoModelForCausalLM.from_pretrained(read_return['model_id'], **model_params)
-                global AUTO_TOKENIZER
-                AUTO_TOKENIZER = AutoTokenizer.from_pretrained(read_return['model_id'], trust_remote_code=read_return['trust_remote_code'])
                 print("\nInitializing inference pipeline...")
-                PIPE = pipeline(read_return['pipeline_task'], model=model, tokenizer=AUTO_TOKENIZER)
+                MODEL = AutoModelForCausalLM.from_pretrained(read_return['model_id'], **model_params)
+                
+                try:
+                    AUTO_PROC_TOK = PIPE = AutoProcessor.from_pretrained(read_return['model_id'], trust_remote_code=read_return['trust_remote_code'])
+                except Exception as e:
+                    handle_error_no_return(f"Could not load Auto-Processor for {read_return['model_id']}, falling back to Auto-Tokenizer. Encountered error: ", e)
+                    AUTO_PROC_TOK = AutoTokenizer.from_pretrained(read_return['model_id'], trust_remote_code=read_return['trust_remote_code'])
+                    PIPE = pipeline(read_return['pipeline_task'], model=MODEL, tokenizer=AUTO_PROC_TOK)
 
                 try:
-                    print(f"Your model's memory footprint is: {model.get_memory_footprint()}")
+                    print(f"Your model's memory footprint is: {MODEL.get_memory_footprint()}")
                 except Exception as e:
                     handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
 
@@ -2802,7 +2834,7 @@ def initialize_model():
 
     if read_return['push_to_hub']:
         try:
-            model.push_to_hub(f"{read_return['model_id']}-{read_return['quant_level']}")
+            MODEL.push_to_hub(f"{read_return['model_id']}-{read_return['quant_level']}")
         except Exception as e:
             handle_error_no_return("Could not push the model to your hub, encountered error: ", e)
 
@@ -2965,8 +2997,9 @@ def get_input_params_for_vision_model(request):
             handle_local_error("Could not get PIL image objects for file, encountered error: ", e)
 
     try:
+        # Not using central Auto-Tokenizer method as this one is based on Auto-Processor instead
         print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
-        input_text = PIPE.apply_chat_template(messages, add_generation_prompt=True) # Not using central auto-tokenizer method as this one is based on Processor-AutoProcessor, not AutoTokenizer!
+        input_text = PIPE.apply_chat_template(messages, add_generation_prompt=True)
     except Exception as e:
         handle_local_error("Could not apply chat template, encountered error: ", e)
         return False
@@ -3170,7 +3203,7 @@ def print_templated_output(templated_output: dict, tokenize: bool):
                     if hasattr(first_elem, '__len__') and not isinstance(first_elem, (str, int)):
                         ids_to_decode = first_elem
 
-                print(f"\n\ntemplated_output: {AUTO_TOKENIZER.decode(ids_to_decode, skip_special_tokens=False)}\n\n")
+                print(f"\n\ntemplated_output: {AUTO_PROC_TOK.decode(ids_to_decode, skip_special_tokens=False)}\n\n")
             except Exception as decode_err:
                 # Fallback to raw print if decoding fails
                 print(f"\n\ntemplated_output (raw): {templated_output} | Decode Error: {decode_err}\n\n")
@@ -3183,14 +3216,14 @@ def print_templated_output(templated_output: dict, tokenize: bool):
 
 
 def auto_tokenizer_apply_chat_template(
-        conversation: Union[list[dict[str, str]], list[list[dict[str, str]]]],
-        tools: Optional[list[Union[dict, Callable]]] = None,
+        conversation: list[dict[str, str]] | list[list[dict[str, str]]],
+        tools: list[dict | Callable] | None = None,
         add_generation_prompt: bool = False,
         tokenize: bool = True,
-        return_tensors: Optional[Union[str, TensorType]] = None,
+        return_tensors: str | TensorType | None = None,
         return_dict: bool = False,
-        verbose: bool = True
-    ) -> dict:
+        verbose: bool = False
+    ) -> dict:  # All defaults above as per Auto-Tokenizer's implementation!
     '''
     Acts as a wrapper around the Transformers apply-chat_template() method, which converts a list of dictionaries 
     with `"role"` and `"content"` keys to a list of token ids. This method is intended for use with chat models, 
@@ -3222,11 +3255,12 @@ def auto_tokenizer_apply_chat_template(
         return_dict (`bool`, defaults to `False`):
             Whether to return a dictionary with named outputs. Has no effect if tokenize is `False`.
 
-    For full details, check the full definition in `tokenization_utils_base.py`, which can be found by inspecting the AutoTokenizer class to open 
-    `tokenization_auto.py` and from there, navigate to the above module via the `from ...tokenization_utils_base` import.
+    For full details, check the full method definition in the following paths:
+        - Auto-Tokenizer: Inspect `Auto-Tokenizer` import -> Inspect `tokenization_utils_base` import -> `def apply...`
+        - Auto-Processor: Inspect `Auto-Processor` import -> Inspect `processing_utils` import -> `def apply...`
     '''
     try:
-        templated_output = AUTO_TOKENIZER.apply_chat_template(
+        templated_output = AUTO_PROC_TOK.apply_chat_template(
             conversation=conversation,
             tools=tools,
             add_generation_prompt=add_generation_prompt,
@@ -3238,7 +3272,7 @@ def auto_tokenizer_apply_chat_template(
             print_templated_output(templated_output, tokenize)
         return templated_output
     except Exception as e:
-        handle_local_error("Error invoking Transformers-AutoTokenizer's apply-chat_template() method, encountered error: ", e)
+        handle_local_error("Error invoking Transformers-Auto-Tokenizer's apply-chat_template() method, encountered error: ", e)
 
 
 @app.route('/completions', methods=['POST'])
@@ -3274,50 +3308,68 @@ def completions():
             return handle_api_error("Could not read POST-request messages for /completions, encountered error: ", e)
 
         try:
-            generation_config = GenerationConfig(
-                max_new_tokens=int(request.headers.get('X-Max-New-Tokens', str(config['max_new_tokens']))),
-                temperature=float(request.headers.get('X-Temperature', str(config['temperature']))),
-                do_sample=request.headers.get('X-Do-Sample', str(config['do_sample'])).lower() == 'true',
-                top_k=int(request.headers.get('X-Top-K', str(config['top_k']))),
-                top_p=float(request.headers.get('X-Top-P', str(config['top_p']))),
-                min_p=float(request.headers.get('X-Min-P', str(config['min_p']))),
-                use_cache=True
-            )
+            generation_config = {
+                "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', config['max_new_tokens'])),
+                "temperature": float(request.headers.get('X-Temperature', str(config['temperature']))),
+                "do_sample": request.headers.get('X-Do-Sample', str(config['do_sample'])).lower() == 'true',
+                "top_k": int(request.headers.get('X-Top-K', str(config['top_k']))),
+                "top_p": float(request.headers.get('X-Top-P', str(config['top_p']))),
+                "min_p": float(request.headers.get('X-Min-P', str(config['min_p']))),
+                "use_cache": True
+            }
             # use_cache=True by default, setting explictily to True for clarity. Intra-call optimization: tells the generator, "During this single generation call, please be efficient.
             # As you process the prompt and generate new tokens, create and use a KV cache internally so you don't have to re-calculate everything for every single new token." 
         except Exception as e:
             handle_error_no_return("Could not set generation-arguments for /completions, proceeding without them. Encountered error: ", e)
-            generation_config = GenerationConfig(max_new_tokens=config['max_new_tokens'], use_cache=True)
+            generation_config = {"max_new_tokens": config['max_new_tokens'],"use_cache": True}
 
         try:
             print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
-            inputs = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, return_dict=True, return_tensors="pt")
+            text = auto_tokenizer_apply_chat_template(
+                conversation=messages,
+                tools=tools,
+                add_generation_prompt=True,
+                tokenize=False # Asking for a string back, not tensors
+            )
         except Exception as e:
             return handle_api_error("Could not apply chat template, encountered error: ", e)
 
         try:
-            print("\n\nLoading Input to Model\n\n")
-            inputs.to(PIPE.model.device)
+            inputs = AUTO_PROC_TOK(text=text, return_tensors="pt").to(MODEL.device)
+            input_length = inputs['input_ids'].shape[-1]
+            inputs.pop('mm_token_type_ids', None)   # see below for reasoning:
+            '''
+            MODEL.generate(**inputs, ...) forwards every key in inputs as keyword arguments 
+            to the model's forward(). Recent versions of Transformers validate those keys &
+            raise if any are not accepted by the model.
+            'mm_token_type_ids' is not accepted by all models (eg Qwen-3.5), so we remove it here.
+            '''
         except Exception as e:
             return handle_api_error("Could not load input to model, encountered error: ", e)
 
         inference_output = ""
         try:
             print("\n\nGenerating Output\n\n")
-            output = PIPE.model.generate(**inputs, generation_config=generation_config)
-            input_length = inputs.input_ids.shape[1]   # Check inference_with_vision_model(request) for detailed explanation!
+            outputs = MODEL.generate(**inputs, **generation_config) # generate() is a synchronous blocking call!
+            generated_tokens = outputs[0][input_length:]
+            response_string = AUTO_PROC_TOK.decode(generated_tokens, skip_special_tokens=False)
             
-            # Slice the tensor and decode only the output!
-            decoded_output = AUTO_TOKENIZER.decode(output[0][input_length:], skip_special_tokens=True)    # Setting skip_special_tokens=True to remove: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
-
-            print(f"\n\ndecoded_output: {decoded_output}\n\n")
-            inference_output += decoded_output
+            # If it's a modern processor with tool parsing, use it!
+            try:
+                if hasattr(AUTO_PROC_TOK, 'parse_response'):
+                    parsed_data = AUTO_PROC_TOK.parse_response(response_string)
+                    print(f"\n\nparsed_data: {parsed_data}\n\n")
+                    # Do whatever is needed with parsed_data here - json.dump() it if required!
+            except Exception as e:
+                handle_error_no_return("Could not parse response, encountered error: ", e)
+            
+            print(f"\n\nFinal Output: {response_string}\n\n")
+            inference_output = response_string
         except Exception as e:
             return handle_api_error("Could not generate output, encountered error: ", e)
 
         print("\n\nCompletions done - releasing LLM semaphore\n\n")
         return jsonify({"success": True, "response": inference_output})
-
 
 
 class StopOnEvent(StoppingCriteria):    # custom StoppingCriteria to stop generation when an event is set - inherits from StoppingCriteria, which is an abstract class defined in Hugging Face's transformers library. StoppingCriteria is used to define custom stopping conditions for the generation process.
@@ -3334,6 +3386,154 @@ class StopOnEvent(StoppingCriteria):    # custom StoppingCriteria to stop genera
     # It takes the input IDs, scores, and any additional keyword arguments (**kwargs) as arguments. However, it ignores the input IDs and scores, and only uses the keyword argument event to determine if the stopping condition is met.
     # The method should return True if the stopping condition is met (e.g., if an event is set), and False otherwise.
 
+
+class CustomTextStreamer(TextStreamer):
+    def __init__(self, tokenizer, skip_special_tokens=True, skip_prompt=True, **kwargs):
+        super().__init__(tokenizer, skip_special_tokens=skip_special_tokens, skip_prompt=skip_prompt, **kwargs)
+        self.callback = None
+        self.buffer = io.StringIO()
+
+    def on_finalized_text(self, text: str, stream_end: bool = False):
+        if self.callback:
+            self.callback(text)
+        return self.buffer.write(text)
+
+    def flush(self):
+        self.buffer.flush()
+
+
+@app.route('/completions_stream', methods=['POST'])
+def completions_stream():
+
+    llm_semaphore.acquire()
+    print("\n\nLLM semaphore acquired by /completions_stream\n\n")
+
+    try:
+        data = request.json
+        if isinstance(data, str):   # should be a list
+            data = json.loads(data)
+        messages = data.get('messages', [])
+        tools = data.get('tools', None)
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not read POST-request messages for /completions_stream, encountered error: ", e)
+
+    try:
+        read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep'])
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not read values from hf_config.json when attempting /completions_stream, encountered error: ", e)
+
+    try:
+        generation_config = {
+            "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', read_return['max_new_tokens'])),
+            "temperature": float(request.headers.get('X-Temperature', str(read_return['temperature']))),
+            "do_sample": request.headers.get('X-Do-Sample', str(read_return['do_sample'])).lower() == 'true',
+            "top_k": int(request.headers.get('X-Top-K', str(read_return['top_k']))),
+            "top_p": float(request.headers.get('X-Top-P', str(read_return['top_p']))),
+            "min_p": float(request.headers.get('X-Min-P', str(read_return['min_p']))),
+            "use_cache": True
+        }
+    except Exception as e:
+        handle_error_no_return("Could not set generation-arguments for /completions_stream, proceeding without them. Encountered error: ", e)
+        generation_config = {"max_new_tokens": read_return['max_new_tokens'],"use_cache": True}
+
+    try:
+        print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
+        text = auto_tokenizer_apply_chat_template(
+            conversation=messages,
+            tools=tools,
+            add_generation_prompt=True,
+            tokenize=False # Asking for a string back, not tensors
+        )
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not apply chat template, encountered error: ", e)
+
+    try:
+        inputs = AUTO_PROC_TOK(text=text, return_tensors="pt").to(MODEL.device)
+        input_length = inputs['input_ids'].shape[-1]
+        inputs.pop('mm_token_type_ids', None)   # see below for reasoning:
+        '''
+        MODEL.generate(**inputs, ...) forwards every key in inputs as keyword arguments 
+        to the model's forward(). Recent versions of Transformers validate those keys &
+        raise if any are not accepted by the model.
+        'mm_token_type_ids' is not accepted by all models (eg Qwen-3.5), so we remove it here.
+        '''
+    except Exception as e:
+        llm_semaphore.release()
+        return handle_api_error("Could not decode inputs, encountered error: ", e)
+
+    stop_event = threading.Event()
+    data_queue = queue.Queue()
+
+    def callback(data):
+        data_queue.put(data)
+
+    # Streamer natively accepts both a tokenizer and a processor!
+    custom_streamer = CustomTextStreamer(AUTO_PROC_TOK, skip_special_tokens=False, skip_prompt=True)
+    custom_streamer.callback = callback
+
+    def llm_task():
+
+        global PIPE
+
+        try:
+            generation_config["streamer"] = custom_streamer
+            generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
+            outputs = MODEL.generate(**inputs, **generation_config) # generate() is a synchronous blocking call!
+
+            # If it's a modern processor with tool parsing, use it!
+            try:
+                if hasattr(AUTO_PROC_TOK, 'parse_response'):
+                    generated_tokens = outputs[0][input_length:]
+                    response_string = AUTO_PROC_TOK.decode(generated_tokens, skip_special_tokens=False)
+                    parsed_data = AUTO_PROC_TOK.parse_response(response_string)
+                    print(f"\n\nparsed_data: {parsed_data}\n\n")
+                    # Do whatever is needed with parsed_data here - json.dump() it if required!
+            except Exception as e:
+                handle_error_no_return("Could not parse response, encountered error: ", e)
+
+        except Exception as e:
+            handle_error_no_return("Response generation failed, encountered error: ", e)
+            data_queue.put(f"Error: {str(e)}") # Pass error to client via queue
+        finally:
+            data_queue.put(None)
+            print("\n\nLLM stream done, releasing semaphore\n\n")
+            llm_semaphore.release()
+
+    def generate():        
+        
+        global STOP_GENERATION
+        STOP_GENERATION = False
+
+        try:
+            thread = threading.Thread(target=llm_task)
+            thread.start()
+        except Exception as e:
+            handle_error_no_return("Error generating completions-stream, encountered error: ", e)
+            yield f"data: {json.dumps('Error in Transformers Response-Generation Pipeline: ' + str(e))}\n\n"
+            return
+
+        while True:
+            if STOP_GENERATION:
+                print("\n\nStopping generation with stop_event\n\n")
+                stop_event.set()
+                thread.join()
+                break
+            line = data_queue.get()
+            if line is None:
+                print("\n\nNone read, breaking and stopping thread\n\n")
+                thread.join()
+                break
+            yield f"data: {json.dumps(line)}\n\n"
+        
+        yield f"event: END\ndata: \"null\"\n\n"
+
+        STOP_GENERATION = False
+            
+    print("\n\nInferencing Begins!\n\n")
+    return Response(generate(), content_type='text/event-stream')
 
 
 @app.route('/vision_stream', methods=['POST'])
@@ -3645,14 +3845,14 @@ def transcribe_with_ibm_granite_speech_3_3(audio_data: np.ndarray, asr_config: d
             dict(role="system", content=system_prompt),
             dict(role="user", content=user_prompt),
         ]
-        prompt = TOKENIZER.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)    # Not using central auto-tokenizer method as this one is based on Processor-AutoProcessor, not AutoTokenizer!
+        prompt = ASR_TOKENIZER.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
         model_inputs = PROCESSOR(prompt, wav, device=asr_config['torch_device_map'], return_tensors="pt").to(asr_config['torch_device_map'])
         model_outputs = MODEL.generate(**model_inputs, max_new_tokens=asr_config['asr_max_new_tokens'], do_sample=False, num_beams=1)
 
         # Transformers includes the input IDs in the response.
         num_input_tokens = model_inputs["input_ids"].shape[-1]
         new_tokens = torch.unsqueeze(model_outputs[0, num_input_tokens:], dim=0)
-        output_text = TOKENIZER.batch_decode(
+        output_text = ASR_TOKENIZER.batch_decode(
             new_tokens, add_special_tokens=False, skip_special_tokens=True
         )
         text = output_text[0].upper()
@@ -3661,10 +3861,6 @@ def transcribe_with_ibm_granite_speech_3_3(audio_data: np.ndarray, asr_config: d
         # Handle any processing errors
         print(f"Error during transcription: {e}")
         return ""
-
-
-def transcribe_with_nv_nemotron_streaming_asr(audio_data: np.ndarray, asr_config: dict) -> str:
-    pass
 
 
 def transcribe_audio_data_with_asr_model(audio_data: np.ndarray, asr_config: dict) -> dict:
@@ -3683,9 +3879,6 @@ def transcribe_audio_data_with_asr_model(audio_data: np.ndarray, asr_config: dic
 
         elif ("ibm-granite/granite-speech-3.3" in asr_config['model_id']):
             return transcribe_with_ibm_granite_speech_3_3(audio_data, asr_config)
-
-        elif ("nvidia/nemotron-speech-streaming-en-0.6b" in asr_config['model_id']):
-            return transcribe_with_nv_nemotron_streaming_asr(audio_data, asr_config)
 
         else:
             raise ValueError(f"Invalid ASR model ID: {asr_config['model_id']}")
@@ -4193,130 +4386,6 @@ def tts():
         return handle_api_error("Server-side error, could not synthesize TTS audio, encountered error: ", e)
 
 
-class CustomTextStreamer(TextStreamer):
-    def __init__(self, tokenizer, skip_special_tokens=True, skip_prompt=True, **kwargs):
-        super().__init__(tokenizer, skip_special_tokens=skip_special_tokens, skip_prompt=skip_prompt, **kwargs)
-        self.callback = None
-        self.buffer = io.StringIO()
-
-    def on_finalized_text(self, text: str, stream_end: bool = False):
-        if self.callback:
-            self.callback(text)
-        return self.buffer.write(text)
-
-    def flush(self):
-        self.buffer.flush()
-
-@app.route('/completions_stream', methods=['POST'])
-def completions_stream():
-
-    llm_semaphore.acquire()
-    print("\n\nLLM semaphore acquired by /completions_stream\n\n")
-
-    try:
-        data = request.json
-        if isinstance(data, str):   # should be a list
-            data = json.loads(data)
-        messages = data.get('messages', [])
-        tools = data.get('tools', None)
-    except Exception as e:
-        llm_semaphore.release()
-        return handle_api_error("Could not read POST-request messages for /completions_stream, encountered error: ", e)
-
-    try:
-        read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep'])
-    except Exception as e:
-        llm_semaphore.release()
-        return handle_api_error("Could not read values from hf_config.json when attempting /completions_stream, encountered error: ", e)
-
-    try:    # Create a GenerationConfig object
-        generation_config = {
-            "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', read_return['max_new_tokens'])),
-            "return_full_text": request.headers.get('X-Return-Full-Text', str(read_return['return_full_text'])).lower() == 'true',
-            "temperature": float(request.headers.get('X-Temperature', str(read_return['temperature']))),
-            "do_sample": request.headers.get('X-Do-Sample', str(read_return['do_sample'])).lower() == 'true',
-            "top_k": int(request.headers.get('X-Top-K', str(read_return['top_k']))),
-            "top_p": float(request.headers.get('X-Top-P', str(read_return['top_p']))),
-            "min_p": float(request.headers.get('X-Min-P', str(read_return['min_p']))),
-            "use_cache": True
-        }
-    except Exception as e:
-        handle_error_no_return("Could not set generation-arguments for /completions_stream, proceeding without them. Encountered error: ", e)
-        generation_config = {"max_new_tokens": read_return['max_new_tokens'],"use_cache": True}
-
-    try:
-        print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
-        inputs = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, return_dict=True, return_tensors="pt")
-    except Exception as e:
-        llm_semaphore.release()
-        return handle_api_error("Could not apply chat template, encountered error: ", e)
-
-    try:
-        # Slice the tensor and decode only the input!
-        decoded_inputs = AUTO_TOKENIZER.decode(inputs['input_ids'][0].tolist(), skip_special_tokens=False)    # Setting skip_special_tokens=False to keep: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
-        print(f"\n\ndecoded_inputs: {decoded_inputs}\n\n")
-    except Exception as e:
-        llm_semaphore.release()
-        return handle_api_error("Could not decode inputs, encountered error: ", e)
-
-    stop_event = threading.Event()
-    data_queue = queue.Queue()
-
-    def callback(data):
-        data_queue.put(data)
-
-    custom_streamer = CustomTextStreamer(AUTO_TOKENIZER, skip_special_tokens=True, skip_prompt=True)    # special tokens need not be streamed though!
-    custom_streamer.callback = callback
-
-    def llm_task():
-
-        global PIPE
-
-        try:
-            generation_config["streamer"] = custom_streamer
-            generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
-            output = PIPE(decoded_inputs, **generation_config)
-        except Exception as e:
-            handle_error_no_return("Response generation failed, encountered error: ", e)
-            data_queue.put(f"Error: {str(e)}") # Pass error to client via queue
-        finally:
-            data_queue.put(None)
-            print("\n\nLLM stream done, releasing semaphore\n\n")
-            llm_semaphore.release()
-
-    def generate():        
-
-        global STOP_GENERATION
-        STOP_GENERATION = False
-
-        try:
-            thread = threading.Thread(target=llm_task)
-            thread.start()
-        except Exception as e:
-            handle_error_no_return("Error generating completions-stream, encountered error: ", e)
-            yield f"data: {json.dumps('Error in Transformers Response-Generation Pipeline: ' + str(e))}\n\n"
-            return
-
-        while True:
-            if STOP_GENERATION:
-                print("\n\nStopping generation with stop_event\n\n")
-                stop_event.set()
-                thread.join()
-                break
-            line = data_queue.get()
-            if line is None:
-                print("\n\nNone read, breaking and stopping thread\n\n")
-                thread.join()
-                break
-            yield f"data: {json.dumps(line)}\n\n"
-
-        yield f"event: END\ndata: \"null\"\n\n"
-
-        STOP_GENERATION = False
-
-    print("\n\nInferencing Begins!\n\n")
-    return Response(generate(), content_type='text/event-stream')
-
 
 ###################################-------------Exl2 Logic Begins-------------###################################
 
@@ -4463,7 +4532,7 @@ def exl2_stream():
         job = ExLlamaV2DynamicJob(
             input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
             max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens')))),
-            stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id],
+            stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_PROC_TOK.eos_token_id],
             gen_settings = gen_settings
         )
         job.response_queue = user_queue
@@ -4614,7 +4683,7 @@ def exl2_fim_stream():
         job = ExLlamaV2DynamicJob(
             input_ids= exl_encoded_fim_input_ids,
             max_new_tokens = config_data['max_new_tokens'],
-            stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id],
+            stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_PROC_TOK.eos_token_id],
             gen_settings = gen_settings
         )
         job.response_queue = user_queue
@@ -5186,20 +5255,29 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
     print("\n\nLLM semaphore acquired by OpenAI/transformers-completions Streaming Route\n\n")
 
     try:
-        read_return = read_config(['model_id', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep'])
+        read_return = read_config(['model_id', 'max_new_tokens', 'temperature', 'do_sample', 'top_k', 'top_p'])
+        temp = int(temperature) if temperature is not None else read_return['temperature']
+        
         generation_config = {
             "max_new_tokens": max_tokens or int(read_return['max_new_tokens']),
-            "return_full_text": False,
-            "temperature": temperature,
-            "do_sample": temperature > 0,
+            "temperature": temp,
+            "do_sample": temp > 0,
             "top_k": top_k or int(read_return['top_k']),
-            "top_p": top_p,
+            "top_p": float(top_p) if top_p is not None else read_return['top_p'],
             "use_cache": True
         }
 
-        inputs = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, return_dict=True, return_tensors="pt")
-        decoded_inputs = AUTO_TOKENIZER.decode(inputs['input_ids'][0].tolist(), skip_special_tokens=False)    # Setting skip_special_tokens=False to keep: 1) Start and end special tokens (<s> and </s>) 2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Input-formatting special tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
+        text = auto_tokenizer_apply_chat_template(
+            conversation=messages,
+            tools=tools,
+            add_generation_prompt=True,
+            tokenize=False # Asking for a string back, not tensors
+        )
+        
+        inputs = AUTO_PROC_TOK(text=text, return_tensors="pt").to(MODEL.device)
+        inputs.pop('mm_token_type_ids', None)
     except Exception as e:
+        print(f"Error: {str(e)}")
         llm_semaphore.release()
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
 
@@ -5209,7 +5287,7 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
     def callback(data):
         data_queue.put(data)
 
-    custom_streamer = CustomTextStreamer(AUTO_TOKENIZER, skip_special_tokens=True, skip_prompt=True)    # special tokens need not be streamed though!
+    custom_streamer = CustomTextStreamer(AUTO_PROC_TOK, skip_special_tokens=False, skip_prompt=True)
     custom_streamer.callback = callback
 
     def llm_task():
@@ -5219,7 +5297,7 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
         try:
             generation_config["streamer"] = custom_streamer
             generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
-            output = PIPE(decoded_inputs, **generation_config)
+            MODEL.generate(**inputs, **generation_config) # generate() is a synchronous blocking call!
         except Exception as e:
             data_queue.put(f"Error: {str(e)}") # Pass error to client via queue
         finally:
@@ -5265,28 +5343,35 @@ def handle_transformers_non_streaming_openai(messages, tools, max_tokens, temper
         print("\n\nLLM semaphore acquired by OpenAI/transformers-completions Non-Streaming Route\n\n")
 
         try:
-            read_return = read_config(['model_id', 'max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep'])
-            generation_config = GenerationConfig(
-                max_new_tokens=max_tokens or int(read_return['max_new_tokens']),
-                return_full_text=False,
-                temperature=temperature,
-                do_sample=temperature > 0,
-                top_k=top_k or int(read_return['top_k']),
-                top_p=top_p,
-                use_cache=True
+            read_return = read_config(['model_id', 'max_new_tokens', 'temperature', 'do_sample', 'top_k', 'top_p'])
+            
+            generation_config = {
+                "max_new_tokens": max_tokens or int(read_return['max_new_tokens']),
+                "temperature": temperature,
+                "do_sample": temperature > 0,
+                "top_k": top_k or int(read_return['top_k']),
+                "top_p": top_p,
+                "use_cache": True
+            }
+
+            text = auto_tokenizer_apply_chat_template(
+                conversation=messages,
+                tools=tools,
+                add_generation_prompt=True,
+                tokenize=False # Asking for a string back, not tensors
             )
 
-            inputs = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, return_dict=True, return_tensors="pt")
-            inputs.to(PIPE.model.device)
+            inputs = AUTO_PROC_TOK(text=text, return_tensors="pt").to(MODEL.device)
+            input_length = inputs['input_ids'].shape[-1]
+            inputs.pop('mm_token_type_ids', None)
 
-            output = PIPE.model.generate(**inputs, generation_config=generation_config)
-            input_length = inputs.input_ids.shape[1]
-            decoded_output = AUTO_TOKENIZER.decode(output[0][input_length:], skip_special_tokens=True)
-            inference_output = decoded_output
+            outputs = MODEL.generate(**inputs, **generation_config)
+            generated_tokens = outputs[0][input_length:]
+            inference_output = AUTO_PROC_TOK.decode(generated_tokens, skip_special_tokens=False)   # response_string
 
             print("\nOpenAI/transformers-completions-non-streaming done\n")
             prompt_tokens = len(inputs['input_ids'][0])
-            completion_tokens = len(AUTO_TOKENIZER.encode(inference_output))
+            completion_tokens = len(inference_output)
 
             return generate_openai_non_streaming_response(
                 model_id=read_return['model_id'],
@@ -5316,7 +5401,7 @@ def handle_exl2_streaming_openai(messages, tools, max_tokens, temperature, top_p
         if top_k is not None: gen_settings.top_k = top_k
         
         # 3. Setup stop conditions
-        stop_tokens = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id]
+        stop_tokens = [EXL2_TOKENIZER.eos_token_id, AUTO_PROC_TOK.eos_token_id]
         if stop:
             if isinstance(stop, str):stop = [stop]
             for stop_string in stop:
@@ -5376,7 +5461,7 @@ def handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, t
         if top_k is not None: gen_settings.top_k = top_k
 
         # 3. Setup stop conditions
-        stop_token_list = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id]
+        stop_token_list = [EXL2_TOKENIZER.eos_token_id, AUTO_PROC_TOK.eos_token_id]
         if stop:
             if isinstance(stop, str):stop = [stop]
             for stop_string in stop:
@@ -5596,8 +5681,8 @@ def openai_compatible_api():
     
     # Check which backends are available
     pipe_ready = PIPE is not None
-    exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, EXL2_GENERATOR, AUTO_TOKENIZER])
-    exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, EXL3_GENERATOR, STOP_TOKENS, AUTO_TOKENIZER])
+    exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, EXL2_GENERATOR, AUTO_PROC_TOK])
+    exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, EXL3_GENERATOR, STOP_TOKENS, AUTO_PROC_TOK])
     
     if not (pipe_ready or exl2_ready or exl3_ready):
         return jsonify(
@@ -5809,7 +5894,7 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
         job = ExLlamaV2DynamicJob(
             input_ids= EXL2_TOKENIZER.encode(payload, encode_special_tokens=True),
             max_new_tokens = max_new_tokens,
-            stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_TOKENIZER.eos_token_id],
+            stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_PROC_TOK.eos_token_id],
             gen_settings = gen_settings
         )
 
@@ -6583,12 +6668,12 @@ def get_transformers_model_info():
     except Exception as e:
         throw_health_check_error("model_vocab_size", e)
         try:
-            model_info["tokenizer_vocab_length"] = len(AUTO_TOKENIZER)
+            model_info["tokenizer_vocab_length"] = len(AUTO_PROC_TOK)
         except Exception as e:
             throw_health_check_error("tokenizer_vocab_length", e)
 
     try:
-        model_info["tokenizer_vocab_size"] = str(AUTO_TOKENIZER.vocab_size)
+        model_info["tokenizer_vocab_size"] = str(AUTO_PROC_TOK.vocab_size)
     except Exception as e:
         throw_health_check_error("tokenizer_vocab_size", e)
 
@@ -6633,12 +6718,12 @@ def get_transformers_model_info():
         throw_health_check_error("max_position_embeddings", e)
 
     try:
-        model_info["tokenizer"] = str(AUTO_TOKENIZER.name_or_path)
+        model_info["tokenizer"] = str(AUTO_PROC_TOK.name_or_path)
     except Exception as e:
         throw_health_check_error("tokenizer", e)
 
     try:
-        model_info["max_seq_length"] = str(AUTO_TOKENIZER.model_max_length)
+        model_info["max_seq_length"] = str(AUTO_PROC_TOK.model_max_length)
     except Exception as e:
         throw_health_check_error("max_seq_length", e)
 
@@ -6651,8 +6736,8 @@ def health():
     try:
         # Treat any backend being ready as healthy:
         pipe_ready = PIPE is not None
-        exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, EXL2_GENERATOR, AUTO_TOKENIZER])
-        exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, EXL3_GENERATOR, STOP_TOKENS, AUTO_TOKENIZER])
+        exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, EXL2_GENERATOR, AUTO_PROC_TOK])
+        exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, EXL3_GENERATOR, STOP_TOKENS, AUTO_PROC_TOK])
         # asr_ready = all([MODEL, SILERO_VAD, SILERO_UTILS]) # MODEL & VAD components are the common denominator for all ASR backends
         asr_ready = MODEL is not None
         tts_ready = MODEL is not None
