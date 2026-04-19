@@ -4945,7 +4945,7 @@ def asr_server_starter(hard_reboot_required: bool = False):
 
     cmd_list = [
         asr_base_command,
-        'hf_waitress_asgi.py',
+        'asr_waitress.py',
         '--port', str(config_data['asr_waitress_server_port']),
         '--model_id', str(config_data['asr_model']),
         '--torch_device_map', str(config_data['asr_torch_device']),
