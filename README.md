@@ -2,10 +2,22 @@
 ### Previously 'LARS - The LLM & Advanced Referencing Solution'
 
 <p align="center">
-<img src="https://github.com/abgulati/LARS-Enterprise/blob/main/web_app/static/images/Privion-UI.png"  align="center">
+<img src="https://github.com/abgulati/LARS-Enterprise/blob/main/web_app/static/images/Privion-Logo.png"  align="center">
 </p>
 
 Privion is a versatile AI application focused on privacy and offline inferencing, capable of leveraging a multitude of open-source LLMs to perform a range of diverse tasks. Privion's current feature set includes:
+
+### Interact in voice end-to-end:
+
+[![Watch the demo](https://img.youtube.com/vi/D0w_GhwA77Q/0.jpg)](https://www.youtube.com/watch?v=D0w_GhwA77Q&list=PL4hRXF9j5gSS8nmvwlpo-PxHXdmm9loCX&index=2)
+
+### Execute various tools, including controlling real-world appliances and search the web all in one request:
+
+[![Watch the demo](https://img.youtube.com/vi/aDuyOtXQMJw/0.jpg)](https://www.youtube.com/watch?v=aDuyOtXQMJw&list=PL4hRXF9j5gSS8nmvwlpo-PxHXdmm9loCX&index=3)
+
+### Carry out very sophisticated hybrid RAG, combining semantic, lexical (keyword), and Graph RAG on local documents with live web-search and URL extraction results:
+
+[![Watch the video](https://img.youtube.com/vi/VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=9C67kXKqc5E&list=PL4hRXF9j5gSS8nmvwlpo-PxHXdmm9loCX&index=5)
 
 ### Here's a list detailing Privion's feature-set as it stands today:
 
@@ -587,12 +599,12 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     4. Installation can now be carried out:
         ```
         cd LARS-Enterprise\web_app\exllamav2
-        pip install . --no-build-isolation
+        pip install . --no-build-isolation --no-deps
 
         # After completion, repeat for v3:
 
         cd LARS-Enterprise\web_app\exllamav3
-        pip install . --no-build-isolation
+        pip install . --no-build-isolation --no-deps
         ```
     5. The `--no-build-isolation` flag is crucial as newer versions of PIP strictly enforce the PEP 517 standard wherein a hermetically sealed (airtight) "clean room" is created for the build
         - Large dependencies such as Torch might not be included in that temporary clean room!
