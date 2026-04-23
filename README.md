@@ -7,15 +7,15 @@
 
 Privion is a versatile AI application focused on privacy and offline inferencing, capable of leveraging a multitude of open-source LLMs to perform a range of diverse tasks. Privion's current feature set includes:
 
-### Interact in voice end-to-end:
+### Demo Video - Interact in voice end-to-end:
 
 [![Watch the demo](https://img.youtube.com/vi/D0w_GhwA77Q/0.jpg)](https://www.youtube.com/watch?v=D0w_GhwA77Q&list=PL4hRXF9j5gSS8nmvwlpo-PxHXdmm9loCX&index=2)
 
-### Execute various tools, including controlling real-world appliances and search the web all in one request:
+### Demo Video - Execute various tools, including controlling real-world appliances and search the web all in one request:
 
 [![Watch the demo](https://img.youtube.com/vi/aDuyOtXQMJw/0.jpg)](https://www.youtube.com/watch?v=aDuyOtXQMJw&list=PL4hRXF9j5gSS8nmvwlpo-PxHXdmm9loCX&index=3)
 
-### Carry out very sophisticated hybrid RAG, combining semantic, lexical (keyword), and Graph RAG on local documents with live web-search and URL extraction results:
+### Demo Video - Carry out very sophisticated hybrid RAG, combining semantic, lexical (keyword), and Graph RAG on local documents with live web-search and URL extraction results:
 
 [![Watch the video](https://img.youtube.com/vi/9C67kXKqc5E/0.jpg)](https://www.youtube.com/watch?v=9C67kXKqc5E&list=PL4hRXF9j5gSS8nmvwlpo-PxHXdmm9loCX&index=5)
 
