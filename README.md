@@ -2,7 +2,7 @@
 ### Previously 'LARS - The LLM & Advanced Referencing Solution'
 
 <p align="center">
-<img src="https://github.com/abgulati/LARS-Enterprise/blob/main/web_app/static/images/Privion-UI.png"  align="center">
+<img src="https://github.com/abgulati/LARS-Enterprise/blob/main/web_app/static/images/Privion-Logo.png"  align="center">
 </p>
 
 Privion is a versatile AI application focused on privacy and offline inferencing, capable of leveraging a multitude of open-source LLMs to perform a range of diverse tasks. Privion's current feature set includes:
