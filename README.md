@@ -2,7 +2,7 @@
 ### Previously 'LARS - The LLM & Advanced Referencing Solution'
 
 <p align="center">
-<img src="https://github.com/abgulati/LARS-Enterprise/blob/main/web_app/static/images/Privion-Logo.png"  align="center">
+<img src="https://github.com/abgulati/LARS-Enterprise/blob/main/web_app/static/images/Privion-UI.png"  align="center">
 </p>
 
 Privion is a versatile AI application focused on privacy and offline inferencing, capable of leveraging a multitude of open-source LLMs to perform a range of diverse tasks. Privion's current feature set includes:
@@ -17,7 +17,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
 
 ### Carry out very sophisticated hybrid RAG, combining semantic, lexical (keyword), and Graph RAG on local documents with live web-search and URL extraction results:
 
-[![Watch the video](https://img.youtube.com/vi/VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=9C67kXKqc5E&list=PL4hRXF9j5gSS8nmvwlpo-PxHXdmm9loCX&index=5)
+[![Watch the video](https://img.youtube.com/vi/9C67kXKqc5E/0.jpg)](https://www.youtube.com/watch?v=9C67kXKqc5E&list=PL4hRXF9j5gSS8nmvwlpo-PxHXdmm9loCX&index=5)
 
 ### Here's a list detailing Privion's feature-set as it stands today:
 
