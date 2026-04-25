@@ -242,13 +242,13 @@ function getOcrConfig() {
     const update_kosmos_url_config = document.getElementById('update_kosmos_url_config').checked;
     const update_docling_config = document.getElementById('update_docling_config').checked;
 
-    const force_extract_previously_extracted_text = document.getElementById('force_extract_previously_extracted_text_checkbox').checked;
+    const force_re_extract = document.getElementById('force_extract_previously_extracted_text_checkbox').checked;
     const backup_ocr_service_choice = document.getElementById('backupOcrApiDropdown').value;
 
     let config = {
         'ocr_service_choice': document.getElementById('ocrApiDropdown').value,
         'force_ocr': ocr_yes_radio_button ? true : false,
-        'force_extract_previously_extracted_text': force_extract_previously_extracted_text,
+        'force_re_extract': force_re_extract,
         'backup_ocr_service_choice': backup_ocr_service_choice
     };
 
