@@ -1031,8 +1031,8 @@ function initializeEmbeddingModelTabComponents(values) {
     document.getElementById('reranker_torch_device').value = values.reranker_torch_device;
     initializeEventListenersForEmbeddingModelTab();
     // toggleRerankerDropdownEnabledState();
-    clearDocsLoadedTable();
-    populateDocsLoadedTable();
+    // clearDocsLoadedTable();
+    // populateDocsLoadedTable();
 }
 
 
@@ -1564,11 +1564,11 @@ function initializeAllCustomDropdowns(config = {}) {
             return; // in a forEach loop, `continue` is unavailable & `return` only skips the current iter!
         }
 
-        const dropdownOptions  = {};
+        const dropdownOptions = {};
 
         // Add vision-instruct handler for ALL HF-sourced dropdowns
         if (dropdown.dataset.configSource === 'hf') {
-            dropdownOptions .onItemSelect = (model) => {
+            dropdownOptions.onItemSelect = (model) => {
                 const textAttachmentBtn = document.getElementById('textAttachmentButton');
                 if (textAttachmentBtn) {
                     textAttachmentBtn.disabled = !model.toLowerCase().includes('vision-instruct');
@@ -1578,7 +1578,7 @@ function initializeAllCustomDropdowns(config = {}) {
 
         // KB/Embed handler
         if (dropdown.dataset.type === 'kb' || dropdown.dataset.type === 'embed') {
-            dropdownOptions .onItemSelect = (model) => {
+            dropdownOptions.onItemSelect = (model) => {
                 clearDocsLoadedTable();
                 populateDocsLoadedTable();
             };
@@ -1589,6 +1589,12 @@ function initializeAllCustomDropdowns(config = {}) {
 
         new CustomDropdown(dropdown, dropdownOptions);
     });
+}
+
+
+function postCustomDropdownInitFunctions() {
+    clearDocsLoadedTable();
+    populateDocsLoadedTable();
 }
 
 
@@ -1764,6 +1770,7 @@ document.addEventListener("DOMContentLoaded", function() {
             else { return startLLMServer(); }
         })
         .then(() => {
+            postCustomDropdownInitFunctions();
             document.getElementById('ModelAndDBLoading').style.display = 'none';
             if (local_llm_server === "hf-waitress") {
                 initializeHfwServerConfig();
