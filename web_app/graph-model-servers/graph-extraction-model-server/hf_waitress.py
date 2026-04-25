@@ -570,6 +570,8 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'pipeline_task':"text-generation", 
                     'max_new_tokens':700, 
                     'return_full_text':False, 
+                    'enable_thinking':False,
+                    'preserve_thinking':False,
                     'temperature':0.1,
                     'do_sample':True, 
                     'top_k':40, 
@@ -1277,6 +1279,8 @@ def parse_arguments():
                 'pipeline_task',
                 'max_new_tokens',
                 'return_full_text',
+                'enable_thinking',
+                'preserve_thinking',
                 'temperature',
                 'do_sample',
                 'top_k',
@@ -1323,6 +1327,8 @@ def parse_arguments():
         parser.add_argument("--pipeline_task", type=str, default=read_return['pipeline_task'], help="Defaults to text-generation. For more details, open a Python shell, `import transformers`, and Run `help(transfomers.pipeline)`.")
         parser.add_argument("--max_new_tokens", type=int, default=read_return['max_new_tokens'], help="Set a hard limit on the maximum number of tokens an LLM can generate when responding. Remembers previously set value. Default: 500")
         parser.add_argument("--return_full_text", action="store_true", default=read_return['return_full_text'], help="When set to True, the LLM response contains the entire messages list with the latest response appended at the end.")
+        parser.add_argument("--enable_thinking", action="store_true", default=read_return['enable_thinking'], help="Passes the enable_thinking flag as a kwarg to the model's jinja chat-template renderer. NOTE: Only supported by some models! Defaults to False.")
+        parser.add_argument("--preserve_thinking", action="store_true", default=read_return['preserve_thinking'], help="Passes the preserve_thinking flag as a kwarg to the model's jinja chat-template renderer. NOTE: Only supported by some models! Defaults to False.")
         parser.add_argument("--temperature", type=float, default=read_return['temperature'], help="Set LLM temperature on a scale of 0.0 to 2.0. Remembers previously set value. Default: 0.1")
         parser.add_argument("--do_sample", action="store_true", default=read_return['do_sample'], help="Perform sampling when selecting response tokens. Remembers previously set value. Default: True. Must be set to True when temperature is above 0.0. For greedy decoding, leave this as False and set temp to 0.0")
         parser.add_argument("--top_k", type=int, default=read_return['top_k'], help="Limit the next token selection to the K most probable tokens. Remembers previously set value. Default: 40")
@@ -1417,6 +1423,8 @@ def parse_arguments():
                     'pipeline_task',
                     'max_new_tokens',
                     'return_full_text',
+                    'enable_thinking',
+                    'preserve_thinking',
                     'temperature',
                     'do_sample',
                     'top_k',
@@ -1539,6 +1547,8 @@ def parse_arguments():
                     'pipeline_task':args.pipeline_task, 
                     'max_new_tokens':args.max_new_tokens, 
                     'return_full_text':args.return_full_text, 
+                    'enable_thinking':args.enable_thinking,
+                    'preserve_thinking':args.preserve_thinking,
                     'temperature':args.temperature,
                     'do_sample':args.do_sample, 
                     'top_k':args.top_k, 
@@ -3133,7 +3143,8 @@ def auto_tokenizer_apply_chat_template(
         tokenize: bool = True,
         return_tensors: str | TensorType | None = None,
         return_dict: bool = False,
-        verbose: bool = False
+        verbose: bool = False,
+        **kwargs
     ) -> dict:  # All defaults above as per Auto-Tokenizer's implementation!
     '''
     Acts as a wrapper around the Transformers apply-chat_template() method, which converts a list of dictionaries 
@@ -3165,6 +3176,9 @@ def auto_tokenizer_apply_chat_template(
             - `'jax'`: Return JAX `jnp.ndarray` objects.
         return_dict (`bool`, defaults to `False`):
             Whether to return a dictionary with named outputs. Has no effect if tokenize is `False`.
+        **kwargs:
+            kwargs are added to the Jinja render context. Jinja only uses variables that the template actually references.
+            So, if a kwarg is passed here but the Jinja chat template never references it, it's ignored & no errors are raised.
 
     For full details, check the full method definition in the following paths:
         - Auto-Tokenizer: Inspect `Auto-Tokenizer` import -> Inspect `tokenization_utils_base` import -> `def apply...`
@@ -3177,7 +3191,8 @@ def auto_tokenizer_apply_chat_template(
             add_generation_prompt=add_generation_prompt,
             return_dict=return_dict,
             return_tensors=return_tensors,
-            tokenize=tokenize
+            tokenize=tokenize,
+            **kwargs
         )
         if verbose:
             print_templated_output(templated_output, tokenize)
@@ -3193,7 +3208,12 @@ def completions():
         print("\n\nLLM semaphore acquired by /completions\n\n")
 
         try:
-            config = read_config(['max_new_tokens', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'flux_diffusers', 'vision'])
+            config = read_config([
+                'max_new_tokens','temperature','do_sample',
+                'top_k','top_p','min_p',
+                'enable_thinking','preserve_thinking',
+                'flux_diffusers','vision'
+            ])
         except Exception as e:
             return handle_api_error("Could not read values from hf_config.json when attempting /completions, encountered error: ", e)
 
@@ -3240,7 +3260,9 @@ def completions():
                 conversation=messages,
                 tools=tools,
                 add_generation_prompt=True,
-                tokenize=False # Asking for a string back, not tensors
+                tokenize=False, # Asking for a string back, not tensors
+                enable_thinking=config['enable_thinking'],
+                preserve_thinking=config['preserve_thinking']
             )
         except Exception as e:
             return handle_api_error("Could not apply chat template, encountered error: ", e)
@@ -3330,7 +3352,11 @@ def completions_stream():
         return handle_api_error("Could not read POST-request messages for /completions_stream, encountered error: ", e)
 
     try:
-        read_return = read_config(['max_new_tokens', 'return_full_text', 'temperature', 'do_sample', 'top_k', 'top_p', 'min_p', 'n_keep'])
+        read_return = read_config([
+            'max_new_tokens','return_full_text',
+            'temperature','do_sample','top_k','top_p','min_p',
+            'enable_thinking','preserve_thinking','n_keep'
+        ])
     except Exception as e:
         llm_semaphore.release()
         return handle_api_error("Could not read values from hf_config.json when attempting /completions_stream, encountered error: ", e)
@@ -3355,7 +3381,9 @@ def completions_stream():
             conversation=messages,
             tools=tools,
             add_generation_prompt=True,
-            tokenize=False # Asking for a string back, not tensors
+            tokenize=False, # Asking for a string back, not tensors
+            enable_thinking=read_return['enable_thinking'],
+            preserve_thinking=read_return['preserve_thinking']
         )
     except Exception as e:
         llm_semaphore.release()
@@ -4087,7 +4115,13 @@ def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
 def get_exl2_gen_settings(request):
 
     try:
-        config_data = read_config(['model_id', 'max_new_tokens', 'temperature', 'top_k', 'top_p', 'knowledge_graph_cache_dir', 'exl2_max_seq_len'])
+        config_data = read_config([
+            'model_id','max_new_tokens',
+            'temperature','top_k','top_p',
+            'enable_thinking','preserve_thinking',
+            'knowledge_graph_cache_dir',
+            'exl2_max_seq_len'
+        ])
     except Exception as e:  # Not using `handle_local_error` as the necessary params may be in the request headers so why error out here?
         handle_error_no_return("Could not read values from hf_config.json when attempting exl2-grapher, relying on request headers instead. Encountered error: ", e)
         config_data = {}
@@ -4183,7 +4217,14 @@ def exl2_stream():
         return handle_api_error("Could not setup for exl2-stream, encountered error: ", e)
     
     try:
-        tokenized_messages = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, tokenize=False)
+        tokenized_messages = auto_tokenizer_apply_chat_template(
+            conversation=messages,
+            tools=tools,
+            add_generation_prompt=True,
+            tokenize=False,
+            enable_thinking=config_data['enable_thinking'],
+            preserve_thinking=config_data['preserve_thinking']
+        )
         if not exl2_prompt_fits_within_max_context_length(tokenized_messages): print("\n\nPrompt doesn't fit within Exl2 context window, will auto-truncate.\n\n")
     except Exception as e:
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
@@ -4258,9 +4299,9 @@ def assemble_fim_messages(prefix: str, suffix: str, middle: str, language: str) 
         handle_local_error("Could not assemble FIM messages, encountered error: ", e)
 
 
-def auto_tokenize_and_encode_fim_messages(exl_tokenizer, fim_messages: list) -> list:
+def auto_tokenize_and_encode_fim_messages(exl_tokenizer, fim_messages: list, **kwargs) -> list:
     try:
-        templated_messages = auto_tokenizer_apply_chat_template(conversation=fim_messages, add_generation_prompt=True, tokenize=False)
+        templated_messages = auto_tokenizer_apply_chat_template(conversation=fim_messages, add_generation_prompt=True, tokenize=False, **kwargs)
         return exl_tokenizer.encode(templated_messages, encode_special_tokens=True)
     except Exception as e:
         handle_local_error("Could not get templated and encoded FIM messages, encountered error: ", e)
@@ -4286,16 +4327,16 @@ def truncate_fim_content(prefix: str, suffix: str, middle: str, language: str, m
     return assemble_fim_messages(prefix, suffix, middle, language)
 
 
-def get_final_exl_encoded_fim_input_ids(exl_tokenizer, prefix: str, suffix: str, middle: str, language: str, max_length: int) -> list:
+def get_final_exl_encoded_fim_input_ids(exl_tokenizer, prefix: str, suffix: str, middle: str, language: str, max_length: int, **kwargs) -> list:
 
     try:
         fim_messages = assemble_fim_messages(prefix, suffix, middle, language)
-        exl_tokenized_messages = auto_tokenize_and_encode_fim_messages(exl_tokenizer, fim_messages)
+        exl_tokenized_messages = auto_tokenize_and_encode_fim_messages(exl_tokenizer, fim_messages, **kwargs)
 
         while len(exl_tokenized_messages[0]) > max_length:
             print(f"FIM messages are too long, truncating... Current length: {len(exl_tokenized_messages[0])}, Max length: {max_length}")
             trimmed_fim_messages = truncate_fim_content(prefix, suffix, middle, language, max_length)
-            exl_tokenized_messages = auto_tokenize_and_encode_fim_messages(exl_tokenizer, trimmed_fim_messages)
+            exl_tokenized_messages = auto_tokenize_and_encode_fim_messages(exl_tokenizer, trimmed_fim_messages, **kwargs)
 
         print(f"Length of final ExLlama encoded FIM input IDs: {len(exl_tokenized_messages[0])}. Max length: {max_length}")
         return exl_tokenized_messages
@@ -4335,7 +4376,13 @@ def exl2_fim_stream():
         return handle_api_error("Could not setup for exl2-fim-stream, encountered error: ", e)
     
     try:
-        exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL2_TOKENIZER, prefix, suffix, middle, language, 8192) # max 8k tokens
+        exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(
+            EXL2_TOKENIZER,
+            prefix, suffix, middle,
+            language, 8192,
+            enable_thinking=config_data['enable_thinking'],
+            preserve_thinking=config_data['preserve_thinking']
+        ) # max 8k tokens
     except Exception as e:
         return handle_api_error("Could not create FIM prompt with chat template, encountered error: ", e)
 
@@ -4393,6 +4440,7 @@ def get_exl3_sampler(request):
 
     try:
         config_data = read_config([
+            'enable_thinking','preserve_thinking',
             'max_new_tokens','temperature',
             'top_k','top_p','min_p',
             'rep_p','pres_p','freq_p',
@@ -4449,7 +4497,14 @@ def exl3_stream():
         return handle_api_error("Could not setup for exl3-stream, encountered error: ", e)
     
     try:
-        tokenized_messages = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, tokenize=False)
+        tokenized_messages = auto_tokenizer_apply_chat_template(
+            conversation=messages,
+            tools=tools,
+            add_generation_prompt=True,
+            tokenize=False,
+            enable_thinking=config_data['enable_thinking'],
+            preserve_thinking=config_data['preserve_thinking']
+        )
     except Exception as e:
         return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
 
@@ -4531,7 +4586,13 @@ def exl3_fim_stream():
         return handle_api_error("Could not read POST-request messages for exl3-fim-stream, encountered error: ", e)
 
     try:
-        exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(EXL3_TOKENIZER, prefix, suffix, middle, language, 8192) # max 8k tokens
+        exl_encoded_fim_input_ids = get_final_exl_encoded_fim_input_ids(
+            EXL3_TOKENIZER,
+            prefix, suffix, middle,
+            language, 8192,
+            enable_thinking=config_data['enable_thinking'],
+            preserve_thinking=config_data['preserve_thinking']
+        ) # max 8k tokens
     except Exception as e:
         return handle_api_error("Could not get final ExLlama encoded FIM input IDs, encountered error: ", e)
     
@@ -4921,7 +4982,12 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
     print("\n\nLLM semaphore acquired by OpenAI/transformers-completions Streaming Route\n\n")
 
     try:
-        read_return = read_config(['model_id', 'max_new_tokens', 'temperature', 'do_sample', 'top_k', 'top_p'])
+        read_return = read_config([
+            'model_id','do_sample',
+            'max_new_tokens',
+            'temperature','top_k','top_p',
+            'enable_thinking','preserve_thinking'
+        ])
         temp = float(temperature or read_return.get('temperature'))
         
         generation_config = {
@@ -4937,7 +5003,9 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
             conversation=messages,
             tools=tools,
             add_generation_prompt=True,
-            tokenize=False # Asking for a string back, not tensors
+            tokenize=False, # Asking for a string back, not tensors
+            enable_thinking=read_return['enable_thinking'],
+            preserve_thinking=read_return['preserve_thinking']
         )
         
         inputs = AUTO_PROC_TOK(text=text, return_tensors="pt").to(MODEL.device)
@@ -5009,7 +5077,11 @@ def handle_transformers_non_streaming_openai(messages, tools, max_tokens, temper
         print("\n\nLLM semaphore acquired by OpenAI/transformers-completions Non-Streaming Route\n\n")
 
         try:
-            read_return = read_config(['model_id', 'max_new_tokens', 'temperature', 'do_sample', 'top_k', 'top_p'])
+            read_return = read_config([
+                'model_id','max_new_tokens',
+                'temperature','do_sample','top_k','top_p',
+                'enable_thinking','preserve_thinking'
+            ])
             temp = float(temperature or read_return.get('temperature'))
             
             generation_config = {
@@ -5025,7 +5097,9 @@ def handle_transformers_non_streaming_openai(messages, tools, max_tokens, temper
                 conversation=messages,
                 tools=tools,
                 add_generation_prompt=True,
-                tokenize=False # Asking for a string back, not tensors
+                tokenize=False, # Asking for a string back, not tensors
+                enable_thinking=read_return['enable_thinking'],
+                preserve_thinking=read_return['preserve_thinking']
             )
 
             inputs = AUTO_PROC_TOK(text=text, return_tensors="pt").to(MODEL.device)
@@ -5075,7 +5149,14 @@ def handle_exl2_streaming_openai(messages, tools, max_tokens, temperature, top_p
                 if len(stop_ids) > 0: stop_tokens.append(stop_ids)  # Append the *sequence* (the list itself) to conditions - append because lists should be added as is, not flattened
 
         # 4. Create Job
-        tokenized_messages = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, tokenize=False)
+        tokenized_messages = auto_tokenizer_apply_chat_template(
+            conversation=messages,
+            tools=tools,
+            add_generation_prompt=True,
+            tokenize=False,
+            enable_thinking=config_data['enable_thinking'],
+            preserve_thinking=config_data['preserve_thinking']
+        )
         
         job = ExLlamaV2DynamicJob(
             input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
@@ -5134,7 +5215,14 @@ def handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, t
                 if len(stop_ids) > 0: stop_token_list.append(stop_ids)  # Append the *sequence* (the list itself) to conditions - append because lists should be added as is, not flattened
         
         # 4. Create Job
-        tokenized_messages = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, tokenize=False)
+        tokenized_messages = auto_tokenizer_apply_chat_template(
+            conversation=messages,
+            tools=tools,
+            add_generation_prompt=True,
+            tokenize=False,
+            enable_thinking=config_data['enable_thinking'],
+            preserve_thinking=config_data['preserve_thinking']
+        )
         
         job = ExLlamaV2DynamicJob(
             input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
@@ -5181,13 +5269,12 @@ def handle_exl3_streaming_openai(messages, tools, max_tokens, temperature, top_p
 
         # 2. Get generator & other config settings
         config_data = read_config([
-            'model_id',
-            'max_new_tokens',
+            'model_id','max_new_tokens',
             'temperature',
             'top_k','top_p','min_p',
             'rep_p','pres_p','freq_p', 
             'rep_sustain_range','rep_decay_range',
-            'exl3_total_context'
+            'enable_thinking','preserve_thinking'
         ])
     
         exl3_sampler = ComboSampler(
@@ -5212,7 +5299,14 @@ def handle_exl3_streaming_openai(messages, tools, max_tokens, temperature, top_p
                 stop_token_list.append(stop_string)
 
         # 4. Create Job
-        tokenized_messages = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, tokenize=False)
+        tokenized_messages = auto_tokenizer_apply_chat_template(
+            conversation=messages,
+            tools=tools,
+            add_generation_prompt=True,
+            tokenize=False,
+            enable_thinking=config_data['enable_thinking'],
+            preserve_thinking=config_data['preserve_thinking']
+        )
 
         job = Job(
             input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
@@ -5258,13 +5352,12 @@ def handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, t
 
         # 2. Get generator & other config settings
         config_data = read_config([
-            'model_id',
-            'max_new_tokens',
+            'model_id','max_new_tokens',
             'temperature',
             'top_k','top_p','min_p',
             'rep_p','pres_p','freq_p', 
             'rep_sustain_range','rep_decay_range',
-            'exl3_total_context'
+            'enable_thinking','preserve_thinking'
         ])
     
         exl3_sampler = ComboSampler(
@@ -5289,7 +5382,14 @@ def handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, t
                 stop_token_list.append(stop_string)
 
         # 4. Create Job
-        tokenized_messages = auto_tokenizer_apply_chat_template(conversation=messages, tools=tools, add_generation_prompt=True, tokenize=False)
+        tokenized_messages = auto_tokenizer_apply_chat_template(
+            conversation=messages,
+            tools=tools,
+            add_generation_prompt=True,
+            tokenize=False,
+            enable_thinking=config_data['enable_thinking'],
+            preserve_thinking=config_data['preserve_thinking']
+        )
 
         job = Job(
             input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
@@ -5596,10 +5696,10 @@ def create_and_execute_exl2_job(payload:str, max_new_tokens:int, gen_settings):
         return ""
 
 
-def get_request_payload_for_graph_entity_extraction(chunk_text: str):
+def get_request_payload_for_graph_entity_extraction(chunk_text: str, **kwargs):
     try:
         chunk_payload = "Extract nodes and relationships from the following text:\n" + chunk_text + "\n<knowledge_graph>"
-        full_payload = auto_tokenizer_apply_chat_template(conversation=[{"role": "user", "content": chunk_payload}], add_generation_prompt=True, tokenize=False)
+        full_payload = auto_tokenizer_apply_chat_template(conversation=[{"role": "user", "content": chunk_payload}], add_generation_prompt=True, tokenize=False, **kwargs)
         return full_payload
     except Exception as e:
         handle_local_error(f"Could not get request payload for graph entity extraction, encountered error: ", e)
@@ -5722,7 +5822,8 @@ def process_nodes_and_relationships(
         source_doc_name: str,
         page_number_list: list,
         requested_max_new_tokens: int = 1000,
-        gen_settings = None
+        gen_settings = None,
+        **kwargs
     ):
     '''
     This function takes a dictionary containing nodes and relationships, and a chunk of text.
@@ -5731,13 +5832,13 @@ def process_nodes_and_relationships(
     '''
     try:
         comprehensive_summary_request_prompt = get_user_query_for_comprehensive_summary(nodes_and_relationships, chunk_text)
-        formatted_prompt = auto_tokenizer_apply_chat_template(conversation=[{"role": "user", "content": comprehensive_summary_request_prompt}], add_generation_prompt=True, tokenize=False)
+        formatted_prompt = auto_tokenizer_apply_chat_template(conversation=[{"role": "user", "content": comprehensive_summary_request_prompt}], add_generation_prompt=True, tokenize=False, **kwargs)
         
         if exl2_prompt_fits_within_max_context_length(formatted_prompt):
             full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
         else:   # No errors are raised if the prompt is larger than the max context length because it'll be auto-truncated which we don't want so best to handle manually!
             minimal_summary_request_prompt = get_minimal_query_for_summary(chunk_text)
-            formatted_prompt = auto_tokenizer_apply_chat_template(conversation=[{"role": "user", "content": minimal_summary_request_prompt}], add_generation_prompt=True, tokenize=False)
+            formatted_prompt = auto_tokenizer_apply_chat_template(conversation=[{"role": "user", "content": minimal_summary_request_prompt}], add_generation_prompt=True, tokenize=False, **kwargs)
             
             if exl2_prompt_fits_within_max_context_length(formatted_prompt):
                 full_response = create_and_execute_exl2_job(payload=formatted_prompt, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
@@ -5938,7 +6039,11 @@ def exl2_graph_extractor():
                         source_doc_name = os.path.splitext(os.path.basename(chunk_data['source_doc_name']))[0]
 
                         print(f"\nAttempting to extract entities and relationships from chunk {chunk_number} of document {source_doc_name}...processing item {processed_entries + 1} of total {total_entry_count} items...\n")
-                        full_payload = get_request_payload_for_graph_entity_extraction(chunk_data['chunk_text'])
+                        full_payload = get_request_payload_for_graph_entity_extraction(
+                            chunk_data['chunk_text'],
+                            enable_thinking=config_data['enable_thinking'],
+                            preserve_thinking=config_data['preserve_thinking']
+                        )
                         
                         response_validation_result = None
                         if exl2_prompt_fits_within_max_context_length(full_payload):
@@ -5973,7 +6078,11 @@ def exl2_graph_extractor():
                                     return {'nodes': [], 'relationships': []}
                                 
                                 try:
-                                    payload = get_request_payload_for_graph_entity_extraction(chunk_text)
+                                    payload = get_request_payload_for_graph_entity_extraction(
+                                        chunk_text,
+                                        enable_thinking=config_data['enable_thinking'],
+                                        preserve_thinking=config_data['preserve_thinking']
+                                    )
                                     response = create_and_execute_exl2_job(payload=payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
                                     response_validation_result = validate_entity_extraction_response(response)
                                 except Exception as e:
@@ -6215,7 +6324,9 @@ def exl2_graph_summarizer():
                             source_doc_name=source_doc_name,
                             page_number_list=chunk_data['page_number'],
                             requested_max_new_tokens=requested_max_new_tokens,
-                            gen_settings=gen_settings
+                            gen_settings=gen_settings,
+                            enable_thinking=config_data['enable_thinking'],
+                            preserve_thinking=config_data['preserve_thinking']
                         )
                         
                         chunk_entities[chunk_number]['summary'] = chunk_summary
