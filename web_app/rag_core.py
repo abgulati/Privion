@@ -76,13 +76,13 @@ def persist_rag_context(stream_session_id: str, docs: list[Document]):
     try:
         conn, cursor = init_and_connect_to_rag_context_db()
     except Exception as e:
-        raise Exception(f"Could not initialize and connect to rag context db in method persist_rag_context, encountered error: {e}")
+        raise Exception(f"Could not initialize and connect to rag context db in method persist-rag_context, encountered error: {e}")
     
     try:
         cursor.execute("INSERT INTO rag_context (stream_session_id, rag_context) VALUES (?, ?)", (stream_session_id, str(docs)))
         conn.commit()
     except Exception as e:
-        raise Exception(f"Could not persist rag context for stream session {stream_session_id} in method persist_rag_context, encountered error: {e}")
+        raise Exception(f"Could not persist rag context for stream session {stream_session_id} in method persist-rag_context, encountered error: {e}")
     finally:
         cursor.close()
         conn.close()

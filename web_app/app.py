@@ -2828,7 +2828,12 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath:pathlib.Path
     '''
 
     try:
-        read_return = read_config(['reuse_graph_extraction_cache_without_validation', 'reuse_graph_summary_cache_without_validation', 'skip_summary_generation'])
+        read_return = read_config([
+            'reuse_graph_extraction_cache_without_validation',
+            'reuse_graph_summary_cache_without_validation',
+            'skip_summary_generation'
+        ])
+        
         reuse_graph_extraction_cache_without_validation = str(read_return['reuse_graph_extraction_cache_without_validation']).lower() == 'true'
         reuse_graph_summary_cache_without_validation = str(read_return['reuse_graph_summary_cache_without_validation']).lower() == 'true'
         skip_summary_generation = str(read_return['skip_summary_generation']).lower() == 'true'

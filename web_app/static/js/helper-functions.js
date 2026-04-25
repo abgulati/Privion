@@ -1164,7 +1164,7 @@ function populateDocsLoadedTable() {
         }
     })
     .catch(error => {
-        errorHandler("fetching file list for the selected vector database", "/fetch_file_list_for_vector_db", String(error.message))
+        errorHandler("fetching file list for the selected vector database", "/fetch-file_list_for_vector_db", String(error.message))
     });
 }
 
