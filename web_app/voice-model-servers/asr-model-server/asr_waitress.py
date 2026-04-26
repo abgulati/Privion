@@ -3096,107 +3096,6 @@ def inference_with_vision_model(request):
     return inference_output
 
 
-def extract_tool_calls_from_response(full_response_text:str) -> list[dict]:
-    try:
-        print("\n--- Starting tool parsing ---")
-
-        tool_calls = []
-        content = full_response_text
-
-        # 1. Regex to find ALL occurrences of <tool_call>...</tool_call>
-        # re.DOTALL ensures '.' matches newlines
-        tool_regex = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL)
-
-        for match in tool_regex.finditer(full_response_text):
-            raw_tool_content = match.group(1).strip()
-
-            tool_name = None
-            tool_args = {}
-            parse_success = False
-
-            # --- STRATEGY A: Standard JSON ---
-            if raw_tool_content.startswith("{") or raw_tool_content.startswith("["):
-                try:
-                    json_data = json.loads(raw_tool_content)
-
-                    # Handle case where the content is a LIST of tools inside one tag
-                    if isinstance(json_data, list):
-                        for item in json_data:
-                            tool_calls.append({
-                                'id': 'call_' + str(uuid.uuid4())[:8],
-                                'type': 'function',
-                                'function': {
-                                    'name': item.get("name"),
-                                    'arguments': json.dumps(item.get("arguments", {}))
-                                }
-                            })
-                        parse_success = True # We handled it, skip to next match
-                        continue 
-
-                    # Handle single JSON object
-                    else:
-                        tool_name = json_data.get('name')
-                        tool_args = json_data.get('arguments', {})
-
-                        tool_calls.append({
-                            'id': 'call_' + str(uuid.uuid4())[:8],
-                            'type': 'function',
-                            'function': {
-                                'name': tool_name,
-                                'arguments': json.dumps(tool_args)
-                            }
-                        })
-                        parse_success = True
-                except json.JSONDecodeError:
-                    print("Tool content looked like JSON but failed to parse.")
-                    pass # Fall through to Strategy B
-            
-            # --- STRATEGY B: Custom XML (<function=name>...) ---
-            if not parse_success:
-                try:
-                    # We use finditer here too, in case there are multiple <function> tags inside one <tool_call>
-                    function_regex = re.compile(r"<function=(.*?)>(.*?)</function>", re.DOTALL)
-                    
-                    found_functions = list(function_regex.finditer(raw_tool_content))
-
-                    if found_functions:
-                        for func_match in found_functions:
-                            t_name = func_match.group(1).strip()
-                            t_body = func_match.group(2).strip()
-                            t_args = {}
-                            
-                            # Extract parameters
-                            param_matches = re.findall(r"<parameter=(.*?)>(.*?)</parameter>", t_body, re.DOTALL)
-                            for p_key, p_val in param_matches:
-                                t_args[p_key.strip()] = p_val.strip()
-
-                            # Add to list immediately
-                            tool_calls.append({
-                                'id': 'call_' + str(uuid.uuid4())[:8],
-                                'type': 'function',
-                                'function': {
-                                    'name': t_name,
-                                    'arguments': json.dumps(t_args)
-                                }
-                            })
-                        parse_success = True
-                except Exception as e:
-                    print(f"Failed to parse custom XML format: {e}")
-
-        # Remove ALL <tool_call> blocks from the text shown to the user
-        content = tool_regex.sub('', full_response_text).strip()
-
-        # Return standardized dict
-        result = {'role': 'assistant', 'content': content}
-        if tool_calls:
-            result['tool_calls'] = tool_calls
-
-        print("\n--- Done ---")
-        return result
-    except Exception as e:
-        raise Exception(f"Failed to extract tool calls from response, encountered error: {e}")
-
-
 def print_templated_output(templated_output: dict, tokenize: bool):
     try:
         if tokenize:
@@ -4985,6 +4884,284 @@ def exl3_fim_stream():
 
 
 ###################################-------------OpenAI Compatible API-------------###################################
+
+
+###################################
+###------Tool Call Parsing------###
+###################################
+
+def qwen3_tools_extrator(full_response_text:str) -> list[dict]:
+    tool_calls = []
+
+    # 1. Regex to find ALL occurrences of <tool_call>...</tool_call>
+    # re.DOTALL ensures '.' matches newlines
+    tool_regex = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL)
+
+    for match in tool_regex.finditer(full_response_text):
+        raw_tool_content = match.group(1).strip()
+
+        tool_name = None
+        tool_args = {}
+
+        try:
+            json_data = json.loads(raw_tool_content)
+
+            # Handle case where the content is a LIST of tools inside one tag
+            if isinstance(json_data, list):
+                for item in json_data:
+                    tool_calls.append({
+                        'id': 'call_' + str(uuid.uuid4())[:8],
+                        'type': 'function',
+                        'function': {
+                            'name': item.get("name"),
+                            'arguments': json.dumps(item.get("arguments", {}))
+                        }
+                    })
+                    continue
+
+            # Handle single JSON object
+            else:
+                tool_name = json_data.get('name')
+                tool_args = json_data.get('arguments', {})
+
+                tool_calls.append({
+                    'id': 'call_' + str(uuid.uuid4())[:8],
+                    'type': 'function',
+                    'function': {
+                        'name': tool_name,
+                        'arguments': json.dumps(tool_args)
+                    }
+                })
+
+        except json.JSONDecodeError:
+            handle_error_no_return("Tool content looked like JSON but failed to parse.")
+
+    content = tool_regex.sub('', full_response_text).strip()
+    result = {'role': 'assistant', 'content': content}
+    if tool_calls:
+        result['tool_calls'] = tool_calls
+    return result
+
+
+def qwen3_coder_next_tools_extrator(full_response_text:str) -> list[dict]:
+    tool_calls = []
+
+    # 1. Regex to find ALL occurrences of <tool_call>...</tool_call>
+    # re.DOTALL ensures '.' matches newlines
+    tool_regex = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL)
+
+    for match in tool_regex.finditer(full_response_text):
+        raw_tool_content = match.group(1).strip()
+
+        try:
+            function_regex = re.compile(r"<function=(.*?)>(.*?)</function>", re.DOTALL)
+            found_functions = list(function_regex.finditer(raw_tool_content))
+            
+            if found_functions:
+                for func_match in found_functions:
+                    t_name = func_match.group(1).strip()
+                    t_body = func_match.group(2).strip()
+                    t_args = {}
+                    
+                    param_matches = re.findall(r"<parameter=(.*?)>(.*?)</parameter>", t_body, re.DOTALL)
+                    for p_key, p_val in param_matches:
+                        t_args[p_key.strip()] = p_val.strip()
+                    
+                    tool_calls.append({
+                        'id': 'call_' + str(uuid.uuid4())[:8],
+                        'type': 'function',
+                        'function': {
+                            'name': t_name,
+                            'arguments': json.dumps(t_args)
+                        }
+                    })
+
+        except json.JSONDecodeError:
+            handle_error_no_return("Tool content looked like JSON but failed to parse.")
+
+    content = tool_regex.sub('', full_response_text).strip()
+    result = {'role': 'assistant', 'content': content}
+    if tool_calls:
+        result['tool_calls'] = tool_calls
+    return result
+
+
+def gemma4_tools_extrator(full_response_text:str) -> list[dict]:
+    tool_calls = []
+
+    # Eg: "<|tool_call>call:search{query:<|\"|>weather in Vancouver today<|\"|>}<tool_call|><|tool_call>call:lamp_turn_on{}<tool_call|><|tool_response>"
+    tool_regex = re.compile(r'<\|tool_call>call:([a-zA-Z0-9_-]+)\{([\s\S]*?)\}<tool_call\|>', re.DOTALL)
+    arg_regex = re.compile(r'(\w+):(?:<\|"\|>([\s\S]*?)<\|"\|>|([^,]+))', re.DOTALL)
+
+    for match in tool_regex.finditer(full_response_text):
+        function_name = match.group(1).strip()
+        raw_args = match.group(2).strip() # Parse "key:value,key2:value2" into a Python dictionary
+
+        args = {}
+        for argMatch in arg_regex.finditer(raw_args):
+            key = argMatch[1].strip()
+            value = argMatch[2].strip()
+            args[key] = value
+            print(f"Key: {key}, Value: {value}")
+        print(f"Args: {args}")
+        
+        tool_calls.append({
+            'id': 'call_' + str(uuid.uuid4())[:8],
+            'type': 'function',
+            'function': {
+                'name': function_name,
+                'arguments': json.dumps(args)
+            }
+        })
+
+    content = tool_regex.sub('', full_response_text).strip()
+    result = {'role': 'assistant', 'content': content}
+    if tool_calls:
+        result['tool_calls'] = tool_calls
+    return result
+
+
+def fallback_tools_extrator(full_response_text:str) -> list[dict]:
+    tool_calls = []
+
+    # 1. Regex to find ALL occurrences of <tool_call>...</tool_call>
+    # re.DOTALL ensures '.' matches newlines
+    tool_regex = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL)
+
+    for match in tool_regex.finditer(full_response_text):
+        raw_tool_content = match.group(1).strip()
+
+        tool_name = None
+        tool_args = {}
+        parse_success = False
+
+        # --- STRATEGY A: Standard JSON ---
+        if raw_tool_content.startswith("{") or raw_tool_content.startswith("["):
+            try:
+                json_data = json.loads(raw_tool_content)
+
+                # Handle case where the content is a LIST of tools inside one tag
+                if isinstance(json_data, list):
+                    for item in json_data:
+                        tool_calls.append({
+                            'id': 'call_' + str(uuid.uuid4())[:8],
+                            'type': 'function',
+                            'function': {
+                                'name': item.get("name"),
+                                'arguments': json.dumps(item.get("arguments", {}))
+                            }
+                        })
+                    parse_success = True # We handled it, skip to next match
+                    continue 
+
+                # Handle single JSON object
+                else:
+                    tool_name = json_data.get('name')
+                    tool_args = json_data.get('arguments', {})
+
+                    tool_calls.append({
+                        'id': 'call_' + str(uuid.uuid4())[:8],
+                        'type': 'function',
+                        'function': {
+                            'name': tool_name,
+                            'arguments': json.dumps(tool_args)
+                        }
+                    })
+                    parse_success = True
+            except json.JSONDecodeError:
+                print("Tool content looked like JSON but failed to parse.")
+                pass # Fall through to Strategy B
+        
+        # --- STRATEGY B: Custom XML (<function=name>...) ---
+        if not parse_success:
+            try:
+                # We use finditer here too, in case there are multiple <function> tags inside one <tool_call>
+                function_regex = re.compile(r"<function=(.*?)>(.*?)</function>", re.DOTALL)
+                
+                found_functions = list(function_regex.finditer(raw_tool_content))
+
+                if found_functions:
+                    for func_match in found_functions:
+                        t_name = func_match.group(1).strip()
+                        t_body = func_match.group(2).strip()
+                        t_args = {}
+                        
+                        # Extract parameters
+                        param_matches = re.findall(r"<parameter=(.*?)>(.*?)</parameter>", t_body, re.DOTALL)
+                        for p_key, p_val in param_matches:
+                            t_args[p_key.strip()] = p_val.strip()
+
+                        # Add to list immediately
+                        tool_calls.append({
+                            'id': 'call_' + str(uuid.uuid4())[:8],
+                            'type': 'function',
+                            'function': {
+                                'name': t_name,
+                                'arguments': json.dumps(t_args)
+                            }
+                        })
+                    parse_success = True
+            except Exception as e:
+                print(f"Failed to parse custom XML format: {e}")
+
+    # Remove ALL <tool_call> blocks from the text shown to the user
+    content = tool_regex.sub('', full_response_text).strip()
+
+    # Return standardized dict
+    result = {'role': 'assistant', 'content': content}
+    if tool_calls:
+        result['tool_calls'] = tool_calls
+
+    return result
+
+
+LLM_TO_TOOLS_EXTRACTOR_MAPPING = {
+    'fallback': fallback_tools_extrator,
+    'nvidia/Nemotron-Orchestrator-8B': qwen3_tools_extrator,
+    'Qwen/Qwen3': qwen3_tools_extrator,
+    'Qwen/Qwen3-Coder-Next': qwen3_coder_next_tools_extrator,
+    'Qwen/Qwen3.5': qwen3_coder_next_tools_extrator,
+    'Qwen/Qwen3.6': qwen3_coder_next_tools_extrator,
+    'google/gemma-4': gemma4_tools_extrator
+}
+
+
+def extract_tool_calls_from_response(full_response_text:str) -> list[dict]:
+    try:
+        print("\n--- Starting tool parsing ---\n")
+
+        llm = read_config(['model_id'])['model_id']
+        
+        extractor = LLM_TO_TOOLS_EXTRACTOR_MAPPING.get(llm, None)
+
+        if not extractor:
+            '''
+            Allows the tool-mapping to be minimalistic:
+            'Qwen/Qwen3' can cover mapping of dozens of models,
+            while full names can be used for more specific mappings.
+            '''
+            llm_name_components = llm.split('-')
+            
+            for i in range(1, len(llm_name_components)+1):  # range is not inclusive, so we add 1 to include the last element.
+                llm_family = '-'.join(llm_name_components[:i])  # Starting to 1 so first slice isn't blank!
+                extractor = LLM_TO_TOOLS_EXTRACTOR_MAPPING.get(llm_family, None)
+                if extractor:
+                    print(f"Extractor found: {extractor}")
+                    break
+        
+        if not extractor:
+            extractor = LLM_TO_TOOLS_EXTRACTOR_MAPPING.get('fallback')
+
+        print("\n--- Done tool parsing ---\n")
+
+        return extractor(full_response_text)
+    
+    except Exception as e:
+        raise Exception(f"Failed to extract tool calls from response, encountered error: {e}")
+
+
+###########---End of Tool Parser Block---###########
+
 
 
 def init_stream_with_role_chunk(backend: str, model_id: str) -> tuple[dict, int, str]:
