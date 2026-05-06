@@ -341,6 +341,180 @@ def handle_model_loading_error(message:str, exception:Exception=None, target:str
 
 ############################------------configuration manager-------------###############################
 
+DEFAULT_CONFIG = {
+    'access_gated':False,
+    'access_token':"",
+    'model_id':"Qwen/Qwen2.5-1.5B-Instruct",
+    'exl2':False,
+    'exl2_bpw':3.0,
+    'exl2_cache_type':"ExLlamaV2Cache",
+    'exl2_max_seq_len':2048,
+    'exl2_force_regenerate_measurement':False,
+    'exl2_no_flash_attn':False,
+    'reuse_graph_extraction_cache':True,    # dev flag: controlled by X-Reuse-Extraction-Cache header
+    'reuse_graph_summary_cache':True,       # dev flag: controlled by X-Reuse-Summary-Cache header
+    'exl3':False,
+    'exl3_bpw':3.0,
+    'exl3_device':'cuda:0',
+    'exl3_cache_type':'CacheLayer_fp16',
+    'exl3_k_bits':8,
+    'exl3_v_bits':8,
+    'exl3_resume_quant_job':False,
+    'exl3_total_context':2048,
+    'exl3_tensor_parallel':False,
+    'exl3_tp_output_device':None,
+    'exl3_use_per_device':None,
+    'exl3_max_chunk_size':2048,
+    'exl3_max_batch_size':256,
+    'exl3_show_gen_visualizer':False,
+    'gguf':False,
+    'awq':False,
+    'flux_diffusers':False,
+    'flux_low_vram_optimizations':True,
+    'load_quantized_flux':False,
+    'vision':False,
+    'tts':False,
+    'asr':False,
+    'streaming_asr':False,
+    'asr_temperature':0.0,
+    'asr_max_new_tokens':1500,
+    'asr_samplerate':16000,
+    'asr_volume_threshold':0.04,
+    'asr_silence_duration_s':1.5,
+    'asr_min_chunk_duration_s':0.25,
+    'asr_min_context_s':11,
+    'asr_streaming_min_context_secs':0.08,  # 80ms
+    'asr_streaming_attn_context_size':'70,13', # {num_frames_left_context, num_frame_right_context}; [70, 0|1|6|13]; [70, 13]: Chunk size = 14 (14 × 80ms = 1.12s)
+    'asr_stale_buffer_timeout_s':20.0,
+    'asr_min_meaningful_samples_factor':0.5,
+    'asr_padding_text':' tony is quiet silent for too long I must not keep master waiting bad dooby must obey and transcribe dooby good servant will transcribe otherwise I will be severely punished',
+    'asr_vad_model':'snakers4/silero-vad',
+    'asr_vad_device':'cpu',
+    'asr_vad_threshold':0.5,
+    'asr_vad_min_speech_ms':250,
+    'asr_vad_min_silence_ms':500,
+    'asr_vad_window_size_samples':1536,
+    'asr_vad_max_buffer_s':30,
+    'asr_vad_speech_pad_ms':30,
+    'asr_apply_normalization':True,
+    'asr_apply_tts_padding':True,
+    'asr_apply_zero_padding':False,
+    'asr_apply_rms_dimming':True,
+    'asr_apply_crossfade':False,
+    'gguf_model_id':None,
+    'gguf_filename':None,
+    'quantize':"quanto",
+    'quant_level':"int8",
+    'hqq_group_size':64,
+    'push_to_hub':False,
+    'torch_device_map':"auto", 
+    'torch_dtype':"auto", 
+    'trust_remote_code':True, 
+    'use_flash_attention_2':False, 
+    'pipeline_task':"text-generation", 
+    'max_new_tokens':700, 
+    'return_full_text':False, 
+    'enable_thinking':False,
+    'preserve_thinking':False,
+    'temperature':0.1,
+    'do_sample':True, 
+    'top_k':40,
+    'top_p':0.9, 
+    'min_p':0.1,
+    'rep_p':1.0,
+    'pres_p':0.0,
+    'freq_p':0.0,
+    'rep_sustain_range':int(10e7),
+    'rep_decay_range':0,
+    'n_keep':0,
+    'port':9069,
+    'host':'0.0.0.0',
+    'load_safe_defaults':False,
+    'model_list': [
+                    'microsoft/Phi-4-reasoning-vision-15B',
+                    'Qwen/Qwen3.5-0.8B',
+                    'Qwen/Qwen3.5-2B',
+                    'Qwen/Qwen3.5-4B',
+                    'Qwen/Qwen3.5-9B',
+                    'Qwen/Qwen3.5-27B',
+                    'Qwen/Qwen3.5-27B-FP8',
+                    'Qwen/Qwen3.5-35B-A3B',
+                    'Qwen/Qwen3.5-35B-A3B-FP8',
+                    'Qwen/Qwen3.5-122B-A10B',
+                    'Qwen/Qwen3.5-122B-A10B-FP8',
+                    'Qwen/Qwen3.5-397B-A17B',
+                    'Qwen/Qwen3.5-397B-A17B-FP8',
+                    'Qwen/Qwen3-Coder-Next-FP8',
+                    'Qwen/Qwen3-4B-Instruct-2507',
+                    'google/functiongemma-270m-it',
+                    'nvidia/Nemotron-Orchestrator-8B',
+                    'microsoft/phi-4',
+                    'zai-org/GLM-4.5-Air',
+                    'zai-org/GLM-4.5',
+                    'moonshotai/Kimi-K2-Instruct',
+                    'deepseek-ai/DeepSeek-R1-0528',
+                    'deepseek-ai/DeepSeek-V3-0324',
+                    'google/gemma-3-27b-it',
+                    'google/gemma-3-12b-it',
+                    'google/gemma-2-2b-it',
+                    'Metin/Gemma-2-2B-TR-Knowledge-Graph',
+                    'Qwen/Qwen3-235B-A22B-Thinking-2507-FP8',
+                    'Qwen/Qwen3-235B-A22B-Instruct-2507',
+                    'Qwen/Qwen3-30B-A3B-Instruct-2507-FP8',
+                    'Qwen/Qwen3-Coder-30B-A3B-Instruct',
+                    'Qwen/Qwen3-14B',
+                    'Qwen/Qwen3-1.7B',
+                    'Qwen/Qwen3-0.6B',
+                    'mistralai/Mistral-Nemo-Instruct-2407',
+                    'mistralai/Mistral-Small-24B-Instruct-2501',
+                    'black-forest-labs/FLUX.1-schnell',
+                    'black-forest-labs/FLUX.1-dev',
+                    'black-forest-labs/FLUX.1-Krea-dev',
+                    'black-forest-labs/FLUX.1-Kontext-dev',
+                    'Qwen/Qwen-Image',
+                    'nvidia/Llama-3_3-Nemotron-Super-49B-v1-FP8',
+                    'meta-llama/Llama-3.3-70B-Instruct',
+                    'meta-llama/Llama-3.2-11B-Vision-Instruct',
+                    'meta-llama/Llama-4-Maverick-17B-128E-Instruct',
+                    'open-thoughts/OpenThinker-32B',
+                    'openai/gpt-oss-20b',
+                    'CohereLabs/c4ai-command-r-plus-08-2024',
+                    'CohereForAI/c4ai-command-r-plus',
+                    'nvidia/Llama-3_3-Nemotron-Super-49B-v1',
+                    'microsoft/Phi-4-mini-instruct',
+                    'microsoft/Phi-3.5-mini-instruct',
+                    'microsoft/Phi-3.5-MoE-instruct',
+                    'microsoft/Phi-3-mini-4k-instruct',
+                    'microsoft/Phi-3-mini-128k-instruct',
+                    'microsoft/Phi-3-small-8k-instruct',
+                    'microsoft/Phi-3-small-128k-instruct',
+                    'microsoft/Phi-3-medium-4k-instruct',
+                    'microsoft/Phi-3-medium-128k-instruct',
+                    'google/gemma-3-4b-it',
+                    'google/gemma-3-1b-it',
+                    'google/gemma-2-9b-it',
+                    'google/gemma-2-27b-it',
+                    'Qwen/Qwen3-32B',
+                    'Qwen/QwQ-32B',
+                    'Qwen/Qwen2-7B-Instruct',
+                    'Qwen/Qwen2-72B-Instruct',
+                    'Qwen/Qwen2.5-Coder-32B-Instruct',
+                    'Qwen/Qwen2.5-1.5B-Instruct',
+                    'Qwen/Qwen2.5-0.5B-Instruct',
+                    'Qwen/Qwen2.5-3B-Instruct',
+                    'Qwen/Qwen2.5-14B-Instruct',
+                    'meta-llama/Llama-3.1-8B-Instruct',
+                    'meta-llama/Llama-3.2-1B-Instruct',
+                    'meta-llama/Llama-3.2-3B-Instruct',
+                    'meta-llama/Meta-Llama-3.1-8B-Instruct',
+                    'meta-llama/Meta-Llama-3.1-70B-Instruct',
+                    'meta-llama/Meta-Llama-3.1-405B-Instruct-FP8',
+                    'hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4',
+                    'hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4'
+                ]
+}
+
+
 def write_config(config_updates:dict, filename:str=None) -> dict:
     '''
     Method to write app configuration to hf_config.json.\n
@@ -504,185 +678,21 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
         base_directory = hf_config.get('base_directory', BASE_DIRECTORY)   # specifying default if not found
 
         for key in keys:
+            
             if key in hf_config:
                 return_dict[key] = hf_config[key]
+            
             else:
-                default_value = {
+                default_dirs = {
                     'upload_folder':base_directory + '/uploaded_files_for_vision_inferencing',
                     'generated_images_folder':base_directory + '/generated_images',
                     'transformer_models_folder':base_directory + '/transformer_models',
-                    'knowledge_graph_cache_dir': base_directory + '/knowledge_graph_cache_dir',
-                    'access_gated':False,
-                    'access_token':"",
-                    'model_id':"Qwen/Qwen2.5-1.5B-Instruct",
-                    'exl2':False,
-                    'exl2_bpw':3.0,
-                    'exl2_cache_type':"ExLlamaV2Cache",
-                    'exl2_max_seq_len':2048,
-                    'exl2_force_regenerate_measurement':False,
-                    'exl2_no_flash_attn':False,
-                    'reuse_graph_extraction_cache':True,    # dev flag: controlled by X-Reuse-Extraction-Cache header
-                    'reuse_graph_summary_cache':True,       # dev flag: controlled by X-Reuse-Summary-Cache header
-                    'exl3':False,
-                    'exl3_bpw':3.0,
-                    'exl3_device':'cuda:0',
-                    'exl3_cache_type':'CacheLayer_fp16',
-                    'exl3_k_bits':8,
-                    'exl3_v_bits':8,
-                    'exl3_resume_quant_job':False,
-                    'exl3_total_context':2048,
-                    'exl3_tensor_parallel':False,
-                    'exl3_tp_output_device':None,
-                    'exl3_use_per_device':None,
-                    'exl3_max_chunk_size':2048,
-                    'exl3_max_batch_size':256,
-                    'exl3_show_gen_visualizer':False,
-                    'gguf':False,
-                    'awq':False,
-                    'flux_diffusers':False,
-                    'flux_low_vram_optimizations':True,
-                    'load_quantized_flux':False,
-                    'vision':False,
-                    'tts':False,
-                    'asr':False,
-                    'streaming_asr':False,
-                    'asr_temperature':0.0,
-                    'asr_max_new_tokens':1500,
-                    'asr_samplerate':16000,
-                    'asr_volume_threshold':0.04,
-                    'asr_silence_duration_s':1.5,
-                    'asr_min_chunk_duration_s':0.25,
-                    'asr_min_context_s':11,
-                    'asr_streaming_min_context_secs':0.08,  # 80ms
-                    'asr_streaming_attn_context_size':'70,13', # {num_frames_left_context, num_frame_right_context}; [70, 0|1|6|13]; [70, 13]: Chunk size = 14 (14 × 80ms = 1.12s)
-                    'asr_stale_buffer_timeout_s':20.0,
-                    'asr_min_meaningful_samples_factor':0.5,
-                    'asr_padding_text':' tony is quiet silent for too long I must not keep master waiting bad dooby must obey and transcribe dooby good servant will transcribe otherwise I will be severely punished',
-                    'asr_vad_model':'snakers4/silero-vad',
-                    'asr_vad_device':'cpu',
-                    'asr_vad_threshold':0.5,
-                    'asr_vad_min_speech_ms':250,
-                    'asr_vad_min_silence_ms':500,
-                    'asr_vad_window_size_samples':1536,
-                    'asr_vad_max_buffer_s':30,
-                    'asr_vad_speech_pad_ms':30,
-                    'asr_apply_normalization':True,
-                    'asr_apply_tts_padding':True,
-                    'asr_apply_zero_padding':False,
-                    'asr_apply_rms_dimming':True,
-                    'asr_apply_crossfade':False,
-                    'gguf_model_id':None,
-                    'gguf_filename':None,
-                    'quantize':"quanto",
-                    'quant_level':"int8",
-                    'hqq_group_size':64,
-                    'push_to_hub':False,
-                    'torch_device_map':"auto", 
-                    'torch_dtype':"auto", 
-                    'trust_remote_code':True, 
-                    'use_flash_attention_2':False, 
-                    'pipeline_task':"text-generation", 
-                    'max_new_tokens':700, 
-                    'return_full_text':False, 
-                    'enable_thinking':False,
-                    'preserve_thinking':False,
-                    'temperature':0.1,
-                    'do_sample':True, 
-                    'top_k':40,
-                    'top_p':0.9, 
-                    'min_p':0.1,
-                    'rep_p':1.0,
-                    'pres_p':0.0,
-                    'freq_p':0.0,
-                    'rep_sustain_range':int(10e7),
-                    'rep_decay_range':0,
-                    'n_keep':0,
-                    'port':9069,
-                    'host':'0.0.0.0',
-                    'load_safe_defaults':False,
-                    'model_list': [
-                                    'microsoft/Phi-4-reasoning-vision-15B',
-                                    'Qwen/Qwen3.5-0.8B',
-                                    'Qwen/Qwen3.5-2B',
-                                    'Qwen/Qwen3.5-4B',
-                                    'Qwen/Qwen3.5-9B',
-                                    'Qwen/Qwen3.5-27B',
-                                    'Qwen/Qwen3.5-27B-FP8',
-                                    'Qwen/Qwen3.5-35B-A3B',
-                                    'Qwen/Qwen3.5-35B-A3B-FP8',
-                                    'Qwen/Qwen3.5-122B-A10B',
-                                    'Qwen/Qwen3.5-122B-A10B-FP8',
-                                    'Qwen/Qwen3.5-397B-A17B',
-                                    'Qwen/Qwen3.5-397B-A17B-FP8',
-                                    'Qwen/Qwen3-Coder-Next-FP8',
-                                    'Qwen/Qwen3-4B-Instruct-2507',
-                                    'google/functiongemma-270m-it',
-                                    'nvidia/Nemotron-Orchestrator-8B',
-                                    'microsoft/phi-4',
-                                    'zai-org/GLM-4.5-Air',
-                                    'zai-org/GLM-4.5',
-                                    'moonshotai/Kimi-K2-Instruct',
-                                    'deepseek-ai/DeepSeek-R1-0528',
-                                    'deepseek-ai/DeepSeek-V3-0324',
-                                    'google/gemma-3-27b-it',
-                                    'google/gemma-3-12b-it',
-                                    'google/gemma-2-2b-it',
-                                    'Metin/Gemma-2-2B-TR-Knowledge-Graph',
-                                    'Qwen/Qwen3-235B-A22B-Thinking-2507-FP8',
-                                    'Qwen/Qwen3-235B-A22B-Instruct-2507',
-                                    'Qwen/Qwen3-30B-A3B-Instruct-2507-FP8',
-                                    'Qwen/Qwen3-Coder-30B-A3B-Instruct',
-                                    'Qwen/Qwen3-14B',
-                                    'Qwen/Qwen3-1.7B',
-                                    'Qwen/Qwen3-0.6B',
-                                    'mistralai/Mistral-Nemo-Instruct-2407',
-                                    'mistralai/Mistral-Small-24B-Instruct-2501',
-                                    'black-forest-labs/FLUX.1-schnell',
-                                    'black-forest-labs/FLUX.1-dev',
-                                    'black-forest-labs/FLUX.1-Krea-dev',
-                                    'black-forest-labs/FLUX.1-Kontext-dev',
-                                    'Qwen/Qwen-Image',
-                                    'nvidia/Llama-3_3-Nemotron-Super-49B-v1-FP8',
-                                    'meta-llama/Llama-3.3-70B-Instruct',
-                                    'meta-llama/Llama-3.2-11B-Vision-Instruct',
-                                    'meta-llama/Llama-4-Maverick-17B-128E-Instruct',
-                                    'open-thoughts/OpenThinker-32B',
-                                    'openai/gpt-oss-20b',
-                                    'CohereLabs/c4ai-command-r-plus-08-2024',
-                                    'CohereForAI/c4ai-command-r-plus',
-                                    'nvidia/Llama-3_3-Nemotron-Super-49B-v1',
-                                    'microsoft/Phi-4-mini-instruct',
-                                    'microsoft/Phi-3.5-mini-instruct',
-                                    'microsoft/Phi-3.5-MoE-instruct',
-                                    'microsoft/Phi-3-mini-4k-instruct',
-                                    'microsoft/Phi-3-mini-128k-instruct',
-                                    'microsoft/Phi-3-small-8k-instruct',
-                                    'microsoft/Phi-3-small-128k-instruct',
-                                    'microsoft/Phi-3-medium-4k-instruct',
-                                    'microsoft/Phi-3-medium-128k-instruct',
-                                    'google/gemma-3-4b-it',
-                                    'google/gemma-3-1b-it',
-                                    'google/gemma-2-9b-it',
-                                    'google/gemma-2-27b-it',
-                                    'Qwen/Qwen3-32B',
-                                    'Qwen/QwQ-32B',
-                                    'Qwen/Qwen2-7B-Instruct',
-                                    'Qwen/Qwen2-72B-Instruct',
-                                    'Qwen/Qwen2.5-Coder-32B-Instruct',
-                                    'Qwen/Qwen2.5-1.5B-Instruct',
-                                    'Qwen/Qwen2.5-0.5B-Instruct',
-                                    'Qwen/Qwen2.5-3B-Instruct',
-                                    'Qwen/Qwen2.5-14B-Instruct',
-                                    'meta-llama/Llama-3.1-8B-Instruct',
-                                    'meta-llama/Llama-3.2-1B-Instruct',
-                                    'meta-llama/Llama-3.2-3B-Instruct',
-                                    'meta-llama/Meta-Llama-3.1-8B-Instruct',
-                                    'meta-llama/Meta-Llama-3.1-70B-Instruct',
-                                    'meta-llama/Meta-Llama-3.1-405B-Instruct-FP8',
-                                    'hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4',
-                                    'hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4'
-                                   ]
-                }.get(key, 'undefined')
+                    'knowledge_graph_cache_dir': base_directory + '/knowledge_graph_cache_dir'
+                }
+                all_defaults = DEFAULT_CONFIG.copy()
+                all_defaults.update(default_dirs)
+
+                default_value = all_defaults.get(key, 'undefined')
 
                 if default_value == 'undefined':
                     raise KeyError(f"Key \'{key}\' not found in hf_config.json and no default value has been defined either.\n")
@@ -2081,37 +2091,6 @@ def load_tts_pipeline():
     return True
 
 
-def exl2_background_worker():
-    '''Continuous loop to drive ExLlamaV2 batching'''
-    print("\n >>> ExLlamaV2 Background Worker Started\n")
-    
-    while not EXL2_WORKER_STOP_EVENT.is_set():
-        if EXL2_GENERATOR and EXL2_GENERATOR.num_remaining_jobs() > 0:
-            try:
-                # This single call advances ALL active requests by one step
-                results = EXL2_GENERATOR.iterate()  # results is a LIST of dictionaries, effectively meaning "Here is everything that happened on the GPU during this clock cycle."
-
-                for result in results:  # 'result' is a dictionary for a specific job
-                    job = result['job']
-                    text = result.get('text', '')
-                    eos = result.get('eos', False)
-                    # We don't care about 'stage': if 'text' is populated, we want it and if 'eos' is True, we want to signal end.
-
-                    if hasattr(job, 'response_queue'):  # job is a ExLlamaV2DynamicJob object, and it has a response_queue attribute! It's NOT a dict key!
-                        if text:
-                            job.response_queue.put(text)
-                        if eos:
-                            job.response_queue.put(None)
-
-            except Exception as e:
-                handle_error_no_return("Error in ExL2 worker: ", e)
-                # Optional: Signal error to all active queues
-        else:
-            time.sleep(0.05)    # Prevent CPU spin
-    
-    print("\n >>> ExLlamaV2 Background Worker Stopped\n")
-
-
 def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_path: os.PathLike) -> os.PathLike:
     print(f"\n\nAttempting to generate measurement file for model {model_id}...\n\n")
 
@@ -2272,6 +2251,37 @@ def define_exllama_generator_components(quantized_model_path: os.PathLike, exl2_
     return True
 
 
+def exl2_background_worker():
+    '''Continuous loop to drive ExLlamaV2 batching'''
+    print("\n >>> ExLlamaV2 Background Worker Started\n")
+    
+    while not EXL2_WORKER_STOP_EVENT.is_set():
+        if EXL2_GENERATOR and EXL2_GENERATOR.num_remaining_jobs() > 0:
+            try:
+                # This single call advances ALL active requests by one step
+                results = EXL2_GENERATOR.iterate()  # results is a LIST of dictionaries, effectively meaning "Here is everything that happened on the GPU during this clock cycle."
+
+                for result in results:  # 'result' is a dictionary for a specific job
+                    job = result['job']
+                    text = result.get('text', '')
+                    eos = result.get('eos', False)
+                    # We don't care about 'stage': if 'text' is populated, we want it and if 'eos' is True, we want to signal end.
+
+                    if hasattr(job, 'response_queue'):  # job is a ExLlamaV2DynamicJob object, and it has a response_queue attribute! It's NOT a dict key!
+                        if text:
+                            job.response_queue.put(text)
+                        if eos:
+                            job.response_queue.put(None)
+
+            except Exception as e:
+                handle_error_no_return("Error in ExL2 worker: ", e)
+                # Optional: Signal error to all active queues
+        else:
+            time.sleep(0.05)    # Prevent CPU spin
+    
+    print("\n >>> ExLlamaV2 Background Worker Stopped\n")
+
+
 def define_exllama_generator():
     print("\nInitializing Global ExLlamaV2 Generator...")
 
@@ -2356,34 +2366,6 @@ def load_exllama_pipeline():
 
     print("\n\nExLlamaV2 Pipeline Loaded Successfully!\n\n")
     return True
-
-
-def exl3_background_worker():
-    '''Continuous loop to drive ExLlamaV3 batching'''
-    print("\n >>> ExLlamaV3 Background Worker Started\n")
-    
-    while not EXL3_WORKER_STOP_EVENT.is_set():
-        if EXL3_GENERATOR and EXL3_GENERATOR.num_remaining_jobs() > 0:
-            try:
-                results = EXL3_GENERATOR.iterate()
-
-                for result in results:
-                    job = result['job']
-                    text = result.get('text', '')
-                    eos = result.get('eos', False)
-
-                    if hasattr(job, 'response_queue'):  # job is a ExLlamaV3Job object, and it has a response_queue attribute! It's NOT a dict key!
-                        if text:
-                            job.response_queue.put(text)
-                        if eos:
-                            job.response_queue.put(None)
-            except Exception as e:
-                handle_error_no_return("Error in ExL3 worker: ", e)
-                # Optional: Signal error to all active queues
-        else:
-            time.sleep(0.05)    # Prevent CPU spin
-    
-    print("\n >>> ExLlamaV3 Background Worker Stopped\n")
 
 
 def exllama3_bpw_quantize_model(model_id: str, model_snapshot_path: os.PathLike, exl3_bpw: float) -> os.PathLike:
@@ -2548,6 +2530,34 @@ def set_full_exl3_model_stop_token_list(raw_stop_token_ids: list | int):
         return True
     except Exception as e:
         handle_local_error("Could not set full model stop token list, encountered error: ", e)
+
+
+def exl3_background_worker():
+    '''Continuous loop to drive ExLlamaV3 batching'''
+    print("\n >>> ExLlamaV3 Background Worker Started\n")
+    
+    while not EXL3_WORKER_STOP_EVENT.is_set():
+        if EXL3_GENERATOR and EXL3_GENERATOR.num_remaining_jobs() > 0:
+            try:
+                results = EXL3_GENERATOR.iterate()
+
+                for result in results:
+                    job = result['job']
+                    text = result.get('text', '')
+                    eos = result.get('eos', False)
+
+                    if hasattr(job, 'response_queue'):  # job is a ExLlamaV3Job object, and it has a response_queue attribute! It's NOT a dict key!
+                        if text:
+                            job.response_queue.put(text)
+                        if eos:
+                            job.response_queue.put(None)
+            except Exception as e:
+                handle_error_no_return("Error in ExL3 worker: ", e)
+                # Optional: Signal error to all active queues
+        else:
+            time.sleep(0.05)    # Prevent CPU spin
+    
+    print("\n >>> ExLlamaV3 Background Worker Stopped\n")
 
 
 def define_exllamav3_generator(max_batch_size: int, max_chunk_size: int, show_visualizer: bool):
@@ -2848,6 +2858,56 @@ def initialize_model():
         except Exception as e:
             handle_error_no_return("Could not push the model to your hub, encountered error: ", e)
 
+    return True
+
+
+def determine_skip_special_tokens() -> bool:
+    '''
+    An AutoImmune disease is one wherein the immune system attacks healthy cells.
+    
+    Similarly, some LLMs AutoTokenizer/Processor parsers can canibalize important tokens 
+    if skip_special_tokens=True. 
+    
+    This was first observed with Google's Gemma-4 model family, wherein the openning and closing 
+    <|tool_call> and <tool_call|> tags were being stripped out if skip_special_tokens=True.
+
+    This resulted in malformed tool calls if special tokens were stripped:
+    `call:get_weather{location:<|"|>New York<|"|>,unit:<|"|>celsius<|"|>}` instead of
+    `<|tool_call>call:get_weather{location:<|"|>New York<|"|>,unit:<|"|>celsius<|"|>}<tool_call|>`
+
+    Leading to the parsers failing to capture the tool calls, including the models own `parse_response()` method!
+
+    All other LLMs restrict the `skip_special_tokens` scope to 1) Start and end special tokens (<s> and </s>) 
+    2) <unk> tokens 3) <pad> tokens 4) [MASK] tokens 5) Turn tokens <|start_of_text|>, <|im_start|>, <|endoftext|>, etc.
+
+    This method can therefore be used to track models suffering from this AutoImmune disease, and 
+    disable `skip_special_tokens` for them.
+    '''
+    
+    autoimmune_models_list = [
+        'google/gemma-4'
+    ]
+
+    current_llm = read_config(['model_id'])['model_id']
+
+    if current_llm in autoimmune_models_list:
+        print(f"Autoimmune model found: {current_llm}. Returning False.")
+        return False
+    else:
+        '''
+        Allows the mapping to be minimalistic:
+        'google/gemma-4' can cover mapping of dozens of models,
+        while full names can be used for more specific mappings.
+        '''
+        llm_name_components = current_llm.split('-')
+        
+        for i in range(1, len(llm_name_components)+1):  # range is not inclusive, so we add 1 to include the last element.
+            llm_family = '-'.join(llm_name_components[:i])  # Starting to 1 so first slice isn't blank!
+            if llm_family in autoimmune_models_list:
+                print(f"Autoimmune model family found: {llm_family}. Returning False.")
+                return False
+
+    print(f"No autoimmune model family found matching {current_llm}. Returning True.")
     return True
 
 
@@ -3190,6 +3250,82 @@ def auto_tokenizer_apply_chat_template(
         handle_local_error("Error invoking Transformers-Auto-Tokenizer's apply-chat_template() method, encountered error: ", e)
 
 
+def set_generation_config_for_prompt(req_body:dict) -> dict:
+    try:
+        config = read_config([
+            'temperature','top_k','top_p','min_p',
+            'enable_thinking','preserve_thinking',
+            'rep_p','pres_p','freq_p',
+            'rep_sustain_range','rep_decay_range',
+            'max_new_tokens', 'model_id'
+        ])
+        temp = float(req_body.get('temperature', config.get('temperature', DEFAULT_CONFIG['temperature'])))
+
+        gen_config = {
+            'temperature': temp,
+            'do_sample': temp > 0,
+            'top_k': int(req_body.get('top_k', config.get('top_k', DEFAULT_CONFIG['top_k']))),
+            'top_p': float(req_body.get('top_p', config.get('top_p', DEFAULT_CONFIG['top_p']))),
+            'min_p': float(req_body.get('min_p', config.get('min_p', DEFAULT_CONFIG['min_p']))),
+            'enable_thinking': req_body.get('enable_thinking', config.get('enable_thinking', DEFAULT_CONFIG['enable_thinking'])),
+            'preserve_thinking': req_body.get('preserve_thinking', config.get('preserve_thinking', DEFAULT_CONFIG['preserve_thinking'])),
+            'repeat_penalty': float(req_body.get('repeat_penalty', config.get('rep_p', DEFAULT_CONFIG['rep_p']))),
+            'presence_penalty': float(req_body.get('presence_penalty', config.get('pres_p', DEFAULT_CONFIG['pres_p']))),
+            'frequency_penalty': float(req_body.get('frequency_penalty', config.get('freq_p', DEFAULT_CONFIG['freq_p']))),
+            'rep_sustain_range': int(req_body.get('rep_sustain_range', config.get('rep_sustain_range', DEFAULT_CONFIG['rep_sustain_range']))),
+            'rep_decay_range': int(req_body.get('rep_decay_range', config.get('rep_decay_range', DEFAULT_CONFIG['rep_decay_range']))),
+            'max_new_tokens': int(req_body.get('max_new_tokens', config.get('max_new_tokens', DEFAULT_CONFIG['max_new_tokens']))),
+            'stream': req_body.get('stream', True),
+            'model': req_body.get('model', config.get('model_id', 'auto')),
+            'model_id': config.get('model_id', 'auto')
+        }
+        print(f"\n\nGeneration Config: {gen_config}\n\n")
+        return gen_config
+
+    except Exception as e:
+        handle_local_error("Error reading values from hf_config.json when attempting to set generation config for prompt, encountered error: ", e)
+
+
+def prep_for_transformers_generation(req_body:dict) -> tuple[dict, dict]:
+    try:
+        base_config = set_generation_config_for_prompt(req_body)
+        
+        generation_config = {
+            "max_new_tokens": base_config['max_new_tokens'],
+            "temperature": base_config['temperature'],
+            "do_sample": base_config['do_sample'],
+            "top_k": base_config['top_k'],
+            "top_p": base_config['top_p'],
+            "use_cache": True
+        }
+        # use_cache=True by default, setting explictily for clarity. Intra-call optimization: prioritizes efficiency for the generator, by
+        # creating and using a KV cache internally during the generation process, so it doesn't have to re-calculate everything for every single new token.
+
+        print(f"\n\nApplying Chat Template for messages: {req_body.get('messages', [])}\n\n")
+        text = auto_tokenizer_apply_chat_template(
+            conversation=req_body.get('messages', []),
+            tools=req_body.get('tools', None),
+            add_generation_prompt=True,
+            tokenize=False, # Asking for a string back, not tensors
+            enable_thinking=base_config['enable_thinking'],
+            preserve_thinking=base_config['preserve_thinking']
+        )
+        
+        inputs = AUTO_PROC_TOK(text=text, return_tensors="pt").to(MODEL.device)
+        inputs.pop('mm_token_type_ids', None)   # see below for reasoning:
+        '''
+        MODEL.generate(**inputs, ...) forwards every key in inputs as keyword arguments (kwargs)
+        to the model's forward() method. Recent versions of Transformers validate those keys &
+        raise if any are not accepted by the model.
+        'mm_token_type_ids' is not accepted by all models (eg Qwen-3.5), so we remove it here.
+        '''
+        
+        return generation_config, inputs, base_config
+    
+    except Exception as e:
+        handle_local_error("Could not prepare for Transformers generation, encountered error: ", e)
+
+
 @app.route('/completions', methods=['POST'])
 def completions():
 
@@ -3198,100 +3334,41 @@ def completions():
 
         try:
             config = read_config([
-                'max_new_tokens','temperature','do_sample',
-                'top_k','top_p','min_p',
-                'enable_thinking','preserve_thinking',
                 'flux_diffusers','vision'
             ])
-        except Exception as e:
-            return handle_api_error("Could not read values from hf_config.json when attempting /completions, encountered error: ", e)
+            skip_special_tokens = determine_skip_special_tokens()
 
-        if config['flux_diffusers']:
-            try:
-                image_str, image_name = generate_flux_image(request)
-                return jsonify({"success": True, "response": image_str, "image_name": image_name})
-            except Exception as e:
-                return handle_api_error("Could not generate image with FLUX Diffusers. Encountered error: ", e)
+            if config['flux_diffusers']:
+                try:
+                    image_str, image_name = generate_flux_image(request)
+                    return jsonify({"success": True, "response": image_str, "image_name": image_name})
+                except Exception as e:
+                    return handle_api_error("Could not generate image with FLUX Diffusers. Encountered error: ", e)
 
-        if config['vision']:
-            try:
-                response = inference_with_vision_model(request)
-                return jsonify({"success": True, "response": response})
-            except Exception as e:
-                return handle_api_error("Could not generate image with Vision Model. Encountered error: ", e)
+            if config['vision']:
+                try:
+                    response = inference_with_vision_model(request)
+                    return jsonify({"success": True, "response": response})
+                except Exception as e:
+                    return handle_api_error("Could not generate image with Vision Model. Encountered error: ", e)
 
-        try:
-            data = request.json
-            messages = data.get('messages', [])
-            tools = data.get('tools', None)
-        except Exception as e:
-            return handle_api_error("Could not read POST-request messages for /completions, encountered error: ", e)
-
-        try:
-            generation_config = {
-                "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', config['max_new_tokens'])),
-                "temperature": float(request.headers.get('X-Temperature', str(config['temperature']))),
-                "do_sample": request.headers.get('X-Do-Sample', str(config['do_sample'])).lower() == 'true',
-                "top_k": int(request.headers.get('X-Top-K', str(config['top_k']))),
-                "top_p": float(request.headers.get('X-Top-P', str(config['top_p']))),
-                "min_p": float(request.headers.get('X-Min-P', str(config['min_p']))),
-                "use_cache": True
-            }
-            # use_cache=True by default, setting explictily to True for clarity. Intra-call optimization: tells the generator, "During this single generation call, please be efficient.
-            # As you process the prompt and generate new tokens, create and use a KV cache internally so you don't have to re-calculate everything for every single new token." 
-        except Exception as e:
-            handle_error_no_return("Could not set generation-arguments for /completions, proceeding without them. Encountered error: ", e)
-            generation_config = {"max_new_tokens": config['max_new_tokens'],"use_cache": True}
-
-        try:
-            print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
-            text = auto_tokenizer_apply_chat_template(
-                conversation=messages,
-                tools=tools,
-                add_generation_prompt=True,
-                tokenize=False, # Asking for a string back, not tensors
-                enable_thinking=config['enable_thinking'],
-                preserve_thinking=config['preserve_thinking']
+            generation_config, inputs, _ = prep_for_transformers_generation(
+                request.json
             )
-        except Exception as e:
-            return handle_api_error("Could not apply chat template, encountered error: ", e)
 
-        try:
-            inputs = AUTO_PROC_TOK(text=text, return_tensors="pt").to(MODEL.device)
             input_length = inputs['input_ids'].shape[-1]
-            inputs.pop('mm_token_type_ids', None)   # see below for reasoning:
-            '''
-            MODEL.generate(**inputs, ...) forwards every key in inputs as keyword arguments 
-            to the model's forward(). Recent versions of Transformers validate those keys &
-            raise if any are not accepted by the model.
-            'mm_token_type_ids' is not accepted by all models (eg Qwen-3.5), so we remove it here.
-            '''
-        except Exception as e:
-            return handle_api_error("Could not load input to model, encountered error: ", e)
 
-        inference_output = ""
-        try:
-            print("\n\nGenerating Output\n\n")
+            print("\n\nGenerating Transformers-Completions\n\n")
             outputs = MODEL.generate(**inputs, **generation_config) # generate() is a synchronous blocking call!
             generated_tokens = outputs[0][input_length:]
-            response_string = AUTO_PROC_TOK.decode(generated_tokens, skip_special_tokens=False)
+            inference_output = AUTO_PROC_TOK.decode(generated_tokens, skip_special_tokens=skip_special_tokens)
             
-            # If it's a modern processor with tool parsing, use it!
-            try:
-                if hasattr(AUTO_PROC_TOK, 'parse_response'):
-                    parsed_data = AUTO_PROC_TOK.parse_response(response_string)
-                    print(f"\n\nparsed_data: {parsed_data}\n\n")
-                    # Do whatever is needed with parsed_data here - json.dump() it if required!
-            except Exception as e:
-                handle_error_no_return("Could not parse response, encountered error: ", e)
-            
-            print(f"\n\nFinal Output: {response_string}\n\n")
-            inference_output = response_string
+            print(f"\n\nFinal Output: {inference_output}\n\n")
+            print("\n\nTransformers-Completions done -- releasing LLM semaphore\n\n")
+            return jsonify({"success": True, "response": inference_output})
+        
         except Exception as e:
-            return handle_api_error("Could not generate output, encountered error: ", e)
-
-        print("\n\nCompletions done - releasing LLM semaphore\n\n")
-        return jsonify({"success": True, "response": inference_output})
+            return handle_api_error("Could not generate Transformers-Completions, encountered error: ", e)
 
 
 class StopOnEvent(StoppingCriteria):    # custom StoppingCriteria to stop generation when an event is set - inherits from StoppingCriteria, which is an abstract class defined in Hugging Face's transformers library. StoppingCriteria is used to define custom stopping conditions for the generation process.
@@ -3331,66 +3408,12 @@ def completions_stream():
     print("\n\nLLM semaphore acquired by /completions_stream\n\n")
 
     try:
-        data = request.json
-        if isinstance(data, str):   # should be a list
-            data = json.loads(data)
-        messages = data.get('messages', [])
-        tools = data.get('tools', None)
-    except Exception as e:
-        llm_semaphore.release()
-        return handle_api_error("Could not read POST-request messages for /completions_stream, encountered error: ", e)
-
-    try:
-        read_return = read_config([
-            'max_new_tokens','return_full_text',
-            'temperature','do_sample','top_k','top_p','min_p',
-            'enable_thinking','preserve_thinking','n_keep'
-        ])
-    except Exception as e:
-        llm_semaphore.release()
-        return handle_api_error("Could not read values from hf_config.json when attempting /completions_stream, encountered error: ", e)
-
-    try:
-        generation_config = {
-            "max_new_tokens": int(request.headers.get('X-Max-New-Tokens', read_return['max_new_tokens'])),
-            "temperature": float(request.headers.get('X-Temperature', str(read_return['temperature']))),
-            "do_sample": request.headers.get('X-Do-Sample', str(read_return['do_sample'])).lower() == 'true',
-            "top_k": int(request.headers.get('X-Top-K', str(read_return['top_k']))),
-            "top_p": float(request.headers.get('X-Top-P', str(read_return['top_p']))),
-            "min_p": float(request.headers.get('X-Min-P', str(read_return['min_p']))),
-            "use_cache": True
-        }
-    except Exception as e:
-        handle_error_no_return("Could not set generation-arguments for /completions_stream, proceeding without them. Encountered error: ", e)
-        generation_config = {"max_new_tokens": read_return['max_new_tokens'],"use_cache": True}
-
-    try:
-        print(f"\n\nApplying Chat Template for messages: {messages}\n\n")
-        text = auto_tokenizer_apply_chat_template(
-            conversation=messages,
-            tools=tools,
-            add_generation_prompt=True,
-            tokenize=False, # Asking for a string back, not tensors
-            enable_thinking=read_return['enable_thinking'],
-            preserve_thinking=read_return['preserve_thinking']
+        generation_config, inputs, _ = prep_for_transformers_generation(
+            request.json
         )
     except Exception as e:
         llm_semaphore.release()
-        return handle_api_error("Could not apply chat template, encountered error: ", e)
-
-    try:
-        inputs = AUTO_PROC_TOK(text=text, return_tensors="pt").to(MODEL.device)
-        input_length = inputs['input_ids'].shape[-1]
-        inputs.pop('mm_token_type_ids', None)   # see below for reasoning:
-        '''
-        MODEL.generate(**inputs, ...) forwards every key in inputs as keyword arguments 
-        to the model's forward(). Recent versions of Transformers validate those keys &
-        raise if any are not accepted by the model.
-        'mm_token_type_ids' is not accepted by all models (eg Qwen-3.5), so we remove it here.
-        '''
-    except Exception as e:
-        llm_semaphore.release()
-        return handle_api_error("Could not decode inputs, encountered error: ", e)
+        return handle_api_error("Could not prepare for Transformers generation, encountered error: ", e)
 
     stop_event = threading.Event()
     data_queue = queue.Queue()
@@ -3399,7 +3422,8 @@ def completions_stream():
         data_queue.put(data)
 
     # Streamer natively accepts both a tokenizer and a processor!
-    custom_streamer = CustomTextStreamer(AUTO_PROC_TOK, skip_special_tokens=False, skip_prompt=True)
+    skip_special_tokens = determine_skip_special_tokens()
+    custom_streamer = CustomTextStreamer(AUTO_PROC_TOK, skip_special_tokens=skip_special_tokens, skip_prompt=True)
     custom_streamer.callback = callback
 
     def llm_task():
@@ -3409,19 +3433,7 @@ def completions_stream():
         try:
             generation_config["streamer"] = custom_streamer
             generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
-            outputs = MODEL.generate(**inputs, **generation_config) # generate() is a synchronous blocking call!
-
-            # If it's a modern processor with tool parsing, use it!
-            try:
-                if hasattr(AUTO_PROC_TOK, 'parse_response'):
-                    generated_tokens = outputs[0][input_length:]
-                    response_string = AUTO_PROC_TOK.decode(generated_tokens, skip_special_tokens=False)
-                    parsed_data = AUTO_PROC_TOK.parse_response(response_string)
-                    print(f"\n\nparsed_data: {parsed_data}\n\n")
-                    # Do whatever is needed with parsed_data here - json.dump() it if required!
-            except Exception as e:
-                handle_error_no_return("Could not parse response, encountered error: ", e)
-
+            MODEL.generate(**inputs, **generation_config) # generate() is a synchronous blocking call!
         except Exception as e:
             handle_error_no_return("Response generation failed, encountered error: ", e)
             data_queue.put(f"Error: {str(e)}") # Pass error to client via queue
@@ -4345,41 +4357,64 @@ def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
             print(f"\n\nPrompt fits within context-window\n\n")
             return True
         else:
-            print(f"\n\nPrompt does not fit within max context length: {prompt_tokens.shape[-1]} > {EXL2_MODEL.config.max_seq_len}\n\n")
+            print(
+                "\n\nPrompt does not fit within max context length, and will be auto-truncated. ",
+                f" Prompt length: {prompt_tokens.shape[-1]} > Max Context Length: {EXL2_MODEL.config.max_seq_len}\n\n"
+            )
             return False
     except Exception as e:
         handle_error_no_return(f"Could not check if exl2-prompt fits within max context length, enabling auto-truncation as a fallback. Encountered error: ", e)
         return True # Since the above check is simplistic, an error indicates something is amiss, so best to return True to avoid infinite loops and try auto-truncation
 
 
-def get_exl2_gen_settings(request):
-
+def prep_for_exl2_generation(req_body:dict) -> tuple[queue.Queue, dict, str]:
     try:
-        config_data = read_config([
-            'model_id','max_new_tokens',
-            'temperature','top_k','top_p',
-            'enable_thinking','preserve_thinking',
-            'knowledge_graph_cache_dir',
-            'exl2_max_seq_len'
-        ])
-    except Exception as e:  # Not using `handle_local_error` as the necessary params may be in the request headers so why error out here?
-        handle_error_no_return("Could not read values from hf_config.json when attempting exl2-grapher, relying on request headers instead. Encountered error: ", e)
-        config_data = {}
+        # 1. Setup response queue for this specific request
+        user_queue = queue.Queue()
 
-    try:
-        print("\nExLlamaV2Sampler.Settings In-Progress...\n")
+        # 2. Get generator & other config settings
+        base_config = set_generation_config_for_prompt(req_body)
         gen_settings = ExLlamaV2Sampler.Settings(
-            temperature = float(request.headers.get('X-Temperature', str(config_data.get('temperature', '')))),
-            top_k = int(request.headers.get('X-Top-K', str(config_data.get('top_k', '')))),
-            top_p = float(request.headers.get('X-Top-P', str(config_data.get('top_p', ''))))
+            temperature = base_config['temperature'],
+            top_k = base_config['top_k'],
+            top_p = base_config['top_p']
         )
-        config_data['max_new_tokens'] = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens', '2048'))))
-        print("\nExLlamaV2Sampler.Settings Defined Successfully\n")
-    except Exception as e:
-        handle_error_no_return("Could not set generation-arguments for exl2-grapher, proceeding without them. Encountered error: ", e)
-        gen_settings = None
+        
+        # 3. Setup stop conditions
+        stop_tokens = [EXL2_TOKENIZER.eos_token_id, AUTO_PROC_TOK.eos_token_id]
+        if req_body.get('stop', None):
+            if isinstance(req_body['stop'], str): stop = [req_body['stop']]
+            elif isinstance(req_body['stop'], list): stop = req_body['stop']
+            else: stop = []
+            for stop_string in stop:
+                stop_ids = EXL2_TOKENIZER.encode(stop_string).flatten().tolist()    # Encode to Tensor, then flatten to List of Ints
+                if len(stop_ids) > 0: stop_tokens.append(stop_ids)  # Append the *sequence* (the list itself) to conditions - append because lists should be added as is, not flattened
 
-    return gen_settings, config_data
+        # 4. Create Job
+        tokenized_messages = auto_tokenizer_apply_chat_template(
+            conversation=req_body.get('messages', []),
+            tools=req_body.get('tools', None),
+            add_generation_prompt=True,
+            tokenize=False,
+            enable_thinking=base_config['enable_thinking'],
+            preserve_thinking=base_config['preserve_thinking']
+        )
+        
+        job = ExLlamaV2DynamicJob(
+            input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
+            max_new_tokens = base_config['max_new_tokens'],
+            stop_conditions = stop_tokens,
+            gen_settings = gen_settings
+        )
+        
+        # 5. Attach Queue & Enqueue to Global Generator (running in background thread)
+        job.response_queue = user_queue
+        EXL2_GENERATOR.enqueue(job)
+
+        return user_queue, job, base_config, tokenized_messages
+    
+    except Exception as e:
+        handle_local_error("Could not prepare for ExLlamaV2 generation, encountered error: ", e)
 
 
 def exl2_test_encoding_logic(tokenized_messages: str):
@@ -4446,42 +4481,11 @@ def exl2_stream():
     print("\n\nexl2-stream route triggered\n\n")
 
     try:
-        data = request.json
-        if isinstance(data, str):   # must convert to a list
-            data = json.loads(data)
-        messages = data.get('messages', [])
-        tools = data.get('tools', None)
-        gen_settings, config_data  = get_exl2_gen_settings(request)
-        user_queue = queue.Queue()
-    except Exception as e:
-        return handle_api_error("Could not setup for exl2-stream, encountered error: ", e)
-    
-    try:
-        tokenized_messages = auto_tokenizer_apply_chat_template(
-            conversation=messages,
-            tools=tools,
-            add_generation_prompt=True,
-            tokenize=False,
-            enable_thinking=config_data['enable_thinking'],
-            preserve_thinking=config_data['preserve_thinking']
+        
+        user_queue, job, _, _ = prep_for_exl2_generation(
+            request.json
         )
-        if not exl2_prompt_fits_within_max_context_length(tokenized_messages): print("\n\nPrompt doesn't fit within Exl2 context window, will auto-truncate.\n\n")
-    except Exception as e:
-        return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
 
-    try:
-        job = ExLlamaV2DynamicJob(
-            input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens')))),
-            stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_PROC_TOK.eos_token_id],
-            gen_settings = gen_settings
-        )
-        job.response_queue = user_queue
-        EXL2_GENERATOR.enqueue(job)
-    except Exception as e:
-        return handle_api_error("Could not create ExLlamaV2-DynamicJob object. Error details follow. In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, and of course, allocate an adequate context-window! Error: ", e)
-
-    try:
         def generate():
 
             global STOP_GENERATION
@@ -4531,8 +4535,12 @@ def create_fim_content(prefix: str, suffix: str, middle: str, language: str = 'p
 def assemble_fim_messages(prefix: str, suffix: str, middle: str, language: str) -> list:
     try:
         fim_content = create_fim_content(prefix, suffix, middle, language)
+        sys_prompt = (
+            "You are a code completion assistant. Complete the code between the prefix and suffix provided by the user. "
+            "Only output the completion - no explanations & exclude the prefix and suffix. ONLY COMPLETION. Language: {language}"
+        )
         return [
-            {"role": "system", "content": f"You are a code completion assistant. Complete the code between the prefix and suffix provided by the user. Only output the completion - no explanations & exclude the prefix and suffix. ONLY COMPLETION. Language: {language}"},
+            {"role": "system", "content": sys_prompt.format(language=language)},
             {"role": "user", "content": fim_content}
         ]
     except Exception as e:
@@ -4610,7 +4618,12 @@ def exl2_fim_stream():
         if not prefix and not suffix:
             raise Exception("Prefix and suffix cannot be empty for FIM completion")
 
-        gen_settings, config_data  = get_exl2_gen_settings(request)
+        base_config = set_generation_config_for_prompt(data)
+        gen_settings = ExLlamaV2Sampler.Settings(
+            temperature = base_config['temperature'],
+            top_k = base_config['top_k'],
+            top_p = base_config['top_p']
+        )
         user_queue = queue.Queue()
     except Exception as e:
         return handle_api_error("Could not setup for exl2-fim-stream, encountered error: ", e)
@@ -4620,8 +4633,8 @@ def exl2_fim_stream():
             EXL2_TOKENIZER,
             prefix, suffix, middle,
             language, 8192,
-            enable_thinking=config_data['enable_thinking'],
-            preserve_thinking=config_data['preserve_thinking']
+            enable_thinking=base_config['enable_thinking'],
+            preserve_thinking=base_config['preserve_thinking']
         ) # max 8k tokens
     except Exception as e:
         return handle_api_error("Could not create FIM prompt with chat template, encountered error: ", e)
@@ -4629,14 +4642,19 @@ def exl2_fim_stream():
     try:
         job = ExLlamaV2DynamicJob(
             input_ids= exl_encoded_fim_input_ids,
-            max_new_tokens = int(config_data.get('max_new_tokens')),
+            max_new_tokens = base_config['max_new_tokens'],
             stop_conditions = [EXL2_TOKENIZER.eos_token_id, AUTO_PROC_TOK.eos_token_id],
             gen_settings = gen_settings
         )
         job.response_queue = user_queue
         EXL2_GENERATOR.enqueue(job)
     except Exception as e:
-        return handle_api_error("Could not create ExLlamaV2-DynamicJob object. Error details follow. In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, and of course, allocate an adequate context-window! Error: ", e)
+        err_msg = (
+            "Could not create ExLlamaV2-DynamicJob object. Error details follow. ",
+            "In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, ",
+            "and of course, allocate an adequate context-window! Error: "
+        )
+        return handle_api_error(err_msg, e)
 
     try:
         def generate():
@@ -4676,40 +4694,61 @@ def exl2_fim_stream():
 
 ###################################-------------Exl3 Logic Begins-------------###################################
 
-def get_exl3_sampler(request):
-
+def prep_for_exl3_generation(req_body:dict) -> tuple[queue.Queue, dict, str]:
     try:
-        config_data = read_config([
-            'enable_thinking','preserve_thinking',
-            'max_new_tokens','temperature',
-            'top_k','top_p','min_p',
-            'rep_p','pres_p','freq_p',
-            'rep_sustain_range','rep_decay_range',
-            'exl3_total_context'
-        ])
-    except Exception as e:  # Not using `handle_local_error` as the necessary params may be in the request headers so why error out here?
-        handle_error_no_return("Could not read values from hf_config.json when attempting exl3-sampler, relying on request headers instead. Encountered error: ", e)
-        config_data = {}
+        # 1. Setup response queue for this specific request
+        user_queue = queue.Queue()
 
-    try:
+        # 2. Get generator & other config settings
+        base_config = set_generation_config_for_prompt(req_body)
         exl3_sampler = ComboSampler(
-            rep_p = float(request.headers.get('X-Repetition-Penalty', str(config_data.get('repetition_penalty', '1')))),
-            pres_p = float(request.headers.get('X-Presence-Penalty', str(config_data.get('presence_penalty', '0')))),
-            freq_p = float(request.headers.get('X-Frequency-Penalty', str(config_data.get('frequency_penalty', '0')))),
-            rep_sustain_range = int(float(request.headers.get('X-Repetition-Sustain-Range', str(config_data.get('rep_sustain_range', '10e7'))))),
-            rep_decay_range = int(request.headers.get('X-Repetition-Decay-Range', str(config_data.get('rep_decay_range', '0')))),
-            temperature = float(request.headers.get('X-Temperature', str(config_data.get('temperature', '0.1')))),
-            min_p = float(request.headers.get('X-Min-P', str(config_data.get('min_p', '0.1')))),
-            top_k = int(request.headers.get('X-Top-K', str(config_data.get('top_k', '40')))),
-            top_p = float(request.headers.get('X-Top-P', str(config_data.get('top_p', '0.9'))))
+            rep_p = base_config['repeat_penalty'],
+            pres_p = base_config['presence_penalty'],
+            freq_p = base_config['frequency_penalty'],
+            rep_sustain_range = base_config['rep_sustain_range'],
+            rep_decay_range = base_config['rep_decay_range'],
+            temperature = base_config['temperature'],
+            min_p = base_config['min_p'],
+            top_k = base_config['top_k'],
+            top_p = base_config['top_p']
         )
-        config_data['max_new_tokens'] = int(request.headers.get('X-Max-New-Tokens', str(config_data.get('max_new_tokens', '2048'))))
-        print("\nExLlamaV3 Sampler Defined Successfully\n")
-    except Exception as e:
-        handle_error_no_return("Could not create ExLlamaV3 Sampler, encountered error: ", e)
-        exl3_sampler = None
+
+        # 3. Setup stop conditions
+        stop_token_list = list(STOP_TOKENS)
+        if req_body.get('stop', None):
+            if isinstance(req_body['stop'], str): stop = [req_body['stop']]
+            elif isinstance(req_body['stop'], list): stop = req_body['stop']
+            else: stop = []
+            for stop_string in stop:
+                # ExLlamaV3 supports stop strings natively, so we append the string directly
+                # passing a list of token IDs (sequence) would raise a ValueError in ExLlamaV3's Job class
+                stop_token_list.append(stop_string)
+
+        # 4. Create Job
+        tokenized_messages = auto_tokenizer_apply_chat_template(
+            conversation=req_body.get('messages', []),
+            tools=req_body.get('tools', None),
+            add_generation_prompt=True,
+            tokenize=False,
+            enable_thinking=base_config['enable_thinking'],
+            preserve_thinking=base_config['preserve_thinking']
+        )
+
+        job = Job(
+            input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
+            max_new_tokens = base_config['max_new_tokens'],
+            stop_conditions = stop_token_list,
+            sampler = exl3_sampler
+        )
+
+        # 5. Attach Queue & Enqueue to Global Generator (running in background thread)
+        job.response_queue = user_queue
+        EXL3_GENERATOR.enqueue(job)
+
+        return user_queue, job, base_config, tokenized_messages
     
-    return exl3_sampler, config_data
+    except Exception as e:
+        handle_local_error("Could not prepare for ExLlamaV3 generation, encountered error: ", e)
 
 
 @app.route('/exl3_stream', methods=['POST'])
@@ -4726,41 +4765,11 @@ def exl3_stream():
     print("\n\nexl3-stream route triggered\n\n")
 
     try:
-        data = request.json
-        if isinstance(data, str):   # must convert to a list
-            data = json.loads(data)
-        messages = data.get('messages', [])
-        tools = data.get('tools', None)
-        exl3_sampler, config_data  = get_exl3_sampler(request)
-        user_queue = queue.Queue()
-    except Exception as e:
-        return handle_api_error("Could not setup for exl3-stream, encountered error: ", e)
-    
-    try:
-        tokenized_messages = auto_tokenizer_apply_chat_template(
-            conversation=messages,
-            tools=tools,
-            add_generation_prompt=True,
-            tokenize=False,
-            enable_thinking=config_data['enable_thinking'],
-            preserve_thinking=config_data['preserve_thinking']
+        
+        user_queue, job, _, _ = prep_for_exl3_generation(
+            request.json
         )
-    except Exception as e:
-        return handle_api_error("Could not tokenize messages for exl2-stream, encountered error: ", e)
 
-    try:
-        job = Job(
-            input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = int(config_data.get('max_new_tokens')),
-            stop_conditions = STOP_TOKENS,
-            sampler = exl3_sampler
-        )
-        job.response_queue = user_queue
-        EXL3_GENERATOR.enqueue(job)
-    except Exception as e:
-        return handle_api_error("Could not create ExLlamaV3 Job object for exl3-stream. Error details follow. In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, and of course, allocate an adequate context-window! Error: ", e)
-
-    try:
         def generate():
 
             global STOP_GENERATION
@@ -4820,7 +4829,18 @@ def exl3_fim_stream():
         if not prefix and not suffix:
             raise Exception("Prefix and suffix cannot be empty for FIM completion")
 
-        exl3_sampler, config_data  = get_exl3_sampler(request)
+        base_config = set_generation_config_for_prompt(data)
+        exl3_sampler = ComboSampler(
+            rep_p = base_config['repeat_penalty'],
+            pres_p = base_config['presence_penalty'],
+            freq_p = base_config['frequency_penalty'],
+            rep_sustain_range = base_config['rep_sustain_range'],
+            rep_decay_range = base_config['rep_decay_range'],
+            temperature = base_config['temperature'],
+            min_p = base_config['min_p'],
+            top_k = base_config['top_k'],
+            top_p = base_config['top_p']
+        )
         user_queue = queue.Queue()
     except Exception as e:
         return handle_api_error("Could not read POST-request messages for exl3-fim-stream, encountered error: ", e)
@@ -4830,8 +4850,8 @@ def exl3_fim_stream():
             EXL3_TOKENIZER,
             prefix, suffix, middle,
             language, 8192,
-            enable_thinking=config_data['enable_thinking'],
-            preserve_thinking=config_data['preserve_thinking']
+            enable_thinking=base_config['enable_thinking'],
+            preserve_thinking=base_config['preserve_thinking']
         ) # max 8k tokens
     except Exception as e:
         return handle_api_error("Could not get final ExLlama encoded FIM input IDs, encountered error: ", e)
@@ -4839,14 +4859,19 @@ def exl3_fim_stream():
     try:
         job = Job(
             input_ids= exl_encoded_fim_input_ids,
-            max_new_tokens = int(config_data.get('max_new_tokens')),
+            max_new_tokens = base_config['max_new_tokens'],
             stop_conditions = STOP_TOKENS,
             sampler = exl3_sampler
         )
         job.response_queue = user_queue
         EXL3_GENERATOR.enqueue(job)
     except Exception as e:
-        return handle_api_error("Could not create ExLlamaV3 Job object for exl3-fim-stream. Error details follow. In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, and of course, allocate an adequate context-window! Error: ", e)
+        err_msg = (
+            "Could not create ExLlamaV3 Job object for exl3-fim-stream. Error details follow. ",
+            "In case of context-window issues, ensure your max_new_tokens does not exceed the allocated context-window, ",
+            "and of course, allocate an adequate context-window! Error: "
+        )
+        return handle_api_error(err_msg, e)
 
     try:
         def generate():
@@ -4884,6 +4909,111 @@ def exl3_fim_stream():
 
 
 ###################################-------------OpenAI Compatible API-------------###################################
+
+
+######################################
+###------LLM Response Parsing------###
+######################################
+
+def manually_parse_response(full_response: str) -> dict:
+    try:
+        # Split reasoning vs visible content
+        # The below approach is a simple left-to-right parser for a single tag type, 
+        # resilient to "no more tags" (-1), and tolerant of missing close tags:
+        reasoning_blocks = []
+        visible_parts = []
+        cursor = 0  # tracks the position in full_response where we're currently reading - everything before has already been handled.
+        while True:
+            start = full_response.find('<think>', cursor)   # searches for the next opening tag after cursor - find returns the index of the match, or -1 if not found.
+            if start == -1:
+                visible_parts.append(full_response[cursor:])  # no more opening tags, so everything remaining is visible content.
+                break
+            end = full_response.find('</think>', start + len('<think>'))  # Otherwise, we look for the matching close tag
+            if end == -1:   
+                # Again, -1 means "not found." In that case we treat the rest as visible text and break (so a missing closing tag doesn't crash the loop)
+                visible_parts.append(full_response[cursor:])
+                break
+            # If both tags found:
+            if start > cursor:
+                visible_parts.append(full_response[cursor:start])   # text before think is visible content
+            # Text inside the tags is reasoning content, so we push it into reasoning_blocks:
+            thinking_text = full_response[start + len('<think>'):end]
+            if thinking_text:
+                reasoning_blocks.append({"type": "text", "text": thinking_text})
+            # Advance cursor to just after the closing tag, so the next iteration continues scanning after that block.
+            cursor = end + len('</think>')
+        
+        visible_content = ''.join(visible_parts)
+
+        # Parse tool calls
+        tool_parsing_result = manually_extract_tool_calls_from_response(visible_content)
+
+        # ALWAYS use the cleaned content (tags stripped)
+        final_content = tool_parsing_result.get('content', visible_content)
+        tool_calls = tool_parsing_result.get('tool_calls', None)
+
+        message = {
+            "role": "assistant",
+            "content": final_content
+        }
+
+        # Add tool_calls to the response if they were found
+        if tool_calls:
+            message["tool_calls"] = tool_calls
+        
+        if reasoning_blocks:
+            message["reasoning_content"] = reasoning_blocks
+
+        return message
+
+    except Exception as e:
+        handle_local_error("Could not manually parse response, encountered error: ", e)
+
+
+def parse_with_pre_defined_response_schema(full_response: str) -> dict:
+    try:
+        parsed_response = AUTO_PROC_TOK.parse_response(full_response)
+        
+        message = {
+            "role": parsed_response.get('role', 'assistant'),
+            "content": parsed_response.get('content', '')
+        }
+        
+        if 'thinking' in parsed_response:
+            message['reasoning_content'] = parsed_response['thinking']
+        if 'tool_calls' in parsed_response:
+            message['tool_calls'] = parsed_response['tool_calls']
+        
+        return message
+    
+    except AttributeError as e:
+        if 'response_schema' in str(e):
+            return None
+        raise e
+    
+    except Exception as e:
+        error_message = (
+            "Could not auto-parse response, despite model likely having a pre-defined response schema. "
+            "Manual parsing will be attempted. "
+            "Encountered error: "
+        )
+        handle_local_error(error_message, e)
+
+
+def parse_llm_response(full_response: str) -> dict:
+    try:
+        parsed_message = parse_with_pre_defined_response_schema(full_response)
+    except Exception:
+        return manually_parse_response(full_response)
+    
+    if parsed_message:
+        return parsed_message
+    
+    return manually_parse_response(full_response)
+
+
+###########---End of LLM Response Parsing Block---###########
+
 
 
 ###################################
@@ -5002,8 +5132,6 @@ def gemma4_tools_extrator(full_response_text:str) -> list[dict]:
             key = argMatch[1].strip()
             value = argMatch[2].strip()
             args[key] = value
-            print(f"Key: {key}, Value: {value}")
-        print(f"Args: {args}")
         
         tool_calls.append({
             'id': 'call_' + str(uuid.uuid4())[:8],
@@ -5126,10 +5254,15 @@ LLM_TO_TOOLS_EXTRACTOR_MAPPING = {
 }
 
 
-def extract_tool_calls_from_response(full_response_text:str) -> list[dict]:
-    try:
-        print("\n--- Starting tool parsing ---\n")
+LLM_TOOL_BLOCK_START_TAGS = ['<tool_call>', '<|tool_call>']
+LLM_TOOL_BLOCK_END_TAGS = ['</tool_call>', '<tool_call|>']
+LLM_THINKING_BLOCK_START_TAGS = ['<think>', '<|channel>thought']
+LLM_THINKING_BLOCK_END_TAGS = ['</think>', '<channel|>']
 
+
+def manually_extract_tool_calls_from_response(full_response_text:str) -> list[dict]:
+    try:
+        print("\n--- Starting manual tool parsing ---\n")
         llm = read_config(['model_id'])['model_id']
         
         extractor = LLM_TO_TOOLS_EXTRACTOR_MAPPING.get(llm, None)
@@ -5152,17 +5285,33 @@ def extract_tool_calls_from_response(full_response_text:str) -> list[dict]:
         if not extractor:
             extractor = LLM_TO_TOOLS_EXTRACTOR_MAPPING.get('fallback')
 
-        print("\n--- Done tool parsing ---\n")
+        print("\n--- Done manual tool parsing ---\n")
 
         return extractor(full_response_text)
     
     except Exception as e:
-        raise Exception(f"Failed to extract tool calls from response, encountered error: {e}")
+        handle_local_error("Failed to manually extract tool calls from response, encountered error: ", e)
+
+
+def extract_tool_calls_from_response(full_response_text:str) -> dict:
+    try:
+        parsed_message = parse_with_pre_defined_response_schema(full_response_text)
+    except Exception:
+        return manually_extract_tool_calls_from_response(full_response_text)
+
+    if parsed_message:
+        return parsed_message
+    
+    return manually_extract_tool_calls_from_response(full_response_text)
 
 
 ###########---End of Tool Parser Block---###########
 
 
+
+#####################################################################
+###------OpenAI /completions API - Chunk Generator Functions------###
+#####################################################################
 
 def init_stream_with_role_chunk(backend: str, model_id: str) -> tuple[dict, int, str]:
 
@@ -5304,6 +5453,39 @@ def get_openai_stop_chunk(
     }
 
 
+def generate_openai_non_streaming_response(
+    model_id: str,
+    backend: str,
+    full_response: str,
+    prompt_token_usage: int,
+    completion_token_usage: int
+) -> dict:
+
+    try:
+        message = parse_llm_response(full_response)
+    except Exception as e:
+        return jsonify(error={"message": str(e), "type": "server_error"}), 500
+        
+    return jsonify({
+        "id": f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": f"{backend}-{model_id}",
+        "system_fingerprint": None,
+        "choices": [{
+            "index": 0,
+            "message": message,
+            "logprobs": None,
+            "finish_reason": "tool_calls" if message.get('tool_calls') else "stop"
+        }],
+        "usage": {
+            "prompt_tokens": prompt_token_usage,
+            "completion_tokens": completion_token_usage,
+            "total_tokens": prompt_token_usage + completion_token_usage
+        }
+    })
+
+
 def generate_openai_stream_chunks(user_queue: queue.Queue, chunk_id: str, created: int, backend: str, model_id: str):
     """
     Generator that consumes tokens from a queue and yields OpenAI-compatible SSE chunks.
@@ -5331,10 +5513,11 @@ def generate_openai_stream_chunks(user_queue: queue.Queue, chunk_id: str, create
 
         # --- Tool Call Suppression Logic ---
         # 1. Check for opening tool tag
-        if '<tool_call>' in accumulated_text and not in_tool_block:
+        tool_tag = next((tag for tag in LLM_TOOL_BLOCK_START_TAGS if tag in accumulated_text), None)
+        if tool_tag and not in_tool_block:
             
             in_tool_block = True
-            before_tool = accumulated_text.split('<tool_call>', 1)[0]
+            before_tool = accumulated_text.split(tool_tag, 1)[0]
 
             if before_tool: # Send any text before tag as reasoning_content or content
                 if in_thinking_block:
@@ -5343,39 +5526,42 @@ def generate_openai_stream_chunks(user_queue: queue.Queue, chunk_id: str, create
                     chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, before_tool)
                 yield f"data: {json.dumps(chunk)}\n\n"
             
-            accumulated_text = accumulated_text.split('<tool_call>', 1)[1]
+            accumulated_text = accumulated_text.split(tool_tag, 1)[1]
             continue
 
         # 2. Handle being inside a tool block
+        end_tool_tag = next((tag for tag in LLM_TOOL_BLOCK_END_TAGS if tag in accumulated_text), None)
         if in_tool_block:
-            if '</tool_call>' in accumulated_text:
+            if end_tool_tag:
                 in_tool_block = False
-                accumulated_text = accumulated_text.split('</tool_call>', 1)[1]     # Swallow the content + closing tag.
+                accumulated_text = accumulated_text.split(end_tool_tag, 1)[1]     # Swallow the content + closing tag.
                 continue
             else:
                 continue    # Not clearing accumulated_text incase `... content ... </tool (chunk 1) -> _call> (chunk 2)` !
         
         # --- Thinking Block Logic ---
         # 3. Check for opening thinking tag
-        if '<think>' in accumulated_text:
+        thinking_tag = next((tag for tag in LLM_THINKING_BLOCK_START_TAGS if tag in accumulated_text), None)
+        if thinking_tag:
             
             in_thinking_block = True
-            before_think = accumulated_text.split('<think>', 1)[0]
+            before_think = accumulated_text.split(thinking_tag, 1)[0]
             if before_think:    # Send any text before think as regular content
                 chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, before_think)
                 yield f"data: {json.dumps(chunk)}\n\n"
-            accumulated_text = accumulated_text.split('<think>', 1)[1]
+            accumulated_text = accumulated_text.split(thinking_tag, 1)[1]
             continue
         
         # Check for closing thinking tag
-        if '</think>' in accumulated_text:
+        end_thinking_tag = next((tag for tag in LLM_THINKING_BLOCK_END_TAGS if tag in accumulated_text), None)
+        if end_thinking_tag:
             # Send thinking content as reasoning_content
-            thinking_text = accumulated_text.split('</think>', 1)[0]
+            thinking_text = accumulated_text.split(end_thinking_tag, 1)[0]
             if thinking_text:
                 chunk = get_openai_reasoning_content_chunk(chunk_id, created, backend, model_id, thinking_text)
                 yield f"data: {json.dumps(chunk)}\n\n"
             in_thinking_block = False
-            accumulated_text = accumulated_text.split('</think>', 1)[1]
+            accumulated_text = accumulated_text.split(end_thinking_tag, 1)[1]
             continue
 
         # If we have any accumulated text, send it as regular content
@@ -5418,81 +5604,15 @@ def generate_openai_stream_chunks(user_queue: queue.Queue, chunk_id: str, create
     yield "data: [DONE]\n\n"
 
 
-def generate_openai_non_streaming_response(
-    model_id: str,
-    backend: str,
-    full_response: str,
-    prompt_token_usage: int,
-    completion_token_usage: int
-) -> dict:
-    
-    # Split reasoning vs visible content
-    # The below approach is a simple left-to-right parser for a single tag type, 
-    # resilient to "no more tags" (-1), and tolerant of missing close tags:
-    reasoning_blocks = []
-    visible_parts = []
-    cursor = 0  # tracks the position in full_response where we're currently reading - everything before has already been handled.
-    while True:
-        start = full_response.find('<think>', cursor)   # searches for the next opening tag after cursor - find returns the index of the match, or -1 if not found.
-        if start == -1:
-            visible_parts.append(full_response[cursor:])  # no more opening tags, so everything remaining is visible content.
-            break
-        end = full_response.find('</think>', start + len('<think>'))  # Otherwise, we look for the matching close tag
-        if end == -1:   
-            # Again, -1 means "not found." In that case we treat the rest as visible text and break (so a missing closing tag doesn't crash the loop)
-            visible_parts.append(full_response[cursor:])
-            break
-        # If both tags found:
-        if start > cursor:
-            visible_parts.append(full_response[cursor:start])   # text before think is visible content
-        # Text inside the tags is reasoning content, so we push it into reasoning_blocks:
-        thinking_text = full_response[start + len('<think>'):end]
-        if thinking_text:
-            reasoning_blocks.append({"type": "text", "text": thinking_text})
-        # Advance cursor to just after the closing tag, so the next iteration continues scanning after that block.
-        cursor = end + len('</think>')
-    visible_content = ''.join(visible_parts)
-
-    # Parse tool calls
-    tool_parsing_result = extract_tool_calls_from_response(visible_content)
-
-    # ALWAYS use the cleaned content (tags stripped)
-    final_content = tool_parsing_result.get('content', visible_content)
-    tool_calls = tool_parsing_result.get('tool_calls', None)
-
-    message = {
-        "role": "assistant",
-        "content": final_content
-    }
-
-    # Add tool_calls to the response if they were found
-    if tool_calls:
-        message["tool_calls"] = tool_calls
-    
-    if reasoning_blocks:
-        message["reasoning_content"] = reasoning_blocks
-
-    return jsonify({
-        "id": f"chatcmpl-{''.join(random.choices('0123456789abcdef', k=24))}",
-        "object": "chat.completion",
-        "created": int(time.time()),
-        "model": f"{backend}-{model_id}",
-        "system_fingerprint": None,
-        "choices": [{
-            "index": 0,
-            "message": message,
-            "logprobs": None,
-            "finish_reason": "tool_calls" if tool_calls else "stop"
-        }],
-        "usage": {
-            "prompt_tokens": prompt_token_usage,
-            "completion_tokens": completion_token_usage,
-            "total_tokens": prompt_token_usage + completion_token_usage
-        }
-    })
+###########---End of OpenAI /completions API - Chunk Generator Functions---###########
 
 
-def handle_transformers_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop):
+
+################################################################
+###------OpenAI /completions API - LLM Backend Handlers------###
+################################################################
+
+def handle_transformers_streaming_openai(req_body:dict) -> Response:
     """Handle streaming OpenAI-compatible responses using Transformers"""
     
     llm_semaphore.acquire()
@@ -5500,36 +5620,8 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
     print("\n\nLLM semaphore acquired by OpenAI/transformers-completions Streaming Route\n\n")
 
     try:
-        read_return = read_config([
-            'model_id','do_sample',
-            'max_new_tokens',
-            'temperature','top_k','top_p',
-            'enable_thinking','preserve_thinking'
-        ])
-        temp = float(temperature or read_return.get('temperature'))
-        
-        generation_config = {
-            "max_new_tokens": int(max_tokens or read_return.get('max_new_tokens')),
-            "temperature": temp,
-            "do_sample": temp > 0,
-            "top_k": int(top_k or read_return.get('top_k')),
-            "top_p": float(top_p or read_return.get('top_p')),
-            "use_cache": True
-        }
-
-        text = auto_tokenizer_apply_chat_template(
-            conversation=messages,
-            tools=tools,
-            add_generation_prompt=True,
-            tokenize=False, # Asking for a string back, not tensors
-            enable_thinking=read_return['enable_thinking'],
-            preserve_thinking=read_return['preserve_thinking']
-        )
-        
-        inputs = AUTO_PROC_TOK(text=text, return_tensors="pt").to(MODEL.device)
-        inputs.pop('mm_token_type_ids', None)
+        generation_config, inputs, base_config = prep_for_transformers_generation(req_body)
     except Exception as e:
-        print(f"Error: {str(e)}")
         llm_semaphore.release()
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
 
@@ -5539,7 +5631,8 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
     def callback(data):
         data_queue.put(data)
 
-    custom_streamer = CustomTextStreamer(AUTO_PROC_TOK, skip_special_tokens=False, skip_prompt=True)
+    skip_special_tokens = determine_skip_special_tokens()
+    custom_streamer = CustomTextStreamer(AUTO_PROC_TOK, skip_special_tokens=skip_special_tokens, skip_prompt=True)
     custom_streamer.callback = callback
 
     def llm_task():
@@ -5568,7 +5661,9 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
             yield f"data: {json.dumps({'error': {'message': str(e), 'type': 'server_error'}})}\n\n"
             return
         
-        chunk_id, created, role_chunk = init_stream_with_role_chunk("Transformers", read_return['model_id'])
+        chunk_id, created, role_chunk = init_stream_with_role_chunk(
+            "Transformers", base_config['model_id']
+        )
         yield f"data: {json.dumps(role_chunk)}\n\n"
 
         yield from generate_openai_stream_chunks(
@@ -5576,7 +5671,7 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
             chunk_id=chunk_id,
             created=created,
             backend="Transformers",
-            model_id=read_return['model_id']
+            model_id=base_config['model_id']
         )
 
         STOP_GENERATION = False
@@ -5587,7 +5682,7 @@ def handle_transformers_streaming_openai(messages, tools, max_tokens, temperatur
     return Response(generate(), content_type='text/event-stream')
 
 
-def handle_transformers_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop):
+def handle_transformers_non_streaming_openai(req_body:dict) -> dict:
     """Handle non-streaming OpenAI-compatible responses using Transformers"""
 
     with llm_semaphore:
@@ -5595,45 +5690,21 @@ def handle_transformers_non_streaming_openai(messages, tools, max_tokens, temper
         print("\n\nLLM semaphore acquired by OpenAI/transformers-completions Non-Streaming Route\n\n")
 
         try:
-            read_return = read_config([
-                'model_id','max_new_tokens',
-                'temperature','do_sample','top_k','top_p',
-                'enable_thinking','preserve_thinking'
-            ])
-            temp = float(temperature or read_return.get('temperature'))
-            
-            generation_config = {
-                "max_new_tokens": int(max_tokens or read_return.get('max_new_tokens')),
-                "temperature": temp,
-                "do_sample": temp > 0,
-                "top_k": int(top_k or read_return.get('top_k')),
-                "top_p": float(top_p or read_return.get('top_p')),
-                "use_cache": True
-            }
+            generation_config, inputs, base_config = prep_for_transformers_generation(req_body)
+            skip_special_tokens = determine_skip_special_tokens()
 
-            text = auto_tokenizer_apply_chat_template(
-                conversation=messages,
-                tools=tools,
-                add_generation_prompt=True,
-                tokenize=False, # Asking for a string back, not tensors
-                enable_thinking=read_return['enable_thinking'],
-                preserve_thinking=read_return['preserve_thinking']
-            )
-
-            inputs = AUTO_PROC_TOK(text=text, return_tensors="pt").to(MODEL.device)
             input_length = inputs['input_ids'].shape[-1]
-            inputs.pop('mm_token_type_ids', None)
 
             outputs = MODEL.generate(**inputs, **generation_config)
             generated_tokens = outputs[0][input_length:]
-            inference_output = AUTO_PROC_TOK.decode(generated_tokens, skip_special_tokens=False)   # response_string
+            inference_output = AUTO_PROC_TOK.decode(generated_tokens, skip_special_tokens=skip_special_tokens)   # response_string
 
             print("\nOpenAI/transformers-completions-non-streaming done\n")
             prompt_tokens = len(inputs['input_ids'][0])
             completion_tokens = len(inference_output)
 
             return generate_openai_non_streaming_response(
-                model_id=read_return['model_id'],
+                model_id=base_config['model_id'],
                 backend="Transformers",
                 full_response=inference_output, 
                 prompt_token_usage=prompt_tokens,
@@ -5644,53 +5715,19 @@ def handle_transformers_non_streaming_openai(messages, tools, max_tokens, temper
             return jsonify(error={"message": str(e), "type": "server_error"}), 500
 
 
-def handle_exl2_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop):
+def handle_exl2_streaming_openai(req_body:dict) -> Response:
     """Handle streaming OpenAI-compatible responses using ExLlamaV2"""
     print("\n\nOpenAI/exl2-stream route triggered\n\n")
 
     try:
-        # 1. Setup response queue for this specific request
-        user_queue = queue.Queue()
-
-        # 2. Get generator & other config settings
-        gen_settings, config_data  = get_exl2_gen_settings(request)
-        if temperature: gen_settings.temperature = float(temperature)
-        if top_p: gen_settings.top_p = float(top_p)
-        if top_k: gen_settings.top_k = int(top_k)
-        
-        # 3. Setup stop conditions
-        stop_tokens = [EXL2_TOKENIZER.eos_token_id, AUTO_PROC_TOK.eos_token_id]
-        if stop:
-            if isinstance(stop, str):stop = [stop]
-            for stop_string in stop:
-                stop_ids = EXL2_TOKENIZER.encode(stop_string).flatten().tolist()    # Encode to Tensor, then flatten to List of Ints
-                if len(stop_ids) > 0: stop_tokens.append(stop_ids)  # Append the *sequence* (the list itself) to conditions - append because lists should be added as is, not flattened
-
-        # 4. Create Job
-        tokenized_messages = auto_tokenizer_apply_chat_template(
-            conversation=messages,
-            tools=tools,
-            add_generation_prompt=True,
-            tokenize=False,
-            enable_thinking=config_data['enable_thinking'],
-            preserve_thinking=config_data['preserve_thinking']
-        )
-        
-        job = ExLlamaV2DynamicJob(
-            input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = int(max_tokens or config_data.get('max_new_tokens')),
-            stop_conditions = stop_tokens,
-            gen_settings = gen_settings
-        )
-        
-        # 5. Attach Queue & Enqueue to Global Generator (running in background thread)
-        job.response_queue = user_queue
-        EXL2_GENERATOR.enqueue(job)
+        user_queue, _, base_config, _ = prep_for_exl2_generation(req_body)
     
-        # 6. Streaming Response Generator
+        # Streaming Response Generator
         def generate():
             
-            chunk_id, created, role_chunk = init_stream_with_role_chunk("ExLlamaV2", config_data['model_id'])
+            chunk_id, created, role_chunk = init_stream_with_role_chunk(
+                "ExLlamaV2", base_config['model_id']
+            )
             yield f"data: {json.dumps(role_chunk)}\n\n"
 
             yield from generate_openai_stream_chunks(
@@ -5698,7 +5735,7 @@ def handle_exl2_streaming_openai(messages, tools, max_tokens, temperature, top_p
                 chunk_id=chunk_id,
                 created=created,
                 backend="ExLlamaV2",
-                model_id=config_data['model_id']
+                model_id=base_config['model_id']
             )
             
             print("\nOpenAI/exl2-stream done\n")
@@ -5710,50 +5747,14 @@ def handle_exl2_streaming_openai(messages, tools, max_tokens, temperature, top_p
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
 
 
-def handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop):
+def handle_exl2_non_streaming_openai(req_body:dict) -> dict:
     """Handle non-streaming OpenAI-compatible responses using ExLlamaV2"""
     print("\n\nOpenAI/exl2-Non-Streaming route triggered\n\n")
 
     try:
-        # 1. Setup response queue for this specific request
-        user_queue = queue.Queue()
+        user_queue, _, base_config, tokenized_messages = prep_for_exl2_generation(req_body)
 
-        # 2. Get generator & other config settings
-        gen_settings, config_data  = get_exl2_gen_settings(request)
-        if temperature: gen_settings.temperature = float(temperature)
-        if top_p: gen_settings.top_p = float(top_p)
-        if top_k: gen_settings.top_k = int(top_k)
-
-        # 3. Setup stop conditions
-        stop_token_list = [EXL2_TOKENIZER.eos_token_id, AUTO_PROC_TOK.eos_token_id]
-        if stop:
-            if isinstance(stop, str):stop = [stop]
-            for stop_string in stop:
-                stop_ids = EXL2_TOKENIZER.encode(stop_string).flatten().tolist()    # Encode to Tensor, then flatten to List of Ints
-                if len(stop_ids) > 0: stop_token_list.append(stop_ids)  # Append the *sequence* (the list itself) to conditions - append because lists should be added as is, not flattened
-        
-        # 4. Create Job
-        tokenized_messages = auto_tokenizer_apply_chat_template(
-            conversation=messages,
-            tools=tools,
-            add_generation_prompt=True,
-            tokenize=False,
-            enable_thinking=config_data['enable_thinking'],
-            preserve_thinking=config_data['preserve_thinking']
-        )
-        
-        job = ExLlamaV2DynamicJob(
-            input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = int(max_tokens or config_data.get('max_new_tokens')),
-            stop_conditions = stop_token_list,
-            gen_settings = gen_settings
-        )
-
-        # 5. Attach Queue & Enqueue to Global Generator (running in background thread)
-        job.response_queue = user_queue
-        EXL2_GENERATOR.enqueue(job)
-
-        # 6. Consume Queue Synchronously (Accumulate Response)
+        # Consume Queue Synchronously (Accumulate Response)
         full_response = ""
         while True:
             token = user_queue.get()
@@ -5766,7 +5767,7 @@ def handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, t
         completion_tokens = len(EXL2_TOKENIZER.encode(full_response, encode_special_tokens=True))
 
         return generate_openai_non_streaming_response(
-            model_id=config_data['model_id'],
+            model_id=base_config['model_id'],
             backend="ExLlamaV2",
             full_response=full_response, 
             prompt_token_usage=prompt_tokens,
@@ -5777,70 +5778,19 @@ def handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, t
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
 
 
-def handle_exl3_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
+def handle_exl3_streaming_openai(req_body:dict) -> Response:
     """Handle streaming OpenAI-compatible responses using ExLlamaV3"""
     print("\n\nOpenAI/exl3-stream route triggered\n\n")
 
     try:
-        #1. Setup response queue for this specific request
-        user_queue = queue.Queue()
+        user_queue, _, base_config, _ = prep_for_exl3_generation(req_body)
 
-        # 2. Get generator & other config settings
-        config_data = read_config([
-            'model_id','max_new_tokens',
-            'temperature',
-            'top_k','top_p','min_p',
-            'rep_p','pres_p','freq_p', 
-            'rep_sustain_range','rep_decay_range',
-            'enable_thinking','preserve_thinking'
-        ])
-    
-        exl3_sampler = ComboSampler(
-            rep_p = float(config_data.get('rep_p')),
-            pres_p = float(presence_penalty or config_data.get('pres_p')),
-            freq_p = float(frequency_penalty or config_data.get('freq_p')),
-            rep_sustain_range = int(float(str(config_data.get('rep_sustain_range', '10e7')))),
-            rep_decay_range = int(config_data.get('rep_decay_range', '0')),
-            temperature = float(temperature or config_data.get('temperature')),
-            min_p = float(config_data.get('min_p')),
-            top_k = int(top_k or config_data.get('top_k')),
-            top_p = float(top_p or config_data.get('top_p'))
-        )
-
-        # 3. Setup stop conditions
-        stop_token_list = list(STOP_TOKENS) # casting done to create a shallow copy of the list, not a reference to and incorrect modification of the original list
-        if stop:
-            if isinstance(stop, str): stop = [stop]
-            for stop_string in stop:
-                # ExLlamaV3 supports stop strings natively, so we append the string directly
-                # passing a list of token IDs (sequence) would raise a ValueError in ExLlamaV3's Job class
-                stop_token_list.append(stop_string)
-
-        # 4. Create Job
-        tokenized_messages = auto_tokenizer_apply_chat_template(
-            conversation=messages,
-            tools=tools,
-            add_generation_prompt=True,
-            tokenize=False,
-            enable_thinking=config_data['enable_thinking'],
-            preserve_thinking=config_data['preserve_thinking']
-        )
-
-        job = Job(
-            input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = int(max_tokens or config_data.get('max_new_tokens')),
-            stop_conditions = stop_token_list,
-            sampler = exl3_sampler
-        )
-        
-        # 5. Attach Queue & Enqueue to Global Generator (running in background thread)
-        job.response_queue = user_queue
-        EXL3_GENERATOR.enqueue(job)
-
-        # 6. Streaming Response Generator
+        # Streaming Response Generator
         def generate():
             
-            chunk_id, created, role_chunk = init_stream_with_role_chunk("ExLlamaV3", config_data['model_id'])
+            chunk_id, created, role_chunk = init_stream_with_role_chunk(
+                "ExLlamaV3", base_config['model_id']
+            )
             yield f"data: {json.dumps(role_chunk)}\n\n"
 
             yield from generate_openai_stream_chunks(
@@ -5848,7 +5798,7 @@ def handle_exl3_streaming_openai(messages, tools, max_tokens, temperature, top_p
                 chunk_id=chunk_id,
                 created=created,
                 backend="ExLlamaV3",
-                model_id=config_data['model_id']
+                model_id=base_config['model_id']
             )
             
             print("\nexl3-stream done\n")
@@ -5860,67 +5810,14 @@ def handle_exl3_streaming_openai(messages, tools, max_tokens, temperature, top_p
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
 
 
-def handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
+def handle_exl3_non_streaming_openai(req_body:dict) -> dict:
     """Handle non-streaming OpenAI-compatible responses using ExLlamaV3"""
     print("\n\nOpenAI/exl3-Non-Streaming route triggered\n\n")
 
     try:
-        # 1. Setup response queue for this specific request
-        user_queue = queue.Queue()
+        user_queue, _, base_config, tokenized_messages = prep_for_exl3_generation(req_body)
 
-        # 2. Get generator & other config settings
-        config_data = read_config([
-            'model_id','max_new_tokens',
-            'temperature',
-            'top_k','top_p','min_p',
-            'rep_p','pres_p','freq_p', 
-            'rep_sustain_range','rep_decay_range',
-            'enable_thinking','preserve_thinking'
-        ])
-    
-        exl3_sampler = ComboSampler(
-            rep_p = float(config_data.get('rep_p')),
-            pres_p = float(presence_penalty or config_data.get('pres_p')),
-            freq_p = float(frequency_penalty or config_data.get('freq_p')),
-            rep_sustain_range = int(float(str(config_data.get('rep_sustain_range', '10e7')))),
-            rep_decay_range = int(config_data.get('rep_decay_range', '0')),
-            temperature = float(temperature or config_data.get('temperature')),
-            min_p = float(config_data.get('min_p')),
-            top_k = int(top_k or config_data.get('top_k')),
-            top_p = float(top_p or config_data.get('top_p'))
-        )
-
-        # 3. Setup stop conditions
-        stop_token_list = list(STOP_TOKENS)
-        if stop:
-            if isinstance(stop, str):stop = [stop]
-            for stop_string in stop:
-                # ExLlamaV3 supports stop strings natively, so we append the string directly
-                # passing a list of token IDs (sequence) would raise a ValueError in ExLlamaV3's Job class
-                stop_token_list.append(stop_string)
-
-        # 4. Create Job
-        tokenized_messages = auto_tokenizer_apply_chat_template(
-            conversation=messages,
-            tools=tools,
-            add_generation_prompt=True,
-            tokenize=False,
-            enable_thinking=config_data['enable_thinking'],
-            preserve_thinking=config_data['preserve_thinking']
-        )
-
-        job = Job(
-            input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = int(max_tokens or config_data.get('max_new_tokens')),
-            stop_conditions = stop_token_list,
-            sampler = exl3_sampler
-        )
-
-        # 5. Attach Queue & Enqueue to Global Generator (running in background thread)
-        job.response_queue = user_queue
-        EXL3_GENERATOR.enqueue(job)
-
-        # 6. Consume Queue Synchronously (Accumulate Response)
+        # Consume Queue Synchronously (Accumulate Response)
         full_response = ""
         while True:
             token = user_queue.get()
@@ -5933,7 +5830,7 @@ def handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, t
         completion_tokens = len(EXL3_TOKENIZER.encode(full_response, encode_special_tokens=True))
         
         return generate_openai_non_streaming_response(
-            model_id=config_data['model_id'],
+            model_id=base_config['model_id'],
             backend="ExLlamaV3",
             full_response=full_response, 
             prompt_token_usage=prompt_tokens,
@@ -5944,18 +5841,18 @@ def handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, t
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
 
 
-def handle_openai_streaming(backend, messages, tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
+def handle_openai_streaming(backend:str, req_body:dict) -> Response:
     """Handle streaming OpenAI-compatible responses"""
-    if backend == 'transformers': return handle_transformers_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop)
-    elif backend == 'exl2': return handle_exl2_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop)
-    elif backend == 'exl3': return handle_exl3_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+    if backend == 'transformers': return handle_transformers_streaming_openai(req_body)
+    elif backend == 'exl2': return handle_exl2_streaming_openai(req_body)
+    elif backend == 'exl3': return handle_exl3_streaming_openai(req_body)
 
 
-def handle_openai_non_streaming(backend, messages, tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty):
+def handle_openai_non_streaming(backend:str, req_body:dict) -> dict:
     """Handle non-streaming OpenAI-compatible responses"""
-    if backend == 'transformers': return handle_transformers_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop)
-    elif backend == 'exl2': return handle_exl2_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop)
-    elif backend == 'exl3': return handle_exl3_non_streaming_openai(messages, tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+    if backend == 'transformers': return handle_transformers_non_streaming_openai(req_body)
+    elif backend == 'exl2': return handle_exl2_non_streaming_openai(req_body)
+    elif backend == 'exl3': return handle_exl3_non_streaming_openai(req_body)
 
 
 @app.route('/v1/chat/completions', methods=['POST'])
@@ -6004,13 +5901,6 @@ def openai_compatible_api():
         print(f"\nOpenAI Tools: {json.dumps(tools, indent=4)}\n")
         model = data.get('model', 'auto').lower().strip()  # Can be used to force specific backend
         stream = data.get('stream', False)
-        max_tokens = data.get('max_tokens', None)
-        temperature = data.get('temperature', None)
-        top_p = data.get('top_p', None)
-        top_k = data.get('top_k', None)
-        stop = data.get('stop', None)
-        presence_penalty = data.get('presence_penalty', None)
-        frequency_penalty = data.get('frequency_penalty', None)
         
     except Exception as e:
         return jsonify(
@@ -6062,11 +5952,12 @@ def openai_compatible_api():
                 final_tools = [t for t in tools if t['function']['name'] == target_name]
 
         # 'auto' is the default, so we leave final_tools as-is.
+    data['tools'] = final_tools
     
     if stream:
-        return handle_openai_streaming(selected_backend, messages, final_tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+        return handle_openai_streaming(selected_backend, data)
     else:
-        return handle_openai_non_streaming(selected_backend, messages, final_tools, max_tokens, temperature, top_p, top_k, stop, presence_penalty, frequency_penalty)
+        return handle_openai_non_streaming(selected_backend, data)
 
 
 @app.route('/v1/models', methods=['GET'])
@@ -6394,12 +6285,23 @@ def exl2_graph_extractor():
     print("\n\nexl2-graph-extractor route triggered\n\n")
 
     try:
-        chunk_entities = request.json.get('chunk_entities')
-        rag_response_mode = request.json.get('rag_response_mode', False)
-        gen_settings, config_data = get_exl2_gen_settings(request)
-        requested_max_new_tokens = int(config_data.get('max_new_tokens'))
-        knowledge_graph_cache_dir = config_data.get('knowledge_graph_cache_dir', '/')
-        reuse_graph_extraction_cache = str(request.headers.get('X-Reuse-Extraction-Cache', str(read_config(['reuse_graph_extraction_cache'])['reuse_graph_extraction_cache']).lower())).lower() == 'true'
+        data = request.json
+        chunk_entities = data.get('chunk_entities')
+        rag_response_mode = data.get('rag_response_mode', False)
+        base_config = set_generation_config_for_prompt(data)
+        gen_settings = ExLlamaV2Sampler.Settings(
+            temperature = base_config['temperature'],
+            top_k = base_config['top_k'],
+            top_p = base_config['top_p']
+        )
+        requested_max_new_tokens = base_config['max_new_tokens']
+        knowledge_graph_cache_dir = read_config(['knowledge_graph_cache_dir'])['knowledge_graph_cache_dir']
+        reuse_graph_extraction_cache = str(
+            data.get(
+                'reuse_extraction_cache',
+                read_config(['reuse_graph_extraction_cache'])['reuse_graph_extraction_cache']
+            )
+        ).lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
         return handle_api_error("Could not read POST-request messages for /exl2-graph-extractor, encountered error: ", e)
@@ -6559,8 +6461,8 @@ def exl2_graph_extractor():
                         print(f"\nAttempting to extract entities and relationships from chunk {chunk_number} of document {source_doc_name}...processing item {processed_entries + 1} of total {total_entry_count} items...\n")
                         full_payload = get_request_payload_for_graph_entity_extraction(
                             chunk_data['chunk_text'],
-                            enable_thinking=config_data['enable_thinking'],
-                            preserve_thinking=config_data['preserve_thinking']
+                            enable_thinking=base_config['enable_thinking'],
+                            preserve_thinking=base_config['preserve_thinking']
                         )
 
                         response_validation_result = None
@@ -6598,8 +6500,8 @@ def exl2_graph_extractor():
                                 try:
                                     payload = get_request_payload_for_graph_entity_extraction(
                                         chunk_text,
-                                        enable_thinking=config_data['enable_thinking'],
-                                        preserve_thinking=config_data['preserve_thinking']
+                                        enable_thinking=base_config['enable_thinking'],
+                                        preserve_thinking=base_config['preserve_thinking']
                                     )
                                     response = create_and_execute_exl2_job(payload=payload, max_new_tokens=requested_max_new_tokens, gen_settings=gen_settings)
                                     response_validation_result = validate_entity_extraction_response(response)
@@ -6729,11 +6631,22 @@ def exl2_graph_summarizer():
     print("\n\nexl2-graph-summarizer route triggered\n\n")
 
     try:
-        chunk_entities = request.json.get('chunk_entities')
-        gen_settings, config_data = get_exl2_gen_settings(request)
-        requested_max_new_tokens = int(config_data.get('max_new_tokens'))
-        knowledge_graph_cache_dir = config_data.get('knowledge_graph_cache_dir', '/')
-        reuse_graph_summary_cache = str(request.headers.get('X-Reuse-Summary-Cache', str(read_config(['reuse_graph_summary_cache'])['reuse_graph_summary_cache']).lower())).lower() == 'true'
+        data = request.json
+        chunk_entities = data.get('chunk_entities')
+        base_config = set_generation_config_for_prompt(data)
+        gen_settings = ExLlamaV2Sampler.Settings(
+            temperature = base_config['temperature'],
+            top_k = base_config['top_k'],
+            top_p = base_config['top_p']
+        )
+        requested_max_new_tokens = base_config['max_new_tokens']
+        knowledge_graph_cache_dir = read_config(['knowledge_graph_cache_dir'])['knowledge_graph_cache_dir']
+        reuse_graph_summary_cache = str(
+           data.get(
+                'reuse_summary_cache',
+                read_config(['reuse_graph_summary_cache'])['reuse_graph_summary_cache']
+            )
+        ).lower() == 'true'
         # print(f"\nchunk_entities received:\n\n{chunk_entities}\n")
     except Exception as e:
         return handle_api_error("Could not read POST-request messages for /exl2-graph-summarizer, encountered error: ", e)
@@ -6843,8 +6756,8 @@ def exl2_graph_summarizer():
                             page_number_list=chunk_data['page_number'],
                             requested_max_new_tokens=requested_max_new_tokens,
                             gen_settings=gen_settings,
-                            enable_thinking=config_data['enable_thinking'],
-                            preserve_thinking=config_data['preserve_thinking']
+                            enable_thinking=base_config['enable_thinking'],
+                            preserve_thinking=base_config['preserve_thinking']
                         )
 
                         chunk_entities[chunk_number]['summary'] = chunk_summary
@@ -7046,7 +6959,6 @@ def health():
         pipe_ready = PIPE is not None
         exl2_ready = all([EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER, EXL2_GENERATOR, AUTO_PROC_TOK])
         exl3_ready = all([EXL3_MODEL, EXL3_CACHE, EXL3_TOKENIZER, EXL3_GENERATOR, STOP_TOKENS, AUTO_PROC_TOK])
-        # asr_ready = all([MODEL, SILERO_VAD, SILERO_UTILS]) # MODEL & VAD components are the common denominator for all ASR backends
         asr_ready = MODEL is not None
         tts_ready = MODEL is not None
         
