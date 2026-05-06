@@ -1,312 +1,225 @@
 {
-	"info": {
-		"_postman_id": "31818b78-c986-4242-a3cd-066689abd274",
-		"name": "HF-Waitress-Tool-Use",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "40026557"
-	},
-	"item": [
-		{
-			"name": "/v1/chat/completions-Tool",
-			"request": {
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n    \"model\": \"exl3\",\r\n    \"messages\": \r\n    [ \r\n        {\r\n        \"role\": \"system\",\r\n        \"content\": \"You are a home automation assistant tasked with assisting the user in performing real-world actions\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Turn on the lamp\"\r\n        }\r\n    ],\r\n    \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"wol_turn_on_tv\", \"description\": \"Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"mac_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"}, \"target_ip\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}, \"port\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lg_webos_tv_turn_on\", \"description\": \"Turns on an LG WebOS TV.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"mac_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"}, \"target_ip\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}, \"port\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lg_webos_tv_turn_off\", \"description\": \"Turns off an LG WebOS TV.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"ip_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lamp_turn_on\", \"description\": \"Turns on a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lamp_turn_off\", \"description\": \"Turns off a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_brightness\", \"description\": \"Sets the brightness of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"brightness\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '100' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_color\", \"description\": \"Sets the color of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"red\": {\"type\": \"integer\", \"description\": \"\"}, \"green\": {\"type\": \"integer\", \"description\": \"\"}, \"blue\": {\"type\": \"integer\", \"description\": \"\"}}, \"required\": [\"red\", \"green\", \"blue\"], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_temperature\", \"description\": \"Sets the temperature of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"temperature\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '2700' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_scene\", \"description\": \"Sets the scene of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"scene\": {\"type\": \"string\", \"description\": \"\", \"enum\": [\"sunrise\", \"sunset\", \"movie\", \"dating\", \"romantic\", \"twinkle\", \"candlelight\", \"snowflake\", \"energetic\", \"breathe\", \"crossing\"]}}, \"required\": [\"scene\"], \"additionalProperties\": false}}}],\r\n    \"temperature\":0.1,\r\n    \"top_k\":40,\r\n    \"top_p\":0.9,\r\n    \"min_p\":0.1,\r\n    \"n_keep\":0,\r\n    \"repeat_penalty\":1,\r\n    \"presence_penalty\":0,\r\n    \"frequency_penalty\":0,\r\n    \"stream\": false\r\n  }",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/v1/chat/completions",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"v1",
-						"chat",
-						"completions"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "ExLlamaV3-Tool-Stream",
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					},
-					{
-						"key": "X-Return-Full-Text",
-						"value": "False",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Temperature",
-						"value": "0.7",
-						"type": "text"
-					},
-					{
-						"key": "X-Do-Sample",
-						"value": "True",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Top-K",
-						"value": "40",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-P",
-						"value": "0.95",
-						"type": "text"
-					},
-					{
-						"key": "X-Min-P",
-						"value": "0.05",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\r\n        \"role\": \"system\",\r\n        \"content\": \"You are a home automation assistant tasked with assisting the user in performing real-world actions\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Turn on the lamp\"\r\n        }\r\n    ],\r\n    \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"wol_turn_on_tv\", \"description\": \"Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"mac_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"}, \"target_ip\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}, \"port\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lg_webos_tv_turn_on\", \"description\": \"Turns on an LG WebOS TV.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"mac_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"}, \"target_ip\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}, \"port\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lg_webos_tv_turn_off\", \"description\": \"Turns off an LG WebOS TV.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"ip_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lamp_turn_on\", \"description\": \"Turns on a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lamp_turn_off\", \"description\": \"Turns off a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_brightness\", \"description\": \"Sets the brightness of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"brightness\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '100' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_color\", \"description\": \"Sets the color of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"red\": {\"type\": \"integer\", \"description\": \"\"}, \"green\": {\"type\": \"integer\", \"description\": \"\"}, \"blue\": {\"type\": \"integer\", \"description\": \"\"}}, \"required\": [\"red\", \"green\", \"blue\"], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_temperature\", \"description\": \"Sets the temperature of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"temperature\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '2700' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_scene\", \"description\": \"Sets the scene of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"scene\": {\"type\": \"string\", \"description\": \"\", \"enum\": [\"sunrise\", \"sunset\", \"movie\", \"dating\", \"romantic\", \"twinkle\", \"candlelight\", \"snowflake\", \"energetic\", \"breathe\", \"crossing\"]}}, \"required\": [\"scene\"], \"additionalProperties\": false}}}]\r\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/exl3_stream",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"exl3_stream"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "ExLlamaV2-Tool-Stream",
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					},
-					{
-						"key": "X-Return-Full-Text",
-						"value": "False",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Temperature",
-						"value": "0.7",
-						"type": "text"
-					},
-					{
-						"key": "X-Do-Sample",
-						"value": "True",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Top-K",
-						"value": "40",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-P",
-						"value": "0.95",
-						"type": "text"
-					},
-					{
-						"key": "X-Min-P",
-						"value": "0.05",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\r\n        \"role\": \"system\",\r\n        \"content\": \"You are a home automation assistant tasked with assisting the user in performing real-world actions\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Turn on the lamp\"\r\n        }\r\n    ],\r\n    \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"wol_turn_on_tv\", \"description\": \"Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"mac_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"}, \"target_ip\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}, \"port\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lg_webos_tv_turn_on\", \"description\": \"Turns on an LG WebOS TV.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"mac_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"}, \"target_ip\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}, \"port\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lg_webos_tv_turn_off\", \"description\": \"Turns off an LG WebOS TV.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"ip_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lamp_turn_on\", \"description\": \"Turns on a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lamp_turn_off\", \"description\": \"Turns off a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_brightness\", \"description\": \"Sets the brightness of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"brightness\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '100' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_color\", \"description\": \"Sets the color of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"red\": {\"type\": \"integer\", \"description\": \"\"}, \"green\": {\"type\": \"integer\", \"description\": \"\"}, \"blue\": {\"type\": \"integer\", \"description\": \"\"}}, \"required\": [\"red\", \"green\", \"blue\"], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_temperature\", \"description\": \"Sets the temperature of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"temperature\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '2700' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_scene\", \"description\": \"Sets the scene of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"scene\": {\"type\": \"string\", \"description\": \"\", \"enum\": [\"sunrise\", \"sunset\", \"movie\", \"dating\", \"romantic\", \"twinkle\", \"candlelight\", \"snowflake\", \"energetic\", \"breathe\", \"crossing\"]}}, \"required\": [\"scene\"], \"additionalProperties\": false}}}]\r\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/exl2_stream",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"exl2_stream"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Completions-Tool-Stream",
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					},
-					{
-						"key": "X-Return-Full-Text",
-						"value": "False",
-						"type": "text"
-					},
-					{
-						"key": "X-Temperature",
-						"value": "0.7",
-						"type": "text"
-					},
-					{
-						"key": "X-Do-Sample",
-						"value": "True",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-K",
-						"value": "40",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-P",
-						"value": "0.95",
-						"type": "text"
-					},
-					{
-						"key": "X-Min-P",
-						"value": "0.05",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\r\n        \"role\": \"system\",\r\n        \"content\": \"You are a home automation assistant tasked with assisting the user in performing real-world actions\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Turn on the lamp\"\r\n        }\r\n    ],\r\n    \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"wol_turn_on_tv\", \"description\": \"Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"mac_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"}, \"target_ip\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}, \"port\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lg_webos_tv_turn_on\", \"description\": \"Turns on an LG WebOS TV.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"mac_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"}, \"target_ip\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}, \"port\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lg_webos_tv_turn_off\", \"description\": \"Turns off an LG WebOS TV.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"ip_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lamp_turn_on\", \"description\": \"Turns on a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lamp_turn_off\", \"description\": \"Turns off a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_brightness\", \"description\": \"Sets the brightness of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"brightness\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '100' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_color\", \"description\": \"Sets the color of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"red\": {\"type\": \"integer\", \"description\": \"\"}, \"green\": {\"type\": \"integer\", \"description\": \"\"}, \"blue\": {\"type\": \"integer\", \"description\": \"\"}}, \"required\": [\"red\", \"green\", \"blue\"], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_temperature\", \"description\": \"Sets the temperature of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"temperature\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '2700' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_scene\", \"description\": \"Sets the scene of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"scene\": {\"type\": \"string\", \"description\": \"\", \"enum\": [\"sunrise\", \"sunset\", \"movie\", \"dating\", \"romantic\", \"twinkle\", \"candlelight\", \"snowflake\", \"energetic\", \"breathe\", \"crossing\"]}}, \"required\": [\"scene\"], \"additionalProperties\": false}}}]\r\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/completions_stream",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"completions_stream"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Completions-Tool",
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					},
-					{
-						"key": "X-Return-Full-Text",
-						"value": "True",
-						"type": "text"
-					},
-					{
-						"key": "X-Temperature",
-						"value": "0.7",
-						"type": "text"
-					},
-					{
-						"key": "X-Do-Sample",
-						"value": "True",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-K",
-						"value": "40",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-P",
-						"value": "0.95",
-						"type": "text"
-					},
-					{
-						"key": "X-Min-P",
-						"value": "0.05",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\r\n        \"role\": \"system\",\r\n        \"content\": \"You are a home automation assistant tasked with assisting the user in performing real-world actions\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Turn on the lamp\"\r\n        }\r\n    ],\r\n    \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"wol_turn_on_tv\", \"description\": \"Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"mac_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"}, \"target_ip\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}, \"port\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lg_webos_tv_turn_on\", \"description\": \"Turns on an LG WebOS TV.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"mac_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"}, \"target_ip\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}, \"port\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lg_webos_tv_turn_off\", \"description\": \"Turns off an LG WebOS TV.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"ip_address\": {\"type\": \"string\", \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lamp_turn_on\", \"description\": \"Turns on a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"lamp_turn_off\", \"description\": \"Turns off a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_brightness\", \"description\": \"Sets the brightness of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"brightness\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '100' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_color\", \"description\": \"Sets the color of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"red\": {\"type\": \"integer\", \"description\": \"\"}, \"green\": {\"type\": \"integer\", \"description\": \"\"}, \"blue\": {\"type\": \"integer\", \"description\": \"\"}}, \"required\": [\"red\", \"green\", \"blue\"], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_temperature\", \"description\": \"Sets the temperature of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"temperature\": {\"type\": \"integer\", \"description\": \"Optional. Defaults to '2700' if not specified. Do not guess.\"}}, \"required\": [], \"additionalProperties\": false}}}, {\"type\": \"function\", \"function\": {\"name\": \"set_lamp_scene\", \"description\": \"Sets the scene of a Govee lamp.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"scene\": {\"type\": \"string\", \"description\": \"\", \"enum\": [\"sunrise\", \"sunset\", \"movie\", \"dating\", \"romantic\", \"twinkle\", \"candlelight\", \"snowflake\", \"energetic\", \"breathe\", \"crossing\"]}}, \"required\": [\"scene\"], \"additionalProperties\": false}}}]\r\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/completions",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"completions"
-					]
-				}
-			},
-			"response": []
-		}
-	]
+  "info": {
+    "_postman_id": "31818b78-c986-4242-a3cd-066689abd274",
+    "name": "HF-Waitress-Tool-Use",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "40026557"
+  },
+  "item": [
+    {
+      "name": "/v1/chat/completions-Tool",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"model\": \"exl3\",\r\n    \"temperature\": 0.1,\r\n    \"top_k\": 40,\r\n    \"top_p\": 0.95,\r\n    \"min_p\": 0.1,\r\n    \"n_keep\": 0,\r\n    \"repeat_penalty\": 1,\r\n    \"presence_penalty\": 0,\r\n    \"frequency_penalty\": 0,\r\n    \"stream\": false,\r\n    \"enable_thinking\": false,\r\n    \"preserve_thinking\": true,\r\n    \"messages\": [\r\n        {\r\n            \"role\": \"system\",\r\n            \"content\": \"You are a home automation assistant tasked with assisting the user in performing real-world actions\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"What's the weather like in Vancouver today? And switch on the lamp please. Thanks!\"\r\n        }\r\n    ],\r\n    \"tools\": [\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"description\": \"Unified RAG tool for local (documents) & web (search engine) search. Performs best when given a detailed and comprehensive, yet focused search-optimized query encompassing all relevant information from the conversational context.  When detailed information is needed from a specific URL (other than internal 'http://llm-citations-database.net' addresses), use the 'fetch_url' tool with the URL to retrieve the full article content.\",\r\n                \"name\": \"search\",\r\n                \"parameters\": {\r\n                    \"additionalProperties\": false,\r\n                    \"properties\": {\r\n                        \"category\": {\r\n                            \"description\": \"Optional. Defaults to 'web' if not specified. Do not guess.\",\r\n                            \"enum\": [\r\n                                \"general\",\r\n                                \"news\",\r\n                                \"images\",\r\n                                \"videos\",\r\n                                \"music\",\r\n                                \"it\",\r\n                                \"science\",\r\n                                \"files\",\r\n                                \"social_media\"\r\n                            ],\r\n                            \"type\": \"string\"\r\n                        },\r\n                        \"query\": {\r\n                            \"description\": \"\",\r\n                            \"type\": \"string\"\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"query\"\r\n                    ],\r\n                    \"type\": \"object\"\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"description\": \"Fetches and extracts the main text content from a given URL. Use this when you need to read the full contents of a webpage, such as after finding relevant URLs from a search. DOES NOT WORK FOR 'http://llm-citations-database.net' ADDRESSES!\",\r\n                \"name\": \"fetch_url\",\r\n                \"parameters\": {\r\n                    \"additionalProperties\": false,\r\n                    \"properties\": {\r\n                        \"url\": {\r\n                            \"description\": \"The full URL of the webpage to fetch and extract content from (DOES NOT WORK FOR 'http://llm-citations-database.net' ADDRESSES!)\",\r\n                            \"type\": \"string\"\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"url\"\r\n                    ],\r\n                    \"type\": \"object\"\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"wol_turn_on_tv\",\r\n                \"description\": \"Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_on\",\r\n                \"description\": \"Turns on an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_off\",\r\n                \"description\": \"Turns off an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"ip_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_on\",\r\n                \"description\": \"Turns on a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_off\",\r\n                \"description\": \"Turns off a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_brightness\",\r\n                \"description\": \"Sets the brightness of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"brightness\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '100' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_color\",\r\n                \"description\": \"Sets the color of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"red\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"green\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"blue\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"red\",\r\n                        \"green\",\r\n                        \"blue\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_temperature\",\r\n                \"description\": \"Sets the temperature of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"temperature\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '2700' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_scene\",\r\n                \"description\": \"Sets the scene of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"scene\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"\",\r\n                            \"enum\": [\r\n                                \"sunrise\",\r\n                                \"sunset\",\r\n                                \"movie\",\r\n                                \"dating\",\r\n                                \"romantic\",\r\n                                \"twinkle\",\r\n                                \"candlelight\",\r\n                                \"snowflake\",\r\n                                \"energetic\",\r\n                                \"breathe\",\r\n                                \"crossing\"\r\n                            ]\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"scene\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        }\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/v1/chat/completions",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "v1",
+            "chat",
+            "completions"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "/v1/chat/completions-FunctionGemma",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"model\": \"exl3\",\r\n    \"messages\": [\r\n        {\r\n            \"role\": \"developer\",\r\n            \"content\": \"You are a model that can do function calling with the following functions\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Turn on the lamp\"\r\n        }\r\n    ],\r\n    \"tools\": [\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_on\",\r\n                \"description\": \"Turns on a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        }\r\n    ],\r\n    \"temperature\": 1,\r\n    \"top_k\": 64,\r\n    \"top_p\": 0.95,\r\n    \"min_p\": 0.1,\r\n    \"n_keep\": 0,\r\n    \"repeat_penalty\": 1,\r\n    \"presence_penalty\": 0,\r\n    \"frequency_penalty\": 0,\r\n    \"stream\": false\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/v1/chat/completions",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "v1",
+            "chat",
+            "completions"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "ExLlamaV3-Tool-Stream",
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"temperature\": 0.1,\r\n    \"top_k\": 20,\r\n    \"top_p\": 0.9,\r\n    \"min_p\": 0.1,\r\n    \"n_keep\": 0,\r\n    \"repeat_penalty\": 1,\r\n    \"presence_penalty\": 0,\r\n    \"frequency_penalty\": 0,\r\n    \"enable_thinking\": false,\r\n    \"preserve_thinking\": true,\r\n    \"messages\": [\r\n        {\r\n            \"role\": \"system\",\r\n            \"content\": \"The Current Date is: 2026-05-05T00:43:06.301Z\\n\\nYou are a helpful assistant deployed in a multi-purpose system designed to aid the user in the following ways:\\n\\n1. General chat: Friendly & fun conversations that might rely on your world knowledge at times.\\n\\n2. Retrieval Augmented Generation (RAG): Additional context may be provided alongside a user query, be sure to link to source citations after every significant point and wherever else applicable in your response, by providing the complete 'source_link' link!\\n\\n3. Home Assistance: The user might request you to perform tasks that involve controlling smart appliances. The system you're deployed in leverages your capabilities in this regard, so don't respond with a generic \\\"as an AI I can't help with turning on lights\\\" etc!\\n\\nNOTE: The system you're hooked up to uses speech transcription to enable vocal interactions, so don't be caught off-guard if the user asks if you can hear them! Instead of replying with \\\"as an AI I cannot hear\\\", simply state \\\"yes loud and clear!\\\" or other such affirmative as the very fact that you received an input means the speech transcription worked!\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Hi!\"\r\n        },\r\n        {\r\n            \"role\": \"assistant\",\r\n            \"content\": \"Hello! How can I help you today?\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"What's the latest on Netflix?\"\r\n        },\r\n        {\r\n            \"role\": \"assistant\",\r\n            \"content\": \"\\n<|tool_call|>[{\\\"name\\\":\\\"search\\\",\\\"arguments\\\":\\\"{\\\\\\\"query\\\\\\\":\\\\\\\"latest new releases on Netflix May 2026\\\\\\\"}\\\"}]\"\r\n        },\r\n        {\r\n            \"role\": \"tool\",\r\n            \"content\": \"{ \\\"name\\\": \\\"search\\\", \\\"result\\\": \\\"\\n\\n====================\\n EXTERNAL WEB SEARCH RESULTS \\n====================\\n\\nTitle: New on Netflix April 2026: Movies, TV, Original Series\\nsource_link: https://www.vulture.com/article/new-on-netflix-movies-shows-originals.html\\nContent: New on Netflix April 2026: Movies, TV ...\\n\\nTitle: what's new on netflix on may 2026\\nsource_link: https://www.dailymotion.com/video/xa7lucw\\nContent: what's new on netflix on may 2026 ...\\n\\nTitle: The Boroughs | Official Teaser Trailer | Netflix\\nsource_link: https://discussingfilm.net/2026/04/30/new-on-netflix-may-2026/\\nContent: Netflix May 2026: Full List of New Arrivals\\n\\nTitle: Ladies First | Official Trailer | Netflix\\nsource_link: https://discussingfilm.net/2026/04/30/new-on-netflix-may-2026/\\nContent: Netflix May 2026: Full List of New Arrivals\\n\\nTitle: What's Coming to Netflix in February 2026\\nsource_link: https://www.whats-on-netflix.com/coming-soon/whats-coming-to-netflix-in-february-2026/\\nContent: What's Coming to Netflix in February 2026\\n\\nTitle: Top NEW RELEASES on Netflix in MAY 2026! - YouTube\\nsource_link: https://www.youtube.com/watch?v=fSca2pj0RAc\\nContent: Top NEW RELEASES on Netflix in MAY 2026 ...\\n\\nTitle: New Movies on Netflix in 2026 - Netflix Tudum\\nsource_link: https://www.netflix.com/tudum/articles/new-movies-on-netflix-2026\\nContent: New Movies on Netflix in 2026 - Netflix ...\\n\\nTitle: Netflix Release Schedule 2026: New Movies and Series Coming ...\\nsource_link: https://www.whats-on-netflix.com/coming-soon/netflix-movie-series-2026/\\nContent: Netflix Release Schedule 2026: New ...\\n\\nTitle: Netflix Release Schedule 2026: New Movies and Series Coming This Year\\nsource_link: https://www.whats-on-netflix.com/coming-soon/netflix-movie-series-2026/\\nContent: Netflix Release Schedule 2026: New Movies and Series Coming This Year\\n\\nTitle: Netflix Release Schedule 2026: New Movies and Series Coming This Year\\nsource_link: https://www.whats-on-netflix.com/coming-soon/netflix-movie-series-2026/\\nContent: Netflix Release Schedule 2026: New Movies and Series Coming This Year\\n\\nTitle: Netflix Release Schedule 2026: New Movies and Series Coming This Year\\nsource_link: https://www.whats-on-netflix.com/coming-soon/netflix-movie-series-2026/\\nContent: Netflix Release Schedule 2026: New Movies and Series Coming This Year\\n\\nTitle: Netflix Release Schedule 2026: New Movies and Series Coming Next Year\\nsource_link: https://www.whats-on-netflix.com/coming-soon/netflix-movie-series-2026/\\nContent: Netflix Release Schedule 2026: New Movies and Series Coming Next Year\\n\\nTitle: New Movies Coming to Netflix in 2026\\nsource_link: https://www.whats-on-netflix.com/coming-soon/movies-coming-to-netflix-in-2026/\\nContent: New Movies Coming to Netflix in 2026\\n\\nTitle: Netflix May 2026 new releases, full list of everything coming ...\\nsource_link: https://www.thebiglead.com/netflix-may-2026-new-releases-full-list-everything-coming-this-month/\\nContent: Netflix May 2026 new releases, full ...\\n\\nTitle: Netflix May 2026 new releases, full list of everything coming ...\\nsource_link: https://www.thebiglead.com/netflix-may-2026-new-releases-full-list-everything-coming-this-month/\\nContent: Netflix May 2026 new releases, full ...\\n\\n\\\" }\"\r\n        },\r\n        {\r\n            \"role\": \"assistant\",\r\n            \"content\": \"\\n<|tool_call|>[{\\\"name\\\":\\\"fetch_url\\\",\\\"arguments\\\":\\\"{\\\\\\\"url\\\\\\\":\\\\\\\"https://www.thebiglead.com/netflix-may-2026-new-releases-full-list-everything-coming-this-month/\\\\\\\"}\\\"}]\"\r\n        },\r\n        {\r\n            \"role\": \"tool\",\r\n            \"content\": \"{ \\\"name\\\": \\\"fetch_url\\\", \\\"result\\\": \\\"Successfully extracted main content from URL: https://www.thebiglead.com/netflix-may-2026-new-releases-full-list-everything-coming-this-month/\\n\\nNetflix is kicking off the second quarter of 2026 as we turn the calendar to May, which means an exciting month of new releases.\\n\\nThis month includes some major highlights, from The Roast of Kevin Hart to the first-ever live MMA event on the streaming service, which is headlined by a superfight a decade in the making between Ronda Rousey and Gina Carano.\\n\\n**MORE: HBO Max May 2026 new releases, full list of everything coming this month**\\n\\nWe will also get a new season of *Pop Culture Jeopardy!*, a Martin Short documentary, and, for reality TV dating fans, a new season of *Perfect Match*.\\n\\nWe will have to tune in to see what turns out to be the breakout hit of the month.\\n\\nWhat will be coming to the streaming service over the next few weeks?\\n\\nCheck out everything coming to Netflix in May 2026 below.\\n\\n## Netflix New Releases – May 2026\\n\\n## May 1\\n\\n*13 Going on 30**48 Hrs.**Airport**Airport ’77**Airport 1975**Bad News Bears**The Boss**The Breakfast Club**Burn After Reading**Den of Thieves**Domestic Disturbance**Eat Pray Love**Fried Green Tomatoes**Glory**Green Book**Hitch**Home**Jennifer’s Body**Jumanji**Jumping the Broom**La Brea – Seasons 1-3**The Land Before Time**Little Fockers**Meet the Parents**Meet the Fockers**My Dearest Señorita**National Lampoon’s Animal House**Ouija**Ouija: Origin of Evil**Pretty Woman**The Proposal**Schindler’s List**Son-In-Law**Starship Troopers**Swapped**Trainwreck**Under the Skin**Veronica Mars**Waterworld*\\n\\n## May 4\\n\\n*Dr. Seuss’s Horton! – Season 2**Funny AF with Kevin Hart**Lord of the Flies*\\n\\n## May 5\\n\\n*Funny AF with Kevin Hart*\\n\\n## May 6\\n\\n*Countdown: Rousey vs. Carano**Love is Blind Poland**Worst Ex Ever – Season 2*\\n\\n## May 7\\n\\n*The Chestnut Man: Hide and Seek**Legends**My Dearest Assassin**USA 94: Brazil’s Return to Glory*\\n\\n## May 8\\n\\n*My Royal Nemesis**Remarkably Bright Creatures**Thank You, Next – Season 3*\\n\\n## May 10\\n\\n*The Roast of Kevin Hart*\\n\\n## May 11\\n\\n*Mrs. Harris Goes to Paris**Pop Culture Jeopardy!*\\n\\n## May 12\\n\\n*Devil May Cry – Season 2**Marty, Life Is Short**Untold UK: Jamie Vardy*\\n\\n## May 13\\n\\n*Between Father and Son**The Bus: A French Football Mutiny**Perfect Match- Season 4**Roosters – Season 2*\\n\\n## May 14\\n\\n*Nemesis**Soul Mate*\\n\\n## May 15\\n\\n*Berlin and the Lady with an Ermine**The Crash**The WONDERfools*\\n\\n## May 16\\n\\n*Black Phone 2**Ronda Rousey vs. Gina Carano*\\n\\n## May 18\\n\\n*Abraham Lincoln – Season 1**FDR – Season 1**Grant – Season 1**The Great War**Law and Order – Seasons 23-24**Navy SEALs: America’s Secret Warriors – Seasons 1-2**Nope**Theodore Roosevelt – Season 1**Thomas Jefferson – Season 1**Washington – Season 1*\\n\\n## May 19\\n\\n*Untold UK: Liverpool’s Miracle of Istanbul**Wanda Sykes: Legacy*\\n\\n## May 20\\n\\n*Carizzma*\\n\\n## May 21\\n\\n*The Boroughs**James*\\n\\n## May 22\\n\\n*Canada: Sprint Qualifying**F1 Canadian Grand Prix: Practice 1**Gabby’s Dollhouse: The Movie**Ladies First**Mating Season*\\n\\n## May 23\\n\\n*F1 Canadian Grand Prix: Qualifying**F1 Canadian Grand Prix: Sprint*\\n\\n## May 24\\n\\n*F1 Canadian Grand Prix: Race*\\n\\n## May 26\\n\\n*Untold UK: Vinnie Jones*\\n\\n## May 27\\n\\n*A Good Girl’s Guide to Murder – Season 2**My 2 Cents**Room to Move*\\n\\n## May 28\\n\\n*Dead Man’s Wire**The Four Seasons – Season 2**Murder Mindfully – Season 2*\\n\\n## May 29\\n\\n*Brazil ’70: The Third Star**Calabasas Confidential**Rafa*\\n\\n## May 30\\n\\n*K-Pops!*\\n\\n## May 31\\n\\n*AFI Life Achievement Award: A Tribute to Eddie Murphy—Netflix Comedy Special**The Theory of Everything*\\n\\n*— **Enjoy free coverage of the top news & trending stories on The Big Lead **—*\\\" }\"\r\n        }\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/exl3_stream",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "exl3_stream"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "FunctionGemma",
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"messages\": [\r\n        {\r\n            \"role\": \"developer\",\r\n            \"content\": \"You are a model that can do function calling with the following functions\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Turn on the lamp\"\r\n        }\r\n    ],\r\n    \"tools\": [\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"wol_turn_on_tv\",\r\n                \"description\": \"Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_on\",\r\n                \"description\": \"Turns on an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_off\",\r\n                \"description\": \"Turns off an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"ip_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_on\",\r\n                \"description\": \"Turns on a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_off\",\r\n                \"description\": \"Turns off a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_brightness\",\r\n                \"description\": \"Sets the brightness of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"brightness\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '100' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_color\",\r\n                \"description\": \"Sets the color of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"red\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"green\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"blue\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"red\",\r\n                        \"green\",\r\n                        \"blue\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_temperature\",\r\n                \"description\": \"Sets the temperature of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"temperature\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '2700' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_scene\",\r\n                \"description\": \"Sets the scene of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"scene\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"\",\r\n                            \"enum\": [\r\n                                \"sunrise\",\r\n                                \"sunset\",\r\n                                \"movie\",\r\n                                \"dating\",\r\n                                \"romantic\",\r\n                                \"twinkle\",\r\n                                \"candlelight\",\r\n                                \"snowflake\",\r\n                                \"energetic\",\r\n                                \"breathe\",\r\n                                \"crossing\"\r\n                            ]\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"scene\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        }\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/completions",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "completions"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "ExLlamaV2-Tool-Stream",
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"temperature\": 0.1,\r\n    \"top_k\": 40,\r\n    \"top_p\": 0.95,\r\n    \"min_p\": 0.1,\r\n    \"n_keep\": 0,\r\n    \"repeat_penalty\": 1,\r\n    \"presence_penalty\": 0,\r\n    \"frequency_penalty\": 0,\r\n    \"enable_thinking\": true,\r\n    \"preserve_thinking\": true,\r\n    \"messages\": [\r\n        {\r\n            \"role\": \"system\",\r\n            \"content\": \"You are a home automation assistant tasked with assisting the user in performing real-world actions\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Turn on the lamp\"\r\n        }\r\n    ],\r\n    \"tools\": [\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"wol_turn_on_tv\",\r\n                \"description\": \"Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_on\",\r\n                \"description\": \"Turns on an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_off\",\r\n                \"description\": \"Turns off an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"ip_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_on\",\r\n                \"description\": \"Turns on a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_off\",\r\n                \"description\": \"Turns off a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_brightness\",\r\n                \"description\": \"Sets the brightness of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"brightness\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '100' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_color\",\r\n                \"description\": \"Sets the color of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"red\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"green\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"blue\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"red\",\r\n                        \"green\",\r\n                        \"blue\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_temperature\",\r\n                \"description\": \"Sets the temperature of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"temperature\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '2700' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_scene\",\r\n                \"description\": \"Sets the scene of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"scene\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"\",\r\n                            \"enum\": [\r\n                                \"sunrise\",\r\n                                \"sunset\",\r\n                                \"movie\",\r\n                                \"dating\",\r\n                                \"romantic\",\r\n                                \"twinkle\",\r\n                                \"candlelight\",\r\n                                \"snowflake\",\r\n                                \"energetic\",\r\n                                \"breathe\",\r\n                                \"crossing\"\r\n                            ]\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"scene\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        }\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/exl2_stream",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "exl2_stream"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Completions-Tool-Stream",
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"temperature\": 0.7,\r\n    \"top_k\": 20,\r\n    \"top_p\": 0.9,\r\n    \"min_p\": 0.1,\r\n    \"n_keep\": 0,\r\n    \"repeat_penalty\": 1,\r\n    \"presence_penalty\": 0,\r\n    \"frequency_penalty\": 0,\r\n    \"enable_thinking\": false,\r\n    \"preserve_thinking\": true,\r\n    \"messages\": [\r\n        {\r\n            \"role\": \"system\",\r\n            \"content\": \"You are a home automation assistant tasked with assisting the user in performing real-world actions\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Turn on the lamp\"\r\n        }\r\n    ],\r\n    \"tools\": [\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"wol_turn_on_tv\",\r\n                \"description\": \"Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_on\",\r\n                \"description\": \"Turns on an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_off\",\r\n                \"description\": \"Turns off an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"ip_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_on\",\r\n                \"description\": \"Turns on a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_off\",\r\n                \"description\": \"Turns off a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_brightness\",\r\n                \"description\": \"Sets the brightness of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"brightness\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '100' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_color\",\r\n                \"description\": \"Sets the color of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"red\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"green\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"blue\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"red\",\r\n                        \"green\",\r\n                        \"blue\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_temperature\",\r\n                \"description\": \"Sets the temperature of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"temperature\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '2700' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_scene\",\r\n                \"description\": \"Sets the scene of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"scene\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"\",\r\n                            \"enum\": [\r\n                                \"sunrise\",\r\n                                \"sunset\",\r\n                                \"movie\",\r\n                                \"dating\",\r\n                                \"romantic\",\r\n                                \"twinkle\",\r\n                                \"candlelight\",\r\n                                \"snowflake\",\r\n                                \"energetic\",\r\n                                \"breathe\",\r\n                                \"crossing\"\r\n                            ]\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"scene\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        }\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/completions_stream",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "completions_stream"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Completions-Tool",
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"temperature\": 0.7,\r\n    \"top_k\": 20,\r\n    \"top_p\": 0.9,\r\n    \"min_p\": 0.1,\r\n    \"n_keep\": 0,\r\n    \"repeat_penalty\": 1,\r\n    \"presence_penalty\": 0,\r\n    \"frequency_penalty\": 0,\r\n    \"enable_thinking\": false,\r\n    \"preserve_thinking\": true,\r\n    \"messages\": [\r\n        {\r\n            \"role\": \"system\",\r\n            \"content\": \"You are a home automation assistant tasked with assisting the user in performing real-world actions\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Turn on the lamp\"\r\n        }\r\n    ],\r\n    \"tools\": [\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"wol_turn_on_tv\",\r\n                \"description\": \"Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_on\",\r\n                \"description\": \"Turns on an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_off\",\r\n                \"description\": \"Turns off an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"ip_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_on\",\r\n                \"description\": \"Turns on a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_off\",\r\n                \"description\": \"Turns off a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_brightness\",\r\n                \"description\": \"Sets the brightness of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"brightness\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '100' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_color\",\r\n                \"description\": \"Sets the color of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"red\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"green\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"blue\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"red\",\r\n                        \"green\",\r\n                        \"blue\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_temperature\",\r\n                \"description\": \"Sets the temperature of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"temperature\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '2700' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_scene\",\r\n                \"description\": \"Sets the scene of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"scene\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"\",\r\n                            \"enum\": [\r\n                                \"sunrise\",\r\n                                \"sunset\",\r\n                                \"movie\",\r\n                                \"dating\",\r\n                                \"romantic\",\r\n                                \"twinkle\",\r\n                                \"candlelight\",\r\n                                \"snowflake\",\r\n                                \"energetic\",\r\n                                \"breathe\",\r\n                                \"crossing\"\r\n                            ]\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"scene\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        }\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/completions",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "completions"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
 }

@@ -1,148 +1,100 @@
 {
-	"info": {
-		"_postman_id": "4d4cb315-e429-41f0-aa7c-debed01f1e59",
-		"name": "HF-Waitress-FIM",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "40026557"
-	},
-	"item": [
-		{
-			"name": "Exl3-FIM-Stream",
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					},
-					{
-						"key": "X-Return-Full-Text",
-						"value": "False",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Temperature",
-						"value": "0.7",
-						"type": "text"
-					},
-					{
-						"key": "X-Do-Sample",
-						"value": "True",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Top-K",
-						"value": "40",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-P",
-						"value": "0.95",
-						"type": "text"
-					},
-					{
-						"key": "X-Min-P",
-						"value": "0.05",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\"prefix\":\"def hello():\", \"suffix\":\"\", \"language\":\"python\"}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/exl3_fim_stream",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"exl3_fim_stream"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Exl2-FIM-Stream",
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					},
-					{
-						"key": "X-Return-Full-Text",
-						"value": "False",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Temperature",
-						"value": "0.7",
-						"type": "text"
-					},
-					{
-						"key": "X-Do-Sample",
-						"value": "True",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Top-K",
-						"value": "40",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-P",
-						"value": "0.95",
-						"type": "text"
-					},
-					{
-						"key": "X-Min-P",
-						"value": "0.05",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\"prefix\":\"def hello():\", \"suffix\":\"\", \"language\":\"python\"}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/exl2_fim_stream",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"exl2_fim_stream"
-					]
-				}
-			},
-			"response": []
-		}
-	]
+  "info": {
+    "_postman_id": "4d4cb315-e429-41f0-aa7c-debed01f1e59",
+    "name": "HF-Waitress-FIM",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "40026557"
+  },
+  "item": [
+    {
+      "name": "Exl3-FIM-Stream",
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"prefix\": \"def hello():\",\r\n    \"suffix\": \"\",\r\n    \"language\": \"python\",\r\n    \"temperature\": 0.1,\r\n    \"top_k\": 40,\r\n    \"top_p\": 0.95,\r\n    \"min_p\": 0.1,\r\n    \"n_keep\": 0,\r\n    \"repeat_penalty\": 1,\r\n    \"presence_penalty\": 0,\r\n    \"frequency_penalty\": 0,\r\n    \"enable_thinking\": false,\r\n    \"preserve_thinking\": false\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/exl3_fim_stream",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "exl3_fim_stream"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Exl2-FIM-Stream",
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"prefix\":\"def hello():\",\r\n    \"suffix\":\"\",\r\n    \"language\":\"python\",\r\n    \"temperature\": 0.1,\r\n    \"top_k\": 40,\r\n    \"top_p\": 0.95,\r\n    \"min_p\": 0.1,\r\n    \"n_keep\": 0,\r\n    \"repeat_penalty\": 1,\r\n    \"presence_penalty\": 0,\r\n    \"frequency_penalty\": 0,\r\n    \"enable_thinking\":false,\r\n    \"preserve_thinking\":false\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/exl2_fim_stream",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "exl2_fim_stream"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "TTS",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"text\":\"The difference is architecture. The industry standard is 'Cloud AI.' Privion is 'Sovereign AI.' When you speak to Privion, your data never leaves your four walls. There is no cloud processing. No data mining. No 'anonymized' training sets. Because the processing happens locally, the latency is near zero. It is instantaneous. And because we don’t pay for cloud compute... neither do you. No monthly fees. No subscriptions. You own the hardware; you own the intelligence.\",\r\n    \"language\":\"Auto\",\r\n    \"speaker\":\"Aiden\",\r\n    \"instruction\":\"Measured, philosophical. Like a keynote opening\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:7755/tts",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "7755",
+          "path": [
+            "tts"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
 }

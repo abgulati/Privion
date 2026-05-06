@@ -1,637 +1,489 @@
 {
-	"info": {
-		"_postman_id": "b288ddae-e109-44a1-a9d2-f3fd036af8cf",
-		"name": "HF-Waitress",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "40026557"
-	},
-	"item": [
-		{
-			"name": "Vision-Stream-Conversation",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							""
-						],
-						"type": "text/javascript",
-						"packages": {},
-						"requests": {}
-					}
-				}
-			],
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-DPI",
-						"value": "300",
-						"type": "text"
-					},
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "formdata",
-					"formdata": [
-						{
-							"key": "file",
-							"type": "file",
-							"src": "/C:/Users/abhee/Downloads/2.pdf"
-						},
-						{
-							"key": "messages",
-							"value": "[\n    {\"role\": \"user\", \"content\": [\n        {\"type\": \"image\"},\n        {\"type\": \"text\", \"text\": \"What form fields need to be filled in the attached document? \"}\n    ]},\n    {\"role\":\"assistant\", \"content\":\"**Required Form Fields:**\\n\\nThe following fields in the attached document must be filled in:\\n\\n* **Filing Status:** Single or Married filing jointly\\n* **Last name:** EMHOFF\\n* **First name:** KAMALA D.\\n* **City, town, or post office:** HARRIS\\n* **Foreign country name:** None\\n* **Foreign province/state/county:** None\\n* **Foreign postal code:** None\\n* **Standard Deduction:** Yes\\n* **Spouse:** Yes\\n* **Age/Birthdate:** Born before January 2, 1957\\n* **Spouse:** Born before January 2, 1957\\n* **Dependents:** First name, Last name, Social security number, Relationship to you\\n* **Wages, salaries, tips, etc. Attach Form(s) W-2:** Tax-exempt interest, Qualified dividends, IRA distributions, Pensions and annuities, Social security benefits\\n* **Standard Deduction for:** Single or Married filing separately, Married filing jointly, Head of household, Standard Deduction, Taxable income\\n* **Charitable contributions:** Add lines 12a and 12b\\n* **Qualified business income deduction from Form 8995 or Form 6995-A:** Add lines 12c and 13\\n* **Taxable income:** Subtract line 14 from line 11\\n\\nThese fields are necessary for accurate reporting and compliance with tax laws.\"},\n    {\"role\": \"user\", \"content\":\"Anything else you can tell me?\"},\n    {\"role\":\"assistant\", \"content\":\"Based on the provided information, it appears that the user is filing a tax return for the year 2022. The user is married filing jointly and has two dependents. The user's income includes wages, salaries, tips, and other income, as well as tax-exempt interest, qualified dividends, IRA distributions, pensions and annuities, and social security benefits.\\n\\nThe user is claiming the standard deduction, which is $25,900 for married filing jointly. The user is also claiming the qualified business income deduction, which is $100,000.\\n\\nThe user has made charitable contributions totaling $10,000 and has a total taxable income of $150,000. The user's tax liability is $20,000, and the user is eligible for a refund of $30,000.\\n\\nIt's important to note that this is just a hypothetical example and actual tax returns may vary depending on individual circumstances. It's always best to consult with a tax professional or use tax preparation software to ensure accuracy and compliance with tax laws.\"},\n    {\"role\": \"user\", \"content\":\"Is this similar to any other form you know?\"},\n    {\"role\":\"assistant\", \"content\":\"The form you provided appears to be a tax form, likely a 1040 form, which is used for personal income tax returns in the United States. The form is divided into several sections, including personal information, income, deductions, and credits. The user is required to provide their name, address, and social security number, as well as information about their income, deductions, and credits.\\n\\nThe form also asks about the user's filing status, which determines the tax rates and deductions they are eligible for. The user is required to report their income from various sources, including wages, salaries, tips, and self-employment income. They are also asked to report any deductions they are eligible for, such as charitable contributions and mortgage interest.\\n\\nThe form also asks about the user's dependents, including their name, social security number, and relationship to the user. The user is also required to report any business income and expenses, as well as any investments and retirement accounts.\\n\\nOverall, the form is designed to help the user accurately report their income and claim the deductions and credits they are eligible for, in order to minimize their tax liability.\"},\n    {\"role\": \"user\", \"content\":\"What about this document?\"}\n]",
-							"type": "text"
-						}
-					]
-				},
-				"url": {
-					"raw": "http://localhost:9069/vision_stream",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"vision_stream"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Vision-Stream",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							""
-						],
-						"type": "text/javascript",
-						"packages": {}
-					}
-				}
-			],
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-DPI",
-						"value": "300",
-						"type": "text"
-					},
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "formdata",
-					"formdata": [
-						{
-							"key": "file",
-							"type": "file",
-							"src": "/C:/Users/abhee/Downloads/kamala_scan.png"
-						},
-						{
-							"key": "messages",
-							"value": "[\n    {\"role\": \"user\", \"content\": [\n        {\"type\": \"image\"},\n        {\"type\": \"text\", \"text\": \"What form fields need to be filled in the attached document? \"}\n    ]}\n]",
-							"type": "text"
-						}
-					]
-				},
-				"url": {
-					"raw": "http://localhost:9069/vision_stream",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"vision_stream"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "FLUX-Image-Generation",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							""
-						],
-						"type": "text/javascript",
-						"packages": {}
-					}
-				}
-			],
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-Guidance-Scale",
-						"value": "0",
-						"type": "text"
-					},
-					{
-						"key": "X-Height",
-						"value": "768",
-						"type": "text"
-					},
-					{
-						"key": "X-Width",
-						"value": "1360",
-						"type": "text"
-					},
-					{
-						"key": "X-Num-Inference-Steps",
-						"value": "3",
-						"type": "text"
-					},
-					{
-						"key": "X-Max-Sequence-Length",
-						"value": "256",
-						"type": "text"
-					},
-					{
-						"key": "X-Num-Images-Per-Prompt",
-						"value": "1",
-						"type": "text"
-					},
-					{
-						"key": "",
-						"value": "",
-						"type": "text",
-						"disabled": true
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\"prompt\": \"High-end liquid-cooled waterfall-themed desktop PC\"}\r\n    ] \r\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/completions",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"completions"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Vision-Completions",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							""
-						],
-						"type": "text/javascript",
-						"packages": {}
-					}
-				}
-			],
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-DPI",
-						"value": "300",
-						"type": "text"
-					},
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "formdata",
-					"formdata": [
-						{
-							"key": "file",
-							"type": "file",
-							"src": "/C:/Users/abhee/OneDrive/Documents/Work_Stuff/LLMs/LARS-Enterprise/documents/images_and_screenshots/vision_tests/form-image.png"
-						},
-						{
-							"key": "messages",
-							"value": "[\n    {\"role\": \"user\", \"content\": [\n        {\"type\": \"image\"},\n        {\"type\": \"text\", \"text\": \"Please describe the attached document\"}\n    ]}\n]",
-							"type": "text"
-						}
-					]
-				},
-				"url": {
-					"raw": "http://localhost:9069/completions",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"completions"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "ExLlamaV3-Stream",
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					},
-					{
-						"key": "X-Return-Full-Text",
-						"value": "False",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Temperature",
-						"value": "0.7",
-						"type": "text"
-					},
-					{
-						"key": "X-Do-Sample",
-						"value": "True",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Top-K",
-						"value": "40",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-P",
-						"value": "0.95",
-						"type": "text"
-					},
-					{
-						"key": "X-Min-P",
-						"value": "0.05",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"},\r\n        {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n        {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n        {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n    ] \r\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/exl3_stream",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"exl3_stream"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "ExLlamaV2-Stream",
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					},
-					{
-						"key": "X-Return-Full-Text",
-						"value": "False",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Temperature",
-						"value": "0.7",
-						"type": "text"
-					},
-					{
-						"key": "X-Do-Sample",
-						"value": "True",
-						"type": "text",
-						"disabled": true
-					},
-					{
-						"key": "X-Top-K",
-						"value": "40",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-P",
-						"value": "0.95",
-						"type": "text"
-					},
-					{
-						"key": "X-Min-P",
-						"value": "0.05",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"},\r\n        {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n        {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n        {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n    ] \r\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/exl2_stream",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"exl2_stream"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Completions-Stream",
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					},
-					{
-						"key": "X-Return-Full-Text",
-						"value": "False",
-						"type": "text"
-					},
-					{
-						"key": "X-Temperature",
-						"value": "0.7",
-						"type": "text"
-					},
-					{
-						"key": "X-Do-Sample",
-						"value": "True",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-K",
-						"value": "40",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-P",
-						"value": "0.95",
-						"type": "text"
-					},
-					{
-						"key": "X-Min-P",
-						"value": "0.05",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n  \"messages\": [\r\n    {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"}, \r\n    {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n    {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n    {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n  ]\r\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/completions_stream",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"completions_stream"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Completions",
-			"protocolProfileBehavior": {
-				"followRedirects": false
-			},
-			"request": {
-				"method": "POST",
-				"header": [
-					{
-						"key": "X-Max-New-Tokens",
-						"value": "500",
-						"type": "text"
-					},
-					{
-						"key": "X-Return-Full-Text",
-						"value": "True",
-						"type": "text"
-					},
-					{
-						"key": "X-Temperature",
-						"value": "0.7",
-						"type": "text"
-					},
-					{
-						"key": "X-Do-Sample",
-						"value": "True",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-K",
-						"value": "40",
-						"type": "text"
-					},
-					{
-						"key": "X-Top-P",
-						"value": "0.95",
-						"type": "text"
-					},
-					{
-						"key": "X-Min-P",
-						"value": "0.05",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"},\r\n        {\"role\": \"user\", \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"}, \r\n        {\"role\": \"assistant\", \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"}, \r\n        {\"role\": \"user\", \"content\": \"What about solving an 2x + 3 = 7 equation?\"}\r\n    ] \r\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/completions",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"completions"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Config-Reader",
-			"request": {
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n  \"keys\": [\r\n    \"model_id\",\r\n    \"quantize\",\r\n    \"quant_level\",\r\n    \"torch_device_map\",\r\n    \"torch_dtype\",\r\n    \"use_flash_attention_2\",\r\n    \"max_new_tokens\"\r\n  ]\r\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/hf_config_reader_api",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"hf_config_reader_api"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Config-Writer",
-			"request": {
-				"method": "POST",
-				"header": [],
-				"body": {
-					"mode": "raw",
-					"raw": "{\r\n  \"config_updates\": {\r\n    \"model_id\":\"mistralai/Mistral-Nemo-Instruct-2407\",\r\n    \"quantize\":\"bitsandbytes\",\r\n    \"quant_level\":\"int4\",\r\n    \"torch_dtype\":\"torch.bfloat16\",\r\n    \"torch_device_map\":\"cuda\"\r\n  }\r\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "http://localhost:9069/hf_config_writer_api",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"hf_config_writer_api"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Restart-Server",
-			"request": {
-				"method": "GET",
-				"header": [],
-				"url": {
-					"raw": "http://localhost:9069/restart_server",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"restart_server"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "Health",
-			"request": {
-				"method": "GET",
-				"header": [],
-				"url": {
-					"raw": "http://localhost:9069/health",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "9069",
-					"path": [
-						"health"
-					]
-				}
-			},
-			"response": []
-		}
-	]
+  "info": {
+    "_postman_id": "b288ddae-e109-44a1-a9d2-f3fd036af8cf",
+    "name": "HF-Waitress",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "40026557"
+  },
+  "item": [
+    {
+      "name": "Vision-Stream-Conversation",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-DPI",
+            "value": "300",
+            "type": "text"
+          },
+          {
+            "key": "X-Max-New-Tokens",
+            "value": "500",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/C:/Users/abhee/Downloads/2.pdf"
+            },
+            {
+              "key": "messages",
+              "value": "[\n    {\"role\": \"user\", \"content\": [\n        {\"type\": \"image\"},\n        {\"type\": \"text\", \"text\": \"What form fields need to be filled in the attached document? \"}\n    ]},\n    {\"role\":\"assistant\", \"content\":\"**Required Form Fields:**\\n\\nThe following fields in the attached document must be filled in:\\n\\n* **Filing Status:** Single or Married filing jointly\\n* **Last name:** EMHOFF\\n* **First name:** KAMALA D.\\n* **City, town, or post office:** HARRIS\\n* **Foreign country name:** None\\n* **Foreign province/state/county:** None\\n* **Foreign postal code:** None\\n* **Standard Deduction:** Yes\\n* **Spouse:** Yes\\n* **Age/Birthdate:** Born before January 2, 1957\\n* **Spouse:** Born before January 2, 1957\\n* **Dependents:** First name, Last name, Social security number, Relationship to you\\n* **Wages, salaries, tips, etc. Attach Form(s) W-2:** Tax-exempt interest, Qualified dividends, IRA distributions, Pensions and annuities, Social security benefits\\n* **Standard Deduction for:** Single or Married filing separately, Married filing jointly, Head of household, Standard Deduction, Taxable income\\n* **Charitable contributions:** Add lines 12a and 12b\\n* **Qualified business income deduction from Form 8995 or Form 6995-A:** Add lines 12c and 13\\n* **Taxable income:** Subtract line 14 from line 11\\n\\nThese fields are necessary for accurate reporting and compliance with tax laws.\"},\n    {\"role\": \"user\", \"content\":\"Anything else you can tell me?\"},\n    {\"role\":\"assistant\", \"content\":\"Based on the provided information, it appears that the user is filing a tax return for the year 2022. The user is married filing jointly and has two dependents. The user's income includes wages, salaries, tips, and other income, as well as tax-exempt interest, qualified dividends, IRA distributions, pensions and annuities, and social security benefits.\\n\\nThe user is claiming the standard deduction, which is $25,900 for married filing jointly. The user is also claiming the qualified business income deduction, which is $100,000.\\n\\nThe user has made charitable contributions totaling $10,000 and has a total taxable income of $150,000. The user's tax liability is $20,000, and the user is eligible for a refund of $30,000.\\n\\nIt's important to note that this is just a hypothetical example and actual tax returns may vary depending on individual circumstances. It's always best to consult with a tax professional or use tax preparation software to ensure accuracy and compliance with tax laws.\"},\n    {\"role\": \"user\", \"content\":\"Is this similar to any other form you know?\"},\n    {\"role\":\"assistant\", \"content\":\"The form you provided appears to be a tax form, likely a 1040 form, which is used for personal income tax returns in the United States. The form is divided into several sections, including personal information, income, deductions, and credits. The user is required to provide their name, address, and social security number, as well as information about their income, deductions, and credits.\\n\\nThe form also asks about the user's filing status, which determines the tax rates and deductions they are eligible for. The user is required to report their income from various sources, including wages, salaries, tips, and self-employment income. They are also asked to report any deductions they are eligible for, such as charitable contributions and mortgage interest.\\n\\nThe form also asks about the user's dependents, including their name, social security number, and relationship to the user. The user is also required to report any business income and expenses, as well as any investments and retirement accounts.\\n\\nOverall, the form is designed to help the user accurately report their income and claim the deductions and credits they are eligible for, in order to minimize their tax liability.\"},\n    {\"role\": \"user\", \"content\":\"What about this document?\"}\n]",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "http://localhost:9069/vision_stream",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "vision_stream"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Vision-Stream",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-DPI",
+            "value": "300",
+            "type": "text"
+          },
+          {
+            "key": "X-Max-New-Tokens",
+            "value": "500",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/C:/Users/abhee/Downloads/kamala_scan.png"
+            },
+            {
+              "key": "messages",
+              "value": "[\n    {\"role\": \"user\", \"content\": [\n        {\"type\": \"image\"},\n        {\"type\": \"text\", \"text\": \"What form fields need to be filled in the attached document? \"}\n    ]}\n]",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "http://localhost:9069/vision_stream",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "vision_stream"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "FLUX-Image-Generation",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Guidance-Scale",
+            "value": "0",
+            "type": "text"
+          },
+          {
+            "key": "X-Height",
+            "value": "768",
+            "type": "text"
+          },
+          {
+            "key": "X-Width",
+            "value": "1360",
+            "type": "text"
+          },
+          {
+            "key": "X-Num-Inference-Steps",
+            "value": "3",
+            "type": "text"
+          },
+          {
+            "key": "X-Max-Sequence-Length",
+            "value": "256",
+            "type": "text"
+          },
+          {
+            "key": "X-Num-Images-Per-Prompt",
+            "value": "1",
+            "type": "text"
+          },
+          {
+            "key": "",
+            "value": "",
+            "type": "text",
+            "disabled": true
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"messages\": \r\n    [ \r\n        {\"prompt\": \"High-end liquid-cooled waterfall-themed desktop PC\"}\r\n    ] \r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/completions",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "completions"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Vision-Completions",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {}
+          }
+        }
+      ],
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-DPI",
+            "value": "300",
+            "type": "text"
+          },
+          {
+            "key": "X-Max-New-Tokens",
+            "value": "500",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "/C:/Users/abhee/OneDrive/Documents/Work_Stuff/LLMs/LARS-Enterprise/documents/images_and_screenshots/vision_tests/form-image.png"
+            },
+            {
+              "key": "messages",
+              "value": "[\n    {\"role\": \"user\", \"content\": [\n        {\"type\": \"image\"},\n        {\"type\": \"text\", \"text\": \"Please describe the attached document\"}\n    ]}\n]",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "http://localhost:9069/completions",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "completions"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "ExLlamaV3-Stream",
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"temperature\": 0.1,\r\n    \"top_k\": 20,\r\n    \"top_p\": 0.9,\r\n    \"min_p\": 0.1,\r\n    \"n_keep\": 0,\r\n    \"repeat_penalty\": 1,\r\n    \"presence_penalty\": 0,\r\n    \"frequency_penalty\": 0,\r\n    \"enable_thinking\": false,\r\n    \"preserve_thinking\": true,\r\n    \"messages\": [\r\n        {\r\n            \"role\": \"system\",\r\n            \"content\": \"You are a helpful AI assistant.\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"\r\n        },\r\n        {\r\n            \"role\": \"assistant\",\r\n            \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"What about solving an 2x + 3 = 7 equation?\"\r\n        }\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/exl3_stream",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "exl3_stream"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "ExLlamaV2-Stream",
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"temperature\": 0.1,\r\n    \"top_k\": 40,\r\n    \"top_p\": 0.95,\r\n    \"min_p\": 0.1,\r\n    \"n_keep\": 0,\r\n    \"repeat_penalty\": 1,\r\n    \"presence_penalty\": 0,\r\n    \"frequency_penalty\": 0,\r\n    \"enable_thinking\": true,\r\n    \"preserve_thinking\": true,\r\n    \"messages\": [\r\n        {\r\n            \"role\": \"system\",\r\n            \"content\": \"You are a helpful AI assistant.\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"\r\n        },\r\n        {\r\n            \"role\": \"assistant\",\r\n            \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"What about solving an 2x + 3 = 7 equation?\"\r\n        }\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/exl2_stream",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "exl2_stream"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Completions-Stream",
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"temperature\": 0.6,\r\n    \"top_k\": 64,\r\n    \"top_p\": 0.8,\r\n    \"min_p\": 0.1,\r\n    \"n_keep\": 0,\r\n    \"repeat_penalty\": 1,\r\n    \"presence_penalty\": 0,\r\n    \"frequency_penalty\": 0,\r\n    \"enable_thinking\": true,\r\n    \"preserve_thinking\": true,\r\n    \"messages\": [\r\n        {\r\n            \"role\": \"system\",\r\n            \"content\": \"You are a helpful AI assistant.\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"\r\n        },\r\n        {\r\n            \"role\": \"assistant\",\r\n            \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"What's the weather like in Vancouver today? And switch on the lamp please. Thanks!\"\r\n        }\r\n    ],\r\n    \"tools\": [\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"description\": \"Unified RAG tool for local (documents) & web (search engine) search. Performs best when given a detailed and comprehensive, yet focused search-optimized query encompassing all relevant information from the conversational context.  When detailed information is needed from a specific URL (other than internal 'http://llm-citations-database.net' addresses), use the 'fetch_url' tool with the URL to retrieve the full article content.\",\r\n                \"name\": \"search\",\r\n                \"parameters\": {\r\n                    \"additionalProperties\": false,\r\n                    \"properties\": {\r\n                        \"category\": {\r\n                            \"description\": \"Optional. Defaults to 'web' if not specified. Do not guess.\",\r\n                            \"enum\": [\r\n                                \"general\",\r\n                                \"news\",\r\n                                \"images\",\r\n                                \"videos\",\r\n                                \"music\",\r\n                                \"it\",\r\n                                \"science\",\r\n                                \"files\",\r\n                                \"social_media\"\r\n                            ],\r\n                            \"type\": \"string\"\r\n                        },\r\n                        \"query\": {\r\n                            \"description\": \"\",\r\n                            \"type\": \"string\"\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"query\"\r\n                    ],\r\n                    \"type\": \"object\"\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"description\": \"Fetches and extracts the main text content from a given URL. Use this when you need to read the full contents of a webpage, such as after finding relevant URLs from a search. DOES NOT WORK FOR 'http://llm-citations-database.net' ADDRESSES!\",\r\n                \"name\": \"fetch_url\",\r\n                \"parameters\": {\r\n                    \"additionalProperties\": false,\r\n                    \"properties\": {\r\n                        \"url\": {\r\n                            \"description\": \"The full URL of the webpage to fetch and extract content from (DOES NOT WORK FOR 'http://llm-citations-database.net' ADDRESSES!)\",\r\n                            \"type\": \"string\"\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"url\"\r\n                    ],\r\n                    \"type\": \"object\"\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"wol_turn_on_tv\",\r\n                \"description\": \"Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_on\",\r\n                \"description\": \"Turns on an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_off\",\r\n                \"description\": \"Turns off an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"ip_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_on\",\r\n                \"description\": \"Turns on a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_off\",\r\n                \"description\": \"Turns off a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_brightness\",\r\n                \"description\": \"Sets the brightness of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"brightness\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '100' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_color\",\r\n                \"description\": \"Sets the color of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"red\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"green\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"blue\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"red\",\r\n                        \"green\",\r\n                        \"blue\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_temperature\",\r\n                \"description\": \"Sets the temperature of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"temperature\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '2700' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_scene\",\r\n                \"description\": \"Sets the scene of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"scene\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"\",\r\n                            \"enum\": [\r\n                                \"sunrise\",\r\n                                \"sunset\",\r\n                                \"movie\",\r\n                                \"dating\",\r\n                                \"romantic\",\r\n                                \"twinkle\",\r\n                                \"candlelight\",\r\n                                \"snowflake\",\r\n                                \"energetic\",\r\n                                \"breathe\",\r\n                                \"crossing\"\r\n                            ]\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"scene\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        }\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/completions_stream",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "completions_stream"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Completions",
+      "protocolProfileBehavior": {
+        "followRedirects": false
+      },
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"temperature\": 0.6,\r\n    \"top_k\": 64,\r\n    \"top_p\": 0.8,\r\n    \"min_p\": 0.1,\r\n    \"n_keep\": 0,\r\n    \"repeat_penalty\": 1,\r\n    \"presence_penalty\": 0,\r\n    \"frequency_penalty\": 0,\r\n    \"enable_thinking\": false,\r\n    \"preserve_thinking\": true,\r\n    \"messages\": [\r\n        {\r\n            \"role\": \"system\",\r\n            \"content\": \"You are a helpful AI assistant.\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"Can you provide ways to eat combinations of bananas and dragonfruits?\"\r\n        },\r\n        {\r\n            \"role\": \"assistant\",\r\n            \"content\": \"Sure! Here are some ways to eat bananas and dragonfruits together: 1. Banana and dragonfruit smoothie: Blend bananas and dragonfruits together with some milk and honey. 2. Banana and dragonfruit salad: Mix sliced bananas and dragonfruits together with some lemon juice and honey.\"\r\n        },\r\n        {\r\n            \"role\": \"user\",\r\n            \"content\": \"What's the weather like in Vancouver today? And switch on the lamp please. Thanks!\"\r\n        }\r\n    ],\r\n    \"tools\": [\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"description\": \"Unified RAG tool for local (documents) & web (search engine) search. Performs best when given a detailed and comprehensive, yet focused search-optimized query encompassing all relevant information from the conversational context.  When detailed information is needed from a specific URL (other than internal 'http://llm-citations-database.net' addresses), use the 'fetch_url' tool with the URL to retrieve the full article content.\",\r\n                \"name\": \"search\",\r\n                \"parameters\": {\r\n                    \"additionalProperties\": false,\r\n                    \"properties\": {\r\n                        \"category\": {\r\n                            \"description\": \"Optional. Defaults to 'web' if not specified. Do not guess.\",\r\n                            \"enum\": [\r\n                                \"general\",\r\n                                \"news\",\r\n                                \"images\",\r\n                                \"videos\",\r\n                                \"music\",\r\n                                \"it\",\r\n                                \"science\",\r\n                                \"files\",\r\n                                \"social_media\"\r\n                            ],\r\n                            \"type\": \"string\"\r\n                        },\r\n                        \"query\": {\r\n                            \"description\": \"\",\r\n                            \"type\": \"string\"\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"query\"\r\n                    ],\r\n                    \"type\": \"object\"\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"description\": \"Fetches and extracts the main text content from a given URL. Use this when you need to read the full contents of a webpage, such as after finding relevant URLs from a search. DOES NOT WORK FOR 'http://llm-citations-database.net' ADDRESSES!\",\r\n                \"name\": \"fetch_url\",\r\n                \"parameters\": {\r\n                    \"additionalProperties\": false,\r\n                    \"properties\": {\r\n                        \"url\": {\r\n                            \"description\": \"The full URL of the webpage to fetch and extract content from (DOES NOT WORK FOR 'http://llm-citations-database.net' ADDRESSES!)\",\r\n                            \"type\": \"string\"\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"url\"\r\n                    ],\r\n                    \"type\": \"object\"\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"wol_turn_on_tv\",\r\n                \"description\": \"Sends a 'magic packet' to wake up a TV with 'Wake-On-LAN' capabilities.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_on\",\r\n                \"description\": \"Turns on an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"mac_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to 'a4:36:c7:58:3f:18' if not specified. Do not guess.\"\r\n                        },\r\n                        \"target_ip\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        },\r\n                        \"port\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '9' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lg_webos_tv_turn_off\",\r\n                \"description\": \"Turns off an LG WebOS TV.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"ip_address\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"Optional. Defaults to '192.168.1.142' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_on\",\r\n                \"description\": \"Turns on a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"lamp_turn_off\",\r\n                \"description\": \"Turns off a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {},\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_brightness\",\r\n                \"description\": \"Sets the brightness of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"brightness\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '100' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_color\",\r\n                \"description\": \"Sets the color of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"red\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"green\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        },\r\n                        \"blue\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"\"\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"red\",\r\n                        \"green\",\r\n                        \"blue\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_temperature\",\r\n                \"description\": \"Sets the temperature of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"temperature\": {\r\n                            \"type\": \"integer\",\r\n                            \"description\": \"Optional. Defaults to '2700' if not specified. Do not guess.\"\r\n                        }\r\n                    },\r\n                    \"required\": [],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        },\r\n        {\r\n            \"type\": \"function\",\r\n            \"function\": {\r\n                \"name\": \"set_lamp_scene\",\r\n                \"description\": \"Sets the scene of a Govee lamp.\",\r\n                \"parameters\": {\r\n                    \"type\": \"object\",\r\n                    \"properties\": {\r\n                        \"scene\": {\r\n                            \"type\": \"string\",\r\n                            \"description\": \"\",\r\n                            \"enum\": [\r\n                                \"sunrise\",\r\n                                \"sunset\",\r\n                                \"movie\",\r\n                                \"dating\",\r\n                                \"romantic\",\r\n                                \"twinkle\",\r\n                                \"candlelight\",\r\n                                \"snowflake\",\r\n                                \"energetic\",\r\n                                \"breathe\",\r\n                                \"crossing\"\r\n                            ]\r\n                        }\r\n                    },\r\n                    \"required\": [\r\n                        \"scene\"\r\n                    ],\r\n                    \"additionalProperties\": false\r\n                }\r\n            }\r\n        }\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/completions",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "completions"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Config-Reader",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"keys\": [\r\n    \"model_id\",\r\n    \"quantize\",\r\n    \"quant_level\",\r\n    \"torch_device_map\",\r\n    \"torch_dtype\",\r\n    \"use_flash_attention_2\",\r\n    \"max_new_tokens\"\r\n  ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/hf_config_reader_api",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "hf_config_reader_api"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Config-Writer",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"config_updates\": {\r\n    \"model_id\":\"mistralai/Mistral-Nemo-Instruct-2407\",\r\n    \"quantize\":\"bitsandbytes\",\r\n    \"quant_level\":\"int4\",\r\n    \"torch_dtype\":\"torch.bfloat16\",\r\n    \"torch_device_map\":\"cuda\"\r\n  }\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:9069/hf_config_writer_api",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "hf_config_writer_api"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Restart-Server",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:9069/restart_server",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "restart_server"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:9069/health",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9069",
+          "path": [
+            "health"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
 }
