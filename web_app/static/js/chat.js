@@ -877,6 +877,7 @@ async function fetchHfWaitressEventStream(
         url = `${hfWaitress_URL}/vision_stream`;
 
         hfwHeaders = new Headers();
+        hfwHeaders.append("Content-Type", "multipart/form-data");
         hfwHeaders.append("X-DPI", "300");
         hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
 
@@ -895,16 +896,17 @@ async function fetchHfWaitressEventStream(
 
         hfwHeaders = new Headers();
         hfwHeaders.append("Content-Type", "application/json");
-        hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
-        hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
-        hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
-        hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
 
-        const requestObj = coerceToObject(formattedPromptCopy, "exl2 request");
-        if (tools_schema) requestObj.tools = tools_schema;
-        else delete requestObj.tools;
+        const requestData = coerceToObject(formattedPromptCopy, "exl2 request");
+        if (tools_schema) requestData.tools = tools_schema;
+        else delete requestData.tools;
+
+        requestData.max_new_tokens = parseInt(document.getElementById('HfwMaxNewToks').value);
+        requestData.temperature = parseFloat(document.getElementById('HfwTempSlider').value);
+        requestData.top_k = parseInt(document.getElementById('HfwTopkSlider').value);
+        requestData.top_p = parseFloat(document.getElementById('HfwToppSlider').value);
         
-        rawBodyJSONStringified = JSON.stringify(requestObj);
+        rawBodyJSONStringified = JSON.stringify(requestData);
 
     } else if (exl3 === "true") {
         console.log("Invoking exl3_stream");
@@ -914,39 +916,43 @@ async function fetchHfWaitressEventStream(
 
         hfwHeaders = new Headers();
         hfwHeaders.append("Content-Type", "application/json");
-        hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
-        hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
-        hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
-        hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
-        hfwHeaders.append("X-Min-P", document.getElementById('HfwMinpSlider').value);
-        hfwHeaders.append("X-Repetition-Penalty", document.getElementById('HfwRepetitionPenaltySlider').value);
-        hfwHeaders.append("X-Presence-Penalty", document.getElementById('HfwPresencePenaltySlider').value);
-        hfwHeaders.append("X-Frequency-Penalty", document.getElementById('HfwFrequencyPenaltySlider').value);
 
-        const requestObj = coerceToObject(formattedPromptCopy, "exl3 request");
-        if (tools_schema) requestObj.tools = tools_schema;
-        else delete requestObj.tools;
+        const requestData = coerceToObject(formattedPromptCopy, "exl3 request");
+        if (tools_schema) requestData.tools = tools_schema;
+        else delete requestData.tools;
+
+        requestData.max_new_tokens = parseInt(document.getElementById('HfwMaxNewToks').value);
+        requestData.temperature = parseFloat(document.getElementById('HfwTempSlider').value);
+        requestData.top_k = parseInt(document.getElementById('HfwTopkSlider').value);
+        requestData.top_p = parseFloat(document.getElementById('HfwToppSlider').value);
+        requestData.min_p = parseFloat(document.getElementById('HfwMinpSlider').value);
+        requestData.repeat_penalty = parseFloat(document.getElementById('HfwRepetitionPenaltySlider').value);
+        requestData.presence_penalty = parseFloat(document.getElementById('HfwPresencePenaltySlider').value);
+        requestData.frequency_penalty = parseFloat(document.getElementById('HfwFrequencyPenaltySlider').value);
         
-        rawBodyJSONStringified = JSON.stringify(requestObj);
+        rawBodyJSONStringified = JSON.stringify(requestData);
 
     } else {
         console.log("Invoking completions_stream");
+
         const hfWaitress_URL = getHfwUrl();
         url = `${hfWaitress_URL}/completions_stream`;
 
         hfwHeaders = new Headers();
         hfwHeaders.append("Content-Type", "application/json");
-        hfwHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
-        hfwHeaders.append("X-Temperature", document.getElementById('HfwTempSlider').value);
-        hfwHeaders.append("X-Top-K", document.getElementById('HfwTopkSlider').value);
-        hfwHeaders.append("X-Top-P", document.getElementById('HfwToppSlider').value);
-        hfwHeaders.append("X-Min-P", document.getElementById('HfwMinpSlider').value);
-        hfwHeaders.append("X-Do-Sample", document.getElementById('HfwTempSlider').value > 0 ? "True" : "False");
+
+        const requestData = coerceToObject(formattedPromptCopy, "completions request");
+        if (tools_schema) requestData.tools = tools_schema;
+        else delete requestData.tools;
+
+        requestData.max_new_tokens = parseInt(document.getElementById('HfwMaxNewToks').value);
+        requestData.temperature = parseFloat(document.getElementById('HfwTempSlider').value);
+        requestData.top_k = parseInt(document.getElementById('HfwTopkSlider').value);
+        requestData.top_p = parseFloat(document.getElementById('HfwToppSlider').value);
+        requestData.min_p = parseFloat(document.getElementById('HfwMinpSlider').value);
+        requestData.do_sample = document.getElementById('HfwTempSlider').value > 0 ? "True" : "False";
         
-        const requestObj = coerceToObject(formattedPromptCopy, "completions request");
-        if (tools_schema) requestObj.tools = tools_schema;
-        else delete requestObj.tools;
-        rawBodyJSONStringified = JSON.stringify(requestObj);
+        rawBodyJSONStringified = JSON.stringify(requestData);
     }
     
     try {

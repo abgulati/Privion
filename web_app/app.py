@@ -1421,10 +1421,10 @@ def PDFtoDoclingOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
 
     if output_text_file_path.exists() and not read_return['force_re_extract']:
         if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
-            print("Vision LLM OCR'ed doc already exists and is not empty! Returning existing file.")
+            print("Docling OCR'ed doc already exists and is not empty! Returning existing file.")
             return output_text_file_path
         else:
-            print("Vision LLM OCR'ed doc already exists but is empty! Overwriting with new OCR'ed file.")
+            print("Docling OCR'ed doc already exists but is empty! Overwriting with new OCR'ed file.")
 
     # Open with PyMuPDF for conversion to binary byte stream
     try:
@@ -1920,32 +1920,37 @@ def get_request_params_for_graph_entity_extraction_model(rag_response_mode: bool
             'graph_model_top_p', 'graph_model_min_p', 'graph_chunk_overlap',
             'reuse_graph_extraction_cache_with_validation'
         ])
-        exl2_quantize_graph_model = str(config_data['exl2_quantize_graph_model']).lower() == 'true'
+        
+        generation_config = {
+            'max_new_tokens': config_data['graph_model_max_new_tokens'],
+            'temperature': config_data['graph_model_temperature'],
+            'top_k': config_data['graph_model_top_k'],
+            'top_p': config_data['graph_model_top_p'],
+            'graph_chunk_overlap': '0' if rag_response_mode else config_data['graph_chunk_overlap'],
+            'reuse_extraction_cache': config_data['reuse_graph_extraction_cache_with_validation'],
+            'exl2_quantize_graph_model': config_data['exl2_quantize_graph_model']
+        }
+
+        if not config_data['exl2_quantize_graph_model']:
+            generation_config['do_sample'] = config_data['graph_model_do_sample']
+            generation_config['min_p'] = config_data['graph_model_min_p']
+    
     except Exception as e:
         handle_local_error("Could not get graphing request params, encountered error: ", e)
 
     headers = {
-        'Content-Type': 'application/json',
-        'X-Max-New-Tokens': str(config_data['graph_model_max_new_tokens']),
-        'X-Temperature': str(config_data['graph_model_temperature']),
-        'X-Top-K': str(config_data['graph_model_top_k']),
-        'X-Top-P': str(config_data['graph_model_top_p']),
-        'X-Chunk-Overlap': str(config_data['graph_chunk_overlap']) if not rag_response_mode else '0',
-        'X-Reuse-Extraction-Cache': str(config_data['reuse_graph_extraction_cache_with_validation']).lower()
+        'Content-Type': 'application/json'
     }
 
     grapher_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
 
-    if not exl2_quantize_graph_model:
-        headers['X-Return-Full-Text'] = 'False'
-        headers['X-Min-P'] = str(config_data['graph_model_min_p'])
-        headers['X-Do-Sample'] = str(config_data['graph_model_do_sample'])
+    if not config_data['exl2_quantize_graph_model']:
         grapher_url += "/completions"
     else:
         headers['Connection'] = 'keep-alive'
         grapher_url += "/exl2_graph_extractor"
 
-    return grapher_url, headers, exl2_quantize_graph_model
+    return grapher_url, headers, generation_config
 
 
 def get_graphing_request_payload(chunk:str, exl2_quantize_graph_model:bool) -> str:
@@ -2082,13 +2087,17 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
     print("\nExtracting all entities and relationships for the entire document\n")
 
     try:
-        grapher_url, headers, exl2_quantize_graph_model = get_request_params_for_graph_entity_extraction_model(rag_response_mode=rag_response_mode)
+        grapher_url, headers, config_data = get_request_params_for_graph_entity_extraction_model(rag_response_mode=rag_response_mode)
     except Exception as e:
         handle_local_error("Could not get graphing request params, encountered error: ", e)
 
-    if exl2_quantize_graph_model:   # invoke exl2-grapher API
+    if config_data['exl2_quantize_graph_model']:   # invoke exl2-grapher API
         try:
-            payload = json.dumps({"chunk_entities": chunk_entities, "rag_response_mode": rag_response_mode})
+            payload = json.dumps({
+                "chunk_entities": chunk_entities,
+                "rag_response_mode": rag_response_mode,
+                **config_data
+            })
             full_response = hf_waitress_exl2_graph_api_stream_handler(grapher_url, headers, payload, cache_filepath)
             # print(f"\nExl2 Bulk-Graphing Response (Entities and Relationships):\n\n{full_response}\n")
             return full_response
@@ -2105,7 +2114,10 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
             for chunk_number, chunk_data in chunk_entities.items(): # chunk_entities.items() returns a dict_items object which is iterable. chunk_data is a dict for each chunk while chunk_number is a string ranging from 0 to len(chunk_entities) - 1
                 try:
                     print(f"\nExtracting entities and relationships for chunk {chunk_number} of total {len(chunk_entities)} chunks...\n")
-                    payload = get_graphing_request_payload(chunk=chunk_data['chunk_text'], exl2_quantize_graph_model=False)
+                    payload = get_graphing_request_payload(
+                        chunk=chunk_data['chunk_text'], 
+                        exl2_quantize_graph_model=False
+                    )
                     response = graphing_request_response_handler(grapher_url, headers, payload)
 
                     if response is None or response == {}:
@@ -2133,7 +2145,20 @@ def get_request_params_for_graph_summarizer_model():
             'graph_summarizer_top_p', 'graph_summarizer_min_p',
             'reuse_graph_summary_cache_with_validation'
         ])
-        exl2_quantize_graph_summarizer_model = str(config_data['exl2_quantize_graph_summarizer_model']).lower() == 'true'
+
+        generation_config = {
+            'max_new_tokens': config_data['graph_summarizer_max_new_tokens'],
+            'temperature': config_data['graph_summarizer_temperature'],
+            'top_k': config_data['graph_summarizer_top_k'],
+            'top_p': config_data['graph_summarizer_top_p'],
+            'reuse_summary_cache': config_data['reuse_graph_summary_cache_with_validation'],
+            'exl2_quantize_graph_summarizer_model': config_data['exl2_quantize_graph_summarizer_model']
+        }
+
+        if not config_data['exl2_quantize_graph_summarizer_model']:
+            generation_config['do_sample'] = config_data['graph_summarizer_do_sample']
+            generation_config['min_p'] = config_data['graph_summarizer_min_p']
+    
     except Exception as e:
         handle_local_error("Could not get graphing request params, encountered error: ", e)
 
@@ -2141,23 +2166,15 @@ def get_request_params_for_graph_summarizer_model():
 
     headers = {
         'Content-Type': 'application/json',
-        'X-Max-New-Tokens': str(config_data['graph_summarizer_max_new_tokens']),
-        'X-Temperature': str(config_data['graph_summarizer_temperature']),
-        'X-Top-K': str(config_data['graph_summarizer_top_k']),
-        'X-Top-P': str(config_data['graph_summarizer_top_p']),
-        'X-Reuse-Summary-Cache': str(config_data['reuse_graph_summary_cache_with_validation']).lower()
     }
 
-    if not exl2_quantize_graph_summarizer_model:
-        headers['X-Return-Full-Text'] = 'False'
-        headers['X-Min-P'] = str(config_data['graph_summarizer_min_p'])
-        headers['X-Do-Sample'] = str(config_data['graph_summarizer_do_sample'])
+    if not config_data['exl2_quantize_graph_summarizer_model']:
         graph_summarizer_url += "/completions"
     else:
         headers['Connection'] = 'keep-alive'
         graph_summarizer_url += "/exl2_graph_summarizer"
 
-    return graph_summarizer_url, headers, exl2_quantize_graph_summarizer_model
+    return graph_summarizer_url, headers, generation_config
 
 
 def bring_graph_summarizer_model_online():  # Launch HF-Waitress instance with graph summarizer model
@@ -2283,12 +2300,15 @@ def summary_generator_for_graph_db(chunk_entities=None, cache_filepath: pathlib.
     if exl2:
 
         try:
-            summarizer_url, headers, _ = get_request_params_for_graph_summarizer_model()
+            summarizer_url, headers, generation_config = get_request_params_for_graph_summarizer_model()
         except Exception as e:
             handle_local_error("Could not get graphing request params, encountered error: ", e)
 
         try:
-            payload = json.dumps({"chunk_entities": chunk_entities})
+            payload = json.dumps({
+                "chunk_entities": chunk_entities,
+                **generation_config
+            })
             full_response = hf_waitress_exl2_graph_api_stream_handler(summarizer_url, headers, payload, cache_filepath)
             # print(f"\nExl2 Bulk-Summary Generation Response:\n\n{full_response}\n")
             return full_response
