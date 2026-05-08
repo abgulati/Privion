@@ -4915,51 +4915,44 @@ def exl3_fim_stream():
 ###------LLM Response Parsing------###
 ######################################
 
+TAG_PAIRS = [
+    ['<think>', '</think>'],
+    ['<|channel>thought', '<channel|>']
+]
+
+
 def manually_parse_response(full_response: str) -> dict:
+    
     try:
-        # Split reasoning vs visible content
-        # The below approach is a simple left-to-right parser for a single tag type, 
-        # resilient to "no more tags" (-1), and tolerant of missing close tags:
         reasoning_blocks = []
-        visible_parts = []
-        cursor = 0  # tracks the position in full_response where we're currently reading - everything before has already been handled.
-        while True:
-            start = full_response.find('<think>', cursor)   # searches for the next opening tag after cursor - find returns the index of the match, or -1 if not found.
-            if start == -1:
-                visible_parts.append(full_response[cursor:])  # no more opening tags, so everything remaining is visible content.
-                break
-            end = full_response.find('</think>', start + len('<think>'))  # Otherwise, we look for the matching close tag
-            if end == -1:   
-                # Again, -1 means "not found." In that case we treat the rest as visible text and break (so a missing closing tag doesn't crash the loop)
-                visible_parts.append(full_response[cursor:])
-                break
-            # If both tags found:
-            if start > cursor:
-                visible_parts.append(full_response[cursor:start])   # text before think is visible content
-            # Text inside the tags is reasoning content, so we push it into reasoning_blocks:
-            thinking_text = full_response[start + len('<think>'):end]
-            if thinking_text:
-                reasoning_blocks.append({"type": "text", "text": thinking_text})
-            # Advance cursor to just after the closing tag, so the next iteration continues scanning after that block.
-            cursor = end + len('</think>')
-        
-        visible_content = ''.join(visible_parts)
+        visible_content = full_response
 
-        # Parse tool calls
+        for start_tag, end_tag in TAG_PAIRS:
+
+            # (.*?) matches any content, \s matches any whitespace, * matches 0 or more occurrences
+            pattern = rf"{re.escape(start_tag)}\s*(.*?)\s*{re.escape(end_tag)}"
+
+            def collect_reasoning(match):   # match is a re.Match object for a single thinking block
+                thinking_text = match.group(1).strip()
+                if thinking_text:
+                    reasoning_blocks.append({"type": "text", "text": thinking_text})
+                return ''
+
+            visible_content = re.sub(
+                pattern,    # For every regex match, Python calls `collect_reasoning(match)`
+                collect_reasoning,  # Normally a replacement string, Python also allows a callback function
+                visible_content,    # The callback function returns '', removing the thinking block from regular content
+                flags=re.DOTALL # Controls re.sub() before it calls collect_reasoning - Allows . in (.*?) to match newlines
+            )
+
         tool_parsing_result = manually_extract_tool_calls_from_response(visible_content)
-
-        # ALWAYS use the cleaned content (tags stripped)
-        final_content = tool_parsing_result.get('content', visible_content)
-        tool_calls = tool_parsing_result.get('tool_calls', None)
-
         message = {
             "role": "assistant",
-            "content": final_content
+            "content": tool_parsing_result.get('content', visible_content)
         }
-
-        # Add tool_calls to the response if they were found
-        if tool_calls:
-            message["tool_calls"] = tool_calls
+        
+        if tool_parsing_result.get('tool_calls'):
+            message["tool_calls"] = tool_parsing_result['tool_calls']
         
         if reasoning_blocks:
             message["reasoning_content"] = reasoning_blocks
@@ -5045,7 +5038,7 @@ def qwen3_tools_extrator(full_response_text:str) -> list[dict]:
                         'function': {
                             'name': item.get("name"),
                             'arguments': json.dumps(item.get("arguments", {}))
-                        }
+                        }   # OpenAI clients expect a JSON string for args, not a dict
                     })
                     continue
 
@@ -5060,7 +5053,7 @@ def qwen3_tools_extrator(full_response_text:str) -> list[dict]:
                     'function': {
                         'name': tool_name,
                         'arguments': json.dumps(tool_args)
-                    }
+                    }   # OpenAI clients expect a JSON string for args, not a dict
                 })
 
         except json.JSONDecodeError:
@@ -5103,7 +5096,7 @@ def qwen3_coder_next_tools_extrator(full_response_text:str) -> list[dict]:
                         'function': {
                             'name': t_name,
                             'arguments': json.dumps(t_args)
-                        }
+                        }   # OpenAI clients expect a JSON string for args, not a dict
                     })
 
         except json.JSONDecodeError:
@@ -5139,7 +5132,7 @@ def gemma4_tools_extrator(full_response_text:str) -> list[dict]:
             'function': {
                 'name': function_name,
                 'arguments': json.dumps(args)
-            }
+            }   # OpenAI clients expect a JSON string for args, not a dict
         })
 
     content = tool_regex.sub('', full_response_text).strip()
@@ -5177,7 +5170,7 @@ def fallback_tools_extrator(full_response_text:str) -> list[dict]:
                             'function': {
                                 'name': item.get("name"),
                                 'arguments': json.dumps(item.get("arguments", {}))
-                            }
+                            }   # OpenAI clients expect a JSON string for args, not a dict
                         })
                     parse_success = True # We handled it, skip to next match
                     continue 
@@ -5193,7 +5186,7 @@ def fallback_tools_extrator(full_response_text:str) -> list[dict]:
                         'function': {
                             'name': tool_name,
                             'arguments': json.dumps(tool_args)
-                        }
+                        }   # OpenAI clients expect a JSON string for args, not a dict
                     })
                     parse_success = True
             except json.JSONDecodeError:
@@ -5226,7 +5219,7 @@ def fallback_tools_extrator(full_response_text:str) -> list[dict]:
                             'function': {
                                 'name': t_name,
                                 'arguments': json.dumps(t_args)
-                            }
+                            }   # OpenAI clients expect a JSON string for args, not a dict
                         })
                     parse_success = True
             except Exception as e:
