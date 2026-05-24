@@ -63,7 +63,8 @@ from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
 from PIL import Image, ImageDraw, ImageFont
 
-from typing import Optional, Union, Callable
+from typing import Callable
+from enum import Enum
 
 import multiprocessing
 import subprocess
@@ -2804,12 +2805,12 @@ def determine_skip_special_tokens() -> bool:
         print(f"Autoimmune model found: {current_llm}. Returning False.")
         return False
     else:
+        llm_name_components = current_llm.split('-')
         '''
         Allows the mapping to be minimalistic:
         'google/gemma-4' can cover mapping of dozens of models,
         while full names can be used for more specific mappings.
         '''
-        llm_name_components = current_llm.split('-')
         
         for i in range(1, len(llm_name_components)+1):  # range is not inclusive, so we add 1 to include the last element.
             llm_family = '-'.join(llm_name_components[:i])  # Starting to 1 so first slice isn't blank!
@@ -4574,9 +4575,14 @@ def exl3_fim_stream():
 ###------LLM Response Parsing------###
 ######################################
 
-TAG_PAIRS = [
+THINKING_TAG_PAIRS = [
     ['<think>', '</think>'],
     ['<|channel>thought', '<channel|>']
+]
+
+TOOL_TAG_PAIRS = [
+    ['<tool_call>', '</tool_call>'],
+    ['<|tool_call>', '<tool_call|>']
 ]
 
 
@@ -4584,17 +4590,25 @@ def manually_parse_response(full_response: str) -> dict:
     
     try:
         reasoning_blocks = []
+        all_tool_calls = []
         visible_content = full_response
 
-        for start_tag, end_tag in TAG_PAIRS:
+        for start_tag, end_tag in THINKING_TAG_PAIRS:
 
             # (.*?) matches any content, \s matches any whitespace, * matches 0 or more occurrences
             pattern = rf"{re.escape(start_tag)}\s*(.*?)\s*{re.escape(end_tag)}"
 
             def collect_reasoning(match):   # match is a re.Match object for a single thinking block
                 thinking_text = match.group(1).strip()
-                if thinking_text:
-                    reasoning_blocks.append({"type": "text", "text": thinking_text})
+                if not thinking_text:
+                    return ''
+                
+                tool_result = manually_extract_tool_calls_from_response(thinking_text)
+                all_tool_calls.extend(tool_result.get('tool_calls', []))
+
+                clean_thinking = tool_result.get('content', '')
+                if clean_thinking:  # avoids raw nested tool-calls in thinking content!
+                    reasoning_blocks.append({"type": "text", "text": clean_thinking})
                 return ''
 
             visible_content = re.sub(
@@ -4609,9 +4623,10 @@ def manually_parse_response(full_response: str) -> dict:
             "role": "assistant",
             "content": tool_parsing_result.get('content', visible_content)
         }
+        all_tool_calls.extend(tool_parsing_result.get('tool_calls', []))
         
-        if tool_parsing_result.get('tool_calls'):
-            message["tool_calls"] = tool_parsing_result['tool_calls']
+        if all_tool_calls:
+            message["tool_calls"] = all_tool_calls
         
         if reasoning_blocks:
             message["reasoning_content"] = reasoning_blocks
@@ -4906,12 +4921,6 @@ LLM_TO_TOOLS_EXTRACTOR_MAPPING = {
 }
 
 
-LLM_TOOL_BLOCK_START_TAGS = ['<tool_call>', '<|tool_call>']
-LLM_TOOL_BLOCK_END_TAGS = ['</tool_call>', '<tool_call|>']
-LLM_THINKING_BLOCK_START_TAGS = ['<think>', '<|channel>thought']
-LLM_THINKING_BLOCK_END_TAGS = ['</think>', '<channel|>']
-
-
 def manually_extract_tool_calls_from_response(full_response_text:str) -> list[dict]:
     try:
         print("\n--- Starting manual tool parsing ---\n")
@@ -5138,7 +5147,149 @@ def generate_openai_non_streaming_response(
     })
 
 
-def generate_openai_stream_chunks(user_queue: queue.Queue, chunk_id: str, created: int, backend: str, model_id: str):
+###########---End of OpenAI /completions API - Chunk Generator Functions---###########
+
+
+
+#####################################################################
+###------OpenAI /completions API - Stream State Management------###
+#####################################################################
+
+LLM_THINKING_BLOCK_START_TAGS = [p[0] for p in THINKING_TAG_PAIRS]
+LLM_THINKING_BLOCK_END_TAGS = [p[1] for p in THINKING_TAG_PAIRS]
+LLM_TOOL_BLOCK_START_TAGS = [p[0] for p in TOOL_TAG_PAIRS]
+
+
+class StreamState(Enum):
+    CONTENT = "content"
+    THINKING = "thinking"
+    TOOL = "tool"
+
+
+THINKING_START_EVENTS = [
+    (tag, "thinking_start") for tag in LLM_THINKING_BLOCK_START_TAGS
+]
+
+THINKING_END_EVENTS = [
+    (tag, "thinking_end") for tag in LLM_THINKING_BLOCK_END_TAGS
+]
+
+TOOL_START_EVENTS = [
+    (tag, "tool_start") for tag in LLM_TOOL_BLOCK_START_TAGS
+]
+
+
+def tag_events_for_state(state: StreamState) -> list[tuple[str, str]]:
+    if state is StreamState.CONTENT:
+        return [*THINKING_START_EVENTS, *TOOL_START_EVENTS]
+    
+    if state is StreamState.THINKING:
+        return [*THINKING_END_EVENTS, *TOOL_START_EVENTS]
+
+    return []   # TOOL is terminal for streaming emission
+
+
+def find_next_tag(text: str, events: list[tuple[str, str]]) -> tuple[int, str, str]:
+    """Return (index, tag, kind) for the earliest relevant complete tag."""
+    best = None
+
+    for tag, kind in events:
+        index = text.find(tag)
+        if index == -1: # Not found
+            continue
+
+        candidate = (index, tag, kind)
+        if best is None or (index, -len(tag)) < (best[0], -len(best[1])):
+            best  = candidate
+            '''
+            Choose the tag that appears first in the text. If two tags appear at the same index, choose the longer one.
+            
+            Uses tuple comparison to pick the best tag match when multiple tags appear in the buffer.
+            Tuple comparison is lexicographic in Python, meaning (a, b) < (c, d) if a < c OR when a == c, b < d.
+
+            In that way, two rules can be defined with the second functioning as the tie-breaker.
+
+            Rule 1: Earliest match wins
+            buffer = 'hello<tool_call>world<think>'
+            # Compare: (5, ...) vs (22, ...)
+            # 5 < 22 -> Pick <tool_call>
+
+            Rule 2: Longer tag wins
+            tags = [foo, foobar]    # therefore unlikely with current tags but a cheap guard nonetheless
+            buffer = 'foobar'
+
+            find('foo') -> index 0, len 3
+            find('foobar') -> index 0, len 6
+
+            # 'foo' found after 'foobar': (0, -3) < (0, -6) -> False, best remains 'foobar'
+            # 'foobar' found after 'foo': (0, -6) < (0, -3) -> True, best becomes 'foobar'
+            This is why we invert with minus sign so the comparison works as expected!
+
+            Does NOT prefer "more important" tags, strictly cares about position alone which is what we want when 
+            parsing a linear stream left-to-right.
+            '''
+    return best
+
+
+def tag_prefix_holdback(text: str, events: list[tuple[str, str]]) -> int:
+    """Trailing chars to keep because they may become a tag next chunk."""
+    hold = 0
+
+    for tag, _ in events:
+        max_prefix_len = min(len(text), len(tag) - 1)
+        '''
+        max prefix can be at most tag length - 1, as the full tag would have been found by find_next_tag()
+        So the max we need to check is the minimum between the text length and the tag length - 1.
+        Full descriptive variable name would be 'max_prefix_length_we_need_to_bother_with_here' !
+        '''
+
+        for n in range(1, max_prefix_len + 1):
+            if text.endswith(tag[:n]):
+                hold = max(hold, n)
+
+    return hold
+
+
+def apply_state_transition(state: StreamState, kind: str) -> StreamState:
+    '''
+    Transition to the new state based on the kind of tag found (eg 'thinking_start', etc.)
+    No "tool_end" state is needed as tool calls terminate the assistant turn for streaming purposes.
+    full_response_text still captures raw output for EOS tool parsing.
+    '''
+    
+    if kind == "thinking_start":
+        return StreamState.THINKING
+
+    if kind == "thinking_end" and state is StreamState.THINKING:
+        return StreamState.CONTENT
+
+    if kind == "tool_start":
+        return StreamState.TOOL
+
+    return state
+
+
+def emit_text(text, state, chunk_id, created, backend, model_id):
+    if not text or state is StreamState.TOOL:
+        return None
+
+    if state is StreamState.THINKING:
+        return get_openai_reasoning_content_chunk(
+            chunk_id, created, backend, model_id, text
+        )
+    
+    return get_openai_content_chunk(
+        chunk_id, created, backend, model_id, text
+    )
+
+
+def generate_openai_stream_chunks(
+    user_queue: queue.Queue,
+    chunk_id: str,
+    created: int,
+    backend: str,
+    model_id: str
+):
     """
     Generator that consumes tokens from a queue and yields OpenAI-compatible SSE chunks.
     Handles thinking blocks, tool call suppression, and final tool parsing.
@@ -5148,93 +5299,66 @@ def generate_openai_stream_chunks(user_queue: queue.Queue, chunk_id: str, create
     pauses to yield a value to the caller, and the function can continue executing after the yield statement.
     """
 
-    # Initialize State
-    in_thinking_block = False
-    in_tool_block = False
-    accumulated_text = ""
+    buffer = ""
     full_response_text = ""
+    state = StreamState.CONTENT
 
+    def drain(*, flush: bool):
+        nonlocal buffer, state  # update outer scope variables
+
+        while True:
+            if state is StreamState.TOOL:
+                '''
+                Tool calls terminate the assistant turn for streaming purposes.
+                State transitions only happen (via apply-state_transition()) once all preceeding text has been streamed.
+                This block will cause the `yield from drain` calls to return while still accumulating full_response_text.
+                Subsequently, tool calls will be parsed from full_response_text and emitted as a separate chunk.
+                '''
+                buffer = ""
+                return
+                
+            events = tag_events_for_state(state)    # returns (tag, kind)
+            match = find_next_tag(buffer, events)    # returns (index, tag, kind)
+
+            if not match:   # maybe partial tag was generated
+                hold = 0 if flush else tag_prefix_holdback(buffer, events)
+
+                safe = buffer[:-hold] if hold else buffer
+                buffer = buffer[-hold:] if hold else "" # clear buffer, but keep partial tag if any
+
+                chunk = emit_text(
+                    safe, state, chunk_id, created, backend, model_id
+                )
+                if chunk:
+                    yield f"data: {json.dumps(chunk)}\n\n"
+
+                return
+
+            index, tag, kind = match
+
+            before = buffer[:index] # prep all text before the tag for stream emission
+            buffer = buffer[index + len(tag):] # set the buffer to the text after the tag
+
+            chunk = emit_text(
+                before, state, chunk_id, created, backend, model_id
+            )   # emit the text before the new tag before transitioning to the new state
+            if chunk:
+                yield f"data: {json.dumps(chunk)}\n\n"
+
+            state = apply_state_transition(state, kind) # transition based on the kind of tag found
+    
     while True:
-
         token = user_queue.get()
         if token is None:   # EOS Signal
             break
 
-        accumulated_text += token   # Only accumulates what hasn't been streamed yet!
         full_response_text += token
+        if state is not StreamState.TOOL:
+            buffer += token
+        yield from drain(flush=False)
 
-        # --- Tool Call Suppression Logic ---
-        # 1. Check for opening tool tag
-        tool_tag = next((tag for tag in LLM_TOOL_BLOCK_START_TAGS if tag in accumulated_text), None)
-        if tool_tag and not in_tool_block:
-            
-            in_tool_block = True
-            before_tool = accumulated_text.split(tool_tag, 1)[0]
+    yield from drain(flush=True)
 
-            if before_tool: # Send any text before tag as reasoning_content or content
-                if in_thinking_block:
-                    chunk = get_openai_reasoning_content_chunk(chunk_id, created, backend, model_id, before_tool)
-                else:
-                    chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, before_tool)
-                yield f"data: {json.dumps(chunk)}\n\n"
-            
-            accumulated_text = accumulated_text.split(tool_tag, 1)[1]
-            continue
-
-        # 2. Handle being inside a tool block
-        end_tool_tag = next((tag for tag in LLM_TOOL_BLOCK_END_TAGS if tag in accumulated_text), None)
-        if in_tool_block:
-            if end_tool_tag:
-                in_tool_block = False
-                accumulated_text = accumulated_text.split(end_tool_tag, 1)[1]     # Swallow the content + closing tag.
-                continue
-            else:
-                continue    # Not clearing accumulated_text incase `... content ... </tool (chunk 1) -> _call> (chunk 2)` !
-        
-        # --- Thinking Block Logic ---
-        # 3. Check for opening thinking tag
-        thinking_tag = next((tag for tag in LLM_THINKING_BLOCK_START_TAGS if tag in accumulated_text), None)
-        if thinking_tag:
-            
-            in_thinking_block = True
-            before_think = accumulated_text.split(thinking_tag, 1)[0]
-            if before_think:    # Send any text before think as regular content
-                chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, before_think)
-                yield f"data: {json.dumps(chunk)}\n\n"
-            accumulated_text = accumulated_text.split(thinking_tag, 1)[1]
-            continue
-        
-        # Check for closing thinking tag
-        end_thinking_tag = next((tag for tag in LLM_THINKING_BLOCK_END_TAGS if tag in accumulated_text), None)
-        if end_thinking_tag:
-            # Send thinking content as reasoning_content
-            thinking_text = accumulated_text.split(end_thinking_tag, 1)[0]
-            if thinking_text:
-                chunk = get_openai_reasoning_content_chunk(chunk_id, created, backend, model_id, thinking_text)
-                yield f"data: {json.dumps(chunk)}\n\n"
-            in_thinking_block = False
-            accumulated_text = accumulated_text.split(end_thinking_tag, 1)[1]
-            continue
-
-        # If we have any accumulated text, send it as regular content
-        if len(accumulated_text) > 0:
-            if in_thinking_block:
-                chunk = get_openai_reasoning_content_chunk(chunk_id, created, backend, model_id, accumulated_text)
-            else:
-                chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, accumulated_text)
-            yield f"data: {json.dumps(chunk)}\n\n"
-            accumulated_text = ""
-
-    # Send any remaining text
-    if accumulated_text and not in_tool_block:
-        if in_thinking_block:
-            chunk = get_openai_reasoning_content_chunk(chunk_id, created, backend, model_id, accumulated_text)
-        else:
-            chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, accumulated_text)
-        yield f"data: {json.dumps(chunk)}\n\n"
-        accumulated_text = ""
-    
-    # Parse tool calls from full response text before sending final chunk
     tool_parsing_result = extract_tool_calls_from_response(full_response_text)
     tool_calls = tool_parsing_result.get('tool_calls', None)
 
@@ -5244,19 +5368,21 @@ def generate_openai_stream_chunks(user_queue: queue.Queue, chunk_id: str, create
 
         finish_reason = "tool_calls"
         
-        for i, tool in enumerate(tool_calls):
-            tool['index'] = i   # OpenAI Stream Spec requires an 'index' for each tool call
+        for index, tool in enumerate(tool_calls):
+            tool['index'] = index   # OpenAI Stream Spec requires an 'index' for each tool call
 
-        tool_calls_chunk = get_openai_tool_calls_chunk(chunk_id, created, backend, model_id, tool_calls)
+        tool_calls_chunk = get_openai_tool_calls_chunk(
+            chunk_id, created, backend, model_id, tool_calls
+        )
         yield f"data: {json.dumps(tool_calls_chunk)}\n\n"
 
-    # Send final closing chunk
-    final_chunk = get_openai_stop_chunk(chunk_id, created, backend, model_id, finish_reason)
+    final_chunk = get_openai_stop_chunk(
+        chunk_id, created, backend, model_id, finish_reason
+    )
     yield f"data: {json.dumps(final_chunk)}\n\n"
     yield "data: [DONE]\n\n"
 
-
-###########---End of OpenAI /completions API - Chunk Generator Functions---###########
+###########---End of OpenAI /completions API - Stream State Management---###########
 
 
 

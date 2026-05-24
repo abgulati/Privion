@@ -6274,3 +6274,127 @@ tool_caller_extras = {
     'dedicated_tool_caller_rep_sustain_range':int(10e7),
     'dedicated_tool_caller_rep_decay_range':0
 }
+
+
+def generate_openai_stream_chunks(user_queue: queue.Queue, chunk_id: str, created: int, backend: str, model_id: str):
+
+    """
+    Generator that consumes tokens from a queue and yields OpenAI-compatible SSE chunks.
+    Handles thinking blocks, tool call suppression, and final tool parsing.
+    Centralizes logic for the various backends of HF-Waitress.
+
+    'yield' is fundamentally different from 'return' in that it does not simply terminate the function, but rather, 
+    pauses to yield a value to the caller, and the function can continue executing after the yield statement.
+    """
+
+    # Initialize State
+    in_thinking_block = False
+    in_tool_block = False
+    accumulated_text = ""
+    full_response_text = ""
+
+    while True:
+
+        token = user_queue.get()
+        if token is None:   # EOS Signal
+            break
+
+        accumulated_text += token   # Only accumulates what hasn't been streamed yet!
+        full_response_text += token
+
+        # --- Tool Call Suppression Logic ---
+        # 1. Check for opening tool tag
+        tool_tag = next((tag for tag in LLM_TOOL_BLOCK_START_TAGS if tag in accumulated_text), None)
+        if tool_tag and not in_tool_block:
+            
+            in_tool_block = True
+            before_tool = accumulated_text.split(tool_tag, 1)[0]
+
+            if before_tool: # Send any text before tag as reasoning_content or content
+                if in_thinking_block:
+                    chunk = get_openai_reasoning_content_chunk(chunk_id, created, backend, model_id, before_tool)
+                else:
+                    chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, before_tool)
+                yield f"data: {json.dumps(chunk)}\n\n"
+            
+            accumulated_text = accumulated_text.split(tool_tag, 1)[1]
+            continue
+
+        # 2. Handle being inside a tool block
+        end_tool_tag = next((tag for tag in LLM_TOOL_BLOCK_END_TAGS if tag in accumulated_text), None)
+        if in_tool_block:
+            if end_tool_tag:
+                in_tool_block = False
+                accumulated_text = accumulated_text.split(end_tool_tag, 1)[1]     # Swallow the content + closing tag.
+                continue
+            else:
+                continue    # Not clearing accumulated_text incase `... content ... </tool (chunk 1) -> _call> (chunk 2)` !
+        
+        # --- Thinking Block Logic ---
+        # 3. Check for opening thinking tag
+        thinking_tag = next((tag for tag in LLM_THINKING_BLOCK_START_TAGS if tag in accumulated_text), None)
+        if thinking_tag:
+            
+            in_thinking_block = True
+            before_think = accumulated_text.split(thinking_tag, 1)[0]
+            if before_think:    # Send any text before think as regular content
+                chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, before_think)
+                yield f"data: {json.dumps(chunk)}\n\n"
+            accumulated_text = accumulated_text.split(thinking_tag, 1)[1]
+            continue
+        
+        # Check for closing thinking tag
+        end_thinking_tag = next((tag for tag in LLM_THINKING_BLOCK_END_TAGS if tag in accumulated_text), None)
+        if end_thinking_tag:
+            # Send thinking content as reasoning_content
+            thinking_text = accumulated_text.split(end_thinking_tag, 1)[0]
+            if thinking_text:
+                chunk = get_openai_reasoning_content_chunk(chunk_id, created, backend, model_id, thinking_text)
+                yield f"data: {json.dumps(chunk)}\n\n"
+            in_thinking_block = False
+            accumulated_text = accumulated_text.split(end_thinking_tag, 1)[1]
+            continue
+
+        # If we have any accumulated text, send it as regular content
+        if len(accumulated_text) > 0:
+            if in_thinking_block:
+                chunk = get_openai_reasoning_content_chunk(chunk_id, created, backend, model_id, accumulated_text)
+            else:
+                chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, accumulated_text)
+            yield f"data: {json.dumps(chunk)}\n\n"
+            accumulated_text = ""
+
+    # Send any remaining text
+    if accumulated_text and not in_tool_block:
+        if in_thinking_block:
+            chunk = get_openai_reasoning_content_chunk(chunk_id, created, backend, model_id, accumulated_text)
+        else:
+            chunk = get_openai_content_chunk(chunk_id, created, backend, model_id, accumulated_text)
+        yield f"data: {json.dumps(chunk)}\n\n"
+        accumulated_text = ""
+    
+    # Parse tool calls from full response text before sending final chunk
+    tool_parsing_result = extract_tool_calls_from_response(full_response_text)
+    tool_calls = tool_parsing_result.get('tool_calls', None)
+
+    finish_reason = "stop"
+
+    if tool_calls:
+
+        finish_reason = "tool_calls"
+        
+        for index, tool in enumerate(tool_calls):
+            tool['index'] = index   # OpenAI Stream Spec requires an 'index' for each tool call
+
+        tool_calls_chunk = get_openai_tool_calls_chunk(
+            chunk_id, created, backend, model_id, tool_calls
+        )
+        yield f"data: {json.dumps(tool_calls_chunk)}\n\n"
+
+    # Send final closing chunk
+    final_chunk = get_openai_stop_chunk(
+        chunk_id, created, backend, model_id, finish_reason
+    )
+    yield f"data: {json.dumps(final_chunk)}\n\n"
+    yield "data: [DONE]\n\n"
+

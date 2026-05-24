@@ -757,7 +757,7 @@ Privion is a versatile AI application focused on privacy and offline inferencing
     
     - **NOTE: In case Flash Attention is setup on your system and llama.cpp will be run with `-fa=on/auto`, ensure the following lauch arg is included too:**
         ```
-        cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="86;120" `DGGML_CUDA_FA_ALL_QUANTS=ON
+        cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="86;120" -DGGML_CUDA_FA_ALL_QUANTS=ON
         ```
 
         - What it does in practice:
