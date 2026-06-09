@@ -607,40 +607,166 @@ function printErrorToChatArea(responseContentID, error_message) {
 }
 
 
-async function fetchLlamacppEventStream(
+function setRequestDataAndHeaders(
+    formattedPrompt,
+    tools_schema,
+    ...rest
+) {
+    
+    const server = getServerType();
+    let requestHeaders = new Headers();
+    let requestBody = null;
+    
+    let formattedPromptCopy = structuredClone(formattedPrompt);
+    const requestData = coerceToObject(formattedPromptCopy, "openai completions request");
+    if (tools_schema) { requestData.tools = tools_schema; }
+    else delete requestData.tools;  
+    /*
+    Objects are passed by reference so appending tools to the passed object will make it 
+    persistent even when `tools_schema` is null in a future call! So we create a copy of 
+    the object and work on the copy.
+
+    On the deletion step: the incoming `formattedPrompt` may already have a `.tools` 
+    property from an earlier mutation (or elsewhere), so it's best to explicitly remove 
+    it when `tools_schema` is null.
+    */
+    
+    if (server == 'llama-cpp') {
+
+        requestHeaders.append("Content-Type", "application/json");
+        
+        requestData.stream = true;
+        requestData.model = document.getElementById('modelDropdown').value;
+        requestData.temperature = parseFloat(document.getElementById('tempSlider').value);
+        requestData.top_k = parseInt(document.getElementById('topkSlider').value);
+        requestData.top_p = parseFloat(document.getElementById('toppSlider').value);
+        requestData.min_p = parseFloat(document.getElementById('minpSlider').value);
+        requestData.n_keep = parseInt(document.getElementById('nkeepSlider').value);
+        requestData.repeat_penalty = parseFloat(document.getElementById('repetitionPenaltySlider').value);
+        requestData.presence_penalty = parseFloat(document.getElementById('presencePenaltySlider').value);
+        requestData.frequency_penalty = parseFloat(document.getElementById('frequencyPenaltySlider').value);
+        requestData.enable_thinking = document.getElementById('LlamaCppEnableThinking').checked;
+        requestData.preserve_thinking = document.getElementById('LlamaCppPreserveThinking').checked;
+
+        requestBody = JSON.stringify(requestData);
+       
+        return { requestHeaders, requestBody };
+
+    } else if (server == 'hf-waitress') {
+
+        const vision = getVision();
+        const exl2 = getExl2();
+        const exl3 = getExl3();
+
+        if (vision === "true") {    // NOTE: Legacy implementation stand-in - TODO: Update for OpenAI /completions
+
+            formdata = new FormData();
+            
+            formdata.append("messages", JSON.stringify(requestData.messages));
+            if (rest.file) { formdata.append("file", rest.file); }
+            requestBody = formdata;
+            
+            requestHeaders.append("Content-Type", "multipart/form-data");
+            requestHeaders.append("X-DPI", "300");
+            requestHeaders.append("X-Max-New-Tokens", document.getElementById('HfwMaxNewToks').value);
+
+            return { requestHeaders, requestBody };
+            
+        } else if (exl2 === "true") {
+
+            requestHeaders.append("Content-Type", "application/json");
+
+            requestData.stream = true;
+            requestData.max_new_tokens = parseInt(document.getElementById('HfwMaxNewToks').value);
+            requestData.temperature = parseFloat(document.getElementById('HfwTempSlider').value);
+            requestData.top_k = parseInt(document.getElementById('HfwTopkSlider').value);
+            requestData.top_p = parseFloat(document.getElementById('HfwToppSlider').value);
+            requestData.enable_thinking = document.getElementById('HfwEnableThinking').checked;
+            requestData.preserve_thinking = document.getElementById('HfwPreserveThinking').checked;
+            
+            requestBody = JSON.stringify(requestData);
+
+            return { requestHeaders, requestBody };
+
+        } else if (exl3 === "true") {
+
+            requestHeaders.append("Content-Type", "application/json");
+
+            requestData.stream = true;
+            requestData.max_new_tokens = parseInt(document.getElementById('HfwMaxNewToks').value);
+            requestData.temperature = parseFloat(document.getElementById('HfwTempSlider').value);
+            requestData.top_k = parseInt(document.getElementById('HfwTopkSlider').value);
+            requestData.top_p = parseFloat(document.getElementById('HfwToppSlider').value);
+            requestData.min_p = parseFloat(document.getElementById('HfwMinpSlider').value);
+            requestData.repeat_penalty = parseFloat(document.getElementById('HfwRepetitionPenaltySlider').value);
+            requestData.presence_penalty = parseFloat(document.getElementById('HfwPresencePenaltySlider').value);
+            requestData.frequency_penalty = parseFloat(document.getElementById('HfwFrequencyPenaltySlider').value);
+            requestData.enable_thinking = document.getElementById('HfwEnableThinking').checked;
+            requestData.preserve_thinking = document.getElementById('HfwPreserveThinking').checked;
+            
+            requestBody = JSON.stringify(requestData);
+
+            return { requestHeaders, requestBody };
+
+        } else {    // Transformers Backend
+
+            requestHeaders.append("Content-Type", "application/json");
+
+            requestData.stream = true;
+            requestData.max_new_tokens = parseInt(document.getElementById('HfwMaxNewToks').value);
+            requestData.temperature = parseFloat(document.getElementById('HfwTempSlider').value);
+            requestData.top_k = parseInt(document.getElementById('HfwTopkSlider').value);
+            requestData.top_p = parseFloat(document.getElementById('HfwToppSlider').value);
+            requestData.min_p = parseFloat(document.getElementById('HfwMinpSlider').value);
+            requestData.do_sample = document.getElementById('HfwTempSlider').value > 0 ? "True" : "False";
+            requestData.enable_thinking = document.getElementById('HfwEnableThinking').checked;
+            requestData.preserve_thinking = document.getElementById('HfwPreserveThinking').checked;
+
+            requestBody = JSON.stringify(requestData);
+
+            return { requestHeaders, requestBody };
+        }
+    }
+}
+
+
+async function fetchOpenAICompletionsStream(
     formattedPrompt,
     responseContentID,
     chatContainer,
-    tools_schema=null
+    tools_schema=null,
+    ...rest
 ) {
 
-    const url = getLlamaCppUrl() + "/v1/chat/completions";
+    const url = getOpenAICompletionsUrl() + "/v1/chat/completions";
     
-    let formattedPromptCopy = structuredClone(formattedPrompt); // objects passed by reference so appending tools to the passed object will make it persistent even when tools_schema is null in a future call!
+    // let formattedPromptCopy = structuredClone(formattedPrompt);
 
-    const requestData = coerceToObject(formattedPromptCopy, "llama.cpp request");
-    if (tools_schema) { requestData.tools = tools_schema; }
-    else delete requestData.tools;  // if the incoming formattedPrompt already has a .tools property from any earlier mutation (or from elsewhere), so best to explicitly remove it when tools_schema is null
+    // const requestData = coerceToObject(formattedPromptCopy, "openai completions request");
+    // if (tools_schema) { requestData.tools = tools_schema; }
+    // else delete requestData.tools; 
     
-    requestData.model = document.getElementById('modelDropdown').value;
-    requestData.stream = true;
-    requestData.temperature = parseFloat(document.getElementById('tempSlider').value);
-    requestData.top_k = parseInt(document.getElementById('topkSlider').value);
-    requestData.top_p = parseFloat(document.getElementById('toppSlider').value);
-    requestData.min_p = parseFloat(document.getElementById('minpSlider').value);
-    requestData.n_keep = parseInt(document.getElementById('nkeepSlider').value);
-    requestData.repeat_penalty = parseFloat(document.getElementById('repetitionPenaltySlider').value);
-    requestData.presence_penalty = parseFloat(document.getElementById('presencePenaltySlider').value);
-    requestData.frequency_penalty = parseFloat(document.getElementById('frequencyPenaltySlider').value);
+    // requestData.model = document.getElementById('modelDropdown').value;
+    // requestData.stream = true;
+    // requestData.temperature = parseFloat(document.getElementById('tempSlider').value);
+    // requestData.top_k = parseInt(document.getElementById('topkSlider').value);
+    // requestData.top_p = parseFloat(document.getElementById('toppSlider').value);
+    // requestData.min_p = parseFloat(document.getElementById('minpSlider').value);
+    // requestData.n_keep = parseInt(document.getElementById('nkeepSlider').value);
+    // requestData.repeat_penalty = parseFloat(document.getElementById('repetitionPenaltySlider').value);
+    // requestData.presence_penalty = parseFloat(document.getElementById('presencePenaltySlider').value);
+    // requestData.frequency_penalty = parseFloat(document.getElementById('frequencyPenaltySlider').value);
 
-    console.log("llama.cpp requestData: ", requestData);
+    const { requestHeaders, requestBody } = setRequestDataAndHeaders(formattedPrompt, tools_schema, ...rest);
+
+    // console.log("OpenAI /completions requestBody: ", requestBody);
 
     try {
 
         const response = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestData)
+            headers: requestHeaders,
+            body: requestBody
         });
 
         scrollChatAreaToBottom();
@@ -730,8 +856,10 @@ async function fetchLlamacppEventStream(
                                         }
 
                                         // Merge Arguments (This is the fragmentation part!)
-                                        if (toolChunk.function && toolChunk.function.arguments) {
-                                            accumulatedTools[index].function.arguments += toolChunk.function.arguments;
+                                        if (toolChunk.function && toolChunk.function.arguments !== undefined) {
+                                            accumulatedTools[index].function.arguments += normalizeToolArgumentChunk(
+                                                toolChunk.function.arguments
+                                            );
                                         }
                                     });
 
@@ -789,7 +917,7 @@ async function fetchLlamacppEventStream(
         return { full_content, plain_text, invoke_tools, tool_calls };
 
     } catch (error) {
-        errorHandlerNoAlert("fetching llama.cpp event-streaming response", "localhost:8080/completions", String(error));
+        errorHandlerNoAlert("fetching openai completions event-streaming response", "localhost:8080/completions", String(error));
         return printErrorToChatArea(responseContentID, String(error));
     }
 }
@@ -857,8 +985,8 @@ async function fetchHfWaitressEventStream(
     formattedPrompt,
     responseContentID,
     chatContainer,
-    file=null,
-    tools_schema=null
+    tools_schema=null,
+    file=null
 ) {
 
     let url;
@@ -1121,7 +1249,7 @@ async function fetchEventStream(
     tools_schema=null
 ) {
     if (serverType == 'llama-cpp') {
-        return fetchLlamacppEventStream(
+        return fetchOpenAICompletionsStream(
             formattedPrompt,
             responseContentID,
             chatContainer,
@@ -1129,12 +1257,12 @@ async function fetchEventStream(
         );
 
     } else if (serverType == 'hf-waitress') {
-        return fetchHfWaitressEventStream(
+        return fetchOpenAICompletionsStream(
             formattedPrompt,
             responseContentID,
             chatContainer,
-            file=null,
-            tools_schema=tools_schema
+            tools_schema=tools_schema,
+            file=null
         );
 
     } else if (serverType == 'hfw-diffusers') {
@@ -1149,8 +1277,8 @@ async function fetchEventStream(
             formattedPrompt,
             responseContentID,
             chatContainer,
-            file,
-            tools_schema
+            tools_schema,
+            file
         );
 
     } else {

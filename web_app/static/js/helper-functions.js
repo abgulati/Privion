@@ -16,8 +16,8 @@ function setOldLlmModel(model) {
     document.getElementById('chatState').setAttribute('data-old-llm-model', model);
 }
 
-function setLlamaCppUrl(host, port) {
-    document.getElementById('chatState').setAttribute('data-llama-cpp-url', `http://${host}:${port}`);
+function setOpenAICompletionsUrl(host, port) {
+    document.getElementById('chatState').setAttribute('data-openai-completions-url', `http://${host}:${port}`);
 }
 
 function setHfwUrl(host, port) {
@@ -118,8 +118,8 @@ function getOldLlmModel() {
     return document.getElementById('chatState').getAttribute('data-old-llm-model');
 }
 
-function getLlamaCppUrl() {
-    return document.getElementById('chatState').getAttribute('data-llama-cpp-url');
+function getOpenAICompletionsUrl() {
+    return document.getElementById('chatState').getAttribute('data-openai-completions-url');
 }
 
 function getHfwUrl() {
@@ -190,6 +190,33 @@ function coerceToObject(maybeJson, label = "prompt") {
             return null;
         }
     }
+}
+
+function normalizeToolArgumentChunk(argumentsChunk) {
+    /*
+    OpenAI /completions API-compatible clients expect a JSON string 
+    for tool arguments, not a dictionary.
+
+    This is why HF-Waitress's tool extractors `json.dumps()` args.
+
+    However, Transformer's `parse_response` schema, when present for
+    a model, such as for Gemma4, returns an object for 
+    `toolChunk.function.arguments`.
+    
+    When `toolChunk.function.arguments` is an object, JS coerces it
+    to a string during `+=`, producing `[object Object]`
+
+    So instead of modifying the serverside code for a built-in 
+    Transformer schema, we normalize here allowing the client-side
+    to handle both string and object arguments!
+    */
+    if (argumentsChunk === undefined || argumentsChunk === null) {
+        return "";
+    }
+
+    return typeof argumentsChunk === "string"
+        ? argumentsChunk
+        : JSON.stringify(argumentsChunk);
 }
 
 // Debounce function to limit how often it's called:
@@ -1118,6 +1145,8 @@ function populateDocsLoadedTable() {
     // formData.append('selected_embedding_model', document.getElementById('hf-waitress-embed-custom-dropdown-selected-value').textContent);
     formData.append('selected_knowledge_domain', CustomDropdown.registry.get('kb').getSelectedValue());
     formData.append('selected_embedding_model', CustomDropdown.registry.get('embed').getSelectedValue());
+    // console.log("Selected knowledge domain: ", CustomDropdown.registry.get('kb').getSelectedValue());
+    // console.log("Selected embedding model: ", CustomDropdown.registry.get('embed').getSelectedValue());
 
     fetch('/fetch_file_list_for_vector_db', {
         method: 'POST',

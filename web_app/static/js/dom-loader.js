@@ -540,7 +540,6 @@ function setLlamaCppValues(values) {
     document.getElementById('LlamaCppServingHost').value = values.llama_cpp_serving_url;
     document.getElementById('LlamaCppAccessUrl').value = values.llama_cpp_access_url;
     document.getElementById('LlamaCppServingPort').value = values.llama_cpp_server_port;
-    setLlamaCppUrl(values.llama_cpp_access_url, values.llama_cpp_server_port);
 }
 
 
@@ -959,6 +958,19 @@ function initializeEventListenersForLLMTabSliders() {
 
 
 function initializeLLMTabComponents(values) {
+    
+    if (values.local_llm_server === 'hf-waitress') {
+        setOpenAICompletionsUrl(
+            values.hf_waitress_access_url,
+            values.hf_waitress_server_port
+        );
+    } else if (values.local_llm_server === 'llama-cpp') {
+        setOpenAICompletionsUrl(
+            values.llama_cpp_access_url,
+            values.llama_cpp_server_port
+        );
+    }
+    
     setLlamaCppValues(values);
     setLlamaCppCheckboxes(values);
     setLlamaCppDropdowns(values);
@@ -966,7 +978,11 @@ function initializeLLMTabComponents(values) {
     initializeModelDropdown(values.model_choice);   
     //initializeLLMTemplateDropdown(values.local_llm_chat_template_format);
     initializeLLMRadioButtons(values.use_local_llm, values.model_choice);
-    initializeHfwUrlComponents(values.hf_waitress_serving_url, values.hf_waitress_access_url, values.hf_waitress_server_port);
+    initializeHfwUrlComponents(
+        values.hf_waitress_serving_url,
+        values.hf_waitress_access_url,
+        values.hf_waitress_server_port
+    );
     initializeEventListenersForLLMTab();
     initializeEventListenersForLLMTabSliders();
 }
