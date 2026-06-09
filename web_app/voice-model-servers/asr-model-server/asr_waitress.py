@@ -4928,6 +4928,17 @@ TOOL_TAG_PAIRS = [
 
 
 def manually_parse_response(full_response: str) -> dict:
+    '''
+    DEV NOTE: Right now, `manually_extract_tool_calls_from_response` is invoked twice whereas
+    a single call right at the start would do, and `collect_reasoning` could be called on the 
+    tool-free text returned by `manually_extract_tool_calls_from_response`.
+    
+    However, the below flow can currently attribute tool calls to specific thinking blocks,
+    which though no used downstream for now, might become useful in the future especially in
+    context of interleaved thinking models. 
+    
+    Likely not, but leaving this as-is for now for future review and refactoring if needed.
+    '''
     
     try:
         reasoning_blocks = []
@@ -4980,6 +4991,7 @@ def manually_parse_response(full_response: str) -> dict:
 
 def parse_with_pre_defined_response_schema(full_response: str) -> dict:
     try:
+        print("\n\nparse_with_pre_defined_response_schema called\n\n")
         parsed_response = AUTO_PROC_TOK.parse_response(full_response)
         
         message = {
@@ -5028,7 +5040,7 @@ def parse_llm_response(full_response: str) -> dict:
 ###------Tool Call Parsing------###
 ###################################
 
-def qwen3_tools_extrator(full_response_text:str) -> list[dict]:
+def qwen3_tools_extractor(full_response_text:str) -> list[dict]:
     tool_calls = []
 
     # 1. Regex to find ALL occurrences of <tool_call>...</tool_call>
@@ -5081,7 +5093,7 @@ def qwen3_tools_extrator(full_response_text:str) -> list[dict]:
     return result
 
 
-def qwen3_coder_next_tools_extrator(full_response_text:str) -> list[dict]:
+def qwen3_coder_next_tools_extractor(full_response_text:str) -> list[dict]:
     tool_calls = []
 
     # 1. Regex to find ALL occurrences of <tool_call>...</tool_call>
@@ -5124,7 +5136,7 @@ def qwen3_coder_next_tools_extrator(full_response_text:str) -> list[dict]:
     return result
 
 
-def gemma4_tools_extrator(full_response_text:str) -> list[dict]:
+def gemma4_tools_extractor(full_response_text:str) -> list[dict]:
     tool_calls = []
 
     # Eg: "<|tool_call>call:search{query:<|\"|>weather in Vancouver today<|\"|>}<tool_call|><|tool_call>call:lamp_turn_on{}<tool_call|><|tool_response>"
@@ -5157,7 +5169,7 @@ def gemma4_tools_extrator(full_response_text:str) -> list[dict]:
     return result
 
 
-def fallback_tools_extrator(full_response_text:str) -> list[dict]:
+def fallback_tools_extractor(full_response_text:str) -> list[dict]:
     tool_calls = []
 
     # 1. Regex to find ALL occurrences of <tool_call>...</tool_call>
@@ -5252,13 +5264,13 @@ def fallback_tools_extrator(full_response_text:str) -> list[dict]:
 
 
 LLM_TO_TOOLS_EXTRACTOR_MAPPING = {
-    'fallback': fallback_tools_extrator,
-    'nvidia/Nemotron-Orchestrator-8B': qwen3_tools_extrator,
-    'Qwen/Qwen3': qwen3_tools_extrator,
-    'Qwen/Qwen3-Coder-Next': qwen3_coder_next_tools_extrator,
-    'Qwen/Qwen3.5': qwen3_coder_next_tools_extrator,
-    'Qwen/Qwen3.6': qwen3_coder_next_tools_extrator,
-    'google/gemma-4': gemma4_tools_extrator
+    'fallback': fallback_tools_extractor,
+    'nvidia/Nemotron-Orchestrator-8B': qwen3_tools_extractor,
+    'Qwen/Qwen3': qwen3_tools_extractor,
+    'Qwen/Qwen3-Coder-Next': qwen3_coder_next_tools_extractor,
+    'Qwen/Qwen3.5': qwen3_coder_next_tools_extractor,
+    'Qwen/Qwen3.6': qwen3_coder_next_tools_extractor,
+    'google/gemma-4': gemma4_tools_extractor
 }
 
 
@@ -5277,16 +5289,21 @@ def manually_extract_tool_calls_from_response(full_response_text:str) -> list[di
             '''
             llm_name_components = llm.split('-')
             
-            for i in range(1, len(llm_name_components)+1):  # range is not inclusive, so we add 1 to include the last element.
-                llm_family = '-'.join(llm_name_components[:i])  # Starting to 1 so first slice isn't blank!
+            for i in range(len(llm_name_components), 0, -1):
+                '''
+                We perform longest-to-shortest matching so that
+                'Qwen/Qwen3-Coder-Next' selection is not overridden 
+                by 'Qwen/Qwen3' selection.
+                '''
+                llm_family = '-'.join(llm_name_components[:i])
                 extractor = LLM_TO_TOOLS_EXTRACTOR_MAPPING.get(llm_family, None)
                 if extractor:
-                    print(f"Extractor found: {extractor}")
                     break
         
         if not extractor:
             extractor = LLM_TO_TOOLS_EXTRACTOR_MAPPING.get('fallback')
 
+        print(f"Using Extractor: {extractor.__name__}")
         print("\n--- Done manual tool parsing ---\n")
 
         return extractor(full_response_text)
@@ -5597,7 +5614,6 @@ def apply_state_transition(state: StreamState, kind: str) -> StreamState:
     No "tool_end" state is needed as tool calls terminate the assistant turn for streaming purposes.
     full_response_text still captures raw output for EOS tool parsing.
     '''
-    
     if kind == "thinking_start":
         return StreamState.THINKING
 
@@ -5974,6 +5990,245 @@ def handle_openai_non_streaming(backend:str, req_body:dict) -> dict:
     elif backend == 'exl3': return handle_exl3_non_streaming_openai(req_body)
 
 
+def openai_completions_messages_parser(messages: list[dict]) -> list[dict]:
+    '''
+    Prep the received messages obj for use with a model that follows the OpenAI /completions
+    API spec exactly.
+
+    Minimal change required as Privion client follows the OpenAI /completions API spec closely,
+    only the 'content' field for the assistant turn generating the tool call must be nulled out.
+
+    This is as per official docs:
+    https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
+    Toggle the 'Functions' taba nd note null content in choices/messages/content 
+    '''
+    
+    final_messages = []
+    for message in messages:
+        
+        if message.get('role') == 'assistant' and message.get('tool_calls'):
+            final_messages.append({
+                'role': 'assistant',
+                'content': None,
+                'tool_calls': message['tool_calls']
+            })
+        
+        else:
+            final_messages.append(message)
+
+    return final_messages
+
+
+def qwen3_messages_parser(messages: list[dict]) -> list[dict]:
+    '''
+    Prep the received messages obj for use with a model that follows the Qwen3 API spec.
+
+    References:
+    https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=nvidia%2FNemotron-Orchestrator-8B&example=tool-usage
+    https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=Qwen%2FQwen3-Coder-Next
+    https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=Qwen%2FQwen3-235B-A22B-Thinking-2507-FP8
+    https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=Qwen%2FQwen3-14B
+    https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=Qwen%2FQwen3.5-397B-A17B
+    https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=Qwen%2FQwen3.5-2B
+    https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=Qwen%2FQwen3.6-35B-A3B
+    https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=Qwen%2FQwen3.6-27B
+
+    '''
+    
+    final_messages = []
+
+    def normalize_tool_calls(tool_calls: list) -> list:
+        '''
+        Normalize tool calls to a list of dictionaries with the function 
+        object having its arguments as a dictionary, not a string.
+
+        Required as `tool_call.arguments` must be a dict/mapping, not 
+        OpenAI's JSON string format, as that leads to a 
+        template application error which can be misconstrued as trying
+        to apply the wrong template, when it's strings instead of dicts!
+        '''
+        if isinstance(tool_calls, str):
+            tool_calls = json.loads(tool_calls)
+
+        normalized = []
+        for tool_call in tool_calls:
+            function = tool_call.get('function', tool_call)
+
+            arguments = function.get('arguments', {})
+            if isinstance(arguments, str):
+                arguments = json.loads(arguments or '{}')
+
+            normalized.append({
+                **tool_call,
+                'function': {
+                    **function,
+                    'arguments': arguments or {},
+                },
+            })
+
+        return normalized
+
+    for message in messages:
+        
+        if message.get('role') == 'tool':
+            final_messages.append({
+                'role': 'user',
+                'content': f"<tool_response>{message['content']}</tool_response>"
+            })  # tool-results already iterated so no need to iterate again
+        
+        elif message.get('role') == 'assistant':
+            qwen_turn = {
+                'role': 'assistant',
+                'content': message.get('content') or '',
+            }
+            if message.get('tool_calls'):
+                qwen_turn['tool_calls'] = normalize_tool_calls(message['tool_calls'])
+            final_messages.append(qwen_turn)
+
+        else:
+            final_messages.append(message)
+    
+    return final_messages
+
+
+def qwen3_5_legacy_messages_parser(messages: list[dict]) -> list[dict]:
+    '''
+    Prep the received messages obj for use with a model that follows the Qwen3.5 legacy spec.
+
+    HuggingFace's chat-template-playground for Qwen3.5/3.6 no longer shows this spec, but 
+    since it was the original spec it has been implemented here for reference purposes.
+    '''
+    final_messages = []
+
+    def get_tool_calls_string(tool_calls: list) -> str:
+        # Need to iterate as entire tool-calls list is passed by client
+        functions_list = []
+        for tool_call in tool_calls:
+            functions_list.append(tool_call['function'])
+        return "\n<|tool_call|>" + json.dumps(functions_list)
+
+    for message in messages:
+        
+        try:
+            if message.get('role') == 'assistant' and message.get('tool_calls'):
+                tool_calls_string = ""
+
+                if isinstance(message['tool_calls'], str):
+                    tool_calls_string = get_tool_calls_string(json.loads(message['tool_calls']))
+                
+                elif isinstance(message['tool_calls'], list):
+                    tool_calls_string = get_tool_calls_string(message['tool_calls'])
+
+                final_messages.append({
+                    'role': 'assistant',
+                    'content': (message.get('content') or '') + tool_calls_string
+                })
+            
+            elif message.get('role') == 'tool':
+                final_messages.append({
+                    'role': 'tool',
+                    'content': json.dumps({ 'name': message['name'], 'result': message['content'] })
+                })  # tool-results already iterated so no need to iterate again
+            
+            else:
+                final_messages.append(message)
+
+        except Exception as e:
+            print(
+                f'''
+                Error parsing message turn exchange, skipping. WARNING: Messages obj may be deformed 
+                and model performance may degrade.
+                Encountered error: {e}
+                For message: {message}
+                '''
+            )        
+            continue
+        
+    return final_messages
+
+
+def gemma4_messages_parser(messages: list[dict]) -> list[dict]:
+    '''
+    Prep the received messages obj for use with a model that follows the Gemma4 spec.
+
+    Reference:
+    https://ai.google.dev/gemma/docs/capabilities/text/function-calling-gemma4#developers_turn
+    '''
+    final_messages = []
+    idx = 0
+
+    while idx < len(messages):
+        message = messages[idx]
+
+        if message.get('role') == 'assistant' and message.get('tool_calls'):
+            gemma_tool_turn = {
+                'role': 'assistant',
+                'tool_calls': message['tool_calls'],
+                'tool_responses': []
+            }
+
+            idx += 1
+            while idx < len(messages) and messages[idx].get('role') == 'tool':
+                gemma_tool_turn['tool_responses'].append({
+                    'name': messages[idx]['name'],
+                    'response': messages[idx]['content']
+                })
+                idx += 1
+
+            final_messages.append(gemma_tool_turn)
+            continue
+
+        if message.get('role') != 'tool':
+            final_messages.append(message)
+
+        idx += 1
+
+    return final_messages
+
+
+MESSAGE_PARSER_MAPPING = {
+    'fallback': openai_completions_messages_parser,
+    'nvidia/Nemotron-Orchestrator-8B': qwen3_messages_parser,
+    'Qwen/Qwen3': qwen3_messages_parser,
+    'Qwen/Qwen3-Coder-Next': qwen3_messages_parser,
+    'Qwen/Qwen3.5': qwen3_messages_parser,
+    'Qwen/Qwen3.6': qwen3_messages_parser,
+    'google/gemma-4': gemma4_messages_parser
+}
+
+
+def parse_openai_completions_messages(messages: list[dict]) -> list[dict]:
+    model_id = read_config(['model_id'])['model_id']
+
+    parser = MESSAGE_PARSER_MAPPING.get(model_id, None)
+
+    if not parser:
+        '''
+        Allows the parser-mapping to be minimalistic:
+        'Qwen/Qwen3' can cover mapping of dozens of models,
+        while full names can be used for more specific mappings.
+        '''
+        llm_name_components = model_id.split('-')
+
+        for i in range(len(llm_name_components), 0, -1):
+            '''
+            We perform longest-to-shortest matching so that
+            'Qwen/Qwen3-Coder-Next' selection is not overridden 
+            by 'Qwen/Qwen3' selection.
+            '''
+            llm_family = '-'.join(llm_name_components[:i])
+            parser = MESSAGE_PARSER_MAPPING.get(llm_family, None)
+            if parser:
+                break
+
+    if not parser:
+        parser = MESSAGE_PARSER_MAPPING['fallback']
+
+    print(f"Using Parser: {parser.__name__}")
+
+    return parser(messages)
+
+
 @app.route('/v1/chat/completions', methods=['POST'])
 def openai_compatible_api():
     """
@@ -6014,10 +6269,12 @@ def openai_compatible_api():
         
         # OpenAI-compatible parameters
         messages = data.get('messages', [])
+        print(f"\nRaw Messages Before Parsing: {json.dumps(messages, indent=4)}\n")
+        data['messages'] = parse_openai_completions_messages(messages)
         tools = data.get('tools', None)
         tool_choice = data.get('tool_choice', 'auto')
-        print(f"\nOpenAI Messages: {json.dumps(messages, indent=4)}\n")
-        print(f"\nOpenAI Tools: {json.dumps(tools, indent=4)}\n")
+        print(f"\nOpenAI Messages After Parsing: {json.dumps(data['messages'], indent=4)}\n")
+        # print(f"\nOpenAI Tools: {json.dumps(tools, indent=4)}\n")
         model = data.get('model', 'auto').lower().strip()  # Can be used to force specific backend
         stream = data.get('stream', False)
         
