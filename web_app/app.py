@@ -5308,6 +5308,8 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                 'llama_cpp_verbose',
                 'llama_cpp_special_tokens_output',
                 'llama_cpp_reasoning_budget',
+                'llama_cpp_enable_thinking',
+                'llama_cpp_preserve_thinking',
                 'llama_cpp_dio',
                 'llama_cpp_main_gpu_index',
                 'llama_cpp_fit',
@@ -5363,7 +5365,12 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             '--parallel', str(read_return["llama_cpp_no_of_seqs_to_par_decode"]),
             '--jinja',
             '--host', read_return['llama_cpp_serving_url'],
-            '--port', str(read_return['llama_cpp_server_port'])
+            '--port', str(read_return['llama_cpp_server_port']),
+            '--chat-template-kwargs', 
+            json.dumps({
+                'enable_thinking': bool(read_return['llama_cpp_enable_thinking']),
+                'preserve_thinking': bool(read_return['llama_cpp_preserve_thinking'])
+            }, separators=(',', ':'))   # no spaces or other separators!
         ]
 
         if read_return['llama_cpp_alias'] and read_return['llama_cpp_alias'] != '':

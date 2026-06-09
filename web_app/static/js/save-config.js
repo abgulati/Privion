@@ -43,6 +43,8 @@ function getLlmConfig() {
             config.llama_cpp_repetition_penalty = parseFloat(document.getElementById('repetitionPenaltySlider').value);
             config.llama_cpp_presence_penalty = parseFloat(document.getElementById('presencePenaltySlider').value);
             config.llama_cpp_frequency_penalty = parseFloat(document.getElementById('frequencyPenaltySlider').value);
+            config.llama_cpp_enable_thinking = document.getElementById('LlamaCppEnableThinking').checked;
+            config.llama_cpp_preserve_thinking = document.getElementById('LlamaCppPreserveThinking').checked;
             config.llama_cpp_fit = document.getElementById('LlamaCppFit').checked;
             config.llama_cpp_fit_target = parseInt(document.getElementById('LlamaCppFitTarget').value);
             config.llama_cpp_fit_min_ctx = parseInt(document.getElementById('LlamaCppFitMinCtx').value);
@@ -438,6 +440,8 @@ function getHfWaitressConfig() {
         'awq': document.getElementById('hf_waitress_is_awq_yes').checked,
         'pipeline_task': document.getElementById('hf_waitress_pipeline_task_choice').value,
         'max_new_tokens': parseInt(document.getElementById('HfwMaxNewToks').value),
+        'enable_thinking': document.getElementById('HfwEnableThinking').checked,
+        'preserve_thinking': document.getElementById('HfwPreserveThinking').checked,
         'top_k': parseInt(document.getElementById('HfwTopkSlider').value),
         'top_p': parseFloat(document.getElementById('HfwToppSlider').value),
         'min_p': parseFloat(document.getElementById('HfwMinpSlider').value),

@@ -74,9 +74,10 @@ class ConversationState {
         // 1. HANDLE THE ASSISTANT MESSAGE
         if (toolResponseMode == "role_tool") {
             // Standard OpenAI: Null content
+            // See: https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
             this.messages['messages'].push({
                 role: 'assistant',
-                content: null,
+                content: plainText || "",
                 tool_calls: toolCalls
             });
         } else if (toolResponseMode == "user_tool_response_tag") {

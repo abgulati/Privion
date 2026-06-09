@@ -196,6 +196,8 @@ function loadCoreLarsConfig() {
         'llama_cpp_repetition_penalty',
         'llama_cpp_presence_penalty',
         'llama_cpp_frequency_penalty',
+        'llama_cpp_enable_thinking',
+        'llama_cpp_preserve_thinking',
         'azure_cv_free_tier',
         'skip_system_prompt',
         'force_re_extract',
@@ -279,6 +281,8 @@ function loadCoreHfConfig() {
         'pipeline_task',
         'max_new_tokens',
         'return_full_text',
+        'enable_thinking',
+        'preserve_thinking',
         'temperature',
         'do_sample',
         'top_k',
@@ -413,6 +417,8 @@ function initializeHfRadioButtons(all_values) {
 function setHfSlidersAndTextAreas(values) {
     document.getElementById('HfwHqqGroupSize').value = values.hqq_group_size;
     document.getElementById('HfwMaxNewToks').value = values.max_new_tokens;
+    document.getElementById('HfwEnableThinking').checked = values.enable_thinking;
+    document.getElementById('HfwPreserveThinking').checked = values.preserve_thinking;
     document.getElementById('HfwTempSlider').value = values.temperature;
     document.getElementById('HfwTempSliderValue').textContent = values.temperature;
     document.getElementById('HfwTopkSlider').value = values.top_k;
@@ -537,6 +543,8 @@ function setLlamaCppValues(values) {
     document.getElementById('presencePenaltySliderValue').textContent = values.llama_cpp_presence_penalty;
     document.getElementById('frequencyPenaltySlider').value = values.llama_cpp_frequency_penalty;
     document.getElementById('frequencyPenaltySliderValue').textContent = values.llama_cpp_frequency_penalty;
+    document.getElementById('LlamaCppEnableThinking').checked = values.llama_cpp_enable_thinking;
+    document.getElementById('LlamaCppPreserveThinking').checked = values.llama_cpp_preserve_thinking;
     document.getElementById('LlamaCppServingHost').value = values.llama_cpp_serving_url;
     document.getElementById('LlamaCppAccessUrl').value = values.llama_cpp_access_url;
     document.getElementById('LlamaCppServingPort').value = values.llama_cpp_server_port;

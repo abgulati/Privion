@@ -292,6 +292,8 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                 'llama_cpp_repetition_penalty':1.1,
                 'llama_cpp_presence_penalty':0.0,
                 'llama_cpp_frequency_penalty':0.0,
+                'llama_cpp_enable_thinking':False,
+                'llama_cpp_preserve_thinking':False,
                 'llama_cpp_server_timeout_seconds':3,
                 'llama_cpp_server_retry_attempts':200,
                 'hf_waitress_server_timeout_seconds':3,
