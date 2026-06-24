@@ -1,5 +1,44 @@
 
 
+function getToolsSchema() {
+    return fetch('/get_tools_schema')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.success) {
+                throw new Error('Failed to fetch tools schema: ' + data.error);
+            }
+            console.log("tools schema successfully fetched: ", data.tools_schema);
+            return data.tools_schema;
+        })
+        .catch(error => {
+            errorHandlerNoAlert("getting tools schema", "get-ToolsSchema()", "Error getting tools schema: " + error);
+            return null;
+        });
+}
+
+
+function executeTools(tool_calls, stream_session_id=null) {
+    return fetch('/execute_tools', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ 'tool_calls': tool_calls, 'stream_session_id': stream_session_id })
+    });
+}
+
+
+
+/**
+ * -----------------------------------------------------------------------------------------------------------------
+ * NOTE: EVERYTHING BELOW THIS POINT HAS BEEN MOVED TO THE hf_waitress.py FILE AS PART OF THE v1-chat-completion API
+ * AND IS NO LONGER USED IN THE FRONTEND. IT IS KEPT HERE FOR REFERENCE ONLY, AND MAY BE REMOVED IN THE FUTURE.
+ * -----------------------------------------------------------------------------------------------------------------
+*/
+
 function extractAssistantAnswerOnly(assistantMessageElement) {
     const llmResponseEl = assistantMessageElement.querySelector('.llm-response');
     if (!llmResponseEl) return '';
@@ -13,10 +52,11 @@ function extractAssistantAnswerOnly(assistantMessageElement) {
     return (clean.innerText || clean.textContent || '').trim();
 }
 
-function getMessagesObject(regeneration_request, regen_sequence_id) {
-    // TODO: Parse the chat-area to get the user and assistant messages, and return them as a single object in OpenAI API format:
+function getMessagesObject(regeneration_request, regen_sequence_id) { // LEGACY FUNCTION - 
+// USED PRIOR TO COMPLETION OF THE v1-chat-completion API (hf_waitress.py).
+    
     const sequenceId = regeneration_request ? regen_sequence_id : getSequenceId();
-    if (sequenceId == 0) {
+    if (sequenceId == 0) {s
         // raise an error
         errorHandlerNoAlert("getting messages object", "get-MessagesObject()", "No messages present in the chat-area to get the messages object from.");
         return;
@@ -53,29 +93,6 @@ function getMessagesObject(regeneration_request, regen_sequence_id) {
     console.log("Freshly generated messages object: ", messages_object);
     return messages_object;
 }
-
-
-function getToolsSchema() {
-    return fetch('/get_tools_schema')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (!data.success) {
-                throw new Error('Failed to fetch tools schema: ' + data.error);
-            }
-            console.log("tools schema successfully fetched: ", data.tools_schema);
-            return data.tools_schema;
-        })
-        .catch(error => {
-            errorHandlerNoAlert("getting tools schema", "get-ToolsSchema()", "Error getting tools schema: " + error);
-            return null;
-        });
-}
-
 
 
 const llmToExtractorMapping = new Map();
@@ -360,7 +377,9 @@ function fallbackToolsExtractor(fullResponseText) {
 }
 
 
-function extractToolCallsFromResponse(fullResponseText) {
+function extractToolCallsFromResponse(fullResponseText) {   // LEGACY FUNCTION - 
+// USED PRIOR TO COMPLETION OF THE v1-chat-completion API (hf_waitress.py).
+
     /**
      * Extracts tool calls from a text response containing <tool_call> tags.
      * Supports standard JSON or custom <function> XML formats.
@@ -401,17 +420,15 @@ function extractToolCallsFromResponse(fullResponseText) {
         return result;
 
     } catch (e) {
-        errorHandlerNoAlert("extracting tool calls from response", "extract-ToolCallsFromResponse()", "Error extracting tool calls from response: " + e.message);
+        errorHandlerNoAlert(
+            "extracting tool calls from response", "extract-ToolCallsFromResponse()",
+            "Error extracting tool calls from response: " + e.message
+        );
+        
         return { 'invoke_tools': false, 'tool_calls': null };
     }
 }
 
 
-function executeTools(tool_calls, stream_session_id=null) {
-    return fetch('/execute_tools', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ 'tool_calls': tool_calls, 'stream_session_id': stream_session_id })
-    });
-}
+
 
