@@ -1,3 +1,23 @@
+// Old single-turn tool execution cycle in executePrompt():
+
+// let { full_content, plain_text, invoke_tools, tool_calls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file, tools_schema);
+// totalContent += full_content;
+// if (invoke_tools == true) {
+//     traceManager.startStep("Executing Tools...");
+//     console.log("invoke_tools is true");
+//     const tool_execution_response = await executeTools(tool_calls, stream_session_id);
+//     const tool_execution_data = await tool_execution_response.json();
+//     const tool_result = tool_execution_data.tool_result_list;
+//     const toolResponseMode = document.getElementById('tool_response_mode').value;
+//     chatState.addToolExchange(plain_text, tool_calls, tool_result, toolResponseMode);
+//     traceManager.startStep("Fetching Follow-Up Response...");
+//     let { full_content: followUpFullContent, plain_text: followUpPlainText, invoke_tools: followUpInvokeTools, tool_calls: followUpToolCalls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file);
+//     chatState.addAssistantMessage(followUpPlainText);
+//     totalContent += followUpFullContent;
+// } else {
+//     chatState.addAssistantMessage(plain_text);
+// }
+
 function sendMessageAndProcessResponseStream() {
 
     document.getElementById('processingQnS').innerHTML = 'Reading documents...';
