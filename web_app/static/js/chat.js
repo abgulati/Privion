@@ -1,7 +1,8 @@
 
 
 function formatTabsAndSpaces(text, tabSize = 4) {
-    // Important to handle user-inputted ampersands so they're not confused with HTML entities such as &lt, &copy etc!
+    // Important to handle user-typed ampersands so they're not confused with 
+    // HTML entities such as &lt, &copy etc!
     text = text.replace(/&/g, '&amp;');
 
     // Replace each tab with tabSize number of &nbsp; nbsp - non-breaking space
@@ -51,8 +52,16 @@ function renderMarkdownWithThinkAndTools(markdown) {
         let m, last = 0, html = "";
         while ((m = re.exec(text)) !== null) {
         if (m.index > last) html += md.render(text.slice(last, m.index));
-        const inner = md.render(m[1] || "");    // m[1] is the content inside the <think> tags, and will skip the <think> & </think> tags themselves!
-        html += `<details class="llm-think"><summary>Reasoning</summary><div class="llm-think-body">${inner}</div></details>`;
+        const inner = md.render(m[1] || "");    // m[1] is the content inside the <think> tags, 
+        // and will skip the <think> & </think> tags themselves!
+        
+        html += `
+            <details class="llm-think">
+                <summary>Reasoning</summary>
+                <div class="llm-think-body">${inner}</div>
+            </details>
+        `;
+   
         last = re.lastIndex;
         }
         if (last < text.length) html += md.render(text.slice(last));
@@ -69,7 +78,8 @@ function renderMarkdownWithThinkAndTools(markdown) {
     //         html += renderWithThinkOnly(src.slice(idx, m.index));
     //     }
 
-    //     const toolCalls = [m[0] || ""];    // m[0] is the entire tool call string, including the <tool_call> and </tool_call> tags!
+    //     const toolCalls = [m[0] || ""];    // m[0] is the entire tool call string, 
+    //     // including the <tool_call> and </tool_call> tags!
     //     let end = toolRe.lastIndex;
 
     //     // Inner loop: consume adjacent tool calls
@@ -79,7 +89,12 @@ function renderMarkdownWithThinkAndTools(markdown) {
     //     }
 
     //     const toolsHtml = toolCalls.map(tc => md.render(tc)).join('');
-    //     html += `<details class="llm-tool-calls"><summary>Tool calls</summary><div class="llm-tool-calls-body">${toolsHtml}</div></details>`;
+    //     html += `
+    //     <details class="llm-tool-calls">
+    //         <summary>Tool calls</summary>
+    //         <div class="llm-tool-calls-body">${toolsHtml}</div>
+    //     </details>
+    //     `;
 
     //     idx = end;
 
@@ -131,7 +146,7 @@ function renderMarkdownWithThinkAndTools(markdown) {
         }
 
         // 3. Render the group
-        // If you want the tags to be visible as code/text, you might want to wrap in backticks or just render.
+        // If you want the tags to be visible as code/text, wrap them in backticks.
         // Assuming you want them rendered as part of the block:
         const toolsHtml = toolCalls.map(tc => md.render(tc)).join('\n');
         
@@ -192,13 +207,17 @@ function appendStreamChunkAndRender(responseContentID, chunk) {
     or any post-stream UI update (e.g., appending star-rating) updates the buffer
     after this timeout was queued., i.e., while the scheduled renderer is still pending!
 
-    Eg: The above is most likely to occur when a response stream from the LLM has just concluded, and so the scheduled renderer is still running,
-    but the handle-FetchedReferences method tries to append the star-rating element to the response content element and proceeds to call finalize-StreamRender()
-    In this case, while the state obj will be updated, as will the innerHTML of the response content element, the scheduled renderer will still render the stale buffer!
+    Eg: The above is most likely to occur when a response stream from the LLM has 
+    just concluded, and so the scheduled renderer is still running, but the 
+    handle-FetchedReferences method tries to append the star-rating element to the 
+    response content element and proceeds to call finalize-StreamRender().
+    In this case, while the state obj will be updated, as will the innerHTML of the 
+    response content element, the scheduled renderer will still render the stale buffer!
 
     Contract:
     - Never replace the state object in the Map; mutate its fields (buffer, scheduled).
-    - scheduled === true ⇒ exactly one pending timer. As in: while the flag is true, there is already one setTimeout queued; don’t queue another.
+    - scheduled === true ⇒ exactly one pending timer. As in: while the flag is true, 
+    there is already one setTimeout queued; don’t queue another.
 
     Throttle: 80ms (~12fps). Consider requestAnimationFrame if you want frame-sync.
     */
@@ -210,7 +229,11 @@ function appendStreamChunkAndRender(responseContentID, chunk) {
             const cur = streamState.get(sid);   // ensure we always render the newest buffer...
             const el = document.getElementById(responseContentID);
             if (cur && el) renderMarkdownInto(el, cur.buffer);
-            if (cur) cur.scheduled = false; // ... and then flip scheduled on the same, current state obj "to maintain the one-timer invariant": at any moment, there is at most one pending render timer per session.
+            
+            if (cur) cur.scheduled = false; // ... and then flip scheduled on the same, current 
+            // state obj "to maintain the one-timer invariant": at any moment, 
+            // there is at most one pending render timer per session.
+            
             handleAutoScroll(document.getElementById('chat-area'));
         }, 80); // ~12 FPS; tune as needed
     }
@@ -218,9 +241,12 @@ function appendStreamChunkAndRender(responseContentID, chunk) {
     /*
     ### Renderer explanation
     - `scheduled` is a per-session flag that prevents spawning multiple timers at once.
-    - It's a coalescing/throttling flag that ensures only one pending timer per session; this prevents overlapping renders and stale overwrites.
-    - “scheduled === true ⇒ exactly one pending timer” means: while the flag is true, there is already one setTimeout queued; don’t queue another.
-    - “one-timer invariant” is the rule we keep: at any moment, there is at most one pending render timer per session.
+    - It's a coalescing/throttling flag that ensures only one pending timer per session; 
+    this prevents overlapping renders and stale overwrites.
+    - “scheduled === true ⇒ exactly one pending timer” means: while the flag is true, 
+    there is already one setTimeout queued; don’t queue another.
+    - “one-timer invariant” is the rule we keep: at any moment, there is at most one 
+    pending render timer per session.
 
     ### How it works (step-by-step)
     1) A chunk arrives:
@@ -232,7 +258,8 @@ function appendStreamChunkAndRender(responseContentID, chunk) {
     - We do not queue more timers because `state.scheduled` is true.
 
     3) The timer fires:
-    - It re-reads the current state from the Map, renders the latest `buffer`, then sets `state.scheduled = false`.
+    - It re-reads the current state from the Map, renders the latest `buffer`, then sets 
+    `state.scheduled = false`.
 
     4) Next chunk after that:
     - Sees `scheduled` is false, so it queues the next single timer, and the cycle repeats.
@@ -243,10 +270,12 @@ function appendStreamChunkAndRender(responseContentID, chunk) {
 
     If we didn’t have `scheduled`:
     - Every chunk would start its own timer.
-    - Timers could fire in a tight cluster, re-rendering multiple times with intermediate buffers, and potentially clobbering UI.
+    - Timers could fire in a tight cluster, re-rendering multiple times with intermediate 
+    buffers, and potentially clobbering UI.
 
     Invariants in one sentence:
-    - Exactly one render timer pending per session at a time; when it fires, it clears the flag so the next burst can schedule the next single render.
+    - Exactly one render timer pending per session at a time; when it fires, it clears the 
+    flag so the next burst can schedule the next single render.
     */
 }
 
@@ -259,6 +288,7 @@ function finalizeStreamRender(responseContentID) {
 }
 
 // ###################---------------END OF LLM Markdown Rendering Pipeline---------------###################
+
 
 function hideWelcomeScreen() {
     const welcomeScreen = document.getElementById('welcome-screen');
@@ -291,12 +321,16 @@ function handleServiceSelectionMessage(llm_set_rag_config, traceManager) {
     
     if (llm_set_rag_config['do_rag'] && !llm_set_rag_config['perform_graph_rag']) {
         traceManager.startStep(
-            "The LLM has Elected to Use Search-Tools. Executing Tech Stack: RAG - Semantic & Lexical Search with Re-Ranking & Filtering..."
+            "The LLM has Elected to Use Search-Tools. " +
+            "Executing Tech Stack: RAG - Semantic & Lexical Search with Re-Ranking & Filtering..."
         );
 
     } else if (llm_set_rag_config['do_rag'] && llm_set_rag_config['perform_graph_rag']) {
         traceManager.startStep(
-            "The LLM has Elected to Use Deep Research Mode. Executing Tech Stack: RAG [Semantic & Lexical Search] + GraphRAG [In-Depth Analysis] with Re-Ranking & Filtering..."
+            "The LLM has Elected to Use Deep Research Mode. " +
+            "Executing Tech Stack: RAG [Semantic & Lexical Search] + " +
+            "GraphRAG [In-Depth Analysis] with Re-Ranking & Filtering..."
+       
         );
 
     } else if (llm_set_rag_config['butler_mode']) {
@@ -313,8 +347,24 @@ function handleServiceSelectionMessage(llm_set_rag_config, traceManager) {
 
 function handleAutoScroll(chatContainer) {
     const scrollThreshold = 100; //100px towards the bottom
-    const isNearBottom =  chatContainer.scrollHeight - chatContainer.clientHeight - chatContainer.scrollTop < scrollThreshold;   //by calculating this way, we're finding the difference between the total height of the chat area including the invisble part that's overflown (scrollHeight), the visible height of the chat area (clientHeight), and how far down the chat area has been scrolled (scrollTop). If less than the threshold, auto-scroll engages!
-    // For example: if the total height is 100px(scrollHeight), 70px is visible (clientHeight), scrollTop increases as we scroll down, so it's 0 at the top and at the very bottom, scrollTop will be equal to scrollHeight - clientHeight = 30px, so the math would equal to 0px and thus within the threshold!
+    const isNearBottom =
+        chatContainer.scrollHeight
+        - chatContainer.clientHeight
+        - chatContainer.scrollTop
+        < scrollThreshold;
+    /* 
+    By calculating this way, we're finding the difference between the total 
+    height of the chat area including the invisble part that's overflown 
+    (scrollHeight), the visible height of the chat area (clientHeight), and 
+    how far down the chat area has been scrolled (scrollTop). If less than 
+    the threshold, auto-scroll engages!
+    
+    For example: if the total height is 100px(scrollHeight), 
+    70px is visible (clientHeight), scrollTop increases as we scroll down, 
+    so it's 0 at the top and at the very bottom, scrollTop will be equal to 
+    scrollHeight - clientHeight = 30px, so the math would equal to 0px and 
+    thus within the threshold!
+    */
     if (isNearBottom) {
         //console.log("is scrolled to bottom")
         chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -339,10 +389,18 @@ function createUserMessageHTML(userInputForHtml){
             <div class="regenerate-menu">
                 <i class="fas fa-ellipsis-v"></i>
                 <div class="regenerate-menu-options">
-                    <span class="regenerate-menu-option regenerate-option">Regenerate Response</span>
-                    <span class="regenerate-menu-option regenerate-with-citations-enabled-option">Regenerate Response with Citations Force Enabled</span>
-                    <span class="regenerate-menu-option regenerate-with-citations-disabled-option">Regenerate Response with Citations Force Disabled</span>
-                    <span class="regenerate-menu-option delete-option">Delete</span>
+                    <span class="regenerate-menu-option regenerate-option">
+                        Regenerate Response
+                    </span>
+                    <span class="regenerate-menu-option regenerate-with-citations-enabled-option">
+                        Regenerate Response with Citations Force Enabled
+                    </span>
+                    <span class="regenerate-menu-option regenerate-with-citations-disabled-option">
+                        Regenerate Response with Citations Force Disabled
+                    </span>
+                    <span class="regenerate-menu-option delete-option">
+                        Delete
+                    </span>
                 </div>
             </div>
         </div>
@@ -358,15 +416,19 @@ function createUserMessageHTML(userInputForHtml){
     chatArea.appendChild(userMessageElement);
 
     /*
-    It's critical to create the HTML for both, the user query and the response container in append-ResponseContainerToChatArea() via appendChild() and not via innerHTML += because
-    in the latter case, the entire chat area is destroyed and recreated, as the browser browser doesn't just add the new element. It performs these steps:
+    It's critical to create the HTML for both, the user query and the response container in 
+    append-ResponseContainerToChatArea() via appendChild() and not via innerHTML += because
+    in the latter case, the entire chat area is destroyed and recreated, as the browser 
+    doesn't just add the new element. It performs the following steps:
         1. Reads the entire existing HTML of the chat-area into a string.
-        2. Appends your new HTML string to it.
-        3. Destroys all the old elements inside chat-area and replaces them by parsing the new, combined string from scratch.
+        2. Appends any new HTML strings to it.
+        3. Destroys all the old elements inside chat-area and replaces 
+        them by parsing the new, combined string from scratch.
     
-    This means that the original user-message element, which our traceManager is being attached to below, will be destroyed and recreated every time you add
-    the LLM's response container. The traceManager instance in memory will then be trying to add new trace items to a DOM element that no longer exists on the page, 
-    rendering it uselessly non-functional.
+    This means that the original user-message element, which our traceManager is being 
+    attached to below, will be destroyed and recreated every time you add the LLM's response 
+    container. The traceManager instance in memory will then be trying to add new trace 
+    items to a DOM element that no longer exists on the page, rendering it uselessly non-functional.
     
     And as noted in appendContentToResponse(), it's also highly inefficient!
     */
@@ -376,14 +438,20 @@ function createUserMessageHTML(userInputForHtml){
 
 function updateChatAreaWithUserInput(userInputForHtml) {
     /*
-    The uniqueId is used primarily to set the data-chat-id, data-sequence-id and data-stream-session-id attributes on 
-    the user-message element, by the methods immediately below.
-    Those methods leverage querySelector to find the user-message element by the uniqueId, and then set attributes on it.
-    For regeneration requests, these attributes are already set to the correct chat-id & stream-session-id, so they needen't be set again.
-    This is why appendChatIdToUserMessage() & appendStreamSessionIdToUserMessage() are only called if (!regeneration_request).
-    In other words, for regen requests, the uniqueID is irrelevant and not used, and instead the previously set stream-session-id is reused!
-    The old stream-session-id is obtained by a call to the prepareAttributeForUserMessage() method, which
-    is called by a click event listener set at DOM load by initializeRegenerateResponseButton().
+    The uniqueId is used primarily to set the data-chat-id, data-sequence-id and 
+    data-stream-session-id attributes on the user-message element, by the methods immediately below.
+    
+    Those methods leverage querySelector to find the user-message element by the uniqueId, and 
+    then set attributes on it. For regeneration requests, these attributes are already set to the 
+    correct chat-id & stream-session-id, so they needen't be set again. 
+    
+    This is why appendChatIdToUserMessage() & appendStreamSessionIdToUserMessage() are only called 
+    if (!regeneration_request).
+    
+    In other words, for regen requests, the uniqueID is irrelevant and not used, and instead the 
+    previously set stream-session-id is reused!
+    The old stream-session-id is obtained by a call to the prepareAttributeForUserMessage() method, 
+    which is called by a click event listener set at DOM load by initializeRegenerateResponseButton().
     */
     const uniqueId = createUserMessageHTML(userInputForHtml);
     appendLoadingAnimation();
@@ -414,7 +482,16 @@ function getUserInput() {
 }
 
 function shouldAppendContent(streamedContent) {
-    const excludeList = ['', '<|eot_id|>', '</s>', '<|im_end|>', '<|end_of_turn|>', '<|EOT|>', '|END_OF_TURN_TOKEN|>', '<|end|>'];
+    const excludeList = [
+        '',
+        '<|eot_id|>',
+        '</s>',
+        '<|im_end|>',
+        '<|end_of_turn|>',
+        '<|EOT|>',
+        '|END_OF_TURN_TOKEN|>',
+        '<|end|>'
+    ];
     return !excludeList.includes(streamedContent)
 }
 
@@ -425,21 +502,35 @@ function appendContentToResponse(responseContentID, content) {
 
     // document.getElementById(responseContentID).innerHTML += event.data;
                 
-    // 'innerHTML' is very inefficent to do repeatedly, as it doesn't simply append but rather re-parses & rebuilds the entire inner content every time! 
-    // Instead, using the DOM API as below to create & append elements is much more efficient as it manipulates the DOM by adding a new node, leaving existing nodes untouched. 
-    // This is also better from a security perspective as recreating DOM elements via innerHTML can be exploited for XSS!
+    /*
+    'innerHTML' is very inefficent to do repeatedly, as it doesn't simply append 
+    but rather re-parses & rebuilds the entire inner content every time! 
+    
+    Instead, using the DOM API as below to create & append elements is much more efficient 
+    as it manipulates the DOM by adding a new node, leaving existing nodes untouched. 
+    This is also better from a security perspective as recreating DOM elements via 
+    innerHTML can be exploited for XSS!
+    */
     let tempDiv = document.createElement('div');
     tempDiv.innerHTML = content;
 
-    // streaming response from LLM starts, begin appending to chat-area
-    // The while loop below is used to append all child nodes of tempDiv to responseContentElement. This is necessary because tempDiv.innerHTML = streamed_content creates a new div for each chunk of streamed content, so we need to append each child node individually.
-    while (tempDiv.firstChild) {
-        responseContentElement.appendChild(tempDiv.firstChild); // If we used appendChild() directly, it would only append the first child node, and the rest would be lost. And we'd end up with a new div for each chunk of streamed content, rather than appending the streamed content directly to responseContentElement.
-    }
+    // Streaming response from LLM starts, begin appending to chat-area:
+    
+    while (tempDiv.firstChild) {    // ...append all child nodes of tempDiv to responseContentElement
+        
+        responseContentElement.appendChild(tempDiv.firstChild); // If we used appendChild() directly, 
+        // it would only append the first child node, and the rest would be lost. We'd also end up with 
+        // a new div for each chunk of streamed content, rather than appending the streamed content 
+        // directly to responseContentElement.
+    }   
+    /*
+    While looping here is necessary because tempDiv.innerHTML = streamed_content creates a new div 
+    for each chunk of streamed content, so we need to append each child node individually.
+    */
 }
 
 
-function setupLLMResponse(
+function setupLLMResponse(  // LEGACY MODE FUNCTION - ONLY USED FOR REGRESSION TESTING
     userInput,
     file_attached,
     current_chat_id,
@@ -470,7 +561,8 @@ function setupLLMResponse(
 }
 
 
-function invokeTools(stream_session_id,
+function invokeTools(  // LEGACY MODE FUNCTION - ONLY USED FOR REGRESSION TESTING
+    stream_session_id,
     userInput,
     current_chat_id,
     llm_set_rag_config,
@@ -493,7 +585,7 @@ function invokeTools(stream_session_id,
 }
 
 
-async function handleToolUse(
+async function handleToolUse(  // LEGACY MODE FUNCTION - ONLY USED FOR REGRESSION TESTING
     stream_session_id,
     userInput,
     current_chat_id,
@@ -513,20 +605,33 @@ async function handleToolUse(
     );
     const invoke_tools_data = await invoke_tools_response.json();
     
-    const {reused_stream_session_id, tool_formatted_user_prompt, sequence_id, reconfirmed_server_type} = invoke_tools_data;
+    const {
+        reused_stream_session_id,
+        tool_formatted_user_prompt,
+        sequence_id,
+        reconfirmed_server_type
+    } = invoke_tools_data;
     
     setSequenceId(sequence_id);
     if (!regeneration_request) { appendSequenceIdToUserMessage(uniqueId, sequence_id); }
+    
     return {reused_stream_session_id, tool_formatted_user_prompt, reconfirmed_server_type};
 }
 
 
-function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, responseContentID, stream_session_id, sequence_id) {
+function appendResponseContainerToChatArea(
+    masterWrapperID,
+    responseWrapperID,
+    responseContentID,
+    stream_session_id,
+    sequence_id
+) {
     
-    // Not called again for regen requests, as the response container is already present in the chat area.
+    // Not called again for regen requests as response container is already present in the chat area.
     const chatArea = document.getElementById('chat-area');
     
-    // Create the new element without using innerHTML on the main chat area - SEE COMMENT IN create-UserMessageHTML() TO UNDERSTAND WHY!
+    // Create the new element without using innerHTML on the main chat area - 
+    // SEE COMMENT IN create-UserMessageHTML() TO UNDERSTAND WHY!
     const responseContainer = document.createElement('div');
     
     responseContainer.className = 'response-and-viewer-container';
@@ -540,7 +645,7 @@ function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, r
         </div>
     `;
 
-    // Append the new container. This does NOT destroy the existing user-message element and it's associated traceManager.
+    // Append the new container. Does NOT destroy the existing user-message element & it's assoc. traceManager.
     chatArea.appendChild(responseContainer);
 
     document.getElementById(responseWrapperID).style.display  = 'block';
@@ -548,9 +653,9 @@ function appendResponseContainerToChatArea(masterWrapperID, responseWrapperID, r
 }
 
 
-function handleSetupResponse(data) {
+function handleSetupResponse(data) {  // LEGACY MODE FUNCTION - ONLY USED FOR REGRESSION TESTING
 
-    // using object-destructuring (ES6-2015) to extract and set specific values from the data object in a single step!
+    // using object-destructuring (ES6-2015) to extract & set specific values from the data object in a single step!
     const {llm_set_rag_config, stream_session_id, formatted_user_prompt, sequence_id, server_type} = data;
     const {do_rag, perform_graph_rag, butler_mode} = llm_set_rag_config;
 
@@ -579,7 +684,15 @@ function handleSetupResponse(data) {
     }
     displayProcessingStatus('Generating...');
 
-    return { tool_use, llm_set_rag_config, stream_session_id, formatted_user_prompt, responseIDs, sequence_id, server_type };
+    return {
+        tool_use,
+        llm_set_rag_config,
+        stream_session_id,
+        formatted_user_prompt,
+        responseIDs,
+        sequence_id,
+        server_type
+    };
 }
 
 
@@ -598,7 +711,8 @@ function printErrorToChatArea(responseContentID, error_message) {
     
     console.error(userFriendlyErrorMessage);
     
-    // Use div instead of span. span is an inline element and markdown-it breaks it when it encounters newlines/blocks in the error message.
+    // Use div instead of span: span is an inline element and markdown breaks it when it encounters 
+    // newlines/blocks in the error message.
     let spannedErrorMessage = `<div class='chat-area-error-message'>${userFriendlyErrorMessage}</div>`;
     
     appendStreamChunkAndRender(responseContentID, spannedErrorMessage);
@@ -621,7 +735,7 @@ function setRequestDataAndHeaders(
     const requestData = coerceToObject(formattedPromptCopy, "openai completions request");
     if (tools_schema) { requestData.tools = tools_schema; }
     else delete requestData.tools;  
-    /*
+    /* NOTE ON ABOVE:
     Objects are passed by reference so appending tools to the passed object will make it 
     persistent even when `tools_schema` is null in a future call! So we create a copy of 
     the object and work on the copy.
@@ -740,24 +854,14 @@ async function fetchOpenAICompletionsStream(
 
     const url = getOpenAICompletionsUrl() + "/v1/chat/completions";
     
-    // let formattedPromptCopy = structuredClone(formattedPrompt);
-
-    // const requestData = coerceToObject(formattedPromptCopy, "openai completions request");
-    // if (tools_schema) { requestData.tools = tools_schema; }
-    // else delete requestData.tools; 
-    
-    // requestData.model = document.getElementById('modelDropdown').value;
-    // requestData.stream = true;
-    // requestData.temperature = parseFloat(document.getElementById('tempSlider').value);
-    // requestData.top_k = parseInt(document.getElementById('topkSlider').value);
-    // requestData.top_p = parseFloat(document.getElementById('toppSlider').value);
-    // requestData.min_p = parseFloat(document.getElementById('minpSlider').value);
-    // requestData.n_keep = parseInt(document.getElementById('nkeepSlider').value);
-    // requestData.repeat_penalty = parseFloat(document.getElementById('repetitionPenaltySlider').value);
-    // requestData.presence_penalty = parseFloat(document.getElementById('presencePenaltySlider').value);
-    // requestData.frequency_penalty = parseFloat(document.getElementById('frequencyPenaltySlider').value);
-
-    const { requestHeaders, requestBody } = setRequestDataAndHeaders(formattedPrompt, tools_schema, ...rest);
+    const {
+        requestHeaders,
+        requestBody
+    } = setRequestDataAndHeaders(
+        formattedPrompt,
+        tools_schema,
+        ...rest
+    );
 
     // console.log("OpenAI /completions requestBody: ", requestBody);
 
@@ -771,7 +875,10 @@ async function fetchOpenAICompletionsStream(
 
         scrollChatAreaToBottom();
 
-        const reader = response.body.getReader();   // To handle the Fetch API's 'Response' object when involving a ReadableStream.  By calling getReader(), a 'ReadableStreamDefaultReader' object is obtained
+        const reader = response.body.getReader();   // To handle the Fetch API's 'Response' 
+        // object when involving a ReadableStream. By calling getReader(), a 
+        // 'ReadableStreamDefaultReader' object is obtained
+        
         let full_content = '';  //String to accumulate content
         let plain_text = '';
         let receivedComplete = false;
@@ -780,13 +887,12 @@ async function fetchOpenAICompletionsStream(
         let reasoningContentFirstToken = true;
         let invoke_tools = false;
         
-        // We use an object/map to accumulate tools because indices might come out of order
-        // or interleaved (though usually sequential).
+        // We use an object/map to accumulate tools because indices might come out of 
+        // order or interleaved (though usually sequential)
         let accumulatedTools = {}; 
 
         // Function to process each text chunk
         async function processChunk() {
-            let partialData = '';   // Holds partially received JSON strings
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -795,8 +901,15 @@ async function fetchOpenAICompletionsStream(
                     break;
                 }
 
-                const textChunk = new TextDecoder("utf-8").decode(value);   //When reading a stream with 'ReadableStreamDefaultReader', Uint8Array binary-data objects are received. TextDecoder decodes these byte streams into human readable text strings. UTF-8 encodes all possible chars in Unicode, and is the std text encoding in most network comms, thus is used here.
-                const messages = textChunk.split('\n'); //one streamed data-message at a time, newlines are standard for seperating SSE-messages which may arrive bunched-up in chunks or partially
+                const textChunk = new TextDecoder("utf-8").decode(value);   // When reading a 
+                // stream with 'ReadableStreamDefaultReader', Uint8Array binary-data objects 
+                // are received. TextDecoder decodes these byte streams into human readable 
+                // text strings. UTF-8 encodes all possible chars in Unicode, and is the std 
+                // text encoding in most network comms, thus is used here.
+                
+                const messages = textChunk.split('\n'); // one streamed data-message at a time, 
+                // newlines are standard for seperating SSE-messages which may arrive 
+                // bunched-up in chunks or partially
                 
                 messages.forEach(message => {
                     if (message.startsWith('data: ')) {
@@ -805,7 +918,7 @@ async function fetchOpenAICompletionsStream(
                             loaderHidden = true;
                         }
                         
-                        const jsonStr = message.slice(6);   // remove 6 chars to get rid of the 'data: ' prefix!
+                        const jsonStr = message.slice(6); // remove 6 chars of the 'data: ' prefix
                         try {
                             if (jsonStr == '[DONE]') {
                                 receivedComplete = true;
@@ -832,7 +945,8 @@ async function fetchOpenAICompletionsStream(
                                     invoke_tools = true;
                                     append_to_plain_text = false;
 
-                                    // Iterate over the tool_calls in this chunk (usually just one, but spec allows array)
+                                    // Iterate over the tool_calls in this chunk 
+                                    // (usually just one, but spec allows arrays)
                                     delta.tool_calls.forEach((toolChunk) => {
                                         const index = toolChunk.index;
 
@@ -893,9 +1007,10 @@ async function fetchOpenAICompletionsStream(
             }
         }
 
-        await processChunk();   // processChunk() is an async-Fn and thus returns a promise. Here, via await, we pause execution until the promise is resolved or rejected.
+        await processChunk();   // processChunk() is an async-Fn and thus returns a promise. Here, 
+        // via await, we pause execution until the promise is resolved or rejected.
         
-        // Convert the accumulated object back to a standard Array for your return
+        // Convert the accumulated object back to a standard Array for return
         let tool_calls = Object.values(accumulatedTools);
         if (tool_calls.length > 0) {
             full_content += '<tool_call>' + JSON.stringify(tool_calls) + '</tool_call>';
@@ -917,7 +1032,12 @@ async function fetchOpenAICompletionsStream(
         return { full_content, plain_text, invoke_tools, tool_calls };
 
     } catch (error) {
-        errorHandlerNoAlert("fetching openai completions event-streaming response", "localhost:8080/completions", String(error));
+        errorHandlerNoAlert(
+            "fetching openai completions event-streaming response",
+            "localhost:8080/completions",
+            String(error)
+        );
+   
         return printErrorToChatArea(responseContentID, String(error));
     }
 }
@@ -930,9 +1050,13 @@ function createDownloadLinkForFile(filename) {
     
     downloadLink.href = `${hfWaitress_URL}/serve_uploaded_file/${filename}`;
     downloadLink.target = '_blank';
-    downloadLink.download = filename;   // HTML5 attribute that specifies that the linked resource should be downloaded when a user clicks on the hyperlink
+    downloadLink.download = filename;   // HTML5 attribute that specifies that the 
+    // linked resource should be downloaded when a user clicks on the hyperlink
     
-    downloadLink.innerHTML = `<i class="fa-solid fa-file-arrow-down"></i> ${filename} Appended to Conversation`;
+    downloadLink.innerHTML = `
+        <i class="fa-solid fa-file-arrow-down"></i> 
+        ${filename} Appended to Conversation
+    `;
     
     downloadLink.classList.add('plain-text-download-link-for-vision-appended-file');
     return downloadLink;
@@ -941,7 +1065,8 @@ function createDownloadLinkForFile(filename) {
 
 function createDownloadContainerForFile(filename) {
     
-    filename = secure_filename(filename);       // get secure filename similar to how it's done in Python - to prevent directory traversal attacks. secure_filename() is implemented in helper-functions.js
+    filename = secure_filename(filename);   // Implemented in helper-functions.js similar to 
+    // how it's done in Python - to prevent directory traversal attacks
     
     const downloadContainer = document.createElement('div');
     downloadContainer.classList.add('download-container-for-vision-appended-file');
@@ -951,7 +1076,9 @@ function createDownloadContainerForFile(filename) {
     
     downloadLink.href = `${hfWaitress_URL}/serve_uploaded_file/${filename}`;
     downloadLink.target = '_blank';
-    downloadLink.download = filename;   // HTML5 attribute that specifies that the linked resource should be downloaded when a user clicks on the hyperlink
+    downloadLink.download = filename;   // HTML5 attribute that specifies that the 
+    // linked resource should be downloaded when a user clicks on the hyperlink
+    
     downloadLink.classList.add('download-link-for-vision-appended-file');
 
     const iconContainer = document.createElement('div');
@@ -993,11 +1120,10 @@ async function fetchHfWaitressEventStream(
     let hfwHeaders = new Headers();
     let formdata = null;
     let rawBodyJSONStringified = null;
-    let formattedPromptCopy = structuredClone(formattedPrompt); // objects passed by reference so appending tools to the passed object will make it persistent even when tools_schema is null in a future call!
+    let formattedPromptCopy = structuredClone(formattedPrompt); // objects passed by reference so 
+    // appending tools to the passed object will make it persistent even when tools_schema is null in a future call!
 
     const vision = getVision();
-    const exl2 = getExl2();
-    const exl3 = getExl3();
     if (vision === "true") {
         console.log("Invoking vision_stream");
         
@@ -1016,71 +1142,8 @@ async function fetchHfWaitressEventStream(
         
         if (file) { formdata.append("file", file); }
 
-    } else if (exl2 === "true") {
-        console.log("Invoking exl2_stream");
-
-        const hfWaitress_URL = getHfwUrl();
-        url = `${hfWaitress_URL}/exl2_stream`;
-
-        hfwHeaders = new Headers();
-        hfwHeaders.append("Content-Type", "application/json");
-
-        const requestData = coerceToObject(formattedPromptCopy, "exl2 request");
-        if (tools_schema) requestData.tools = tools_schema;
-        else delete requestData.tools;
-
-        requestData.max_new_tokens = parseInt(document.getElementById('HfwMaxNewToks').value);
-        requestData.temperature = parseFloat(document.getElementById('HfwTempSlider').value);
-        requestData.top_k = parseInt(document.getElementById('HfwTopkSlider').value);
-        requestData.top_p = parseFloat(document.getElementById('HfwToppSlider').value);
-        
-        rawBodyJSONStringified = JSON.stringify(requestData);
-
-    } else if (exl3 === "true") {
-        console.log("Invoking exl3_stream");
-        
-        const hfWaitress_URL = getHfwUrl();
-        url = `${hfWaitress_URL}/exl3_stream`;
-
-        hfwHeaders = new Headers();
-        hfwHeaders.append("Content-Type", "application/json");
-
-        const requestData = coerceToObject(formattedPromptCopy, "exl3 request");
-        if (tools_schema) requestData.tools = tools_schema;
-        else delete requestData.tools;
-
-        requestData.max_new_tokens = parseInt(document.getElementById('HfwMaxNewToks').value);
-        requestData.temperature = parseFloat(document.getElementById('HfwTempSlider').value);
-        requestData.top_k = parseInt(document.getElementById('HfwTopkSlider').value);
-        requestData.top_p = parseFloat(document.getElementById('HfwToppSlider').value);
-        requestData.min_p = parseFloat(document.getElementById('HfwMinpSlider').value);
-        requestData.repeat_penalty = parseFloat(document.getElementById('HfwRepetitionPenaltySlider').value);
-        requestData.presence_penalty = parseFloat(document.getElementById('HfwPresencePenaltySlider').value);
-        requestData.frequency_penalty = parseFloat(document.getElementById('HfwFrequencyPenaltySlider').value);
-        
-        rawBodyJSONStringified = JSON.stringify(requestData);
-
     } else {
-        console.log("Invoking completions_stream");
-
-        const hfWaitress_URL = getHfwUrl();
-        url = `${hfWaitress_URL}/completions_stream`;
-
-        hfwHeaders = new Headers();
-        hfwHeaders.append("Content-Type", "application/json");
-
-        const requestData = coerceToObject(formattedPromptCopy, "completions request");
-        if (tools_schema) requestData.tools = tools_schema;
-        else delete requestData.tools;
-
-        requestData.max_new_tokens = parseInt(document.getElementById('HfwMaxNewToks').value);
-        requestData.temperature = parseFloat(document.getElementById('HfwTempSlider').value);
-        requestData.top_k = parseInt(document.getElementById('HfwTopkSlider').value);
-        requestData.top_p = parseFloat(document.getElementById('HfwToppSlider').value);
-        requestData.min_p = parseFloat(document.getElementById('HfwMinpSlider').value);
-        requestData.do_sample = document.getElementById('HfwTempSlider').value > 0 ? "True" : "False";
-        
-        rawBodyJSONStringified = JSON.stringify(requestData);
+        return printErrorToChatArea(responseContentID, "Vision is not enabled");
     }
     
     try {
@@ -1105,7 +1168,8 @@ async function fetchHfWaitressEventStream(
             document.getElementById(responseContentID).appendChild(downloadContainer);
         }
 
-        document.getElementById('chat-area').scrollTop = document.getElementById('chat-area').scrollHeight;     //Scroll to the bottom of the page
+        document.getElementById('chat-area').scrollTop = document.getElementById('chat-area').scrollHeight;     
+        // Scroll to the bottom of the page
 
         const hfwReader = hfwResponse.body.getReader();
         let full_content = '';
@@ -1136,13 +1200,16 @@ async function fetchHfWaitressEventStream(
                             loaderHidden = true;
                         }
 
-                        const payload = message.slice(6).trim();    // remove the 'data: ' prefix but keep the quoted string for JSON.parse to decode
+                        const payload = message.slice(6).trim();    // remove the 'data: ' prefix 
+                        // but keep the quoted string for JSON.parse to decode
+                        
                         let chunkText = "";
                         try{
-                            chunkText = JSON.parse(payload);    // payload is usually a quoted JSON string with escapes; JSON.parse decodes \n, \t, \uXXXX safely
-                        } catch {   // Fallback: strip outer quotes if present
+                            chunkText = JSON.parse(payload);    // payload is usually a quoted JSON 
+                            // string with escapes; JSON.parse decodes \n, \t, \uXXXX safely
+                        } catch {
                             chunkText = payload.replace(/^"/, '').replace(/"$/, '');
-                        }
+                        }   // Fallback: strip outer quotes if present
 
                         if (chunkText == "null") {
                             console.log("Stream Complete - Received null payload");
@@ -1170,13 +1237,22 @@ async function fetchHfWaitressEventStream(
         return { full_content, plain_text, invoke_tools, tool_calls};
 
     } catch (error) {
-        errorHandlerNoAlert("fetching event-streaming response", "fetchHfWaitressEventStream", String(error));
+        errorHandlerNoAlert(
+            "fetching event-streaming response",
+            "fetch-HfWaitressEventStream",
+            String(error)
+        );
+   
         return printErrorToChatArea(responseContentID, String(error));
     }
 
 }
 
-async function fetchHfwDiffusersEventStream(formattedPrompt, responseContentID, chatContainer) {
+async function fetchHfwDiffusersEventStream(
+    formattedPrompt,
+    responseContentID,
+    chatContainer
+) {
     
     const hfWaitress_URL = getHfwUrl();
     const url = `${hfWaitress_URL}/completions`;
@@ -1299,7 +1375,8 @@ function handleFetchedReferences(
     const latest_sequence_id = getSequenceId();
     const current_chat_id = data.chat_id;
 
-    const chatState_chat_id = document.getElementById('chatState').getAttribute('data-ongoing-chat-id');
+    const chatStateElement = document.getElementById('chatState');
+    const chatState_chat_id = chatStateElement.getAttribute('data-ongoing-chat-id');
     
     if (chatState_chat_id != current_chat_id) {
         console.log("Updating chatID in the InfoBox");
@@ -1311,7 +1388,12 @@ function handleFetchedReferences(
         }
     }
 
-    if (parseInt(latest_sequence_id) == 1 && document.querySelector(`.nav-item[data-chat-id="${getChatId()}"]`) == null) {
+    if (
+        parseInt(latest_sequence_id) == 1 &&
+        document.querySelector(
+            `.nav-item[data-chat-id="${getChatId()}"]`
+        ) == null
+    ) {
         
         const sidenav = document.getElementById('sidenav-content');
 
@@ -1335,7 +1417,11 @@ function handleFetchedReferences(
 
     const llm_star_rating_html_parts = [
         '<br>',
-        `<div class="star-rating" data-rated="False" data-rating-chat-id="${current_chat_id}" data-rating-sequence-id="${latest_sequence_id}">`,
+        `<div class="star-rating" 
+              data-rated="False" 
+              data-rating-chat-id="${current_chat_id}" 
+              data-rating-sequence-id="${latest_sequence_id}">`,
+   
         '<i class="far fa-star" data-rate="1"></i>',
         '<i class="far fa-star" data-rate="2"></i>',
         '<i class="far fa-star" data-rate="3"></i>',
@@ -1343,20 +1429,21 @@ function handleFetchedReferences(
         '<i class="far fa-star" data-rate="5"></i>',
         '</div>'
     ];  // Using array and join to avoid newline characters \n's appearing in the HTML output as breakline tags
-    const llm_star_rating_full_div = llm_star_rating_html_parts.join('');   // Join the array elements into a single string
+    const llm_star_rating_full_div = llm_star_rating_html_parts.join(''); // Join array elements into a single string
 
     const el = document.getElementById(responseContentID);
     const finalResponse = (data?.response && data.response.length > 0) ? data.response : el.innerHTML;
     /* Notes:
-        - data.get(...) won't work on JSON objects, and Map.get won't take a default, thus the above
-        - data?.response elegantly handles both “data might not exist” and “response might not exist,” yielding undefined instead of throwing.
-        - `?.` is called the "optional chaining operator" and is used to safely access properties of an object that might not exist.
-        - We could have also used "nullish coalescing operator" `??` E.g. `data?.response ?? el.innerHTML`
-        - `??` falls back to the right-hand side if the left-hand side is null or undefined, but not if it's false, 0, or an empty string
+    - data.get(...) won't work on JSON objects, and Map.get won't take a default, thus the above
+    - data?.response elegantly handles both “data might not exist” and “response might not exist,” yielding undefined instead of throwing.
+    - `?.` is called the "optional chaining operator" and is used to safely access properties of an object that might not exist.
+    - We could have also used "nullish coalescing operator" `??` E.g. `data?.response ?? el.innerHTML`
+    - `??` falls back to the right-hand side if the left-hand side is null or undefined, but not if it's false, 0, or an empty string
     */
     
-    // Never replace the state object, mutate it in place to prevent race conditions with any already-scheduled renders - just ensure...
-    let stateObj = streamState.get(stream_session_id);   // ...the scheduled renderer in append-StreamChunkAndRender() reads the latest state from the map!
+    // Never replace the state object, mutate it in place to prevent race conditions with any already-scheduled renders - 
+    // Just ensure the scheduled renderer in append-StreamChunkAndRender() reads the latest state from the map:
+    let stateObj = streamState.get(stream_session_id);   
     if (!stateObj) {
         stateObj = { buffer: '', scheduled: false };
         streamState.set(stream_session_id, stateObj);
@@ -1382,7 +1469,12 @@ function handleFetchedReferences(
     }
 }
 
-async function getReferences(params, responseContentID, masterWrapperID, user_message_html_unique_id) {
+async function getReferences(
+    params,
+    responseContentID,
+    masterWrapperID,
+    user_message_html_unique_id
+) {
     try {
         const response = await fetch('/get_references', {
             method: 'POST',
@@ -1398,7 +1490,11 @@ async function getReferences(params, responseContentID, masterWrapperID, user_me
         const data = await response.json();
 
         if (!data.success) {
-            throw new Error(`Internal Server Error: Check server-log and server command-line for more details. Error: ${data.error}`);
+            throw new Error(
+                "Internal Server Error: Check server-log and server command-line for more details. " +
+                "Error: " + data.error
+            );
+       
         }
 
         handleFetchedReferences(
@@ -1411,7 +1507,12 @@ async function getReferences(params, responseContentID, masterWrapperID, user_me
         );
 
     } catch (error) {
-        errorHandlerNoAlert("fetching relevant reference material", "get-References()", String(error));
+        errorHandlerNoAlert(
+            "fetching relevant reference material",
+            "get-References()",
+            String(error)
+        );
+   
         // return printErrorToChatArea(responseContentID, String(error));
     }
 }
@@ -1451,7 +1552,8 @@ function cleanTtsVoiceText(text) {
     ttsText = ttsText.replace(/https?:\/\/[^\s]+/g, '');
     // console.log("ttsText after removing https and http urls: ", ttsText);
 
-    // remove all special characters from ttsText, except for spaces, newlines, tabs, commas, question and exclamation marks, and periods
+    // remove all special characters from ttsText, except for spaces, newlines, tabs, 
+    // commas, question and exclamation marks, and periods
     ttsText = ttsText.replace(/[^a-zA-Z0-9\s\n\t\.,!?"']/g, '');
     console.log("Final ttsText for AudioContext to play TTS voice: ", ttsText);
     return ttsText;
@@ -1513,7 +1615,7 @@ async function fetchTTSVoice(text) {
 }
 
 
-async function requestFormattedPrompt(
+async function requestFormattedPrompt(  // LEGACY MODE FUNCTION - ONLY USED FOR REGRESSION TESTING
     regeneration_request=false, 
     regenerate_with_citations_force_enabled=false, 
     regenerate_with_citations_force_disabled=false, 
@@ -1523,16 +1625,19 @@ async function requestFormattedPrompt(
     initializePromptRequest();
 
     const current_chat_id = getChatId();
-    const {userInput, file} = getUserInput();
     
-    const userInputForHtml = regeneration_request ? userInput : formatTabsAndSpaces(userInput); // Old input need-not be re-formatted!
-    const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);  // The use of the uniqueId is explained in the docstring of update-ChatAreaWithUserInput().
+    const {userInput, file} = getUserInput(); // Old inputs need-not be re-formatted below
+    const userInputForHtml = regeneration_request ? userInput : formatTabsAndSpaces(userInput);
+
+    const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);  
+    // The use of the uniqueId is explained in the docstring of update-ChatAreaWithUserInput().
     
     const userMessageElement = regeneration_request 
         ? document.querySelector(`.user-message[data-stream-session-id="${regen_stream_session_id}"]`) 
         : document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
     
-    const traceManager = userMessageElement._traceManager;  // created and stored in the userMessageElement at time of create-UserMessageHTML()!
+    const traceManager = userMessageElement._traceManager;  
+    // ...created and stored in the userMessageElement at time of create-UserMessageHTML()
     
     if (regeneration_request) { 
         resetResponseAndViewerContainerWithStreamSessionId(regen_stream_session_id); 
@@ -1674,7 +1779,7 @@ async function executePrompt(
             regenerate_with_citations_force_disabled,
             regen_stream_session_id,
             regen_sequence_id
-        );  // must await so we don't simply return a promise immediately, rather wait for the request-FormattedPrompt() to complete!
+        );  // must await to avoid simply returning a promise immediately
     }
 
     console.log("MESSAGES_OBJECT at execute-Prompt() invocation: ", chatState.inspect());
@@ -1683,18 +1788,20 @@ async function executePrompt(
     const current_sequence_id = regeneration_request ? regen_sequence_id : incrementSequenceId();
     const current_chat_id = getChatId();
     
-    const {userInput, file} = getUserInput();
-    const userInputForHtml = regeneration_request ? userInput : formatTabsAndSpaces(userInput); // Old input need-not be re-formatted!
+    const {userInput, file} = getUserInput();   // Old inputs need-not be re-formatted below.
+    const userInputForHtml = regeneration_request ? userInput : formatTabsAndSpaces(userInput); 
     
     chatState.addUserMessage(userInputForHtml);
 
-    const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);  // uniqueId explainer: see updateChatAreaWithUserInput()
+    const uniqueId = regeneration_request ? getUniqueId() : updateChatAreaWithUserInput(userInputForHtml);  
+    // uniqueId explainer: see update-ChatAreaWithUserInput()
     
     const userMessageElement = regeneration_request 
         ? document.querySelector(`.user-message[data-stream-session-id="${regen_stream_session_id}"]`) 
         : document.querySelector(`.user-message[data-unique-id="${uniqueId}"]`);
     
-    const traceManager = userMessageElement._traceManager;  // created and stored in the userMessageElement at time of create-UserMessageHTML()!
+    const traceManager = userMessageElement._traceManager;  
+    // ...created and stored in the userMessageElement at time of create-UserMessageHTML()
     
     if (regeneration_request) { 
         resetResponseAndViewerContainerWithStreamSessionId(regen_stream_session_id); 
@@ -1759,7 +1866,9 @@ async function executePrompt(
             totalContent += full_content;
             
             if (invoke_tools == true) {
-                traceManager.startStep(`Executing Tools... iteration ${toolIteration + 1} of maximum ${MAX_TOOL_ITERATIONS} iterations`);
+                traceManager.startStep(
+                    `Executing Tools... iteration ${toolIteration + 1} of maximum ${MAX_TOOL_ITERATIONS} iterations`
+                );
                 
                 const tool_execution_response = await executeTools(tool_calls, stream_session_id);
                 const tool_execution_data = await tool_execution_response.json();
@@ -1792,25 +1901,6 @@ async function executePrompt(
                 totalContent += `\n\n${toolCapNotice}`;
         }
         
-
-        // let { full_content, plain_text, invoke_tools, tool_calls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file, tools_schema);
-        // totalContent += full_content;
-        // if (invoke_tools == true) {
-        //     traceManager.startStep("Executing Tools...");
-        //     console.log("invoke_tools is true");
-        //     const tool_execution_response = await executeTools(tool_calls, stream_session_id);
-        //     const tool_execution_data = await tool_execution_response.json();
-        //     const tool_result = tool_execution_data.tool_result_list;
-        //     const toolResponseMode = document.getElementById('tool_response_mode').value;
-        //     chatState.addToolExchange(plain_text, tool_calls, tool_result, toolResponseMode);
-        //     traceManager.startStep("Fetching Follow-Up Response...");
-        //     let { full_content: followUpFullContent, plain_text: followUpPlainText, invoke_tools: followUpInvokeTools, tool_calls: followUpToolCalls } = await fetchEventStream(getServerType(), chatState.getForAPI(), responseIDs.responseContentID, chatContainer, file);
-        //     chatState.addAssistantMessage(followUpPlainText);
-        //     totalContent += followUpFullContent;
-        // } else {
-        //     chatState.addAssistantMessage(plain_text);
-        // }
-        
         console.log("MESSAGES_OBJECT at get-References() invocation: ", chatState.inspect());
         
         const getReferencesParams = {
@@ -1836,7 +1926,7 @@ async function executePrompt(
         traceManager.completeCurrentStep();     // Complete final step
 
         if (document.getElementById('enable_tts').checked) { await fetchTTSVoice(totalContent); }   
-            // Not using getTts() here so simple checkbox change is enough, rather than a config save!
+            // Not using getTts() here to track live checkbox status, rather than config state
 
     } catch (error) {
 
@@ -1854,8 +1944,7 @@ async function executePrompt(
 }
 
 
-// Call sendMessage() if the user presses the 'Enter' key
-const maxRows = 11; // Replace this value with the maximum allowed number of rows you want
+const maxRows = 11; // Replace this value with the maximum desired number of rows
 const inputTextAreaElement = document.getElementById("user-input");
 const lineHeight = parseInt(window.getComputedStyle(inputTextAreaElement).lineHeight);
 const maxHeight = lineHeight * maxRows;
@@ -1866,7 +1955,8 @@ function autoAdjustHeight() {
     // Store the current scroll position
     const scrollPos = inputTextAreaElement.scrollTop;
     
-    // Temporarily set height to 'auto' - to measure the true height needed for the content in the textarea, we need to temporarily remove any height constraints!
+    // Temporarily set height to 'auto' - To measure the true height needed for the 
+    // content in the textarea, we need to temporarily remove any height constraints
     inputTextAreaElement.style.height = 'auto';
     
     // Calculate new height within bounds
@@ -1878,13 +1968,19 @@ function autoAdjustHeight() {
 
     inputTextAreaElement.scrollTop = inputTextAreaElement.scrollHeight;
     
-    // Restore scroll position - If the user has manually scrolled around the textarea, setting the height to auto would cause this position to be lost, so it's important to restore it!
+    // Restore scroll position - If the user has manually scrolled around the textarea, 
+    // setting the height to auto would cause this position to be lost, so it's 
+    // important to restore it after setting the height to auto:
     // inputTextAreaElement.scrollTop = scrollPos;
 }
 
 
 // Add input event listener for dynamic resizing:
-const debouncedAdjustHeight = debounce(autoAdjustHeight, 100);  // necessary to declare a const as this ensures only one instance of the debounced function is created, rather than creating a new instance on each call via `inputTextAreaElement.addEventListener('input', debounce(autoAdjustHeight, 70));`
+const debouncedAdjustHeight = debounce(autoAdjustHeight, 100);  // necessary to declare a 
+// const as this ensures only one instance of the debounced function is created, rather 
+// than creating a new instance on each call via 
+// `inputTextAreaElement.addEventListener('input', debounce(autoAdjustHeight, 70));`
+
 inputTextAreaElement.addEventListener('input', debouncedAdjustHeight);
 
 // Also handle paste events explicitly:
@@ -1910,7 +2006,8 @@ inputTextAreaElement.addEventListener("keydown", function(event) {
 
     if (!event.shiftKey && event.key == "Enter" && this.value.trim() !== "") {
         event.preventDefault();
-        if(!sendButton.disabled) {  //Only trigger a send event if the button is not disabled, i.e. another stream is in progress!
+        if(!sendButton.disabled) {  // Only trigger a send event if the button is 
+        // not disabled, i.e. another stream is in progress
             inputTextAreaElement.style.height = `${lineHeight}px`;
             currentHeight = lineHeight;
             executePrompt();
@@ -1924,9 +2021,10 @@ inputTextAreaElement.addEventListener("keydown", function(event) {
             currentHeight = potentialNewHeight;
         }
     } 
-    // else if (event.key === "Backspace" || event.key === "Delete") { //KeyDown, which used 8 for Backspace and 46 for Delete, is obsolete and deprecated!
-    //     // Let the deletion happen and let autoAdjustHeight handle the height adjustment
-    //     // We'll update currentHeight in the autoAdjustHeight function
+    // else if (event.key === "Backspace" || event.key === "Delete") { 
+    //      KeyDown, which used 8 for Backspace and 46 for Delete, is obsolete and deprecated!
+    //      Let the deletion happen and let autoAdjustHeight handle the height adjustment
+    //      We'll update currentHeight in the autoAdjustHeight function
     // }
 });
 
@@ -1957,48 +2055,56 @@ function removeTextAttachment() {
 
 textAttachmentRemoveBtn.addEventListener('click', removeTextAttachment);
 
-// Store user rating & update UI - confirm the associated route does not contain print() statements as the stdout is redirected during response generation!
+// Store user rating & update UI - confirm the associated route does not contain print() 
+// statements as the stdout is redirected during response generation.
 document.getElementById('chat-area').addEventListener('click', function(e) {
     if(e.target.classList.contains('fa-star')) {
         let starContainer = e.target.parentElement; // should be div class="star-rating"
-        // if(starContainer.getAttribute('data-rated') === "False") {
             
-            let rate = e.target.getAttribute('data-rate');
-            let chat_id = starContainer.getAttribute('data-rating-chat-id');
-            let sequence_id = starContainer.getAttribute('data-rating-sequence-id');
+        let rate = e.target.getAttribute('data-rate');
+        let chat_id = starContainer.getAttribute('data-rating-chat-id');
+        let sequence_id = starContainer.getAttribute('data-rating-sequence-id');
 
-            for(let i = 0; i < 5; i++) {
-                // reset star
-                starContainer.children[i].classList.remove('fas');
-                starContainer.children[i].classList.add('far');
+        for(let i = 0; i < 5; i++) {
+            // reset star
+            starContainer.children[i].classList.remove('fas');
+            starContainer.children[i].classList.add('far');
 
-                // fill star if rated
-                if(i < rate) {
-                    console.log("filling star-rating")
-                    starContainer.children[i].classList.remove('far');
-                    starContainer.children[i].classList.add('fas'); // This fills the star
-                }
+            // fill star if rated
+            if(i < rate) {
+                console.log("filling star-rating")
+                starContainer.children[i].classList.remove('far');
+                starContainer.children[i].classList.add('fas'); // This fills the star
             }
-            starContainer.setAttribute('data-rated', "True");
-            
-            let formData = new FormData();
-            formData.append('rating', rate);
-            formData.append('chat_id', chat_id);
-            formData.append('sequence_id', sequence_id);
-            // AJAX time:
-            fetch('/store_user_rating', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => { throw new Error(err.error)});
-                }
-            })
-            .catch(error => {
-                errorHandler("storing the user's rating", "/store_user_rating", String(error.message))
-            });
-        // }
+        }
+        starContainer.setAttribute('data-rated', "True");
+        
+        let formData = new FormData();
+        formData.append('rating', rate);
+        formData.append('chat_id', chat_id);
+        formData.append('sequence_id', sequence_id);
+        
+        fetch('/store_user_rating', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json()
+                    .then(err => {
+                        throw new Error(err.error);
+                    });
+           
+            }
+        })
+        .catch(error => {
+            errorHandler(
+                "storing the user's rating",
+                "/store_user_rating",
+                String(error.message)
+            );
+       
+        });
     }
 
     if(e.target.classList.contains('tool-chain-toggle')) {
