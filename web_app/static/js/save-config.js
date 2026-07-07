@@ -16,6 +16,9 @@ function getLlmConfig() {
         config.local_llm_server = document.getElementById('local_llm_server_select_dropdown').value;
         if (config.local_llm_server === "llama-cpp") {
             config.model_choice = document.getElementById('modelDropdown').value;
+            config.llama_cpp_spec_type = document.getElementById('SpecType').value;
+            config.llama_cpp_spec_draft_model = document.getElementById('SpecDraftModel').value;
+            config.llama_cpp_spec_draft_n_max = parseInt(document.getElementById('LlamaCppSpecDraftNMax').value);
             config.llama_cpp_use_gpu = document.getElementById('UseGpu').checked;
             config.llama_cpp_gpu_layers = parseInt(document.getElementById('NumbGpuLayers').value);
             config.llama_cpp_unified_kv_buffer = document.getElementById('UnifiedKvBuffer').checked;

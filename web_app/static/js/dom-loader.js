@@ -156,6 +156,9 @@ function loadCoreLarsConfig() {
         'min_lexical_similarity_threshold',
         'base_template',
         'vision_ocr_prompt',
+        'llama_cpp_spec_type',
+        'llama_cpp_spec_draft_model',
+        'llama_cpp_spec_draft_n_max',
         'llama_cpp_use_gpu',
         'llama_cpp_gpu_layers',
         'llama_cpp_fit',
@@ -505,6 +508,9 @@ function setLlamaCppCheckboxes(values) {
 
 
 function setLlamaCppValues(values) {
+    document.getElementById('SpecType').value = values.llama_cpp_spec_type;
+    document.getElementById('SpecDraftModel').value = values.llama_cpp_spec_draft_model;
+    document.getElementById('LlamaCppSpecDraftNMax').value = values.llama_cpp_spec_draft_n_max;
     document.getElementById('NumbGpuLayers').value = values.llama_cpp_gpu_layers;
     document.getElementById('LlamaCppWarmup').checked = values.llama_cpp_warmup;
     document.getElementById('LlamaCppAlias').value = values.llama_cpp_alias;
@@ -579,22 +585,37 @@ function initializeModelDropdown(model_choice) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            //console.log('model_choice:', model_choice);
-            const dropdown = document.getElementById('modelDropdown');
-            data.models.forEach(model => {
-                const option = document.createElement('option');
-                option.value = model;
-                option.textContent = model;
-                //console.log('Model:', model);
+            // //console.log('model_choice:', model_choice);
+            // const dropdown = document.getElementById('modelDropdown');
+            // data.models.forEach(model => {
+            //     const option = document.createElement('option');
+            //     option.value = model;
+            //     option.textContent = model;
+            //     //console.log('Model:', model);
 
-                if (typeof model !== 'undefined' && typeof model_choice !== 'undefined') {
-                    if (model.toLowerCase() == model_choice.toLowerCase()) {
-                        option.selected = true;
-                        //readGGUF(model);
-                    }
-                }
-                dropdown.appendChild(option);
-            });
+            //     if (typeof model !== 'undefined' && typeof model_choice !== 'undefined') {
+            //         if (model.toLowerCase() == model_choice.toLowerCase()) {
+            //             option.selected = true;
+            //             //readGGUF(model);
+            //         }
+            //     }
+            //     dropdown.appendChild(option);
+            // });
+
+            if (data.models && data.models.length > 0) {
+                populateDropDown(
+                    document.getElementById('modelDropdown'),
+                    data.models,
+                    model_choice
+                );
+            }
+            if (data.draftModels && data.draftModels.length > 0) {
+                populateDropDown(
+                    document.getElementById('SpecDraftModel'),
+                    data.draftModels,
+                    data.draftModelSelected
+                );
+            }
         } else {
             throw new Error('Internal Server Error: Check server-log and server command-line for more details.');
         }

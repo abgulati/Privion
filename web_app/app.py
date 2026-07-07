@@ -375,13 +375,17 @@ def config_writer_api():
 # Having set the values for the directories above, proceed to actually create them on disk IF they don't alread exist!
        
 try:
-    read_return = read_config(['model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 
-        'docs_to_knowledge_graph_dir', 'upload_staging_folder', 'graph_db_data_directory'])
+    read_return = read_config([
+        'model_dir', 'highlighted_docs', 'upload_folder', 'ocr_pdfs', 'pdfs_to_txts', 
+        'docs_to_knowledge_graph_dir', 'upload_staging_folder', 
+        'graph_db_data_directory', 'draft_models_dir'
+    ])
 except Exception as e:
-    handle_local_error("Could not read paths for app directories (model_dir, highlighted_docs, upload_folder, etc.) from config.json on boot, encountered error: ", e)
+    handle_local_error("Could not read paths for core app directories from config, encountered error: ", e)
 
 try:
     os.makedirs(read_return['model_dir'], exist_ok=True)
+    os.makedirs(read_return['draft_models_dir'], exist_ok=True)
     os.makedirs(read_return['highlighted_docs'], exist_ok=True)
     os.makedirs(read_return['upload_folder'], exist_ok=True)
     os.makedirs(read_return['ocr_pdfs'], exist_ok=True)
@@ -3212,20 +3216,27 @@ def store_to_chat_history_db(
 # Route for loading all models from model dir
 @app.route('/load_local_models')
 def load_local_models():
-
     try:
-        read_return = read_config(['model_dir'])
+        read_return = read_config(['model_dir', 'draft_models_dir', 'llama_cpp_spec_draft_model'])
         model_dir = read_return['model_dir']
+        draft_models_dir = read_return['draft_models_dir']
+        llama_cpp_spec_draft_model = read_return['llama_cpp_spec_draft_model']
     except Exception as e:
-        return handle_api_error("Missing model_dir in config.json for method load_local_models. Error: ", e)
+        return handle_api_error("Missing model_dir in config.json for method load-local_models. Error: ", e)
     
     try:
         models = [f for f in os.listdir(model_dir) if os.path.isfile(os.path.join(model_dir, f))]
+        draft_models = [f for f in os.listdir(draft_models_dir) if os.path.isfile(os.path.join(draft_models_dir, f))]
     except Exception as e:
         return handle_api_error("Could not load list of local models, encountered error: ", e)
         
     #print(f"locally available models: {models}")
-    return jsonify({'success': True, 'models': models})
+    return jsonify({
+        'success': True,
+        'models': models,
+        'draftModels': draft_models,
+        'draftModelSelected': llama_cpp_spec_draft_model
+    })
 
 
 @app.route('/gguf_reader', methods=['POST'])
@@ -5301,6 +5312,10 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             [
                 'model_dir',
                 'model_choice',
+                'draft_models_dir',
+                'llama_cpp_spec_type',
+                'llama_cpp_spec_draft_model',
+                'llama_cpp_spec_draft_n_max',
                 'llama_cpp_warmup',
                 'llama_cpp_alias',
                 'llama_cpp_misc_args',
@@ -5342,7 +5357,17 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             ]
         )
         llama_cpp_base_url = get_url_for_server('llama-cpp')
-        cpp_model = str(pathlib.Path(rf"{read_return['model_dir']}").resolve() / read_return['model_choice'])
+        cpp_model = str(
+            pathlib.Path(rf"{read_return['model_dir']}").resolve() / read_return['model_choice']
+        )
+
+        spec_draft_model = read_return.get('llama_cpp_spec_draft_model', '')
+        draft_model = None
+        if spec_draft_model and spec_draft_model != 'none':
+            draft_model = str(
+                pathlib.Path(rf"{read_return['draft_models_dir']}").resolve() / spec_draft_model
+            )
+
     except Exception as e:
         handle_local_error("Error with core configuration in config.json for llama.cpp server starter method: ", e)
 
@@ -5372,6 +5397,18 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                 'preserve_thinking': bool(read_return['llama_cpp_preserve_thinking'])
             }, separators=(',', ':'))   # no spaces or other separators!
         ]
+
+        spec_type = read_return.get('llama_cpp_spec_type', '')
+
+        if spec_type and spec_type != 'none':
+            llama_cpp_safe_launch_args.extend([
+                '--spec-type', str(spec_type),
+                '--spec-draft-n-max', str(read_return['llama_cpp_spec_draft_n_max'])
+            ])
+            if draft_model:
+                llama_cpp_safe_launch_args.extend([
+                    '--spec-draft-model', str(draft_model)
+                ])
 
         if read_return['llama_cpp_alias'] and read_return['llama_cpp_alias'] != '':
             llama_cpp_safe_launch_args.extend(['--alias', read_return['llama_cpp_alias']])

@@ -942,6 +942,40 @@
                                                                 <td class="settings_table_setting_description">Special tokens output enabled [default: false]</td>
                                                                 <td class="settings_table_setting_value"><input type="checkbox" id="LlamaCppSpecialTokensOutput" name="LlamaCppSpecialTokensOutput" style="margin-left: 7px;"></td>
                                                             </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_spec_type">
+                                                                <td class="settings_table_setting_name">--spec-type</td>
+                                                                <td class="settings_table_setting_description"> Enable Multi-Token Prediction (MTP): MTP supercharges tokens/sec throughput by enabling a large model to utilize 
+                                                                    a smaller draft model to quickly predict next token candidates, which the base model then simply verifies. This is also known as 'speculative decoding', or 
+                                                                    "specdec" for short, and requires a compatible model and runtime</td>
+                                                                <td class="settings_table_setting_value">
+                                                                    <select class="modal-selects" id="SpecType">
+                                                                        <option value="none">none (Default)</option>
+                                                                        <option value="draft-mtp">draft-mtp</option>
+                                                                        <option value="draft-simple">draft-simple</option>
+                                                                        <option value="draft-eagle3">draft-eagle3</option>
+                                                                        <option value="ngram-simple">ngram-simple</option>
+                                                                        <option value="ngram-map-k">ngram-map-k</option>
+                                                                        <option value="ngram-map-k4v">ngram-map-k4v</option>
+                                                                        <option value="ngram-mod">ngram-mod</option>
+                                                                        <option value="ngram-cache">ngram-cache</option>
+                                                                    </select>
+                                                                </td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_spec_draft_model">
+                                                                <td class="settings_table_setting_name">--spec-draft-model</td>
+                                                                <td class="settings_table_setting_description">Model to use for speculative decoding (default: Self-MTP (Built-in))</td>
+                                                                <td class="settings_table_setting_value">
+                                                                    <select class="modal-selects" id="SpecDraftModel">
+                                                                        <option value="none">Self-MTP (Built-in) (Default)</option>
+                                                                        <!--Add options here via JS-->
+                                                                    </select>
+                                                                </td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_spec_draft_n_max">
+                                                                <td class="settings_table_setting_name">--spec-draft-n-max</td>
+                                                                <td class="settings_table_setting_description">Number of tokens to draft for speculative decoding (default: 3)</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="LlamaCppSpecDraftNMax" name="LlamaCppSpecDraftNMax" min="1" class="settings-input-fields" value="3"></td>
+                                                            </tr>
                                                             <tr class="settings-table-row" id="llama_cpp_reasoning_budget">
                                                                 <td class="settings_table_setting_name">--reasoning-budget</td>
                                                                 <td class="settings_table_setting_description">Controls the amount of thinking allowed; currently only one of: -1 for unrestricted thinking budget, or 0 to disable thinking [default: -1]</td>

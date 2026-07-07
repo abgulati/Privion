@@ -461,22 +461,31 @@ document.getElementById('uploadLlm').addEventListener('change', function (event)
                             .then(data => {
                                 if (data.success) {
 
-                                    const dropdown = document.getElementById('modelDropdown');
-                                    dropdown.innerHTML = '';
-                                    data.models.forEach(model => {
-                                        const option = document.createElement('option');
-                                        option.value = model;
-                                        option.textContent = model;
-                                        //console.log('Model:', model);
+                                    // const dropdown = document.getElementById('modelDropdown');
+                                    // dropdown.innerHTML = '';
+                                    // data.models.forEach(model => {
+                                    //     const option = document.createElement('option');
+                                    //     option.value = model;
+                                    //     option.textContent = model;
+                                    //     //console.log('Model:', model);
 
-                                        if (typeof model !== 'undefined' && typeof model_choice !== 'undefined') {
-                                            if (model.toLowerCase() == model_choice.toLowerCase()) {
-                                                option.selected = true;
-                                            }
-                                        }
-                                        dropdown.appendChild(option);
-                                    });
+                                    //     if (typeof model !== 'undefined' && typeof model_choice !== 'undefined') {
+                                    //         if (model.toLowerCase() == model_choice.toLowerCase()) {
+                                    //             option.selected = true;
+                                    //         }
+                                    //     }
+                                    //     dropdown.appendChild(option);
+                                    // });
 
+                                    if (data.models && data.models.length > 0) {
+                                        const dropdown = document.getElementById('modelDropdown');
+                                        dropdown.innerHTML = '';
+                                        populateDropDown(
+                                            dropdown,
+                                            data.models,
+                                            model_choice
+                                        );
+                                    }
                                     cleanupUpload();
                                 
                                 } else {
