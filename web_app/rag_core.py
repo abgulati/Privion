@@ -1071,7 +1071,7 @@ def search_searxng(user_query:str, category:str='general') -> list[Document]:
             'categories': category,
             'language': 'auto'
         }
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=20)
         results = response.json().get('results', [])
 
         if not results:
