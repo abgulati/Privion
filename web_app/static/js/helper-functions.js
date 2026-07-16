@@ -1752,3 +1752,21 @@ function handleHfWaitressShutdown(server_to_shutdown) {
         hideStreamSpinner();
     });
 }
+
+
+function populateDropDown(dropdown, list, selectedItem) {
+    if (dropdown === null || list === null) {
+        throw new Error('Cannot populate dropdown: dropdown or list is null');
+    }
+
+    list.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item;
+        option.textContent = item;
+
+        if (selectedItem && item.toLowerCase() == selectedItem.toLowerCase()) {
+            option.selected = true;
+        }
+        dropdown.appendChild(option);
+    });
+}
