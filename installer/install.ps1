@@ -41,9 +41,9 @@ Write-Host "    - [OK] PyTorch installed." -ForegroundColor Green
 
 
 # ---------------------------------------------------------
-# Install Flash-Attention 2
+# Install Flash-Attention 2 & Flash-Linear-Attention
 # ---------------------------------------------------------
-Write-Host "    - [4] Installing Flash-Attention 2..." -ForegroundColor Yellow
+Write-Host "    - [4] Installing Flash-Attention 2 & Flash-Linear-Attention..." -ForegroundColor Yellow
 
 Write-Host "      > Verifying Ninja installation... (ninja --version)..." -ForegroundColor Yellow
 try {
@@ -108,7 +108,12 @@ try{
     }
 }
 
-Write-Host "    - [OK] Flash-Attention 2 installed." -ForegroundColor Green
+try{
+    pip install flash-linear-attention --no-deps --no-build-isolation
+    Write-Host "    - [OK] Flash-Attention 2 & Flash-Linear-Attention installed." -ForegroundColor Green
+} catch {
+    Write-Host "      > Error installing Flash-Linear-Attention: $_" -ForegroundColor Yellow
+}
 
 
 # ---------------------------------------------------------
@@ -231,7 +236,7 @@ Write-Host "    - [OK] ExLlamaV2 installed." -ForegroundColor Green
 
 Write-Host "    - [9] Installing ExLlamaV3..." -ForegroundColor Yellow
 if (-not (Test-Path "exllamav3")) {
-    git clone -b v0.0.20 https://github.com/turboderp-org/exllamav3.git
+    git clone https://github.com/turboderp-org/exllamav3.git
 }
 pip install ./exllamav3 --no-build-isolation
 Write-Host "    - [OK] ExLlamaV3 installed." -ForegroundColor Green
