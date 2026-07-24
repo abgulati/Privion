@@ -19,7 +19,9 @@ from googleapiclient.http import MediaIoBaseDownload
 from falkordb import FalkorDB
 import chromadb
 
-from pdf2image import convert_from_path # accepts `pdf_path` param as either a String or PurePath. Can directly pass pathlib.Path as it's a subclass of PurePath!
+from pdf2image import convert_from_path 
+# accepts `pdf_path` param as either a String or PurePath. 
+# Can directly pass pathlib.Path as it's a subclass of PurePath!
 
 from urllib.parse import urlparse, parse_qs
 from urlextract import URLExtract
@@ -35,7 +37,7 @@ import logging
 import pathlib
 import sqlite3
 import PyPDF2
-import shutil   # Shell Utilities is part of Python's standard library and is used for file operations
+import shutil   # Shell Utilities is part of Python's stdlib & is used for file ops
 import signal
 import queue
 import uuid
@@ -80,7 +82,11 @@ try:
 
     from docling_core.types.doc import ImageRefMode
 except Exception as e:
-    print(f"Could not import Docling OCR, skipping. If not installed, please run `pip install docling`. Encountered error: {e}")
+    print(
+        'Could not import Docling OCR, skipping. '
+        'If not installed, please run `pip install docling`. '
+        f'Encountered error: {e}'
+    )
 
 try:
     from azure.cognitiveservices.vision.computervision import ComputerVisionClient
@@ -90,17 +96,27 @@ try:
     from azure.core.exceptions import HttpResponseError
     import azure.ai.vision as sdk
 except Exception as e:
-    print(f"Could not import Azure libraries for ComputerVision & Document-Intelligence OCR. WARNING: These services will not work, use a local OCR service instead. Encountered error: {e}")
+    print(
+        'Could not import Azure libraries for ComputerVision & Document-Intelligence OCR. '
+        'WARNING: These services will not work, use a local OCR service instead. '
+        f'Encountered error: {e}'
+    )
 
 try:
     from graph_clustering import apply_leiden_clustering
 except Exception as e:
-    print(f"Could not import graph_clustering (likely not installed), skipping. Encountered error: {e}")
+    print(
+        'Could not import graph_clustering (likely not installed), skipping. '
+        f'Encountered error: {e}'
+    )
 
 try:
     import prompt_formatting as prompt_formatting_module
 except ImportError:
-    print("WARNING: Prompt Formatter module `prompt_formatting.py` is not present. Skipping import. Exl2 and llama.cpp will not work!")
+    print(
+        'WARNING: Prompt Formatter module `prompt_formatting.py` is not present. '
+        'Skipping import. Exl2 and llama.cpp will not work if using legacy mode!'
+    )
 
 try:
     import utils
@@ -121,9 +137,16 @@ try:
     from kokoro import KPipeline
     import soundfile as sf
 except Exception as e:
-    print(f"Could not import necessary modules for Kokoro 82M TTS pipeline, encountered error: {e}")
+    print(
+        'Could not import necessary modules for Kokoro 82M TTS pipeline, '
+        f'encountered error: {e}'
+    )
 
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Allow insecure traffic - Needed to bypass HTTPS requirement for Google Drive OAuth. FOR DEV USE ONLY! SWITCH TO SELF-SIGNED CERTIFICATES & HTTPS FOR PRODUCTION!
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+'''
+Note: Allow insecure traffic - Needed to bypass HTTPS requirement for Google Drive OAuth. 
+This is for DEV USE ONLY! SWITCH TO SELF-SIGNED CERTIFICATES & HTTPS FOR PRODUCTION!
+'''
 
 app = Flask(__name__)
 CORS(app)
@@ -133,7 +156,6 @@ CORS(app)
 def index():
     return render_template('chat.html')
 
-# model_selection.html triggers window.location.href to '/chat', which triggers this route, which loads the chat.html template at the end!
 @app.route('/chat')
 def chat():
     return render_template('chat.html')
@@ -145,8 +167,9 @@ def load_file():
 
 @app.route('/download/<filename>')
 def download_file(filename):
-    # return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
-    return send_from_directory(app.config['DOWNLOAD_FOLDER'], filename, as_attachment=False, mimetype='application/pdf')
+    return send_from_directory(
+        app.config['DOWNLOAD_FOLDER'], filename, as_attachment=False, mimetype='application/pdf'
+    )
 
 @app.route('/pdf/<filename>')
 def pdf_viewer(filename):
@@ -155,7 +178,9 @@ def pdf_viewer(filename):
 
 
 #########################------------------GLOBALS!----------------------###############################
-LLAMA_CPP_PROCESS = None   #  used in llama-cpp_server_starter and hf-waitress_server_starter, primary purpose is to manage the termination of the llama.cpp server process
+LLAMA_CPP_PROCESS = None   #  used in llama-cpp_server_starter and hf-waitress_server_starter
+# Primary purpose is to manage the termination of the llama.cpp server process
+
 LLM_CHANGE_RELOAD_TRIGGER_SET = False   # set in config.json and used in llama-cpp_server_starter
 ASR_CHANGE_RELOAD_TRIGGER_SET = False   # set in config.json and used in asr-server_starter
 
@@ -203,7 +228,10 @@ def _early_resolve_base_and_config():
             base = boot.get('base_directory', base)
             cfg_path = boot.get('config_path', cfg_path)
         except Exception as e:
-            print(f"Could not read storage_config.json, defaulting to base dir: {base}. Encountered error: {e}")
+            print(
+                f'Could not read storage_config.json, defaulting to base dir: {base}. '
+                f'Encountered error: {e}'
+            )
 
     try:
         os.makedirs(base, exist_ok=True)
@@ -214,33 +242,43 @@ def _early_resolve_base_and_config():
 
 BASE_DIRECTORY, CONFIG_PATH, BOOTSTRAP_PATH = _early_resolve_base_and_config()
 
-# Create real config if missing - no error handling as an exception should stop execution
+# Create real config if missing - No error handling as exceptions should halt execution.
 if not os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, 'w') as file:
         json.dump({}, file, indent=4)
 
 # Update config with base_directory
 try:
-    with open(CONFIG_PATH, 'r+') as file:   # Unlike w, r+ allows updates without overwriting the whole file, but requires seek & truncation alongside the dump!
-        config = json.load(file)
+    with open(CONFIG_PATH, 'r+') as file:   # 
         '''
-        TODO: `if config.get('base_directory') != BASE_DIRECTORY:`, then move contents of old dir to new dir! 
+        Unlike w, r+ allows updates without overwriting the whole file, 
+        but requires seek, to move the file-pointer back to the start of 
+        the file before writing, and truncation to remove the original data.
+
+        TODO: `if config.get('base_directory') != BASE_DIRECTORY:`, 
+        then move contents of old dir to new dir! 
         Invoke: `_move_contents_of_old_dir_to_new_dir(old_dir, new_dir)`
         Verify if referencing system can handle moves first!
         '''
+        config = json.load(file)
         config['base_directory'] = BASE_DIRECTORY
-        file.seek(0)    # move file-pointer back to the start of the file before writing!
+        file.seek(0)
         json.dump(config, file, indent=4)
-        file.truncate()    # truncate the file in case new config data is shorter than the original data! Eg: 'very_long_dir_name' -> 'short_dir_name'!
+        file.truncate()
+
 except Exception as e:
     print(f"Could not read config.json, encountered error: {e}")
 
-# If the file doesn't exist (first-run), write defaults. On subsequent runs, simply write-back to security_config.json,
+# If the file doesn't exist (first-run), write defaults. 
+# On subsequent runs, simply write-back to storage_config.json,
 # which serves as a confirmation mechanism of the paths set.
-# Users can move locations by simply editing the single base_dir knob in security_config.json
+# Users simply edit base_dir in storage_config.json to move.
 try:
     with open(BOOTSTRAP_PATH, 'w') as file:
-        json.dump({'base_directory': str(pathlib.Path(BASE_DIRECTORY).resolve()), 'config_path': str(pathlib.Path(CONFIG_PATH).resolve())}, file, indent=4)
+        json.dump({
+                'base_directory': str(pathlib.Path(BASE_DIRECTORY).resolve()),
+                'config_path': str(pathlib.Path(CONFIG_PATH).resolve())
+            },file,indent=4)
 except Exception as e:
     print(f"Could not write bootstrap storage_config.json, encountered error: {e}")
 
@@ -267,7 +305,7 @@ try:
     formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
     handler.setFormatter(formatter)
 
-    # 4 - Add the handler to the logger for final LOGGER - Usage: LOGGER.error(f"This is an error message with error {e}")
+    # 4 - Add the handler to the logger for final LOGGER - Usage: LOGGER.error(f"Error: {e}")
     LOGGER.addHandler(handler)
 except Exception as e:
     print(f"\n\nCould not establish logger, encountered error: {e}")
@@ -294,7 +332,9 @@ def handle_api_error(message:str, exception:Exception=None):
 
 def handle_local_error(message:str, exception:Exception=None):
     _ = central_error_logging(message, exception)
-    raise Exception(exception)
+    if exception:
+        raise  # preserves the original error & traceback
+    raise RuntimeError(message)
 
 
 def handle_error_no_return(message:str, exception:Exception=None):
@@ -305,27 +345,21 @@ def handle_error_no_return(message:str, exception:Exception=None):
 
 from privion_config_concierge import read_config, write_config, read_hf_config, safe_write_config
 
-# Method for API route to read from config.json
-# Deviates from typical RESTful principals to use a POST call to fetch values but practical & justifyable because we:
-# 1. Do not want to make the URL huge with a ever-growing list of query-params 2. Do not wish to expose values via query-params
 @app.route('/config_reader_api', methods=['POST'])
-def config_reader_api():
-    # keys = request.args.getlist('keys') # Assuming keys are passed as query parameters
-    
+def config_reader_api():    
     try:
-        keys = request.json.get('keys', []) # Could also do keys = request.json['keys'] but this way we can provide a default list should 'keys' be missing!
+        keys = request.json['keys']
     except Exception as e:
-        return handle_api_error("Server-side error - could not read keys for config_reader_api request. Encountered error:", e)
+        return handle_api_error("Request error - could not read keys from config_reader_api request body:", e)
 
     try:
         values = read_config(keys)  # send list of keys, get dict of key:values
     except Exception as e:
-        return handle_api_error("Server-side error - could not read keys from config.json. Encountered error: ", e)
+        return handle_api_error("Server-side error - could not read keys from config.json: ", e)
     
     return jsonify(success=True, values=values)
 
 
-# Method for API route to write to config.json
 @app.route('/config_writer_api', methods=['POST'])
 def config_writer_api():
 
@@ -333,7 +367,7 @@ def config_writer_api():
         config_updates = request.json['config_updates']
         print(f"config_updates for config_writer_api: {config_updates}")
     except Exception as e:
-        return handle_api_error("Server-side error - could not read values for config_writer_api request. Encountered error: ", e)
+        return handle_api_error("Request error - could not read config_writer_api request body: ", e)
     
     try:
         write_return = write_config(config_updates)
@@ -351,9 +385,13 @@ def config_writer_api():
             ASR_CHANGE_RELOAD_TRIGGER_SET = True
 
     except Exception as e:
-        return handle_api_error("Server-side error - could not write keys to config.json. Encountered error: ", e)
+        return handle_api_error("Server-side error - could not write to config.json: ", e)
     
-    return jsonify({"success": write_return['success'], "restart_required": write_return['restart_required'], "reload_asr": write_return['reload_asr']})
+    return jsonify({
+        "success": write_return['success'],
+        "restart_required": write_return['restart_required'],
+        "reload_asr": write_return['reload_asr']
+    })
 
 ############################----------------------------------------------###############################
 
@@ -7319,15 +7357,12 @@ def get_references():
     return jsonify({'success': True, 'response': llm_response_with_citation_links, 'pdf_frame':pdf_section_html, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
 
 
-def parse_arguments():
+def parse_arguments() -> argparse.ArgumentParser:
 
     try:
         parser = argparse.ArgumentParser(description="Server for HuggingFace Transformers models")
-    except Exception as e:
-        handle_local_error("Could not create parser to parse_arguments(), proceeding with defaults. Encountered error: ", e)
 
-    # Even if a parser object could not be created, a read_request will write & return defaults
-    try:
+        # Even if a parser object could not be created, a read_request will write & return defaults
         read_return = read_config(
             [
                 'lars_host',
@@ -7340,29 +7375,61 @@ def parse_arguments():
                 'llama_cpp_server_port'
             ]
         )
-    except Exception as e:
-        handle_error_no_return("Could not get host and port from hf_config.json, encountered error: ", e)
 
-    if parser:
-        parser.add_argument("--reset_to_defaults", action="store_true", default=False, help="Use default settings")
-        parser.add_argument("--lars_host", type=str, default=read_return['lars_host'], help="Specify the host to be used by the server. Remembers previously set value. Default: 0.0.0.0")
-        parser.add_argument("--lars_port", type=int, default=read_return['lars_port'], help="Specify the port to be used by the server. Remembers previously set value. Default: 5000")
-        parser.add_argument("--hf_waitress_access_url", type=str, default=read_return['hf_waitress_access_url'], help="Specify the access URL to be used by the HF-Waitress server. Remembers previously set value. Default: localhost")
-        parser.add_argument("--hf_waitress_serving_url", type=str, default=read_return['hf_waitress_serving_url'], help="Specify the serving URL to be used by the HF-Waitress server. Remembers previously set value. Default: 0.0.0.0")
-        parser.add_argument("--hf_waitress_server_port", type=int, default=read_return['hf_waitress_server_port'], help="Specify the port to be used by the HF-Waitress server. Remembers previously set value. Default: 9069")
-        parser.add_argument("--llama_cpp_access_url", type=str, default=read_return['llama_cpp_access_url'], help="Specify the access URL to be used by the Llama-CPP server. Remembers previously set value. Default: localhost")
-        parser.add_argument("--llama_cpp_serving_url", type=str, default=read_return['llama_cpp_serving_url'], help="Specify the serving URL to be used by the Llama-CPP server. Remembers previously set value. Default: 0.0.0.0")
-        parser.add_argument("--llama_cpp_server_port", type=int, default=read_return['llama_cpp_server_port'], help="Specify the port to be used by the Llama-CPP server. Remembers previously set value. Default: 8080")
+        if parser:
+            parser.add_argument(
+                "--reset_to_defaults", action="store_true", default=False,
+                help="Erase all custom settings and reset to defaults."
+            )
+            
+            parser.add_argument(
+                "--lars_host", type=str, default=read_return['lars_host'],
+                help="Specify the host for Privion. Remembers previously set value. Default: 0.0.0.0"
+            )
+            
+            parser.add_argument(
+                "--lars_port", type=int, default=read_return['lars_port'],
+                help="Specify the port for Privion. Remembers previously set value. Default: 5000"
+            )
 
-        args = parser.parse_args()
-        # print(f"\n\nparser.parse_args():\n\n{args}\n\n")
+            parser.add_argument(
+                "--hf_waitress_access_url", type=str, default=read_return['hf_waitress_access_url'], 
+                help="Specify the access URL for HF-Waitress. Remembers previously set value. Default: localhost"
+            )
 
-        if args.reset_to_defaults:
-            print("\n\nLoading Server with Safe Defaults\n\n")
-            try:
-                # Empty config.json
+            parser.add_argument(
+                "--hf_waitress_serving_url", type=str, default=read_return['hf_waitress_serving_url'], 
+                help="Specify the serving URL for HF-Waitress. Remembers previously set value. Default: 0.0.0.0"
+            )
+
+            parser.add_argument(
+                "--hf_waitress_server_port", type=int, default=read_return['hf_waitress_server_port'], 
+                help="Specify the port for HF-Waitress. Remembers previously set value. Default: 9069"
+            )
+
+            parser.add_argument(
+                "--llama_cpp_access_url", type=str, default=read_return['llama_cpp_access_url'],
+                help="Specify the access URL for Llama-CPP. Remembers previously set value. Default: localhost"
+            )
+
+            parser.add_argument(
+                "--llama_cpp_serving_url", type=str, default=read_return['llama_cpp_serving_url'],
+                help="Specify the serving URL for Llama-CPP. Remembers previously set value. Default: 0.0.0.0"
+            )
+
+            parser.add_argument(
+                "--llama_cpp_server_port", type=int, default=read_return['llama_cpp_server_port'],
+                help="Specify the port for Llama-CPP. Remembers previously set value. Default: 8080"
+            )
+
+            args = parser.parse_args()
+            # print(f"\n\nparser.parse_args():\n\n{args}\n\n")
+
+            if args.reset_to_defaults:
+                print("\n\nLoading Server with Safe Defaults\n\n")
+                
                 with open(CONFIG_PATH, 'w') as file:
-                    json.dump({}, file, indent=4)
+                    json.dump({}, file, indent=4)   # Empty config.json
                 
                 # Set defaults
                 read_config([
@@ -7375,11 +7442,8 @@ def parse_arguments():
                     'llama_cpp_serving_url',
                     'llama_cpp_server_port'
                 ])
-            except Exception as e:
-                handle_local_error("Could not reset hosts and ports in config.json, encountered error: ", e)
 
-        else:
-            try:
+            else:
                 write_config({
                     'lars_host':args.lars_host,
                     'lars_port':args.lars_port,
@@ -7390,16 +7454,16 @@ def parse_arguments():
                     'llama_cpp_serving_url':args.llama_cpp_serving_url,
                     'llama_cpp_server_port':args.llama_cpp_server_port
                 })
-            except Exception as e:
-                handle_local_error("Could not write hosts and ports to config.json, encountered error: ", e)
 
-        return args
+            return args
 
-    # Return None if parser was not created
-    return None
+        return None
+
+    except Exception as e:
+        handle_local_error("Could not parse arguments, encountered error: ", e)
 
 
-def get_host_and_port():
+def get_host_and_port() -> tuple[str, int]:
     try:
         read_return = read_config(['lars_host', 'lars_port'])
         return read_return['lars_host'], read_return['lars_port']
@@ -7410,19 +7474,21 @@ def get_host_and_port():
 def signal_handler(sig, frame):
     '''
     Signal handler for the main process.
-    It will shut down the server gracefully by intercepting the interrupt "SIGINT" signal (Ctrl+C).
-    We skip semaphores because if the app is hung holding a lock, waiting for it here ensures the shutdown will also hang!
-    Args:
-        sig: Integer representing the specific signal that triggered the handler. Eg: CTRL+C -> 2
-        frame: Represents the "current execution point" of your code at the exact millisecond of the signal. Primarily used for debugging.
-            Eg: line 452 inside function `generate_tokens`
-    '''
-    print("\n\n⚠️  CTRL+C Detected! Force stopping workers...\n")
+    Shuts down the server gracefully by intercepting the interrupt "SIGINT" signal (Ctrl+C).
+    No waiting on semaphores here: In case app is hung, waiting here will cause the shutdown to hang!
+
+    Hard exit:
+    os._exit(0) is used instead of sys.exit(0) because it skips Python's cleanup handlers (except 
+    finally blocks) and immediately terminates the process.
     
-    # Hard exit:
-    # os._exit(0) is better than sys.exit(0) for signal handlers 
-    # because it skips Python's cleanup handlers (except finally blocks)
-    # and immediately terminates the process.
+    Args:
+    - sig: Integer representing the specific signal that triggered the handler. Eg: CTRL+C -> 2
+    - frame: Represents the "current execution point" of the code at the exact millisecond of the signal. 
+        - Primarily used for debugging.
+        - Eg: line 452 inside function `generate_tokens`
+    '''
+    
+    print("\n\n⚠️  CTRL+C Detected! Force stopping workers...\n")
     print("👋 Exiting immediately.")
     os._exit(0)
 
@@ -7434,5 +7500,5 @@ if __name__ == '__main__':
     print(f"\n\nServing LARS-Enterprise on {lars_host} port {lars_port}\n\n")
     # app.run(debug=True)
     # app.run(host='0.0.0.0', port=5000)
-    MAX_UPLOAD_SIZE = 100 * 1024 * 1024 * 1024  # 100GB in bytes upload limit
-    serve(app, host=lars_host, port=lars_port, max_request_body_size=MAX_UPLOAD_SIZE)
+    max_upload_size = 100 * 1024 * 1024 * 1024  # 100GB upload limit
+    serve(app, host=lars_host, port=lars_port, max_request_body_size=max_upload_size)
