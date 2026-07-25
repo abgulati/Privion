@@ -529,14 +529,14 @@ def remove_file_from_filepath(filepath: pathlib.Path):
         os.remove(str(filepath))
         print(f"Successfully deleted file: {filepath}")
     except Exception as e:
-        handle_local_error(f"Could not remove file from filepath: {filepath}, encountered error: ", e)
+        handle_local_error(f"Error removing file from filepath: {filepath}: ", e)
 
 
 def safe_remove_file_from_filepath(filepath: pathlib.Path):
     try:
         remove_file_from_filepath(filepath)
     except Exception as e:
-        handle_error_no_return(f"Could not remove file from filepath: {filepath}, encountered error: ", e)
+        handle_error_no_return(f"Error removing file from filepath: {filepath}: ", e)
 
 
 def remove_folder_from_filepath(folderpath:pathlib.Path):
@@ -558,7 +558,7 @@ def remove_folder_from_filepath(folderpath:pathlib.Path):
         shutil.rmtree(str(folderpath))
         print(f"Successfully deleted folder: {folderpath}")
     except Exception as e:
-        handle_local_error(f"Could not remove folder from filepath: {folderpath}, encountered error: ", e)
+        handle_local_error(f"Error removing folder from filepath: {folderpath}: ", e)
     
 
 def safe_remove_folder_from_filepath(folderpath:pathlib.Path):
@@ -577,13 +577,17 @@ def safe_remove_folder_from_filepath(folderpath:pathlib.Path):
     try:
         remove_folder_from_filepath(folderpath)
     except PermissionError:
-        print(f"\nPermissionError: Ensure OneDrive or other file sync services aren't running! If not, manually delete the folder at the path that follows and try again. Error -- Could not remove folder from filepath: {folderpath}\n")
-    except FileNotFoundError:   # Raised when the path doesn't exist at all
+        print(
+            "\nPermissionError: Ensure OneDrive or other file sync services aren't running! "
+            "If not, manually delete the folder at the path that follows and try again. "
+            f"Error -- Could not remove folder from filepath: {folderpath}\n"
+        )
+    except FileNotFoundError:   # Path doesn't exist at all
         print(f"\nFileNotFoundError: Could not remove folder from filepath: {folderpath}\n")
-    except NotADirectoryError:   # Raised when the path exists but is not a directory (shutil.rmtree() only works on directories)
+    except NotADirectoryError:   # Path exists but is not a dir - shutil.rmtree() is for dirs
         print(f"\nNotADirectoryError: Could not remove folder from filepath: {folderpath}\n")
     except Exception as e:
-        handle_error_no_return(f"Could not remove folder from filepath: {folderpath}, encountered error: ", e)
+        handle_error_no_return(f"Error removing folder from filepath: {folderpath}: ", e)
 
 ############################----------------------------------------------###############################
 
@@ -595,12 +599,12 @@ def whoosh_indexer(new_chunks:list[dict]):
     try:
         whoosh_index_folder = rag_support_module.determine_whoosh_index_folder()
     except Exception as e:
-        handle_local_error("Failed to determine Whoosh Index Folder, encountered error: ", e)
+        handle_local_error("Error determining Whoosh Index Folder: ", e)
     
     try:
         ix = rag_support_module.get_whoosh_index_object_for_folder(whoosh_index_folder)
     except Exception as e:
-        handle_local_error("Failed to get Whoosh Index Object, encountered error: ", e)
+        handle_local_error("Error getting Whoosh Index Object: ", e)
         
     # init writer and write to the index:
     try:
@@ -611,14 +615,16 @@ def whoosh_indexer(new_chunks:list[dict]):
                 source_link=chunk['source_link'],
                 source=chunk['source'], 
                 page_number=str(chunk['page_number']),
-                entities_and_relationships=str(chunk.get('entities_and_relationships', {}))
+                entities_and_relationships=str(
+                    chunk.get('entities_and_relationships', {})
+                )
             )
         
         writer.commit()
         print(f"Added {len(new_chunks)} chunks to Whoosh Index")
         
     except Exception as e:
-        handle_local_error("Failed to write to Whoosh Index, encountered error: ", e)
+        handle_local_error("Error writing to Whoosh Index: ", e)
 
 
 def PDFtoAzureDocAiTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
