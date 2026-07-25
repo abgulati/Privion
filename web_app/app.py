@@ -398,19 +398,24 @@ def config_writer_api():
 
 #########################------------Setup Directories-------------###############################
 
+'''
+## Notes on the above workflow for setting up the directories:
+1. Everytime the app runs, the OS platform is detected and the appropriate 
+    OS-specific base directory is requested above
+2. If this is the very first run:
+   a. read_config does not find the directory data in config.json
+   b. The methods `else` clause is triggered and defaults are written to 
+   config.json and subsequently returned
+3. If this isn't the very first run, read_config simply returns the OS specific 
+directory (windows_base_directory, unix_and_docker_base_directory, or mac_base_directory)
+4. Basis this, BASE_DIRECTORY is written to config.json
+5. This setup ensures that:
+   a. Directories are set correctly at each run
+   b. The user can set their preferred directory by easily editing config.json!
 
-###---Notes on the above workflow:---###
-# 1. Everytime the app runs, the OS platform is detected and the appropriate OS-specific base directory is requested above
-# 2. If this is the very first run:
-#   a. read_config does not find the directory data in config.json
-#   b. The methods `else` clause is triggered and defaults are written to config.json and subsequently returned
-# 3. If this isn't the very first run, read_config simply returns the OS specific directory (windows_base_directory, unix_and_docker_base_directory, or mac_base_directory)
-# 4. Basis this, BASE_DIRECTORY is written to config.json
-# 5. This setup ensures that:
-#   a. Directories are set correctly at each run
-#   b. The user can set their preferred directory by easily editing config.json!
-
-# Having set the values for the directories above, proceed to actually create them on disk IF they don't alread exist!
+Having set the values for the directories above, proceed to actually create them on 
+disk IF they don't already exist!
+'''
        
 try:
     read_return = read_config([
