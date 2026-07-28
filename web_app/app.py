@@ -634,49 +634,70 @@ def whoosh_indexer(new_chunks:list[dict]):
 
 def PDFtoAzureDocAiTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
     '''
-    OCR PDFs using Azure Document Intelligence OCR by iterating through each page, converting to a binary stream and then invoking `begin_analyze_document()`
+    OCR PDFs using Azure Document Intelligence OCR:
+        - Iterating through each page
+        - Converting to a binary stream
+        - Invoking `begin_analyze_document()`
 
     Args:
-        - input_pdf_filepath: pathlib.Path object of the PDF file to be OCR'ed
+        - input_pdf_filepath: pathlib.Path to the target PDF
 
     Returns:
-        - pathlib.Path object of the output text file
+        - pathlib.Path to the output text file
     
     Raises:
-        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+        - Exception: 
+            - If the PDF file cannot be opened
+            - If the output text file cannot be initialized
+            - If the OCR process fails
     '''
     
     try:
-        read_return = read_config(['azure_doc_ai_endpoint', 'azure_doc_ai_subscription_key', 'ocr_pdfs', 'force_re_extract'])
+        config = read_config([
+            'azure_doc_ai_endpoint',
+            'azure_doc_ai_subscription_key',
+            'ocr_pdfs','force_re_extract'
+        ])
     except Exception as e:
-        handle_local_error("Missing Azure OCR Endpoint URL & Subscription Key for Azure Document Intelligence OCR, please provide required API config. Error: ", e)
+        handle_local_error(
+            "Missing Azure DocAI URL and/or Subscription Key, "
+            "please provide required API config. Error: ", e
+        )
 
     try:
         source_filename = input_pdf_filepath.name
-        print(f"\n\nApplying Azure DocAI OCR to PDF file: {source_filename}\n\n")
+        print(f"\nApplying Azure DocAI OCR to PDF: {source_filename}\n")
 
         output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
-        output_text_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
+        output_text_file_path = pathlib.Path(
+            rf"{config['ocr_pdfs']}"
+        ).resolve() / output_text_file_name   # normalize and append filename
     except Exception as e:
         handle_local_error("Could not extract filename, encountered error: ", e)
 
-    if output_text_file_path.exists() and not read_return['force_re_extract']:
-        if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
-            print("Azure-OCR'ed doc already exists and is not empty! Returning existing file.")
+    if output_text_file_path.exists() and not config['force_re_extract']:
+        if (
+            output_text_file_path.is_file() and 
+            output_text_file_path.stat().st_size > 0
+        ):
+            print("OCR'ed doc already exists and is not empty! Returning existing file.")
             return output_text_file_path
         else:
-            print("Azure-OCR'ed doc already exists but is empty! Overwriting with new OCR'ed file.")
+            print("OCR'ed doc already exists but is empty! Proceeding with OCR extraction.")
 
     # Initialize text output
     try:
         output_text_file = open(output_text_file_path, 'w', encoding='utf-8')
     except Exception as e:
-        handle_local_error("Could not initialize/access output text file, encountered error: ", e)
+        handle_local_error("Could not initialize output text file, encountered error: ", e)
 
     try:
-        docai_client = DocumentAnalysisClient(read_return['azure_doc_ai_endpoint'], AzureKeyCredential(read_return['azure_doc_ai_subscription_key']))
+        docai_client = DocumentAnalysisClient(
+            config['azure_doc_ai_endpoint'],
+            AzureKeyCredential(config['azure_doc_ai_subscription_key'])
+        )
     except Exception as e:
-        handle_local_error("Could not create ComputerVisionClient for Azure DocAI, encountered error: ", e)
+        handle_local_error("Could not create DocumentAnalysisClient, encountered error: ", e)
 
     try:
         with open(input_pdf_filepath, "rb") as pdf_file:
@@ -687,17 +708,21 @@ def PDFtoAzureDocAiTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
                 page_range = f"1-{page_count}" if page_count > 1 else "1"
                 print(f"page_range: {page_range}")
             except Exception as e:
-                handle_local_error("Could not get page count for call to Azure DocAI, encountered error: ", e)
+                handle_local_error("Could not get page count for Azure DocAI, Error: ", e)
 
-            # 2 - Reset file-read stream's internal pointer, which has now been set to the end of the file due to the above read operation!
+            # 2 - Reset file pointer to the beginning of the file.
             pdf_file.seek(0)
 
             # 3 - Call Azure DocAI:
             try:
-                poller = docai_client.begin_analyze_document("prebuilt-layout", pdf_file, pages=page_range)
+                poller = docai_client.begin_analyze_document(
+                    "prebuilt-layout",
+                    pdf_file,
+                    pages=page_range
+                )
                 result = poller.result()
             except Exception as e:
-                handle_local_error("Could not get results for begin_analyze_document for Azure DocAI, encountered error: ", e)
+                handle_local_error("Error with Azure begin_analyze_document: ", e)
 
         # print(f"result: \n{result}")
 
@@ -717,7 +742,9 @@ def PDFtoAzureDocAiTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
                             for region in cell.bounding_regions:
                                 page_number = region.page_number
                                 cell_polygon = region.polygon
-                                cell_polygon_tuple = tuple((point.x, point.y) for point in cell_polygon)    # lists aren't hashable to cast to a tuple
+                                cell_polygon_tuple = tuple(
+                                    (point.x, point.y) for point in cell_polygon
+                                )    # lists aren't hashable to cast to a tuple
                                 used_regions.add(cell_polygon_tuple)
 
                         try:
