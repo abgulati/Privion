@@ -267,7 +267,7 @@ try:
         file.truncate()
 
 except Exception as e:
-    print(f"Could not read config.json, encountered error: {e}")
+    print(f"Could not read config.json: {e}")
 
 # If the file doesn't exist (first-run), write defaults. 
 # On subsequent runs, simply write-back to storage_config.json,
@@ -280,7 +280,7 @@ try:
                 'config_path': str(pathlib.Path(CONFIG_PATH).resolve())
             },file,indent=4)
 except Exception as e:
-    print(f"Could not write bootstrap storage_config.json, encountered error: {e}")
+    print(f"Could not write bootstrap storage_config.json: {e}")
 
 #######################################################################################################
 
@@ -308,7 +308,7 @@ try:
     # 4 - Add the handler to the logger for final LOGGER - Usage: LOGGER.error(f"Error: {e}")
     LOGGER.addHandler(handler)
 except Exception as e:
-    print(f"\n\nCould not establish logger, encountered error: {e}")
+    print(f"\n\nCould not establish logger: {e}")
 
 
 def central_error_logging(message:str, exception:Exception=None):
@@ -424,7 +424,7 @@ try:
         'graph_db_data_directory', 'draft_models_dir'
     ])
 except Exception as e:
-    handle_local_error("Could not read paths for core app directories from config, encountered error: ", e)
+    handle_local_error("Could not read paths for core app directories from config: ", e)
 
 try:
     os.makedirs(read_return['model_dir'], exist_ok=True)
@@ -437,7 +437,7 @@ try:
     os.makedirs(read_return['upload_staging_folder'], exist_ok=True)
     os.makedirs(read_return['graph_db_data_directory'], exist_ok=True)
 except Exception as e:
-    handle_local_error("Failed to create app directories, encountered error: ", e)
+    handle_local_error("Failed to create app directories: ", e)
 
 app.config['UPLOAD_FOLDER'] = read_return['upload_folder']
 app.config['DOWNLOAD_FOLDER'] = read_return['highlighted_docs']
@@ -467,7 +467,7 @@ def load_json_file(file_path:pathlib.Path) -> dict:
             with open(file_path, 'r') as file:
                 return json.load(file)
         except Exception as e:
-            handle_local_error("Could not load JSON file, encountered error: ", e)
+            handle_local_error("Could not load JSON file: ", e)
     else:
         return None   # NOTE: isinstance({}, dict) will return True so better to return None!
 
@@ -492,14 +492,14 @@ def update_and_save_json_file(data: dict, file_path: pathlib.Path) -> bool:
             with open(file_path, 'r') as file:
                 current_cache = json.load(file)
         except Exception as e:
-            handle_local_error("Could not save JSON file, encountered error: ", e)
+            handle_local_error("Could not save JSON file: ", e)
     
     try:
         current_cache.update(data)
         with open(file_path, 'w') as file:
             json.dump(current_cache, file, indent=4)
     except Exception as e:
-        handle_local_error("Could not save JSON file, encountered error: ", e)
+        handle_local_error("Could not save JSON file: ", e)
 
     return True
 
@@ -523,7 +523,7 @@ def overwrite_json_file(data: dict, file_path: pathlib.Path) -> bool:
         with open(file_path, 'w') as file:
             json.dump(data, file, indent=4)
     except Exception as e:
-        handle_local_error("Could not save JSON file, encountered error: ", e)
+        handle_local_error("Could not save JSON file: ", e)
 
     return True
 
@@ -550,7 +550,6 @@ def remove_folder_from_filepath(folderpath:pathlib.Path):
 
     Args:
         - folderpath: pathlib.Path object of the folder path
-    
 
     Returns:
         - bool: True if the folder was removed successfully, False otherwise
@@ -659,10 +658,7 @@ def PDFtoAzureDocAiTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
             'ocr_pdfs','force_re_extract'
         ])
     except Exception as e:
-        handle_local_error(
-            "Missing Azure DocAI URL and/or Subscription Key, "
-            "please provide required API config. Error: ", e
-        )
+        handle_local_error("Missing Azure DocAI API config, Error: ", e)
 
     try:
         source_filename = input_pdf_filepath.name
@@ -673,23 +669,23 @@ def PDFtoAzureDocAiTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
             rf"{config['ocr_pdfs']}"
         ).resolve() / output_text_file_name   # normalize and append filename
     except Exception as e:
-        handle_local_error("Could not extract filename, encountered error: ", e)
+        handle_local_error("Could not extract filename: ", e)
 
     if output_text_file_path.exists() and not config['force_re_extract']:
         if (
             output_text_file_path.is_file() and 
             output_text_file_path.stat().st_size > 0
         ):
-            print("OCR'ed doc already exists and is not empty! Returning existing file.")
+            print("OCR'ed doc already exists and is not empty! Returning...")
             return output_text_file_path
         else:
-            print("OCR'ed doc already exists but is empty! Proceeding with OCR extraction.")
+            print("OCR'ed doc already exists but is empty! Proceeding...")
 
     # Initialize text output
     try:
         output_text_file = open(output_text_file_path, 'w', encoding='utf-8')
     except Exception as e:
-        handle_local_error("Could not initialize output text file, encountered error: ", e)
+        handle_local_error("Could not initialize output text file for Azure DocAI: ", e)
 
     try:
         docai_client = DocumentAnalysisClient(
@@ -697,7 +693,7 @@ def PDFtoAzureDocAiTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
             AzureKeyCredential(config['azure_doc_ai_subscription_key'])
         )
     except Exception as e:
-        handle_local_error("Could not create DocumentAnalysisClient, encountered error: ", e)
+        handle_local_error("Could not create DocumentAnalysisClient: ", e)
 
     try:
         with open(input_pdf_filepath, "rb") as pdf_file:
@@ -750,7 +746,7 @@ def PDFtoAzureDocAiTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
                         try:
                             output_text_file.write(f"[PAGE:{page_number}]\n{cell_text}\n")
                         except Exception as e:
-                            handle_local_error("could not write to output text file, encountered error: ", e)
+                            handle_local_error("could not write to output text file: ", e)
 
         # Get paragraphs
         if hasattr(result, 'paragraphs'):
@@ -771,7 +767,7 @@ def PDFtoAzureDocAiTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
                     output_text_file.write(f"[PAGE:{para_page_number}]\n{para_content}\n")
                     used_regions.add(para_polygon_tuple)
                 except Exception as e:
-                    handle_local_error("could not write to output text file, encountered error: ", e)
+                    handle_local_error("could not write to output text file: ", e)
 
     except Exception as e:
         handle_local_error("Error processing document with azure DocAI: ", e)
@@ -784,61 +780,87 @@ def PDFtoAzureDocAiTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
 
 def PDFtoAzureOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
     '''
-    OCR PDFs using Azure Computer Vision OCR by iterating through each page, converting to a binary stream and then invoking `recognize_printed_text_in_stream()`
+    OCR PDFs using Azure Computer Vision OCR:
+    - Iterating through each page
+    - Converting to a binary stream
+    - Invoking `recognize_printed_text_in_stream()`
 
     Args:
-        - input_pdf_filepath: pathlib.Path object of the PDF file to be OCR'ed
+        - input_pdf_filepath: pathlib.Path to the target PDF
 
     Returns:
-        - pathlib.Path object of the output text file
+        - pathlib.Path to the output text file
 
     Raises:
-        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+        - Exception: 
+            - If the PDF file cannot be opened
+            - If the output text file cannot be initialized
+            - If the OCR process fails
     '''
     try:
-        read_return = read_config(['azure_ocr_endpoint', 'azure_ocr_subscription_key', 'ocr_pdfs', 'azure_cv_free_tier', 'force_re_extract'])
+        read_return = read_config([
+            'azure_ocr_endpoint',
+            'azure_ocr_subscription_key',
+            'ocr_pdfs',
+            'azure_cv_free_tier',
+            'force_re_extract'
+        ])
     except Exception as e:
-        handle_local_error("Missing Azure OCR Endpoint URL & Subscription Key for Azure OCR, please provide required API config. Error: ", e)
+        handle_local_error("Missing Azure OCR API config, Error: ", e)
 
     try:
         source_filename = input_pdf_filepath.name
         print(f"\n\nApplying Azure OCR to PDF file: {source_filename}\n\n")
 
         output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
-        output_text_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
+        output_text_file_path = pathlib.Path(
+            rf"{read_return['ocr_pdfs']}"
+        ).resolve() / output_text_file_name   # normalize and append filename
     except Exception as e:
-        handle_local_error("Could not extract filename, encountered error: ", e)
+        handle_local_error("Could not extract filename for Azure OCR: ", e)
 
     if output_text_file_path.exists() and not read_return['force_re_extract']:
-        if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
-            print("OCR'ed doc already exists and is not empty! Returning existing file.")
+        if (
+            output_text_file_path.is_file() and 
+            output_text_file_path.stat().st_size > 0
+        ):
+            print("OCR'ed doc already exists and is not empty! Returning...")
             return output_text_file_path
         else:
-            print("OCR'ed doc already exists but is empty! Overwriting with new OCR'ed file.")
+            print("OCR'ed doc already exists but is empty! Proceeding...")
 
     # Convert PDF to  a list of images
     try:
         print("\n\nConverting PDF to a list of Images\n\n")
-        pages = convert_from_path(input_pdf_filepath, 300) # The convert-from_path() function from pdf2image lib intertnally uses Poppler to convert PDF pages to images, and then creates PIP Image objects from them. 300dpi - good balance between quality and performance
+        pages = convert_from_path(input_pdf_filepath, 300) 
+        '''
+        The convert-from_path() function from pdf2image lib 
+        intertnally uses Poppler to convert PDF pages to images, 
+        and then creates PIP Image objects from them. 
+        300dpi is a good balance between quality and performance.
+        '''
     except Exception as e:
-        handle_local_error("Could not image PDF file, encountered error: ", e)
+        handle_local_error("Could not image PDF file: ", e)
 
     # Initialize text output
     try:
         output_text_file = open(output_text_file_path, 'w', encoding='utf-8')
     except Exception as e:
-        handle_local_error("Could not initialize/access output text file, encountered error: ", e)
+        handle_local_error("Could not initialize output text file: ", e)
 
     try:
-        computervision_client = ComputerVisionClient(read_return['azure_ocr_endpoint'], CognitiveServicesCredentials(read_return['azure_ocr_subscription_key']))
+        computervision_client = ComputerVisionClient(
+            read_return['azure_ocr_endpoint'],
+            CognitiveServicesCredentials(read_return['azure_ocr_subscription_key'])
+        )
     except Exception as e:
-        handle_local_error("Could not create ComputerVisionClient for Azure OCR, encountered error: ", e)
+        handle_local_error("Could not create ComputerVisionClient: ", e)
     
     calls_made = 0
 
     # Iterate over each page and apply OCR:
     print("\n\nBeginning image to Text OCR\n\n")
-    for page_number, image in enumerate(pages, start = 1): # start=1 to match the page numbers in the PDF
+    for page_number, image in enumerate(pages, start = 1): # start=1 to match PDF page numbers
         
         # Convert to bytes and create a stream
         try:
@@ -846,7 +868,7 @@ def PDFtoAzureOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
             image.save(img_stream, format='PNG')
             img_stream.seek(0)  # Reset the stream position to the beginning
         except Exception as e:
-            handle_local_error("Could not convert image to Byte Stream for Azure OCR, encountered error: ", e)
+            handle_local_error("Could not convert image to Byte Stream for Azure OCR: ", e)
             continue
 
         # Send to Azure OCR
@@ -885,7 +907,7 @@ def PDFtoAzureOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
                 result = computervision_client.recognize_printed_text_in_stream(image=img_stream)
                 calls_made = 1  #reset counter\
             else:
-                handle_local_error("Could not convert image to Byte Stream for Azure OCR, encountered error: ", e)
+                handle_local_error("Could not convert image to Byte Stream for Azure OCR: ", e)
 
         for region in result.regions:
             for line in region.lines:
@@ -894,26 +916,26 @@ def PDFtoAzureOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
                 try:
                     clean_text = str(" ".join([word.text for word in line.words]))
                 except Exception as e:
-                    handle_error_no_return("Could not obtain line from Azure OCR result, encountered error: ", e)
+                    handle_error_no_return("Could not obtain line from Azure OCR result: ", e)
                     continue
 
                 # Write the extracted text to the file:
                 try:
                     output_text_file.write(f"[PAGE:{page_number}]\n{clean_text}\n")
                 except Exception as e:
-                    handle_local_error("Could not write to output text file, encountered error: ", e)
+                    handle_local_error("Could not write to output text file: ", e)
 
     # Close all files
     output_text_file.close()
-    print(f"\n\nCompleted Azure-ComputerVision OCR for PDF file: {input_pdf_filepath}\n\n")
+    print(f"\nCompleted Azure-ComputerVision OCR for PDF file: {input_pdf_filepath}\n")
     return output_text_file_path
 
 
 def get_vision_llm_request_params() -> tuple[str, dict, dict]:
     try:
-        read_return = read_config(['vision_llm_local_url', 'vision_ocr_prompt'])
+        read_return = read_config(['vision_llm_local_url','vision_ocr_prompt'])
     except Exception as e:
-        handle_local_error("Missing Vision LLM URL or Vision OCR Prompt for get_vision_llm_request_params, please provide required API config. Error: ", e)
+        handle_local_error("Missing API config for Vision OCR: ", e)
 
     vision_request_payload = {
         'messages': json.dumps([
@@ -937,69 +959,93 @@ def get_vision_llm_request_params() -> tuple[str, dict, dict]:
 
 def PDFtoVisionLLMOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
     '''
-    OCR PDFs using Vision LLM by iterating through each page, converting to a binary stream and then invoking the Vision LLM
+    OCR PDFs using Vision LLM:
+    - Iterating through each page
+    - Converting to a binary stream
+    - Invoking the Vision LLM
 
     Args:
-        - input_filepath: pathlib.Path object of the PDF file to be OCR'ed
+        - input_filepath: pathlib.Path to the target PDF
 
     Returns:
-        - pathlib.Path object of the output text file
+        - pathlib.Path to the output text file
 
     Raises:
-        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+        - Exception: 
+            - If the PDF file cannot be opened
+            - If the output text file cannot be initialized
+            - If the OCR process fails
     '''
 
     try:
         print("\n\nChecking if HF-Waitress Server is Online\n\n")
         hf_waitress_base_url = get_url_for_server('hf-waitress')
+        
         if not utils.is_local_server_online(hf_waitress_base_url)['server_available']:
-            handle_local_error("HF-Waitress Server is Offline! Please start the HF-Waitress Server and try again.")
+            handle_local_error("HF-Waitress offline for Vision OCR! Please restart and try again.")
+        
         else:
             print("\n\nHF-Waitress Server is Online\n\n")
     except Exception as e:
-        handle_error_no_return("Could not check if HF-Waitress Server is Online, presuming online and proceeding. Encountered error: ", e)
+        err_str = (
+            "Could not check if HF-Waitress is Online, presuming online and proceeding. "
+            "Encountered error: "
+        )
+        handle_error_no_return(err_str, e)
 
     try:
         read_return = read_config(['ocr_pdfs', 'force_re_extract'])
     except Exception as e:
-        handle_local_error("Missing OCR PDFs directory for Vision LLM-based OCR, please provide required API config. Error: ", e)
+        handle_local_error("Missing OCR PDFs directory for Vision LLM OCR: ", e)
 
     try:
         source_filename = input_pdf_filepath.name
         print(f"\n\nApplying Vision LLM OCR to PDF file: {source_filename}\n\n")
 
         output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
-        output_text_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
+        
+        output_text_file_path = pathlib.Path(
+            rf"{read_return['ocr_pdfs']}"
+        ).resolve() / output_text_file_name   # normalize and append filename
     except Exception as e:
-        handle_local_error("Could not extract filename, encountered error: ", e)
+        handle_local_error("Could not extract filename: ", e)
 
     if output_text_file_path.exists() and not read_return['force_re_extract']:
-        if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
-            print("Vision LLM OCR'ed doc already exists and is not empty! Returning existing file.")
+        if (
+            output_text_file_path.is_file() and 
+            output_text_file_path.stat().st_size > 0
+        ):
+            print("Vision LLM OCR'ed doc already exists and is not empty! Returning...")
             return output_text_file_path
         else:
-            print("Vision LLM OCR'ed doc already exists but is empty! Overwriting with new OCR'ed file.")
+            print("Vision LLM OCR'ed doc already exists but is empty! Overwriting...")
 
     # Convert PDF to  a list of images
     pil_image_object_list = []
     try:
         print("\n\nConverting PDF to a list of Images\n\n")
-        pil_image_object_list = convert_from_path(input_pdf_filepath, 300) # The convert-from_path() function from pdf2image lib intertnally uses Poppler to convert PDF pages to images, and then creates PIL Image objects from them. 300dpi - good balance between quality and performance
+        pil_image_object_list = convert_from_path(input_pdf_filepath, 300)
+        '''
+        The convert-from_path() function from pdf2image lib 
+        intertnally uses Poppler to convert PDF pages to images, 
+        and then creates PIP Image objects from them. 
+        300dpi is a good balance between quality and performance.
+        '''
     except Exception as e:
-        handle_local_error("Could not image PDF file, encountered error: ", e)
+        handle_local_error("Could not image PDF file: ", e)
 
     # Initialize text output
     try:
         output_text_file = open(output_text_file_path, 'w', encoding='utf-8')
     except Exception as e:
-        handle_local_error("Could not initialize/access output text file, encountered error: ", e)
+        handle_local_error("Could not initialize/access output text file: ", e)
 
     try:
         vision_llm_local_url, vision_request_payload, headers = get_vision_llm_request_params()
     except Exception as e:
-        handle_local_error("Could not get Vision LLM request parameters, encountered error: ", e)
+        handle_local_error("Could not get Vision LLM request parameters: ", e)
 
-    for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match the page numbers in the PDF
+    for page_number, image in enumerate(pil_image_object_list, start=1): # start=1 to match PDF page numbers
 
         print(f"\n\nProcessing Page: {page_number} from file: {source_filename}\n\n")
 
@@ -1009,7 +1055,7 @@ def PDFtoVisionLLMOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
             image.save(img_stream, format='PNG')
             img_stream.seek(0)
         except Exception as e:
-            handle_error_no_return("Could not convert PIL-image object to Byte-Stream, encountered error: ", e)
+            handle_error_no_return("Could not convert PIL-image object to Byte-Stream: ", e)
             continue
 
         try:
@@ -1018,29 +1064,34 @@ def PDFtoVisionLLMOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
                 ('file', ('page-image.png', img_stream, 'image/png'))
             ]
         except Exception as e:
-            handle_error_no_return("Could not prepare file payload for Vision LLM, encountered error: ", e)
+            handle_error_no_return("Could not prepare file payload for Vision LLM: ", e)
             continue
 
         try:
             print("\n\nSending request to Vision LLM\n\n")
-            response = requests.post(vision_llm_local_url, headers=headers, data=vision_request_payload, files=file_payload)    # requests.post() is a convenience function specifically for sending POST requests with form-encoded or multipart data. It automatically sets the Content-Type header to multipart/form-data. It's more readable than the generic requests.request() function.
+            response = requests.post(
+                vision_llm_local_url,
+                headers=headers,
+                data=vision_request_payload,
+                files=file_payload
+            )    # Content-Type header set to multipart/form-data automatically.
             print(f"\n\nVision LLM response: {response.json()}\n\n")
         except Exception as e:
-            handle_error_no_return("Could not send request to Vision LLM, encountered error: ", e)
+            handle_error_no_return("Could not send request to Vision LLM: ", e)
             continue
 
         try:
             print("\n\nExtracting inference output-text from Vision LLM Response\n\n")
             vision_output = response.json()['response']
         except Exception as e:
-            handle_error_no_return("Could not obtain inference output from Vision LLM, encountered error: ", e)
+            handle_error_no_return("Could not obtain inference output from Vision LLM: ", e)
             continue
 
         try:
             print(f"\n\nWriting output to output text file\n\n")
             output_text_file.write(f"[PAGE:{page_number}]\n{vision_output}\n")
         except Exception as e:
-            handle_error_no_return("Could not write to output text file, encountered error: ", e)
+            handle_error_no_return("Could not write to output text file: ", e)
             continue
     
      # Close all files
@@ -1053,14 +1104,15 @@ def get_container_id_by_container_name(container_name:str) -> str:
     print(f"\nChecking if container {container_name} is running...\n")
     try:
         result = subprocess.run(
-            ['docker', 'ps', '--filter', f'name={container_name}' , '--format', '{{.ID}}'], # get container ID
-            capture_output=True,    # captures the command's output and error, while suppressing the print to the terminal
+            ['docker', 'ps', '--filter', f'name={container_name}' , '--format', '{{.ID}}'],
+            capture_output=True, 
             text=True,  # Get output as string and not bytes
             check=True
         )
-        return result.stdout.strip()    # Will return the container ID if the container is running, otherwise will return an empty string!
+        return result.stdout.strip()    
+        # Returns: container ID if the container is running, otherwise empty string.
     except Exception as e:
-        handle_local_error(f"Could not check if {container_name} Docker container is running, encountered error: ", e)
+        handle_local_error(f"Could not check if {container_name} Docker container is running: ", e)
     
 
 def check_if_container_is_running(container_name:str) -> bool:
@@ -1068,47 +1120,76 @@ def check_if_container_is_running(container_name:str) -> bool:
         container_id = get_container_id_by_container_name(container_name)
         return container_id is not None and container_id != ""
     except Exception as e:
-        handle_error_no_return(f"Could not check if {container_name} Docker container is running, encountered error: ", e)
         return False
 
 
 def start_kosmos_container() -> bool:
     try:
-        read_return = read_config(['kosmos_container_name', 'minimum_free_vram_for_kosmos_ocr'])
+        read_return = read_config([
+            'kosmos_container_name',
+            'minimum_free_vram_for_kosmos_ocr'
+        ])
         kosmos_container_name = read_return['kosmos_container_name']
         minimum_free_vram_for_kosmos_ocr = read_return['minimum_free_vram_for_kosmos_ocr']
     except Exception as e:
-        handle_local_error("Could not read Kosmos container name from config.json, encountered error: ", e)
+        handle_local_error("Could not read Kosmos container name from config.json: ", e)
     
     try:
         hf_waitress_base_url = get_url_for_server('hf-waitress')
-        url_config = read_config(['graph_model_access_url', 'graph_model_server_port', 'graph_summarizer_access_url', 'graph_summarizer_server_port'])
-        graph_model_base_url = f"http://{url_config['graph_model_access_url']}:{url_config['graph_model_server_port']}"
-        graph_summarizer_base_url = f"http://{url_config['graph_summarizer_access_url']}:{url_config['graph_summarizer_server_port']}"
-        utils.ensure_minimum_free_vram(minimum_free_vram_for_kosmos_ocr, [graph_summarizer_base_url, graph_model_base_url, hf_waitress_base_url])   
-        # Graph-Extraction model is used for GraphRAG responses, so we try shutting down the summarizer model first!
+        
+        url_config = read_config([
+            'graph_model_access_url',
+            'graph_model_server_port',
+            'graph_summarizer_access_url',
+            'graph_summarizer_server_port'
+        ])
+        graph_model_base_url = (
+            f"http://{url_config['graph_model_access_url']}:"
+            f"{url_config['graph_model_server_port']}"
+        )
+        graph_summarizer_base_url = (
+            f"http://{url_config['graph_summarizer_access_url']}:"
+            f"{url_config['graph_summarizer_server_port']}"
+        )
+   
+        utils.ensure_minimum_free_vram(
+            minimum_free_vram_for_kosmos_ocr,
+            [graph_summarizer_base_url,graph_model_base_url,hf_waitress_base_url]
+        )   
+        # Historically, the graph-extraction model was used for GraphRAG 
+        # responses, so the summarizer model was shut down first
     except Exception as e:
-        handle_local_error(f"Could not ensure minimum free GPU memory ({minimum_free_vram_for_kosmos_ocr}MB) required for Kosmos OCR, encountered error: ", e)
+        err_str = (
+            "Could not ensure minimum free GPU memory "
+            f"({minimum_free_vram_for_kosmos_ocr}MB) required for Kosmos OCR: "
+            "Encountered error: "
+        )
+        handle_local_error(err_str, e)
 
     # Check if Docker Engine is running
     try:
-        subprocess.run(['docker', 'info'], capture_output=True, check=True)  # check=True will raise an exception if the command returns a non-zero exit code
+        subprocess.run(
+            ['docker','info'],
+            capture_output=True,
+            check=True  # Raise an exception if the command returns a non-zero exit code
+        )  
     except Exception as e:
-        handle_local_error("Docker Engine is not running, encountered error: ", e)
+        handle_local_error("Docker Engine is not running: ", e)
 
-    print("\nDocker Engine is running, proceeding with Kosmos Docker container launch...\n")
+    print("\nDocker running, proceeding with Kosmos container launch...\n")
 
     if check_if_container_is_running(kosmos_container_name):
-        print("\nKosmos Docker container is already running, skipping launch...\n")
+        print("\nKosmos Docker container is already running, returning...\n")
         return True
 
     command = ['docker', 'start', f'{kosmos_container_name}']
 
     try:
-        # subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE) if platform.system() == 'Windows' else subprocess.Popen(command, shell=True)
-
         if platform.system() == 'Windows':
-            kosmos_container_process = subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
+            kosmos_container_process = subprocess.Popen(
+                command,
+                creationflags=subprocess.CREATE_NEW_CONSOLE
+            )
         
         else:
             with open('kosmos_container_output_log.txt', 'w') as f:
@@ -1127,10 +1208,13 @@ def start_kosmos_container() -> bool:
             if kosmos_container_process is not None:
                 exit_code = kosmos_container_process.poll()
                 if exit_code is not None:
-                    if exit_code != 0:  # `docker start` is expected to exit quickly with code 0 when it succeeds!
-                        handle_local_error(
+                    if exit_code != 0:  # `docker start` expected to exit quickly with code 0 on success
+                        err_str = (
                             "Kosmos Docker container process exited early before becoming available. "
-                            f"Return code: {exit_code}. Check the Kosmos Docker container log for details. ",
+                            f"Return code: {exit_code}. Check the Kosmos Docker container log for details. "
+                        )
+                        handle_local_error(
+                            err_str,
                             RuntimeError(f"Kosmos Docker container exited with code {exit_code}")
                         )
 
@@ -1140,24 +1224,29 @@ def start_kosmos_container() -> bool:
                 return True
             
             else:
-                print(f"Kosmos Docker container not yet running, waiting {timeout} seconds before retrying...")
+                print(f"Kosmos Docker container not yet running, waiting {timeout} seconds and retrying...")
                 time.sleep(timeout)
 
     except Exception as e:
-        handle_local_error("Could not launch Kosmos Docker container, encountered error: ", e)
+        handle_local_error("Could not launch Kosmos Docker container: ", e)
 
     return False
 
 
 def get_kosmos_request_params() -> tuple[str, dict, dict]:
     try:
-        read_return = read_config(['kosmos_local_url', 'kosmos_task', 'kosmos_threshold', 'kosmos_offload_vram'])
+        read_return = read_config([
+            'kosmos_local_url',
+            'kosmos_task',
+            'kosmos_threshold',
+            'kosmos_offload_vram'
+        ])
         kosmos_local_url = read_return['kosmos_local_url'] + '/infer_file_stream'
         kosmos_task = read_return['kosmos_task']
         kosmos_threshold = read_return['kosmos_threshold']
         kosmos_offload_vram = str(read_return['kosmos_offload_vram']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Missing Kosmos API config, please provide required API config. Error: ", e)
+        handle_local_error("Missing Kosmos API config: ", e)
 
     payload = {
         'task': kosmos_task,
@@ -1175,7 +1264,7 @@ def kosmos_ocr_page(page_as_pil_image_object, retry_count:int=0) -> str:
     try:
         kosmos_local_url, payload, headers = get_kosmos_request_params()
     except Exception as e:
-        handle_local_error("Could not get Kosmos request parameters, encountered error: ", e)
+        handle_local_error("Could not get Kosmos request parameters: ", e)
     
     try:
         print("\n\nConverting PIL-image object to Byte-Stream\n\n")
@@ -1183,7 +1272,7 @@ def kosmos_ocr_page(page_as_pil_image_object, retry_count:int=0) -> str:
         page_as_pil_image_object.save(img_stream, format='PNG')
         img_stream.seek(0)
     except Exception as e:
-        handle_local_error("Could not convert PIL-image object to Byte-Stream, encountered error: ", e)
+        handle_local_error("Could not convert PIL-image object to Byte-Stream: ", e)
     
     try:
         print("Preparing file payload for Kosmos\n")
@@ -1191,12 +1280,12 @@ def kosmos_ocr_page(page_as_pil_image_object, retry_count:int=0) -> str:
             ('file', ('page-image.png', img_stream, 'image/png'))
         ]
     except Exception as e:
-        handle_local_error("Could not prepare file payload for Kosmos, encountered error: ", e)
+        handle_local_error("Could not prepare file payload for Kosmos: ", e)
     
     try:
         start_kosmos_container()    # Will do nothing if the container is already running!
     except Exception as e:
-        handle_local_error("Could not start Kosmos Docker container, encountered error: ", e)
+        handle_local_error("Could not start Kosmos Docker container: ", e)
     
     try:
         print("\nSending request to Kosmos\n")
@@ -1219,10 +1308,10 @@ def kosmos_ocr_page(page_as_pil_image_object, retry_count:int=0) -> str:
                             else:
                                 print(f"\n\nReceived plain-text event from Kosmos: {event_data}\n\n")
                         except json.JSONDecodeError as e:
-                            print(f"\n\nCould not parse event from Kosmos as JSON dictionary, encountered error: {e}\n\n")
+                            print(f"\n\nCould not parse event from Kosmos as JSON dictionary: {e}\n\n")
                             print(f"\n\nReceived plain-text event from Kosmos: {event}\n\n")
                         except Exception as e:
-                            handle_local_error("Could not process event from Kosmos, encountered error: ", e)
+                            handle_local_error("Could not process event from Kosmos: ", e)
     except requests.exceptions.RequestException as e:
         handle_error_no_return(f"Could not send request to Kosmos, checking if Kosmos is running and attempting to start the service if not. Retry attempt {retry_count+1} of 3. Encountered error: ", e)
         if retry_count >= 3:
@@ -1232,9 +1321,9 @@ def kosmos_ocr_page(page_as_pil_image_object, retry_count:int=0) -> str:
                 start_kosmos_container()    # Will do nothing if the container is already running!
                 return kosmos_ocr_page(page_as_pil_image_object, retry_count=retry_count+1)
             except Exception as e:
-                handle_local_error("Could not start Kosmos Docker container, encountered error: ", e)
+                handle_local_error("Could not start Kosmos Docker container: ", e)
     except Exception as e:
-        handle_local_error("Could not receive a complete response from the Kosmos OCR service, encountered error: ", e)
+        handle_local_error("Could not receive a complete response from the Kosmos OCR service: ", e)
     finally:
         if 'img_stream' in locals() and img_stream:
             img_stream.close()  # io.BytesIO objects are in-memory streams, and while the GC will eventually close them, it's best to do it explicitly here.
@@ -1265,7 +1354,7 @@ def PDFtoKosmosOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
         output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
         output_text_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
     except Exception as e:
-        handle_local_error("Could not extract filename, encountered error: ", e)
+        handle_local_error("Could not extract filename: ", e)
 
     if output_text_file_path.exists() and not read_return['force_re_extract']:
         if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
@@ -1281,13 +1370,13 @@ def PDFtoKosmosOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
         pil_image_object_list = convert_from_path(input_pdf_filepath, 300) # The convert-from_path() function from pdf2image lib intertnally uses Poppler to convert PDF pages to images, and then creates PIP Image objects from them. 300dpi - good balance between quality and performance
         pdf_document_length = len(pil_image_object_list)
     except Exception as e:
-        handle_local_error("Could not image PDF file, encountered error: ", e)
+        handle_local_error("Could not image PDF file: ", e)
     
     # Initialize text output
     try:
         output_text_file = open(output_text_file_path, 'w', encoding='utf-8')
     except Exception as e:
-        handle_local_error("Could not initialize/access output text file, encountered error: ", e)
+        handle_local_error("Could not initialize/access output text file: ", e)
 
     # Initialize page number
     for page_number, image in enumerate(pil_image_object_list, start=1):
@@ -1296,7 +1385,7 @@ def PDFtoKosmosOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
             full_parsed_text = kosmos_ocr_page(image)
             output_text_file.write(f"[PAGE:{page_number}]\n{full_parsed_text}\n")
         except Exception as e:
-            handle_error_no_return("Could not process page, encountered error: ", e)
+            handle_error_no_return("Could not process page: ", e)
             continue
     
     # Close & return
@@ -1323,7 +1412,7 @@ def get_docling_ocr_model(model_name_string:str):
             return RapidOcrOptions()
         
     except Exception as e:
-        handle_local_error("Could not get Docling OCR model, encountered error: ", e)
+        handle_local_error("Could not get Docling OCR model: ", e)
         
 
 def get_docling_vlm_model(model_name_string:str):
@@ -1359,7 +1448,7 @@ def get_docling_vlm_model(model_name_string:str):
             return vlm_model_specs.GEMMA3_27B_MLX
         
     except Exception as e:
-        handle_local_error("Could not get Docling VLM model, encountered error: ", e)
+        handle_local_error("Could not get Docling VLM model: ", e)
 
 
 def get_docling_config() -> dict:
@@ -1383,7 +1472,7 @@ def get_docling_config() -> dict:
             ]
         )
     except Exception as e:
-        handle_local_error("Could not read Docling config, encountered error: ", e)
+        handle_local_error("Could not read Docling config: ", e)
 
 
 def get_docling_converter(docling_config:dict):
@@ -1443,7 +1532,7 @@ def get_docling_converter(docling_config:dict):
         return converter
 
     except Exception as e:
-        handle_local_error("Could not get Docling converter, encountered error: ", e)
+        handle_local_error("Could not get Docling converter: ", e)
 
 
 def docling_ocr_page(page_as_pdf_bytes:bytes, page_number:int, retry_count:int=0) -> str:
@@ -1488,7 +1577,7 @@ def PDFtoDoclingOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
     try:
         read_return = read_config(['force_re_extract', 'ocr_pdfs'])
     except Exception as e:
-        handle_local_error("Could not read required values from config.json when attempting to convert PDF to TXT, encountered error: ", e)
+        handle_local_error("Could not read required values from config.json when attempting to convert PDF to TXT: ", e)
     
     try:
         source_filename = input_pdf_filepath.name
@@ -1497,7 +1586,7 @@ def PDFtoDoclingOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
         output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
         output_text_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
     except Exception as e:
-        handle_local_error("Could not extract filename, encountered error: ", e)
+        handle_local_error("Could not extract filename: ", e)
 
     if output_text_file_path.exists() and not read_return['force_re_extract']:
         if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
@@ -1511,13 +1600,13 @@ def PDFtoDoclingOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
         pdf_document = fitz.open(input_pdf_filepath)
         pdf_document_length = len(pdf_document)
     except Exception as e:
-        handle_local_error("Could not open PDF file, encountered error: ", e)
+        handle_local_error("Could not open PDF file: ", e)
     
     # Initialize text output
     try:
         output_text_file = open(output_text_file_path, 'w', encoding='utf-8')
     except Exception as e:
-        handle_local_error("Could not initialize/access output text file, encountered error: ", e)
+        handle_local_error("Could not initialize/access output text file: ", e)
     
     # Iterate through each page and OCR
     for page_number in range(pdf_document_length):
@@ -1539,7 +1628,7 @@ def PDFtoDoclingOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
             output_text_file.write(f"[PAGE:{page_number + 1}]\n{full_parsed_text}\n")
 
         except Exception as e:
-            handle_error_no_return(f"Could not process page {page_number+1} of {pdf_document_length}, encountered error: ", e)
+            handle_error_no_return(f"Could not process page {page_number+1} of {pdf_document_length}: ", e)
             continue
     
     # Close & return
@@ -1565,7 +1654,7 @@ def UseBackupOcrOnPage(input_pdf_filepath:pathlib.Path, current_page_num:int) ->
     try:
         read_return = read_config(['backup_ocr_service_choice'])
     except Exception as e:
-        handle_local_error("Could not read required values from config.json when attempting to use backup OCR on page, encountered error: ", e)
+        handle_local_error("Could not read required values from config.json when attempting to use backup OCR on page: ", e)
     
     if read_return['backup_ocr_service_choice'] == 'Kosmos':
         try:
@@ -1622,7 +1711,7 @@ def PDFtoTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
     try:
         read_return = read_config(['pdfs_to_txts', 'force_re_extract', 'ocr_pdfs', 'min_char_threshold_for_backup_ocr'])
     except Exception as e:
-        handle_local_error("Could not read required values from config.json when attempting to convert PDF to TXT, encountered error: ", e)
+        handle_local_error("Could not read required values from config.json when attempting to convert PDF to TXT: ", e)
 
     try:
         source_filename = input_pdf_filepath.name
@@ -1643,7 +1732,7 @@ def PDFtoTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
                 print("PyPDF2-extracted .txt already exists but is empty! Overwriting with new .txt file.")
     
     except Exception as e:
-        handle_local_error("Could not complete necessary file system operations when attempting to convert PDF to TXT, encountered error: ", e)
+        handle_local_error("Could not complete necessary file system operations when attempting to convert PDF to TXT: ", e)
     
     try:
         with open(input_pdf_filepath, 'rb') as pdf_file_obj:    # Open PDF file as binary stream. The `with open()` block will automatically close the file after the block is executed.
@@ -1680,10 +1769,10 @@ def PDFtoTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
                         text_to_write = pypdf2_text if len(pypdf2_text) >= len(ocr_text) else ocr_text
                         output_text_file.write(f"[PAGE:{current_page_num}]\n{text_to_write}\n")
                     except Exception as e:
-                        handle_error_no_return("Could not write to output text file, encountered error: ", e)
+                        handle_error_no_return("Could not write to output text file: ", e)
                         continue
     except Exception as e:
-        handle_local_error("Could not process PDF file, encountered error: ", e)
+        handle_local_error("Could not process PDF file: ", e)
 
     print(f"\n\nCompleted default-extraction for PDF file: {input_pdf_filepath}\n\n")
     return output_text_file_path
@@ -1711,7 +1800,7 @@ def init_and_connect_to_docs_loaded_db() -> tuple[sqlite3.Connection, sqlite3.Cu
         conn = sqlite3.connect(sqlite_docs_loaded_db)
         cursor = conn.cursor()
     except Exception as e:
-        handle_local_error("Could not establish connection to sqlite_docs_loaded_db, encountered error: ", e)
+        handle_local_error("Could not establish connection to sqlite_docs_loaded_db: ", e)
 
     # If the database does not currently exist...
     try:
@@ -1729,7 +1818,7 @@ def init_and_connect_to_docs_loaded_db() -> tuple[sqlite3.Connection, sqlite3.Cu
 
         conn.commit()   # Auto-incrementing primary key 'id'
     except Exception as e:
-        handle_local_error("Could not create document_records DB, encountered error: ", e)
+        handle_local_error("Could not create document_records DB: ", e)
     
     try:
         add_column_if_not_exists(cursor, 'document_records', 'document_name', 'TEXT')
@@ -1739,7 +1828,7 @@ def init_and_connect_to_docs_loaded_db() -> tuple[sqlite3.Connection, sqlite3.Cu
         add_column_if_not_exists(cursor, 'document_records', 'chunk_overlap', 'INTEGER')
         add_column_if_not_exists(cursor, 'document_records', 'knowledge_domain', 'TEXT')
     except Exception as e:
-        handle_local_error("Could not add necessary columns to document_records db, encountered error: ", e)
+        handle_local_error("Could not add necessary columns to document_records db: ", e)
 
     return conn, cursor
 
@@ -1750,7 +1839,7 @@ def is_doc_already_loaded_to_db(document_name:str, embedding_model:str, chunk_si
     try:
         conn, cursor = init_and_connect_to_docs_loaded_db()
     except Exception as e:
-        handle_local_error("Could not initialize and connect to docs_loaded_db to check_if_doc_already_loaded_to_db, encountered error: ", e)
+        handle_local_error("Could not initialize and connect to docs_loaded_db to check_if_doc_already_loaded_to_db: ", e)
 
     try:
         cursor.execute("""
@@ -1794,7 +1883,7 @@ def record_doc_loaded_to_db(document_name:str, chunk_size:int, chunk_overlap:int
     try:
         conn, cursor = init_and_connect_to_docs_loaded_db()
     except Exception as e:
-        handle_local_error("Could not connect to docs_loaded_db, encountered error: ", e)
+        handle_local_error("Could not connect to docs_loaded_db: ", e)
     
     try:
         cursor.execute("INSERT INTO document_records (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain) VALUES (?, ?, ?, ?, ?)", (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain))
@@ -1803,7 +1892,7 @@ def record_doc_loaded_to_db(document_name:str, chunk_size:int, chunk_overlap:int
         print("\nDocument record added to document_records DB\n")
         return True
     except Exception as e:
-        handle_local_error("Could not update document_records DB, encountered error: ", e)
+        handle_local_error("Could not update document_records DB: ", e)
     
 
 
@@ -1898,7 +1987,7 @@ def chunk_docs_with_page_numbers(input_filepath:pathlib.Path, chunk_size:int=250
             add_chunk(current_chunk, current_page)
 
     except Exception as e:
-        handle_local_error("Could not chunk document, encountered error: ", e)
+        handle_local_error("Could not chunk document: ", e)
 
     print(f"\n\nGenerated {len(documents)} document chunks\n\n")
     return documents
@@ -1924,14 +2013,14 @@ def core_embedder(chunks:list[dict], selected_embedding_model:str, path_to_knowl
     try:    # To generate a list of Document objects, each containing a 'page_content' string, and a 'metadata' dictionary with 'source_link', 'page_number', and 'source' keys
         numbered_splits = [Document(page_content=chunk['content'], metadata={'source_link':chunk['source_link'], 'page_number': chunk['page_number'], 'source': chunk['source'], 'entities_and_relationships': str(chunk.get('entities_and_relationships', {}))}) for chunk in chunks]
     except Exception as e:
-        handle_local_error("Failed to convert chunks to Document objects for storage to VectorDB, encountered error: ", e)
+        handle_local_error("Failed to convert chunks to Document objects for storage to VectorDB: ", e)
 
     # Load Embedding Model
     embedding_model = None
     try:
         embedding_model = SentenceTransformer(selected_embedding_model, trust_remote_code=True)
     except Exception as e:
-        handle_local_error("Could not load embedding model in core-embedder, encountered error: ", e)
+        handle_local_error("Could not load embedding model in core-embedder: ", e)
 
     # Generate Embeddings for just the page_content
     try:
@@ -1939,7 +2028,7 @@ def core_embedder(chunks:list[dict], selected_embedding_model:str, path_to_knowl
         print("\n\nGenerating embeddings...\n\n")
         embeddings = embedding_model.encode(texts_to_embed)    # By default, convert_to_tensor=False and this is what we want because ChromaDB expects numpy arrays, not PyTorch tensors!
     except Exception as e:
-        handle_local_error("Could not generate embeddings, encountered error: ", e)
+        handle_local_error("Could not generate embeddings: ", e)
     finally:
         if embedding_model is not None:
             del embedding_model
@@ -1986,7 +2075,7 @@ def core_embedder(chunks:list[dict], selected_embedding_model:str, path_to_knowl
                 embeddings=batch_embeddings.tolist()  # Convert embeddings from NumPy arrays to list of lists
             )
     except Exception as e:
-        handle_local_error("Could not store to VectorDB, encountered error: ", e)
+        handle_local_error("Could not store to VectorDB: ", e)
 
     return True
 
@@ -2016,7 +2105,7 @@ def get_request_params_for_graph_entity_extraction_model(rag_response_mode: bool
             generation_config['min_p'] = config_data['graph_model_min_p']
     
     except Exception as e:
-        handle_local_error("Could not get graphing request params, encountered error: ", e)
+        handle_local_error("Could not get graphing request params: ", e)
 
     headers = {
         'Content-Type': 'application/json'
@@ -2057,7 +2146,7 @@ def get_graphing_request_payload(chunk:str, exl2_quantize_graph_model:bool) -> s
 #         print("\nCompleted, returning response\n")
 #         return (response.json()['response'])
 #     except Exception as e:
-#         handle_local_error("Failed /completions request to extract entities and relationships from chunk, encountered error: ", e)
+#         handle_local_error("Failed /completions request to extract entities and relationships from chunk: ", e)
 
 
 def hf_waitress_exl2_graph_api_stream_handler(endpoint_url:str, headers:dict, payload:str, cache_filepath: pathlib.Path = None) -> dict:
@@ -2123,7 +2212,7 @@ def hf_waitress_exl2_graph_api_stream_handler(endpoint_url:str, headers:dict, pa
                         chunk_number += 1
                     
                     except json.JSONDecodeError as e:
-                        handle_error_no_return(f"Failed to parse event data: {event_data}, encountered error: ", e)
+                        handle_error_no_return(f"Failed to parse event data: {event_data}: ", e)
                 elif line.startswith("event: END"):
                     break
                 else:
@@ -2137,7 +2226,7 @@ def hf_waitress_exl2_graph_api_stream_handler(endpoint_url:str, headers:dict, pa
         return full_response
         
     except Exception as e:
-        handle_local_error("Failed request to exl2-stream or exl2-grapher APIs, encountered error: ", e)
+        handle_local_error("Failed request to exl2-stream or exl2-grapher APIs: ", e)
 
 
 def graphing_request_response_handler(grapher_url:str, headers:dict, payload:str) -> dict:
@@ -2147,7 +2236,7 @@ def graphing_request_response_handler(grapher_url:str, headers:dict, payload:str
         print(f"\nResponse (Entities and Relationships): {response}\n")
         return ast.literal_eval(response)
     except Exception as e:
-        handle_local_error("Failed /completions request to extract entities and relationships from chunk, encountered error: ", e)
+        handle_local_error("Failed /completions request to extract entities and relationships from chunk: ", e)
 
 
 def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mode: bool = False, cache_filepath: pathlib.Path = None) -> dict:
@@ -2169,7 +2258,7 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
     try:
         grapher_url, headers, config_data = get_request_params_for_graph_entity_extraction_model(rag_response_mode=rag_response_mode)
     except Exception as e:
-        handle_local_error("Could not get graphing request params, encountered error: ", e)
+        handle_local_error("Could not get graphing request params: ", e)
 
     if config_data['exl2_quantize_graph_model']:   # invoke exl2-grapher API
         try:
@@ -2182,7 +2271,7 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
             # print(f"\nExl2 Bulk-Graphing Response (Entities and Relationships):\n\n{full_response}\n")
             return full_response
         except Exception as e:
-            handle_local_error("Error with request to exl2-grapher API, encountered error: ", e)
+            handle_local_error("Error with request to exl2-grapher API: ", e)
 
     else:   # invoke /completions
         '''
@@ -2208,12 +2297,12 @@ def extract_all_entities_and_relationships(chunk_entities: dict, rag_response_mo
 
                     chunk_entities[chunk_number]['entities_and_relationships'] = response  # Not using chunk_data['entities_and_relationships'] as that would not update the original dict because dicts are passed by reference in Python
                 except Exception as e:
-                    handle_error_no_return(f"\nCould not extract entities and relationships for graph chunk {chunk_number} of total {len(chunk_entities)} chunks, encountered error: ", e)
+                    handle_error_no_return(f"\nCould not extract entities and relationships for graph chunk {chunk_number} of total {len(chunk_entities)} chunks: ", e)
             
             return chunk_entities
                     
         except Exception as e:
-            handle_local_error("\nCould not iterate over chunk entities, encountered error: ", e)
+            handle_local_error("\nCould not iterate over chunk entities: ", e)
 
 
 def get_request_params_for_graph_summarizer_model():
@@ -2240,7 +2329,7 @@ def get_request_params_for_graph_summarizer_model():
             generation_config['min_p'] = config_data['graph_summarizer_min_p']
     
     except Exception as e:
-        handle_local_error("Could not get graphing request params, encountered error: ", e)
+        handle_local_error("Could not get graphing request params: ", e)
 
     graph_summarizer_url = f"http://{config_data['graph_summarizer_access_url']}:{config_data['graph_summarizer_server_port']}"
 
@@ -2270,7 +2359,7 @@ def bring_graph_summarizer_model_online():  # Launch HF-Waitress instance with g
         hf_waitress_graph_summarizer_server_path = pathlib.Path.cwd() / str(config_data['graph_models_base_directory_name']) / str(config_data['graph_summary_generator_directory_name'])
         print(f"\nLaunching HF-Waitress instance with graph summarizer model at path: {hf_waitress_graph_summarizer_server_path}\n")
     except Exception as e:
-        handle_local_error("Could not read graph model config, encountered error: ", e)
+        handle_local_error("Could not read graph model config: ", e)
 
     if utils.is_local_server_online(f"http://{config_data['graph_summarizer_access_url']}:{config_data['graph_summarizer_server_port']}")['server_online']:
         print("\nGraph summarizer model server is already online, skipping launch...\n")
@@ -2282,7 +2371,7 @@ def bring_graph_summarizer_model_online():  # Launch HF-Waitress instance with g
         graph_model_base_url = f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}"
         utils.ensure_minimum_free_vram(int(config_data['minimum_free_vram_for_graph_summarizer_model']), [graph_model_base_url, hf_waitress_base_url])
     except Exception as e:
-        handle_local_error(f"Could not reserve minimum GPU memory ({config_data['minimum_free_vram_for_graph_summarizer_model']}MB) required for Graph-Summarizer model, encountered error: ", e)
+        handle_local_error(f"Could not reserve minimum GPU memory ({config_data['minimum_free_vram_for_graph_summarizer_model']}MB) required for Graph-Summarizer model: ", e)
 
     base_command = 'python' if platform.system() == 'Windows' else 'python3'
 
@@ -2346,7 +2435,7 @@ def bring_graph_summarizer_model_online():  # Launch HF-Waitress instance with g
             time.sleep(timeout)
 
     except Exception as e:
-        handle_local_error("Could not launch HF-Waitress instance with graph-summarizer model, encountered error: ", e)
+        handle_local_error("Could not launch HF-Waitress instance with graph-summarizer model: ", e)
     
     return False
 
@@ -2373,7 +2462,7 @@ def summary_generator_for_graph_db(chunk_entities=None, cache_filepath: pathlib.
     try:
         bring_graph_summarizer_model_online()
     except Exception as e:
-        handle_local_error("Could not bring graph summarizer model online, encountered error: ", e)
+        handle_local_error("Could not bring graph summarizer model online: ", e)
 
     exl2 = str(read_config(['exl2_quantize_graph_summarizer_model'])['exl2_quantize_graph_summarizer_model']).lower() == 'true'        
     
@@ -2382,7 +2471,7 @@ def summary_generator_for_graph_db(chunk_entities=None, cache_filepath: pathlib.
         try:
             summarizer_url, headers, generation_config = get_request_params_for_graph_summarizer_model()
         except Exception as e:
-            handle_local_error("Could not get graphing request params, encountered error: ", e)
+            handle_local_error("Could not get graphing request params: ", e)
 
         try:
             payload = json.dumps({
@@ -2393,7 +2482,7 @@ def summary_generator_for_graph_db(chunk_entities=None, cache_filepath: pathlib.
             # print(f"\nExl2 Bulk-Summary Generation Response:\n\n{full_response}\n")
             return full_response
         except Exception as e:
-            handle_local_error("Error with request to exl2-grapher API, encountered error: ", e)
+            handle_local_error("Error with request to exl2-grapher API: ", e)
 
     else:
         # TODO: Implement non-exl2 bulk-summary generation with /completions
@@ -2605,9 +2694,9 @@ def store_entities_and_relationships_in_graph_db(chunk_entities: dict, selected_
                 add_nodes_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['nodes'], graph, chunk_data['source_doc_name'], chunk_data['page_number'], chunk_data.get('summary', []))
                 add_relationships_to_graph(selected_knowledge_domain, chunk_data['entities_and_relationships']['relationships'], graph, chunk_data['source_doc_name'], chunk_data['page_number'], chunk_data.get('summary', []))
             except Exception as e:
-                handle_error_no_return(f"Could not store entities and relationships for chunk {chunk_number} in {selected_knowledge_domain} graph DB, encountered error: ", e)
+                handle_error_no_return(f"Could not store entities and relationships for chunk {chunk_number} in {selected_knowledge_domain} graph DB: ", e)
     except Exception as e:
-        handle_local_error("Could not iterate over chunk entities for storage in {selected_knowledge_domain} graph DB, encountered error: ", e)
+        handle_local_error("Could not iterate over chunk entities for storage in {selected_knowledge_domain} graph DB: ", e)
 
     print(f"\nSuccessfully stored {len(chunk_entities)} chunks in {selected_knowledge_domain} graph DB\n")
     return True
@@ -2670,7 +2759,7 @@ def append_graph_entities_to_chunks(chunks, complete_chunk_entities):
                 Instead, we simply try to extend and catch relevant exceptions to handle them with a safe fallback: fresh append!
                 '''
         except Exception as e:
-            handle_error_no_return(f"Could not append graph entities to RAG chunk {source_chunk} in complete_chunk_entities, encountered error: ", e)
+            handle_error_no_return(f"Could not append graph entities to RAG chunk {source_chunk} in complete_chunk_entities: ", e)
 
     return chunks
 
@@ -2682,7 +2771,7 @@ def start_falkordb():
         rag_support_module.bring_graph_db_online()
         return jsonify({"message": "FalkorDB Docker container started successfully", "success": True}), 200
     except Exception as e:
-        return handle_api_error("Could not start FalkorDB Docker container, encountered error: ", e)
+        return handle_api_error("Could not start FalkorDB Docker container: ", e)
 
 
 @app.route('/start_perplexica')
@@ -2692,7 +2781,7 @@ def start_perplexica():
         rag_support_module.bring_perplexica_online()
         return jsonify({"message": "Perplexica Docker container started successfully", "success": True}), 200
     except Exception as e:
-        return handle_api_error("Could not start Perplexica Docker container, encountered error: ", e)
+        return handle_api_error("Could not start Perplexica Docker container: ", e)
 
 
 @app.route('/start_searxng')
@@ -2702,7 +2791,7 @@ def start_searxng():
         rag_support_module.bring_searxng_online()
         return jsonify({"message": "SearXNG Docker container started successfully", "success": True}), 200
     except Exception as e:
-        return handle_api_error("Could not start SearXNG Docker container, encountered error: ", e)
+        return handle_api_error("Could not start SearXNG Docker container: ", e)
 
 
 def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with kb-generator model
@@ -2720,7 +2809,7 @@ def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with k
         hf_waitress_kb_generator_server_path = pathlib.Path.cwd() / str(config_data['graph_models_base_directory_name']) / str(config_data['graph_extraction_model_directory_name'])
         print(f"\nLaunching HF-Waitress instance with kb-generator model at path: {hf_waitress_kb_generator_server_path}\n")
     except Exception as e:
-        handle_local_error("Could not read graph model config, encountered error: ", e)
+        handle_local_error("Could not read graph model config: ", e)
 
     if utils.is_local_server_online(f"http://{config_data['graph_model_access_url']}:{config_data['graph_model_server_port']}")['server_online']:
         print("\nGraphing model server is already online, skipping launch...\n")
@@ -2732,7 +2821,7 @@ def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with k
         graph_summarizer_base_url = f"http://{config_data['graph_summarizer_access_url']}:{config_data['graph_summarizer_server_port']}"
         utils.ensure_minimum_free_vram(int(config_data['minimum_free_vram_for_graph_extraction_model']), [graph_summarizer_base_url, hf_waitress_base_url])
     except Exception as e:
-        handle_local_error(f"Could not reserve minimum GPU memory ({config_data['minimum_free_vram_for_graph_extraction_model']}MB) required for Graph-Extraction model, encountered error: ", e)
+        handle_local_error(f"Could not reserve minimum GPU memory ({config_data['minimum_free_vram_for_graph_extraction_model']}MB) required for Graph-Extraction model: ", e)
 
     base_command = 'python' if platform.system() == 'Windows' else 'python3'
 
@@ -2796,7 +2885,7 @@ def bring_graph_extraction_model_online():  # Launch HF-Waitress instance with k
             time.sleep(timeout)
 
     except Exception as e:
-        handle_local_error("Could not launch HF-Waitress instance with graph-extraction model, encountered error: ", e)
+        handle_local_error("Could not launch HF-Waitress instance with graph-extraction model: ", e)
     
     return False
 
@@ -2806,7 +2895,7 @@ def is_graph_blank_or_newly_created(graph):
         result = graph.query("MATCH (n) RETURN count(n)").result_set[0][0]
         return result == 0
     except Exception as e:
-        handle_error_no_return("Could not check if graph is blank or newly created, encountered error: ", e)
+        handle_error_no_return("Could not check if graph is blank or newly created: ", e)
         return False    # Default to False means the check will occur just to be safe!
 
 
@@ -2820,7 +2909,7 @@ def apply_leiden_clustering_to_graph(selected_knowledge_domain):
             raise Exception(status_message)
         return True
     except Exception as e:
-        handle_local_error(f"Could not apply Leiden clustering to the graph for {selected_knowledge_domain}, encountered error: ", e)
+        handle_local_error(f"Could not apply Leiden clustering to the graph for {selected_knowledge_domain}: ", e)
 
 
 @app.route('/generate_graph_communities', methods=['POST'])
@@ -2830,12 +2919,12 @@ def generate_graph_communities():
     try:
         knowledge_domain = request.json.get('knowledge_domain')
     except Exception as e:
-        return handle_api_error("Could not get selected knowledge domain from request, encountered error: ", e)
+        return handle_api_error("Could not get selected knowledge domain from request: ", e)
 
     try:
         apply_leiden_clustering_to_graph(knowledge_domain)
     except Exception as e:
-        return handle_api_error("Could not generate graph communities, encountered error: ", e)
+        return handle_api_error("Could not generate graph communities: ", e)
 
     return jsonify({"message": "Graph communities generated successfully"}), 200
 
@@ -2868,7 +2957,7 @@ def convert_doc_chunks_to_graph_entities(chunks:list[dict]) -> dict:
                     page_number_list.append(int(chunk['page_number']))
                     page_number_list = list(set(page_number_list))   # Remove duplicates
                 except Exception as e:
-                    handle_error_no_return(f"Could not obtain page number from chunk {count} of {len(chunks)}, encountered error: ", e)
+                    handle_error_no_return(f"Could not obtain page number from chunk {count} of {len(chunks)}: ", e)
 
                 graphing_chunk += str(chunk['content'])
                 chunks_in_storage_queue.append(count)
@@ -2891,7 +2980,7 @@ def convert_doc_chunks_to_graph_entities(chunks:list[dict]) -> dict:
                     chunks_in_storage_queue = []    # Reset the storage queue for the next chunk
                     page_number_list = []
             except Exception as e:
-                handle_error_no_return(f"Error processing chunk {count} of {len(chunks)} in assemble_chunks_for_grapd_db(), encountered error: ", e)
+                handle_error_no_return(f"Error processing chunk {count} of {len(chunks)} in assemble_chunks_for_grapd_db(): ", e)
 
         if graphing_chunk: # Add final batch to chunk_entities dict
             try:
@@ -2902,9 +2991,9 @@ def convert_doc_chunks_to_graph_entities(chunks:list[dict]) -> dict:
                     'page_number': page_number_list
                 }   # Clean-up left to the garbage collector as we're at the end of the loop!
             except Exception as e:
-                handle_error_no_return(f"Error processing final batch of chunks in assemble-chunks_for_graph_db(), encountered error: ", e)
+                handle_error_no_return(f"Error processing final batch of chunks in assemble-chunks_for_graph_db(): ", e)
     except Exception as e:
-        handle_local_error(f"Error assembling chunks for graph DB, encountered error: ", e)
+        handle_local_error(f"Error assembling chunks for graph DB: ", e)
 
     return chunk_entities
 
@@ -2941,7 +3030,7 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath:pathlib.Path
         reuse_previous_extract = False
         loaded_entities_and_relationships = False
     except Exception as e:
-        handle_local_error("Could not determine graph cache config, encountered error: ", e)
+        handle_local_error("Could not determine graph cache config: ", e)
     
     if reuse_graph_extraction_cache_without_validation and entities_and_relationships_filepath.exists():
         try:
@@ -2955,7 +3044,7 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath:pathlib.Path
         except Exception as e:
             complete_chunk_entities = None
             loaded_entities_and_relationships = False
-            handle_error_no_return("Could not load previously extracted graph entities and relationships, encountered error: ", e)
+            handle_error_no_return("Could not load previously extracted graph entities and relationships: ", e)
     
     if reuse_graph_summary_cache_without_validation and summaries_filepath.exists():
         try:
@@ -2970,7 +3059,7 @@ def determine_graph_cache_reuse(entities_and_relationships_filepath:pathlib.Path
         except Exception as e:
             if not loaded_entities_and_relationships:
                 complete_chunk_entities = None
-            handle_error_no_return("Could not load previously generated graph summaries, encountered error: ", e)
+            handle_error_no_return("Could not load previously generated graph summaries: ", e)
     
     if complete_chunk_entities is not None:
         reuse_previous_extract = True
@@ -2991,7 +3080,7 @@ def get_graph_cache_filepaths(input_filepath:pathlib.Path, docs_to_knowledge_gra
         return entities_and_relationships_filepath, summaries_filepath
     
     except Exception as e:
-        handle_local_error("Could not set graph generator file names and paths, encountered error: ", e)
+        handle_local_error("Could not set graph generator file names and paths: ", e)
 
 
 def read_graph_generator_config():
@@ -2999,7 +3088,7 @@ def read_graph_generator_config():
         read_return = read_config(['docs_to_knowledge_graph_dir', 'selected_knowledge_domain', 'apply_clustering_to_graph_db_on_doc_load'])
         return read_return['docs_to_knowledge_graph_dir'], read_return['selected_knowledge_domain'], str(read_return['apply_clustering_to_graph_db_on_doc_load']).lower() == 'true'
     except Exception as e:
-        handle_local_error("Could not read graph generator config, encountered error: ", e)
+        handle_local_error("Could not read graph generator config: ", e)
 
 
 def graph_generator(chunks:list[dict], input_filepath:pathlib.Path) -> bool:
@@ -3030,61 +3119,61 @@ def graph_generator(chunks:list[dict], input_filepath:pathlib.Path) -> bool:
     try:
         rag_support_module.bring_graph_db_online()
     except Exception as e:
-        handle_local_error("Could not bring graph DB online, encountered error: ", e)
+        handle_local_error("Could not bring graph DB online: ", e)
 
     try:
         docs_to_knowledge_graph_dir, selected_knowledge_domain, apply_clustering_to_graph_db_on_doc_load = read_graph_generator_config()
         complete_chunk_entities = None
     except Exception as e:
-        handle_local_error("Could not read graph generator config, encountered error: ", e)
+        handle_local_error("Could not read graph generator config: ", e)
 
     try:
         entities_and_relationships_filepath, summaries_filepath = get_graph_cache_filepaths(input_filepath, pathlib.Path(rf"{docs_to_knowledge_graph_dir}").resolve())
     except Exception as e:
-        handle_local_error("Could not set graph generator file names and paths, encountered error: ", e)
+        handle_local_error("Could not set graph generator file names and paths: ", e)
 
     try:
         reuse_previous_extract, skip_summary_generation, complete_chunk_entities = determine_graph_cache_reuse(entities_and_relationships_filepath, summaries_filepath)
     except Exception as e:
-        handle_local_error("Could not determine graph cache reuse, encountered error: ", e)
+        handle_local_error("Could not determine graph cache reuse: ", e)
     
     if not reuse_previous_extract:
         try:
             bring_graph_extraction_model_online()
         except Exception as e:
-            handle_local_error("Could not bring graphing model online, encountered error: ", e)
+            handle_local_error("Could not bring graphing model online: ", e)
 
         try:
             chunk_entities = convert_doc_chunks_to_graph_entities(chunks)
         except Exception as e:
-            handle_local_error("Could not assemble chunks for graph DB, encountered error: ", e)
+            handle_local_error("Could not assemble chunks for graph DB: ", e)
 
         try:
             complete_chunk_entities = extract_all_entities_and_relationships(chunk_entities=chunk_entities, cache_filepath=entities_and_relationships_filepath)
         except Exception as e:
-            handle_local_error("Failed to extract entities and relationships from chunk entities, encountered error: ", e)
+            handle_local_error("Failed to extract entities and relationships from chunk entities: ", e)
     
     try:
         client = rag_support_module.get_graph_db_client()
         graph = client.select_graph(selected_knowledge_domain)  # Will create the graph if it doesn't exist
     except Exception as e:
-        handle_local_error(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB, encountered error: ", e)
+        handle_local_error(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB: ", e)
     
     try:
         store_entities_and_relationships_in_graph_db(complete_chunk_entities, selected_knowledge_domain, graph, skip_summary_generation, summaries_filepath)
     except Exception as e:
-        handle_local_error("Could not store entities and relationships in graph DB, encountered error: ", e)
+        handle_local_error("Could not store entities and relationships in graph DB: ", e)
 
     if apply_clustering_to_graph_db_on_doc_load:
         try:
             apply_leiden_clustering_to_graph(selected_knowledge_domain)
         except Exception as e:
-            handle_error_no_return("Could not apply Leiden clustering to the graph, encountered error: ", e)
+            handle_error_no_return("Could not apply Leiden clustering to the graph: ", e)
 
     try:
         chunks_with_graph_entities = append_graph_entities_to_chunks(chunks, complete_chunk_entities)
     except Exception as e:
-        handle_local_error("Could not append graph entities to chunks, encountered error: ", e)
+        handle_local_error("Could not append graph entities to chunks: ", e)
 
     print(f"\n\nCompleted Graph Generator at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
     return chunks_with_graph_entities
@@ -3122,7 +3211,7 @@ def whoosh_embed_and_graph_doc_chunks(input_filepath:pathlib.Path) -> tuple[int,
     try:
         selected_embedding_model, path_to_knowledge_domain, chunk_sz, chunk_olp, upload_doc_to_graph_db, perform_only_graph_rag = read_embeddings_config()
     except Exception as e:
-        handle_local_error("Could not read embeddings config, encountered error: ", e)
+        handle_local_error("Could not read embeddings config: ", e)
 
     # Chunk Source Data
     print("Chunking Doc")
@@ -3154,7 +3243,7 @@ def whoosh_embed_and_graph_doc_chunks(input_filepath:pathlib.Path) -> tuple[int,
         else:
             print("No chunks generated, skipping indexing and embedding")
     except Exception as e:
-        handle_local_error("Failed to chunk document for storage to VectorDB, encountered error: ", e)
+        handle_local_error("Failed to chunk document for storage to VectorDB: ", e)
     finally:
         print("\nCompleted Document-Upload Processing.\n")
         return chunk_sz, chunk_olp
@@ -3175,7 +3264,7 @@ def determine_sequence_id_for_chat(chat_id: int) -> int:
         conn = sqlite3.connect(sqlite_history_db)
         cursor = conn.cursor()
     except Exception as e:
-        handle_local_error("Could not establish connection to DB for chat history storage, encountered error: ", e)
+        handle_local_error("Could not establish connection to DB for chat history storage: ", e)
 
     try:
         # Determine sequence_id
@@ -3192,7 +3281,7 @@ def determine_sequence_id_for_chat(chat_id: int) -> int:
         return current_sequence_id  # returning current max sequence_id, this will be incremented by 1 when a new response is stored to the db
         
     except Exception as e:
-        handle_local_error("Could not determine sequence ID for storage to chat history DB, encountered error: ", e)
+        handle_local_error("Could not determine sequence ID for storage to chat history DB: ", e)
 
 
 def store_to_chat_history_db(
@@ -3229,25 +3318,25 @@ def store_to_chat_history_db(
         conn = sqlite3.connect(sqlite_history_db)
         cursor = conn.cursor()
     except Exception as e:
-        handle_local_error("Could not establish connection to DB for chat history storage, encountered error: ", e)
+        handle_local_error("Could not establish connection to DB for chat history storage: ", e)
 
     if int(sequence_id) == 1:
         try:
             chat_id = determine_latest_chat_id(cursor)
         except Exception as e:
-            handle_local_error("Could not determine latest chat ID, encountered error: ", e)
+            handle_local_error("Could not determine latest chat ID: ", e)
     
     try:
         prev_max_sequence_id = determine_sequence_id_for_chat(int(chat_id))
         sequence_id = prev_max_sequence_id + 1
     except Exception as e:
-        handle_local_error("Could not determine sequence ID for storage to chat history DB, encountered error: ", e)
+        handle_local_error("Could not determine sequence ID for storage to chat history DB: ", e)
 
     try:
         current_datetime = datetime.datetime.now()
         formatted_datetime = current_datetime.strftime('%d %b %Y - %I:%M %p %Z')
     except Exception as e:
-        handle_local_error("Could not obtain timestamp in store-local_llm_chat_history_to_db, encountered error: ", e)
+        handle_local_error("Could not obtain timestamp in store-local_llm_chat_history_to_db: ", e)
 
     try:
         # Store conversation history into DB
@@ -3284,7 +3373,7 @@ def store_to_chat_history_db(
         conn.commit()
         print(f"\n\nInserted chat history into DB with chat_id: {chat_id}\n\n")
     except Exception as e:
-        handle_local_error("Could not insert chat history into DB, encountered error: ", e)
+        handle_local_error("Could not insert chat history into DB: ", e)
 
     return formatted_datetime, chat_id
 
@@ -3304,7 +3393,7 @@ def load_local_models():
         models = [f for f in os.listdir(model_dir) if os.path.isfile(os.path.join(model_dir, f))]
         draft_models = [f for f in os.listdir(draft_models_dir) if os.path.isfile(os.path.join(draft_models_dir, f))]
     except Exception as e:
-        return handle_api_error("Could not load list of local models, encountered error: ", e)
+        return handle_api_error("Could not load list of local models: ", e)
         
     #print(f"locally available models: {models}")
     return jsonify({
@@ -3323,7 +3412,7 @@ def gguf_reader():
         model_dir = read_config(['model_dir'])['model_dir']
         model_path = pathlib.Path(rf"{str(model_dir)}").resolve() / str(model_name)
     except Exception as e:
-        return handle_api_error("Could not obtain model path, encountered error: ", e)
+        return handle_api_error("Could not obtain model path: ", e)
 
     try:
         from gguf.gguf_reader import GGUFReader
@@ -3346,7 +3435,7 @@ def gguf_reader():
             #print(f"{name}\tshape={shape}\tdtype={dtype}\telements={n_elements}\tbytes={n_bytes}")
             gguf_details += f"{name}\tshape={shape}\tdtype={dtype}\telements={n_elements}\tbytes={n_bytes}\n"
     except Exception as e:
-        return handle_api_error("Could not create GGUFReader, encountered error: ", e)
+        return handle_api_error("Could not create GGUFReader: ", e)
 
     return jsonify(success=True, gguf_details=gguf_details)
 
@@ -3378,7 +3467,7 @@ def upload_new_llm():
         # Save the uploaded file to the specified path
         input_file.save(str(filepath))
     except Exception as e:
-        return handle_api_error("Failed to save LLM to model_dir, encountered error: ", e)
+        return handle_api_error("Failed to save LLM to model_dir: ", e)
 
     return jsonify(success=True)
 
@@ -3496,7 +3585,7 @@ def get_google_drive_user():
         user_name = about_result.get('user', {}).get('emailAddress', 'Unknown User')
         return jsonify(success=True, user_name=user_name)
     except Exception as e:
-        handle_error_no_return("Could not get user name from Google Drive, encountered error: ", e)
+        handle_error_no_return("Could not get user name from Google Drive: ", e)
         return jsonify(success=False)
 
 
@@ -3750,7 +3839,7 @@ def fetch_file_list_from_google_drive():
             })
 
     except Exception as e:
-        return handle_api_error("Could not fetch GDrive files, encountered error: ", e)
+        return handle_api_error("Could not fetch GDrive files: ", e)
     
     return jsonify({'success': True, 'gdrive_files': gdrive_files})
 
@@ -3760,7 +3849,7 @@ def stage_gdrive_file(filename_with_extension, file_content, mime_type, lars_use
     try:
         staging_info_record = prepare_basic_staging_info_record(filename_with_extension, lars_user_id, 'Google Drive')
     except Exception as e:
-        handle_local_error(f"Server-side error - could not prepare staging info record for Google Drive file: '{filename_with_extension}', encountered error: ", e)
+        handle_local_error(f"Server-side error - could not prepare staging info record for Google Drive file: '{filename_with_extension}': ", e)
     
     try:
         staged_file_info = check_if_file_already_staged(staging_info_record)
@@ -3782,7 +3871,7 @@ def stage_gdrive_file(filename_with_extension, file_content, mime_type, lars_use
     try:
         staged_filename, staged_filepath = save_file_to_staging_dir(file_to_stage)
     except Exception as e:
-        handle_local_error("Server-side error, could not save file to staging area, encountered error: ", e)
+        handle_local_error("Server-side error, could not save file to staging area: ", e)
     
     try:
         staging_info_record['document_name_and_extension'] = staged_filename # secure_filename version of original filename
@@ -3792,7 +3881,7 @@ def stage_gdrive_file(filename_with_extension, file_content, mime_type, lars_use
         staging_info_record['status'] = 'Staged - File Saved to Staging Area'
         insert_into_staging_db(staging_info_record, skip_check=True)  # `file_already_staged` check has already been performed, so this will insert directly into the DB barring some error.
     except Exception as e:
-        handle_local_error("Server-side error, could not insert file into staging DB, encountered error: ", e)
+        handle_local_error("Server-side error, could not insert file into staging DB: ", e)
     
     return staging_info_record
 
@@ -3893,17 +3982,17 @@ def download_folder(service, folder_id, folder_name=None, lars_user_id=None):
                     staged_file_records.extend(download_folder(service, file_id, filename, lars_user_id))  # in this case, file_id will be the folder id!
                     print(f"\nNested GDrive Folder '{filename}' downloaded successfully\n")
                 except Exception as e:
-                    handle_error_no_return("Could not download nested folder from GDrive, encountered error: ", e)
+                    handle_error_no_return("Could not download nested folder from GDrive: ", e)
             else:
                 try:
                     staged_file_records.append(download_gdrive_file(service, file_id, filename, mime_type, lars_user_id))
                     print(f"\nGDrive File '{filename}' downloaded successfully\n")
                 except Exception as e:
-                    handle_error_no_return("Server-side error downloading GDrive file, encountered error: ", e)
+                    handle_error_no_return("Server-side error downloading GDrive file: ", e)
             
         print(f"\n\nGDrive folder '{folder_name}' downloaded successfully\n\n")
     except Exception as e:
-        handle_local_error(f"Error downloading Google Drive folder: '{folder_name}' in the GDrive download folder method, encountered error: ", e)
+        handle_local_error(f"Error downloading Google Drive folder: '{folder_name}' in the GDrive download folder method: ", e)
 
     return staged_file_records
 
@@ -3915,7 +4004,7 @@ def gdrive_downloader(service, file_or_folder_id, filename, mime_type, mime_type
         else:
             return download_gdrive_file(service, file_or_folder_id, filename, mime_type, lars_user_id)
     except Exception as e:
-        handle_local_error("Error downloading file from Google Drive in the gdrive-downloader() method, encountered error: ", e)
+        handle_local_error("Error downloading file from Google Drive in the gdrive-downloader() method: ", e)
 
 
 @app.route('/gdrive_file_transfer_to_staging', methods=['POST'])
@@ -3938,7 +4027,7 @@ def gdrive_file_transfer_to_staging():
         mime_type = file_metadata.get('mimeType', gdrive_file_mimeType)
         mime_type_category = categorize_mimetype(mime_type)
     except Exception as e:
-        return handle_api_error(f"Could not read GoogleDrive file metadata for file: '{original_filename}', encountered error: ", e)
+        return handle_api_error(f"Could not read GoogleDrive file metadata for file: '{original_filename}': ", e)
 
     try:
         staged_info = gdrive_downloader(service, gdrive_file_id, original_filename, mime_type, mime_type_category, lars_user_id)
@@ -3989,12 +4078,12 @@ def get_text_extract_from_pdf(pdf_filepath:pathlib.Path) -> pathlib.Path:
             try:
                 txt_filepath = PDFtoTXT(pdf_filepath)
             except Exception as e:
-                handle_local_error("Failed to extract text from the PDF document, even via fallback PyPDF2, encountered error: ", e)
+                handle_local_error("Failed to extract text from the PDF document, even via fallback PyPDF2: ", e)
     else:
         try:
             txt_filepath = PDFtoTXT(pdf_filepath)
         except Exception as e:
-            handle_local_error("Failed to extract text from the PDF document via PyPDF2, encountered error: ", e)
+            handle_local_error("Failed to extract text from the PDF document via PyPDF2: ", e)
     
     return txt_filepath
 
@@ -4036,9 +4125,9 @@ def prep_and_execute_unoconv_conversion(input_filepath: pathlib.Path, target_dir
         convert_to_pdf_with_unoconv(input_filepath, output_filepath)
         return output_filepath
     except subprocess.CalledProcessError as e:
-        handle_local_error("Could not convert file to PDF, encountered error: ", e)
+        handle_local_error("Could not convert file to PDF: ", e)
     except Exception as e:
-        handle_local_error("Unexpected error when converting file to PDF, encountered error: ", e)
+        handle_local_error("Unexpected error when converting file to PDF: ", e)
 
 
 def check_if_converted_file_exists(pdf_filename: str) -> tuple[bool, pathlib.Path]:
@@ -4086,7 +4175,7 @@ def get_pdf_filepath_for_upload(filepath: pathlib.Path) -> pathlib.Path:
         else:
             return filepath
     except Exception as e:
-        handle_local_error("Could not get PDF filepath for upload, encountered error: ", e)
+        handle_local_error("Could not get PDF filepath for upload: ", e)
 
 
 def upload_to_rag_and_records_databases(original_filename:str, txt_filepath:pathlib.Path) -> bool:
@@ -4117,7 +4206,7 @@ def upload_to_rag_and_records_databases(original_filename:str, txt_filepath:path
         else:
             print("Extracted document is empty! Not saving to Records DB.")
     except Exception as e:
-        handle_error_no_return("Unable to record document loading to Records DB, encountered error: ", e)
+        handle_error_no_return("Unable to record document loading to Records DB: ", e)
 
     return True
 
@@ -4144,12 +4233,12 @@ def prepare_basic_staging_info_record(filename_with_extension:str, user_id:str, 
         force_ocr = str(read_return['force_ocr']).lower() == 'true'
         ocr_service_choice = str(read_return['ocr_service_choice'])
     except Exception as e:
-        handle_local_error("Could not read config when preparing basic staging info record, encountered error: ", e)
+        handle_local_error("Could not read config when preparing basic staging info record: ", e)
 
     try:
         upload_id = str(uuid.uuid4())
     except Exception as e:
-        handle_local_error("Could not generate unique ID for staging info record, encountered error: ", e)
+        handle_local_error("Could not generate unique ID for staging info record: ", e)
     
     try:
         staging_info_record = {
@@ -4164,7 +4253,7 @@ def prepare_basic_staging_info_record(filename_with_extension:str, user_id:str, 
             'status': 'Basic Ticket Created'
         }
     except Exception as e:
-        handle_local_error("Could not prepare basic staging info record, encountered error: ", e)
+        handle_local_error("Could not prepare basic staging info record: ", e)
     
     return staging_info_record
     
@@ -4180,7 +4269,7 @@ def init_and_connect_to_upload_staging_db() -> tuple[sqlite3.Connection, sqlite3
         conn = sqlite3.connect(upload_staging_db)
         cursor = conn.cursor()
     except Exception as e:
-        handle_local_error("Could not establish connection to upload_staging_db, encountered error: ", e)
+        handle_local_error("Could not establish connection to upload_staging_db: ", e)
     
     try:    # 1. Create table if it doesn't already exist - not adding the UNIQUE constraint here as it will only apply to new table creations, not future schema changes!
         cursor.execute('''
@@ -4203,7 +4292,7 @@ def init_and_connect_to_upload_staging_db() -> tuple[sqlite3.Connection, sqlite3
 
         conn.commit()   # Auto-incrementing primary key 'id'
     except Exception as e:
-        handle_local_error("Could not create upload_staging table, encountered error: ", e)
+        handle_local_error("Could not create upload_staging table: ", e)
     
     try:    # 2. Add columns if they don't already exist
         add_column_if_not_exists(cursor, 'upload_staging', 'upload_id', 'TEXT')
@@ -4219,7 +4308,7 @@ def init_and_connect_to_upload_staging_db() -> tuple[sqlite3.Connection, sqlite3
         add_column_if_not_exists(cursor, 'upload_staging', 'staged_datetime', 'TEXT')
         add_column_if_not_exists(cursor, 'upload_staging', 'status', 'TEXT')
     except Exception as e:
-        handle_local_error("Could not add necessary columns to upload_staging table, encountered error: ", e)
+        handle_local_error("Could not add necessary columns to upload_staging table: ", e)
     
     return conn, cursor
 
@@ -4228,7 +4317,7 @@ def update_existing_entry_in_staging_db(doc_info: dict, id: int):
     try:
         conn, cursor = init_and_connect_to_upload_staging_db()
     except Exception as e:
-        handle_local_error("Could not connect to upload staging DB, encountered error: ", e)
+        handle_local_error("Could not connect to upload staging DB: ", e)
     
     try:
         cursor.execute('''
@@ -4240,7 +4329,7 @@ def update_existing_entry_in_staging_db(doc_info: dict, id: int):
         )
         conn.commit()
     except Exception as e:
-        handle_local_error("Could not update existing entry in upload staging DB, encountered error: ", e)
+        handle_local_error("Could not update existing entry in upload staging DB: ", e)
     finally:
         cursor.close()
         conn.close()
@@ -4251,7 +4340,7 @@ def check_for_staged_file_info_in_staging_db(file_transfer_info: dict):
     try:
         conn, cursor = init_and_connect_to_upload_staging_db()
     except Exception as e:
-        handle_local_error("Could not connect to upload staging DB, encountered error: ", e)
+        handle_local_error("Could not connect to upload staging DB: ", e)
     
     try:
         cursor.execute('''
@@ -4281,7 +4370,7 @@ def check_for_staged_file_info_in_staging_db(file_transfer_info: dict):
         else:
             return None
     except Exception as e:
-        handle_local_error("Could not check if files are already staged, encountered error: ", e)
+        handle_local_error("Could not check if files are already staged: ", e)
     finally:
         cursor.close()
         conn.close()
@@ -4295,7 +4384,7 @@ def validate_file_transfer_info(file_transfer_info: dict):
                 raise Exception(f"Invalid request, missing key information for bulk download request: {key}")
         return True
     except Exception as e:
-        handle_local_error("File transfer info validation failed, encountered error: ", e)
+        handle_local_error("File transfer info validation failed: ", e)
 
 
 def check_if_file_already_staged(file_transfer_info: dict):
@@ -4322,7 +4411,7 @@ def check_if_file_already_staged(file_transfer_info: dict):
             print(f"\n\nFile not previously staged.\n\n")
             return None
     except Exception as e:
-        handle_local_error("Could not check if file is already staged, encountered error: ", e)
+        handle_local_error("Could not check if file is already staged: ", e)
 
 
 def delete_entry_from_staging_db(doc: dict, id: int = None):
@@ -4339,7 +4428,7 @@ def delete_entry_from_staging_db(doc: dict, id: int = None):
                 )
                 conn.commit()
             except Exception as e:
-                handle_local_error("Could not delete entry from upload staging DB, encountered error: ", e)
+                handle_local_error("Could not delete entry from upload staging DB: ", e)
             finally:
                 cursor.close()
                 conn.close()
@@ -4371,7 +4460,7 @@ def insert_into_staging_db(doc_info: dict, skip_check: bool = False):
     try:
         conn, cursor = init_and_connect_to_upload_staging_db()
     except Exception as e:
-        handle_local_error("Could not connect to upload staging DB, encountered error: ", e)
+        handle_local_error("Could not connect to upload staging DB: ", e)
     
     try:    # Queue in staging DB
         cursor.execute('''
@@ -4408,7 +4497,7 @@ def insert_into_staging_db(doc_info: dict, skip_check: bool = False):
         )
         conn.commit()
     except Exception as e:
-        handle_local_error("Could not add new entry to upload staging DB, encountered error: ", e)
+        handle_local_error("Could not add new entry to upload staging DB: ", e)
     finally:
         cursor.close()
         conn.close()
@@ -4430,7 +4519,7 @@ def perform_post_bulk_upload_cleanup(data_queue: queue.Queue = None):
             handle_error_no_return(f"\nCould not shut down graph summarizer model at URL {summarizer_url}, proceeding regardless...\n")
             if data_queue is not None: data_queue.put(f"Error shutting down graph summarizer model at URL {summarizer_url} | failure")
     except Exception as e:
-        handle_error_no_return("Could not shutdown graph summarizer model, encountered error: ", e)
+        handle_error_no_return("Could not shutdown graph summarizer model: ", e)
 
     # 2. Shutdown the graph extraction model
     try:
@@ -4444,7 +4533,7 @@ def perform_post_bulk_upload_cleanup(data_queue: queue.Queue = None):
             handle_error_no_return(f"\nCould not shut down graph extraction model at URL {graph_extraction_url}, proceeding regardless...\n")
             if data_queue is not None: data_queue.put(f"Error shutting down graph extraction model at URL {graph_extraction_url} | failure")
     except Exception as e:
-        handle_error_no_return("Could not shutdown graph extraction model, encountered error: ", e)
+        handle_error_no_return("Could not shutdown graph extraction model: ", e)
 
     # 3. Ensure chat-LLM server is online
     try:
@@ -4453,7 +4542,7 @@ def perform_post_bulk_upload_cleanup(data_queue: queue.Queue = None):
         exclusive_server_mode = str(read_return['exclusive_server_mode']).lower() == 'true'
         if data_queue is not None: data_queue.put(f"Checking if {server_to_start} chat-LLM server is online... | waiting")
     except Exception as e:
-        handle_error_no_return("Server-side error, could not read local_llm_server from config.json, encountered error: ", e)
+        handle_error_no_return("Server-side error, could not read local_llm_server from config.json: ", e)
     
     try:
         if server_to_start == 'hf-waitress':
@@ -4488,7 +4577,7 @@ def perform_post_bulk_upload_cleanup(data_queue: queue.Queue = None):
             handle_error_no_return(f"Invalid local LLM server choice: {server_to_start}")
             if data_queue is not None: data_queue.put(f"Invalid local LLM server choice: {server_to_start} | failure")
     except Exception as e:
-        handle_error_no_return("Could not start local LLM server post-document upload, encountered error: ", e)
+        handle_error_no_return("Could not start local LLM server post-document upload: ", e)
         if data_queue is not None: data_queue.put(f"Error starting local LLM server post-document upload | failure")
 
     return True
@@ -4529,7 +4618,7 @@ def move_file_to_upload_dir(staged_filename: str, staged_filepath: pathlib.Path)
     except FileNotFoundError as f:
         handle_local_error(f"File not found: {staged_filepath}", f)
     except Exception as e:
-        handle_local_error("Could not move file to upload folder, encountered error: ", e)
+        handle_local_error("Could not move file to upload folder: ", e)
 
 
 def enable_kosmos_vram_offloading():
@@ -4542,7 +4631,7 @@ def disable_kosmos_vram_offloading():
         if kosmos_offload_vram_enabled: write_config({'kosmos_offload_vram': False})
         return kosmos_offload_vram_enabled
     except Exception as e:
-        handle_error_no_return("Could not disable Kosmos VRAM offloading, encountered error: ", e)
+        handle_error_no_return("Could not disable Kosmos VRAM offloading: ", e)
 
 
 def invoke_offload_kosmos_vram_endpoint():
@@ -4663,7 +4752,7 @@ def bulk_upload_files():
         docs_to_upload = request.form['docs_to_upload']
         docs_to_upload = json.loads(docs_to_upload)
     except Exception as e:
-        return handle_api_error("Server-side error, could not read bulk upload request, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read bulk upload request: ", e)
     
     data_queue = queue.Queue()
     stop_event = threading.Event()
@@ -4673,12 +4762,12 @@ def bulk_upload_files():
             try:
                 bulk_text_extract_from_staging_area(docs_to_upload, data_queue)
             except Exception as e:
-                handle_local_error("Server-side error, could not perform bulk text extraction, encountered error: ", e)
+                handle_local_error("Server-side error, could not perform bulk text extraction: ", e)
             
             try:
                 bulk_upload_files_to_rag_and_records_databases(docs_to_upload, data_queue)
             except Exception as e:
-                handle_local_error("Server-side error, could not bulk upload files to RAG & Records databases, encountered error: ", e)
+                handle_local_error("Server-side error, could not bulk upload files to RAG & Records databases: ", e)
         finally:
             data_queue.put(None)
             print("\n\nDocument upload stream done, breaking thread\n\n")
@@ -4690,7 +4779,7 @@ def bulk_upload_files():
             thread.start()
         except Exception as e:
             data_queue.put(f"Could not start sync process for bulk file upload | failure")
-            return handle_api_error("Could not start thread in the bulk_process_files() method, encountered error: ", e)
+            return handle_api_error("Could not start thread in the bulk_process_files() method: ", e)
 
         while True:
             if stop_event.is_set(): #TODO: Add Cancel-Sync button to UI! Logic here will be simialr to STOP_GENERATION in hf_waitress.py
@@ -4719,7 +4808,7 @@ def save_file_to_staging_dir(input_file) -> tuple[str, pathlib.Path]:   # input_
         print(f"\nSaved file {filename} to {filepath} successfully.\n")
         return filename, filepath
     except Exception as e:
-        handle_local_error("Could not save file to staging directory, encountered error: ", e)
+        handle_local_error("Could not save file to staging directory: ", e)
 
 
 @app.route('/file_transfer_to_staging', methods=['POST'])
@@ -4762,7 +4851,7 @@ def file_transfer_to_staging():
         file_transfer_info = request.form['file_transfer_info']
         file_transfer_info = json.loads(file_transfer_info)
     except Exception as e:
-        return handle_api_error("Server-side error, could not read file transfer data, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read file transfer data: ", e)
 
     try:    # validate file transfer data
         validate_file_transfer_info(file_transfer_info) # exception will be raised if invalid
@@ -4784,7 +4873,7 @@ def file_transfer_to_staging():
     try:
         staged_filename, staged_filepath = save_file_to_staging_dir(file_to_stage)
     except Exception as e:
-        return handle_api_error("Server-side error, could not save file to staging area, encountered error: ", e)
+        return handle_api_error("Server-side error, could not save file to staging area: ", e)
 
     try:
         file_transfer_info['document_name_and_extension'] = staged_filename # secure-filename version of original filename
@@ -4794,7 +4883,7 @@ def file_transfer_to_staging():
         file_transfer_info['status'] = 'Staged - File Saved to Staging Area'
         insert_into_staging_db(file_transfer_info, skip_check=True)  # `file_already_staged` check has already been performed, so this will insert directly into the DB barring some error.
     except Exception as e:
-        return handle_api_error("Server-side error, could not insert file into staging DB, encountered error: ", e)
+        return handle_api_error("Server-side error, could not insert file into staging DB: ", e)
     
     return jsonify(success=True, file_previously_staged=False, staged_file_info=file_transfer_info)
     
@@ -4805,7 +4894,7 @@ def check_for_pending_uploads_for_user(user_id: str):
     try:
         conn, cursor = init_and_connect_to_upload_staging_db()
     except Exception as e:
-        handle_local_error("Could not connect to upload staging DB to check for pending uploads, encountered error: ", e)
+        handle_local_error("Could not connect to upload staging DB to check for pending uploads: ", e)
 
     try:
         cursor.execute('''
@@ -4837,7 +4926,7 @@ def check_for_pending_uploads_for_user(user_id: str):
         else:
             return []
     except Exception as e:
-        handle_local_error("Could not check for pending uploads, encountered error: ", e)
+        handle_local_error("Could not check for pending uploads: ", e)
     finally:
         cursor.close()
         conn.close()
@@ -4848,20 +4937,20 @@ def check_for_pending_uploads():
     try:
         user_id = request.form['user_id']
     except Exception as e:
-        return handle_api_error("Server-side error, could not read user ID, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read user ID: ", e)
     
     try:
         files_staged = check_for_pending_uploads_for_user(user_id)
         return jsonify(success=True, files_already_staged = True, list_of_files_staged=files_staged) if len(files_staged) > 0 else jsonify(success=True, files_already_staged = False, list_of_files_staged=[])
     except Exception as e:
-        return handle_api_error("Server-side error, could not check for pending uploads, encountered error: ", e)
+        return handle_api_error("Server-side error, could not check for pending uploads: ", e)
     
 
 def cancel_upload_for_staged_files(user_id: str):
     try:
         conn, cursor = init_and_connect_to_upload_staging_db()
     except Exception as e:
-        handle_local_error("Could not connect to upload staging DB to cancel pending uploads, encountered error: ", e)
+        handle_local_error("Could not connect to upload staging DB to cancel pending uploads: ", e)
     
     # 1. Check for staged files and attmept disk deletion
     try:
@@ -4877,7 +4966,7 @@ def cancel_upload_for_staged_files(user_id: str):
                 safe_remove_file_from_filepath(pathlib.Path(rf"{file['staged_filepath']}").resolve())
                 safe_remove_file_from_filepath(pathlib.Path(rf"{file['txt_filepath']}").resolve())
     except Exception as e:
-        handle_local_error("Could not check for pending uploads, encountered error: ", e)
+        handle_local_error("Could not check for pending uploads: ", e)
     
     # 2. Delete from staging DB
     try:
@@ -4889,7 +4978,7 @@ def cancel_upload_for_staged_files(user_id: str):
         )
         conn.commit()
     except Exception as e:
-        handle_local_error("Could not delete pending uploads from staging DB, encountered error: ", e)
+        handle_local_error("Could not delete pending uploads from staging DB: ", e)
     
     finally:
         cursor.close()
@@ -4903,12 +4992,12 @@ def cancel_pending_uploads():
     try:
         user_id = request.form['user_id']
     except Exception as e:
-        return handle_api_error("Server-side error, could not read user ID, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read user ID: ", e)
     
     try:
         cancel_upload_for_staged_files(user_id)
     except Exception as e:
-        return handle_api_error("Server-side error, could not cancel pending uploads, encountered error: ", e)
+        return handle_api_error("Server-side error, could not cancel pending uploads: ", e)
     
     return jsonify(success=True)
 
@@ -4936,7 +5025,7 @@ def store_user_rating():
         chat_id_for_rating = request.form['chat_id']
         sequence_id_for_rating = request.form['sequence_id']
     except Exception as e:
-        return handle_api_error("Server-side error, could not read user rating or failed to obtain chat/sequence ID, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read user rating or failed to obtain chat/sequence ID: ", e)
 
     # print("user_rating: ", user_rating)
     # print("chat_id_for_rating: ", chat_id_for_rating)
@@ -4946,7 +5035,7 @@ def store_user_rating():
         conn = sqlite3.connect(sqlite_history_db)
         cursor = conn.cursor()
     except Exception as e:
-        return handle_api_error("Could not connect to chat history DB for storage of user-rating, encountered error: ", e)
+        return handle_api_error("Could not connect to chat history DB for storage of user-rating: ", e)
 
     try:
         cursor.execute(
@@ -4959,7 +5048,7 @@ def store_user_rating():
         )
         conn.commit()
     except Exception as e:
-        return handle_api_error("Could not store user-rating to chat history db, encountered error: ", e)
+        return handle_api_error("Could not store user-rating to chat history db: ", e)
 
     conn.close()
 
@@ -5049,7 +5138,7 @@ def asr_server_starter(hard_reboot_required: bool = False):
         hf_waitress_asr_server_path = pathlib.Path.cwd() / str(config_data['voice_base_directory_name']) / str(config_data['asr_subdirectory_name'])
         print(f"\nLaunching HF-Waitress instance for ASR at path: {hf_waitress_asr_server_path}\n")
     except Exception as e:
-        handle_local_error("Could not read ASR model config, encountered error: ", e)
+        handle_local_error("Could not read ASR model config: ", e)
     
     print("\n\nProceeding to launch HF-Waitress ASR-ASGI server\n\n")
     
@@ -5083,7 +5172,7 @@ def asr_server_starter(hard_reboot_required: bool = False):
                     text=True,
                 )
     except Exception as e:
-        handle_local_error("Could not launch ASR-Waitress instance, encountered error: ", e)
+        handle_local_error("Could not launch ASR-Waitress instance: ", e)
 
     try:
         for _ in range(config_data['hf_waitress_server_retry_attempts']):
@@ -5132,14 +5221,14 @@ def asr_server_starter_endpoint():
         data = request.get_json()
         hard_reboot_required = data.get('hard_reboot_required', 'false')
     except Exception as e:
-        return handle_api_error("Could not read request, encountered error: ", e)
+        return handle_api_error("Could not read request: ", e)
     
     try:
         result = asr_server_starter(hard_reboot_required = (hard_reboot_required or ASR_CHANGE_RELOAD_TRIGGER_SET)) # If either is True, the ASR server will be restarted.
         ASR_CHANGE_RELOAD_TRIGGER_SET = False
         return jsonify(result)
     except Exception as e:
-        return handle_api_error("Could not start ASR server, encountered error: ", e)
+        return handle_api_error("Could not start ASR server: ", e)
 
 
 def get_tts_pipeline(tts_name: str, **kwargs):
@@ -5149,7 +5238,7 @@ def get_tts_pipeline(tts_name: str, **kwargs):
         try:
             return KPipeline(lang_code=kwargs['kokoro_language_code'])
         except Exception as e:
-            raise Exception(f"Could not load Kokoro 82M TTS pipeline, encountered error: {e}")
+            raise Exception(f"Could not load Kokoro 82M TTS pipeline: {e}")
     else:
         raise Exception(f"Invalid TTS choice: {tts_name}")
 
@@ -5161,13 +5250,13 @@ def tts_pipeline_core_loader():
     try:
         read_return = read_config(['selected_tts', 'selected_kokoro_voice', 'tts_sample_rate', 'kokoro_language_code'])
     except Exception as e:
-        handle_local_error("Server-side error, could not read tts configuration, encountered error: ", e)
+        handle_local_error("Server-side error, could not read tts configuration: ", e)
     
     try:
         kwargs = {'tts_sample_rate': read_return['tts_sample_rate'], 'kokoro_voice': read_return['selected_kokoro_voice'], 'kokoro_language_code': read_return['kokoro_language_code']}
         TTS_PIPELINE = get_tts_pipeline(tts_name=read_return['selected_tts'], **kwargs)
     except Exception as e:
-        handle_local_error("Server-side error, could not load tts pipeline, encountered error: ", e)
+        handle_local_error("Server-side error, could not load tts pipeline: ", e)
 
     return True
 
@@ -5179,7 +5268,7 @@ def load_tts_pipeline():
         tts_pipeline_core_loader()
         return jsonify(success=True)
     except Exception as e:
-        return handle_api_error("Server-side error, could not load tts pipeline, encountered error: ", e) 
+        return handle_api_error("Server-side error, could not load tts pipeline: ", e) 
     
 
 def synth_to_wav_bytes(text: str) -> bytes:
@@ -5188,7 +5277,7 @@ def synth_to_wav_bytes(text: str) -> bytes:
     try:
         read_return = read_config(['selected_tts', 'selected_kokoro_voice', 'tts_sample_rate'])
     except Exception as e:
-        raise Exception(f"Could not read tts configuration, encountered error: {e}")
+        raise Exception(f"Could not read tts configuration: {e}")
     
     try:
         if read_return['selected_tts'] == 'kokoro_82m':
@@ -5211,7 +5300,7 @@ def synth_to_wav_bytes(text: str) -> bytes:
         else:
             raise Exception(f"Invalid TTS choice: {read_return['selected_tts']}")
     except Exception as e:
-        raise Exception(f"Could not synthesize TTS audio, encountered error: {e}")
+        raise Exception(f"Could not synthesize TTS audio: {e}")
 
 
 @app.route('/tts_voice', methods=['POST'])
@@ -5220,7 +5309,7 @@ def tts_voice():
         payload = request.get_json(silent=True) or {}
         text = (payload.get('text') or '').strip()
     except Exception as e:
-        return handle_api_error("Server-side error, could not read text or voice, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read text or voice: ", e)
     
     try:
         wav_bytes = synth_to_wav_bytes(text)
@@ -5233,7 +5322,7 @@ def tts_voice():
             }
         )
     except Exception as e:
-        return handle_api_error("Server-side error, could not synthesize TTS audio, encountered error: ", e)
+        return handle_api_error("Server-side error, could not synthesize TTS audio: ", e)
 
 
 def check_status_and_shutdown_llm_server(server_to_shutdown: str):
@@ -5242,7 +5331,7 @@ def check_status_and_shutdown_llm_server(server_to_shutdown: str):
     try:
         target_server_url = get_url_for_server(server_to_shutdown)  # will throw error if invalid server choice
     except Exception as e:
-        err_msg = f"Could not check if the server is running, encountered error: "
+        err_msg = f"Could not check if the server is running: "
         handle_error_no_return(err_msg, e)
         return {'success': False, 'message': f"{err_msg} {e}"}
     
@@ -5274,12 +5363,12 @@ def shutdown_local_llm_server():
         data = request.get_json()
         server_to_shutdown = data.get('server_to_shutdown')
     except Exception as e:
-        return handle_api_error("Server-side error, could not read server_to_shutdown from the POST request, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read server_to_shutdown from the POST request: ", e)
 
     try:
         return jsonify(check_status_and_shutdown_llm_server(server_to_shutdown = server_to_shutdown))
     except Exception as e:
-        return handle_api_error("Server-side error, could not shutdown local LLM server, encountered error: ", e)
+        return handle_api_error("Server-side error, could not shutdown local LLM server: ", e)
 
 
 def run_prechecks_for_llama_cpp_server_starter(exclusive_server_mode: bool):
@@ -5376,7 +5465,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
     try:
         precheck_result = run_prechecks_for_llama_cpp_server_starter(exclusive_server_mode)
     except Exception as e:
-        handle_local_error("Could not run prechecks for llama.cpp server starter, encountered error: ", e)
+        handle_local_error("Could not run prechecks for llama.cpp server starter: ", e)
     
     if precheck_result['skip_fresh_start']:
         return precheck_result
@@ -5605,7 +5694,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                 LLAMA_CPP_PROCESS = subprocess.Popen(llama_cpp_safe_launch_args, stdout=f, stderr=subprocess.STDOUT, text=True)    #stdout has already been redirected to the file, so simply direct stderr to stdout!
 
     except Exception as e:
-        handle_local_error("Could not launch llama.cpp process, encountered error: ", e)
+        handle_local_error("Could not launch llama.cpp process: ", e)
 
     try:
         for _ in range(read_return['llama_cpp_server_retry_attempts']):
@@ -5761,7 +5850,7 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
         lars_read_return = read_config(['hf_waitress_server_timeout_seconds', 'hf_waitress_server_retry_attempts'])
         hf_waitress_base_url = get_url_for_server('hf-waitress')
     except Exception as e:
-        handle_local_error("Could not read hf_config.json, encountered error: ", e)
+        handle_local_error("Could not read hf_config.json: ", e)
     
     print("\n\nProceeding to launch HF-Waitress server\n\n")
     
@@ -5820,7 +5909,7 @@ def hf_waitress_server_starter(exclusive_server_mode: bool, hard_reboot_required
                 hf_waitress_process = subprocess.Popen(command_list, stdout=f, stderr=subprocess.STDOUT, text=True)
 
     except Exception as e:
-        handle_local_error(f"Could not launch HF-Waitress process in directory: {os.getcwd()}, encountered error: ", e)
+        handle_local_error(f"Could not launch HF-Waitress process in directory: {os.getcwd()}: ", e)
 
     try:
         for _ in range(lars_read_return['hf_waitress_server_retry_attempts']):
@@ -5871,14 +5960,14 @@ def hf_waitress_server_starter_endpoint():
         hard_reboot_required = data.get('hard_reboot_required', 'false')
         print(f"\n\nhard_reboot_required: {hard_reboot_required}\n\n")
     except Exception as e:
-        return handle_api_error("Could not read request, encountered error: ", e)
+        return handle_api_error("Could not read request: ", e)
 
     try:
         exclusive_server_mode = str(read_config(['exclusive_server_mode'])['exclusive_server_mode']).lower() == 'true'
         result = hf_waitress_server_starter(exclusive_server_mode = exclusive_server_mode, hard_reboot_required = hard_reboot_required)
         return jsonify(result)
     except Exception as e:
-        return handle_api_error("Could not start HF-Waitress server, encountered error: ", e)
+        return handle_api_error("Could not start HF-Waitress server: ", e)
 
 
 @app.route('/check_local_llm_server_status', methods=['POST'])
@@ -5886,14 +5975,14 @@ def check_local_llm_server_status():
     try:
         server_to_check = request.form['server_to_check']
     except Exception as e:
-        return handle_api_error("Server-side error, could not read server_to_check from the POST request, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read server_to_check from the POST request: ", e)
     
     try:
         server_url = get_url_for_server(server_to_check)
         server_online = utils.is_local_server_online(server_url)['server_online']
         return jsonify({'success': True, 'server_online': server_online})
     except Exception as e:
-        return handle_api_error(f"Error checking {server_to_check} server status, encountered error: ", e)
+        return handle_api_error(f"Error checking {server_to_check} server status: ", e)
 
 
 @app.route('/local_llm_server_starter')
@@ -5905,7 +5994,7 @@ def local_llm_server_starter():
         server_to_start = read_return['local_llm_server']
         exclusive_server_mode = str(read_return['exclusive_server_mode']).lower() == 'true'
     except Exception as e:
-        return handle_api_error("Server-side error, could not read local_llm_server from config.json, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read local_llm_server from config.json: ", e)
 
     try:
         if server_to_start == 'hf-waitress':
@@ -5917,7 +6006,7 @@ def local_llm_server_starter():
         else:
             return handle_api_error(f"Invalid local LLM server choice: {server_to_start}")
     except Exception as e:
-        return handle_api_error("Server-side error, could not start local LLM server, encountered error: ", e)
+        return handle_api_error("Server-side error, could not start local LLM server: ", e)
 
 
 
@@ -5929,12 +6018,12 @@ def set_prompt_template():
     try:
         base_template = request.form['prompt_template']
     except Exception as e:
-        return handle_api_error("Server-side error, could not read prompt_template from the POST request in method set_prompt_template, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read prompt_template from the POST request in method set_prompt_template: ", e)
     
     try:
         write_config({'base_template':base_template})
     except Exception as e:
-        return handle_api_error("Could not update base_template in method set_prompt_template, encountered error: ", e)
+        return handle_api_error("Could not update base_template in method set_prompt_template: ", e)
 
     return jsonify({'success':True})
 
@@ -5946,21 +6035,21 @@ def fetch_file_list_for_vector_db():
         selected_embedding_model_choice = request.form['selected_embedding_model']
         knowledge_domain = request.form['selected_knowledge_domain']
     except Exception as e:
-        return handle_api_error("Server-side error, could not read selected_embedding_model or selected_knowledge_domain from the POST request in method fetch_file_list_for_vector_db, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read selected_embedding_model or selected_knowledge_domain from the POST request in method fetch_file_list_for_vector_db: ", e)
 
     print(f"\nFetching file list for documents in knowledge domain: {knowledge_domain} embedded with: {selected_embedding_model_choice}...\n")
     
     try:
         conn, cursor = init_and_connect_to_docs_loaded_db()
     except Exception as e:
-        return handle_api_error("Could not initialize and connect to docs_loaded_db to fetch_file_list_for_vector_db, encountered error: ", e)
+        return handle_api_error("Could not initialize and connect to docs_loaded_db to fetch_file_list_for_vector_db: ", e)
 
     file_row_list = []
 
     try:
         cursor.execute("SELECT document_name, knowledge_domain, embedding_model, chunk_size FROM document_records where embedding_model LIKE ? AND knowledge_domain LIKE ?", (selected_embedding_model_choice, knowledge_domain))
     except Exception as e:
-        return handle_api_error("Could not get document list from document_records db, encountered error: ", e)
+        return handle_api_error("Could not get document list from document_records db: ", e)
     
     try:
         result = cursor.fetchall()
@@ -5968,13 +6057,13 @@ def fetch_file_list_for_vector_db():
         for list_item in result:
             file_row_list.append(list(list_item))
     except Exception as e:
-        return handle_api_error("Could not parse document list from document_records db, encountered error: ", e)
+        return handle_api_error("Could not parse document list from document_records db: ", e)
 
     try:
         cursor.close()
         conn.close()
     except Exception as e:
-        handle_error_no_return("Could not close connections to document_records db, encountered error: ", e)
+        handle_error_no_return("Could not close connections to document_records db: ", e)
     
     return jsonify({'success': True, 'file_row_list': file_row_list})
 
@@ -5992,7 +6081,7 @@ def shell_delete_folder(target_path:pathlib.Path, delete_vector_db:bool = False)
                     print(f"Successfully reset vectorDB at path: {target_path}")
                     return True
                 except Exception as e:
-                    handle_error_no_return("Could not reset vector_db, encountered error: ", e)
+                    handle_error_no_return("Could not reset vector_db: ", e)
 
             max_retries = 3
             for attempt in range(max_retries):
@@ -6010,7 +6099,7 @@ def shell_delete_folder(target_path:pathlib.Path, delete_vector_db:bool = False)
         else:
             print(f"No existing folder found at: {target_path}")
     except Exception as e:
-        handle_error_no_return("Could not remove existing folder, encountered error: ", e)
+        handle_error_no_return("Could not remove existing folder: ", e)
         return False
 
 
@@ -6019,13 +6108,13 @@ def clean_up_docs_loaded_db(selected_embedding_model_choice:str, knowledge_domai
     try:
         conn, cursor = init_and_connect_to_docs_loaded_db()
     except Exception as e:
-        handle_local_error("Could not initialize and connect to docs_loaded_db to clean up, encountered error: ", e)
+        handle_local_error("Could not initialize and connect to docs_loaded_db to clean up: ", e)
 
     try:
         with conn:  # Handles commit/rollback automatically
             cursor.execute("DELETE FROM document_records WHERE embedding_model LIKE ? AND knowledge_domain LIKE ?", (selected_embedding_model_choice, knowledge_domain))
     except Exception as e:
-        handle_local_error("Could not delete document records from docs_loaded_db, encountered error: ", e)
+        handle_local_error("Could not delete document records from docs_loaded_db: ", e)
     finally:
         cursor.close()
 
@@ -6048,7 +6137,7 @@ def delete_knowledge_domain_graph(knowledge_domain:str) -> bool:
         print(f"Successfully deleted graph for {knowledge_domain} domain in graph DB")
         return True
     except Exception as e:
-        handle_error_no_return(f"Could not delete graph for {knowledge_domain} domain in graph DB, encountered error: ", e)
+        handle_error_no_return(f"Could not delete graph for {knowledge_domain} domain in graph DB: ", e)
         return False
 
 
@@ -6061,7 +6150,7 @@ def reset_vector_db_on_disk():
         selected_embedding_model_choice = str(request.form['selected_embedding_model'])
         knowledge_domain = str(request.form['selected_knowledge_domain'])
     except Exception as e:
-        return handle_api_error("Server-side error, could not read selected_embedding_model or selected_knowledge_domain from the POST request in method reset_vector_db_on_disk, encountered error: ", e)
+        return handle_api_error("Server-side error, could not read selected_embedding_model or selected_knowledge_domain from the POST request in method reset_vector_db_on_disk: ", e)
 
     try:
         knowledge_domain_base_directory = str(read_config(['knowledge_domain_base_directory'])['knowledge_domain_base_directory'])
@@ -6074,13 +6163,13 @@ def reset_vector_db_on_disk():
             path_to_knowledge_domain.mkdir(parents=True, exist_ok=True)
             print(f"\n\nCreated knowledge domain directory: {path_to_knowledge_domain}\n\n")
     except Exception as e:
-        return handle_api_error("Could not determine path to knowledge domain, encountered error: ", e)
+        return handle_api_error("Could not determine path to knowledge domain: ", e)
 
     try:
         vector_db_path = path_to_knowledge_domain / "vector_db_and_whoosh_index" / selected_embedding_model_choice
         whoosh_index_path = path_to_knowledge_domain / "vector_db_and_whoosh_index" / selected_embedding_model_choice / "whoosh_index"
     except Exception as e:
-        return handle_api_error("Could not determine path to vector_db or whoosh_index, encountered error: ", e)
+        return handle_api_error("Could not determine path to vector_db or whoosh_index: ", e)
     
     shell_delete_folder(vector_db_path, delete_vector_db=True)
     shell_delete_folder(whoosh_index_path, delete_vector_db=False)
@@ -6089,7 +6178,7 @@ def reset_vector_db_on_disk():
     try:
         delete_knowledge_domain_graph(knowledge_domain)
     except Exception as e:
-        handle_error_no_return(f"Could not delete knowledge graph for {knowledge_domain} domain in graph DB, encountered error: ", e)
+        handle_error_no_return(f"Could not delete knowledge graph for {knowledge_domain} domain in graph DB: ", e)
     
     return jsonify({'success': True})
 
@@ -6102,7 +6191,7 @@ def delete_chat():
     try:
         chat_id = request.form['chat_id']
     except Exception as e:
-        return handle_api_error("Could not read chat_id from request form, encountered error: ", e)
+        return handle_api_error("Could not read chat_id from request form: ", e)
 
     try:
         read_return = read_config(['sqlite_history_db'])
@@ -6114,7 +6203,7 @@ def delete_chat():
         conn = sqlite3.connect(sqlite_history_db)
         c = conn.cursor()
     except Exception as e:
-        return handle_api_error("Could not connect to sqlite_history_db database to delete chat, encountered error: ", e)
+        return handle_api_error("Could not connect to sqlite_history_db database to delete chat: ", e)
     
     try:
         c.execute("DELETE FROM chat_history WHERE chat_id = ?", (chat_id,))
@@ -6122,7 +6211,7 @@ def delete_chat():
         c.close()
         conn.close()
     except Exception as e:
-        return handle_api_error("Could not delete chat from chat history db, encountered error: ", e)
+        return handle_api_error("Could not delete chat from chat history db: ", e)
 
     return jsonify({'success': True})
 
@@ -6136,7 +6225,7 @@ def rename_chat():
         chat_id = request.form['chat_id']
         new_chat_name = request.form['new_chat_name']
     except Exception as e:
-        return handle_api_error("Could not read chat_id or new_chat_name from request form, encountered error: ", e)
+        return handle_api_error("Could not read chat_id or new_chat_name from request form: ", e)
 
     try:
         read_return = read_config(['sqlite_history_db'])
@@ -6148,7 +6237,7 @@ def rename_chat():
         conn = sqlite3.connect(sqlite_history_db)
         c = conn.cursor()
     except Exception as e:
-        return handle_api_error("Could not connect to sqlite_history_db database to rename chat, encountered error: ", e)
+        return handle_api_error("Could not connect to sqlite_history_db database to rename chat: ", e)
 
     try:
         c.execute("UPDATE chat_history SET chat_name = ? WHERE chat_id = ?", (new_chat_name, chat_id))
@@ -6156,7 +6245,7 @@ def rename_chat():
         c.close()
         conn.close()
     except Exception as e:
-        return handle_api_error("Could not rename chat in chat history db, encountered error: ", e)
+        return handle_api_error("Could not rename chat in chat history db: ", e)
 
     return jsonify({'success': True})
 
@@ -6178,7 +6267,7 @@ def load_chat_history_list():
         conn = sqlite3.connect(sqlite_history_db)
         c = conn.cursor()
     except Exception as e:
-        return handle_api_error("Could not connect to sqlite_history_db database to load chat history list, encountered error: ", e)
+        return handle_api_error("Could not connect to sqlite_history_db database to load chat history list: ", e)
 
     try:
         c.execute("""
@@ -6198,7 +6287,7 @@ def load_chat_history_list():
             ORDER BY date_time DESC;
         """)
     except Exception as e:
-        return handle_api_error("Could not get list from chat history db, encountered error: ", e)
+        return handle_api_error("Could not get list from chat history db: ", e)
     
     try:
         result = c.fetchall()
@@ -6212,7 +6301,7 @@ def load_chat_history_list():
                 'prompt_template_format': row[4]
             })
     except Exception as e:
-        return handle_api_error("Could not parse chat history list from db, encountered error: ", e)
+        return handle_api_error("Could not parse chat history list from db: ", e)
 
     #print(f'returning chat hsitory list: {history_id_list}')
 
@@ -6241,7 +6330,7 @@ def generate_user_message_html(user_message: str, user_message_html: str, stream
         else:
             return user_message_html
     except Exception as e:
-        handle_local_error("Could not generate user message HTML, encountered error: ", e)
+        handle_local_error("Could not generate user message HTML: ", e)
 
 
 def generate_llm_response_html(llm_response: str, stream_session_id: str, user_rating: str, chat_id: int, sequence_id: int) -> str:
@@ -6287,7 +6376,7 @@ def generate_llm_response_html(llm_response: str, stream_session_id: str, user_r
 
         return llm_response
     except Exception as e:
-        handle_local_error("Could not generate LLM response HTML, encountered error: ", e)
+        handle_local_error("Could not generate LLM response HTML: ", e)
 
 
 def load_messages_list_from_history_db(cursor: sqlite3.Cursor, chat_id: int, sequence_id: int = None) -> list:
@@ -6318,7 +6407,7 @@ def load_messages_list_from_history_db(cursor: sqlite3.Cursor, chat_id: int, seq
         return messages_list
                 
     except Exception as e:
-        handle_local_error("Could not load messages_list from chat history DB, encountered error: ", e)
+        handle_local_error("Could not load messages_list from chat history DB: ", e)
 
 
 @app.route('/load_chat_history', methods=['POST'])
@@ -6335,13 +6424,13 @@ def load_chat_history():
     try:
         chat_id = int(request.form['chat_id'])
     except Exception as e:
-        return handle_api_error("Could not retrieve Chat ID from request form, encountered error: ", e)
+        return handle_api_error("Could not retrieve Chat ID from request form: ", e)
 
     try:
         conn = sqlite3.connect(sqlite_history_db)
         c = conn.cursor()
     except Exception as e:
-        return handle_api_error("Could not connect to chat history database, encountered error: ", e)
+        return handle_api_error("Could not connect to chat history database: ", e)
 
     sequence_id_for_history_search = 1
     chat_history = []
@@ -6370,19 +6459,19 @@ def load_chat_history():
             sequence_id_for_history_search += 1 # Increment sequence ID for next iteration
         
         except Exception as e:
-            return handle_api_error("Could not retrieve chat history, encountered error: ", e)
+            return handle_api_error("Could not retrieve chat history: ", e)
     
     print(f'\n\nChat history loaded for chat with model: {old_chat_model}\n\n')
 
     try:
         sequence_id = determine_sequence_id_for_chat(chat_id)
     except Exception as e:
-        return handle_api_error("Could not determine sequence_id, encountered error: ", e)
+        return handle_api_error("Could not determine sequence_id: ", e)
 
     try:
         messages_list = load_messages_list_from_history_db(c, chat_id, sequence_id)
     except Exception as e:
-        handle_error_no_return("Could not load messages_list from chat history DB, encountered error: ", e)
+        handle_error_no_return("Could not load messages_list from chat history DB: ", e)
         messages_list = None
     
     c.close()
@@ -6416,7 +6505,7 @@ def init_chat_history_db():
         conn = sqlite3.connect(sqlite_history_db)
         c = conn.cursor()
     except Exception as e:
-        return handle_api_error("Could not connect to chat history database, encountered error: ", e)
+        return handle_api_error("Could not connect to chat history database: ", e)
 
     # If the database does not currently exist...
     try:
@@ -6441,7 +6530,7 @@ def init_chat_history_db():
         ''')
         conn.commit()
     except Exception as e:
-        return handle_api_error("Could not create new chat history db, encountered error: ", e)
+        return handle_api_error("Could not create new chat history db: ", e)
 
     try:
         add_column_if_not_exists(c, 'chat_history', 'chat_id', 'INTEGER')
@@ -6459,12 +6548,12 @@ def init_chat_history_db():
         add_column_if_not_exists(c, 'chat_history', 'date_time', 'TEXT')
         add_column_if_not_exists(c, 'chat_history', 'prompt_template_format', 'TEXT')
     except Exception as e:
-        return handle_api_error("Could not add necessary columns to chat history db, encountered error: ", e)
+        return handle_api_error("Could not add necessary columns to chat history db: ", e)
 
     try:
         chat_id = determine_latest_chat_id(c)
     except Exception as e:
-        return handle_api_error("Could not set chat_id, encountered error: ", e)
+        return handle_api_error("Could not set chat_id: ", e)
 
     conn.close()
 
@@ -6482,7 +6571,7 @@ def delete_chat_history_for_chat_id_from_sequence_id(c: sqlite3.Cursor, conn: sq
         print(f"Deleted {deleted_count} rows of chat history for chat with chat_id: {chat_id} and sequence_id greater than: {sequence_id}")
         return True
     except Exception as e:
-        handle_local_error(f"Could not delete chat history for chat with chat_id: {chat_id} and sequence_id greater than: {sequence_id}, encountered error: ", e)
+        handle_local_error(f"Could not delete chat history for chat with chat_id: {chat_id} and sequence_id greater than: {sequence_id}: ", e)
 
 
 @app.route('/delete_messages', methods=['POST'])
@@ -6493,7 +6582,7 @@ def delete_messages():
         chat_id = request.form['chat_id']
         sequence_id = request.form['sequence_id']
     except Exception as e:
-        handle_local_error("Could not read chat_id or sequence_id from request, encountered error: ", e)
+        handle_local_error("Could not read chat_id or sequence_id from request: ", e)
     
     try:
         read_return = read_config(['sqlite_history_db'])
@@ -6506,7 +6595,7 @@ def delete_messages():
         conn = sqlite3.connect(sqlite_history_db)
         c = conn.cursor()
     except Exception as e:
-        handle_local_error("Could not connect to chat history database, encountered error: ", e)
+        handle_local_error("Could not connect to chat history database: ", e)
 
     try:
         c.execute("DELETE FROM chat_history WHERE chat_id = ? AND sequence_id >= ?", (chat_id, sequence_id))
@@ -6514,12 +6603,12 @@ def delete_messages():
         conn.commit()
         print(f"Deleted {deleted_count} rows of chat history for chat with chat_id: {chat_id} beginning with sequence_id: {sequence_id}")
     except Exception as e:
-        handle_local_error(f"Could not delete chat history for chat with chat_id: {chat_id} beginning with sequence_id: {sequence_id}, encountered error: ", e)
+        handle_local_error(f"Could not delete chat history for chat with chat_id: {chat_id} beginning with sequence_id: {sequence_id}: ", e)
     
     try:
         messages_list = load_messages_list_from_history_db(c, int(chat_id), (int(sequence_id) - 1))
     except Exception as e:
-        handle_error_no_return("Could not load messages_list from chat history DB, encountered error: ", e)
+        handle_error_no_return("Could not load messages_list from chat history DB: ", e)
         messages_list = None
 
     conn.close()
@@ -6556,20 +6645,20 @@ def update_record_in_history_db(
         conn = sqlite3.connect(sqlite_history_db)
         c = conn.cursor()
     except Exception as e:
-        handle_local_error("Could not connect to chat history database, encountered error: ", e)
+        handle_local_error("Could not connect to chat history database: ", e)
 
     try:
         current_datetime = datetime.datetime.now()
         formatted_datetime = current_datetime.strftime('%d %b %Y - %I:%M %p %Z')
     except Exception as e:
-        handle_local_error("Could not obtain timestamp in update-llm_response_in_history_db, encountered error: ", e)
+        handle_local_error("Could not obtain timestamp in update-llm_response_in_history_db: ", e)
     
     # Update the LLM response in the chat history DB for the given stream_session_id:
     try:
         c.execute("UPDATE chat_history SET user_query = ?, user_query_html = ?, llm_response = ?, date_time = ? WHERE stream_session_id = ?", (user_query, user_query_html, llm_response, formatted_datetime, stream_session_id))
         conn.commit()
     except Exception as e:
-        handle_local_error("Could not update LLM response in chat history DB, encountered error: ", e)
+        handle_local_error("Could not update LLM response in chat history DB: ", e)
     
     try:
         c.execute("SELECT sequence_id FROM chat_history WHERE chat_id = ? AND stream_session_id = ?", (chat_id, stream_session_id))
@@ -6577,7 +6666,7 @@ def update_record_in_history_db(
         sequence_id = result[0]
         delete_chat_history_for_chat_id_from_sequence_id(c, conn, chat_id, sequence_id)
     except Exception as e:
-        handle_local_error("Could not determine sequence_id / delete chat history in update-llm_response_in_history_db, encountered error: ", e)
+        handle_local_error("Could not determine sequence_id / delete chat history in update-llm_response_in_history_db: ", e)
     
     conn.close()
 
@@ -6601,7 +6690,7 @@ def get_formatted_prompt_from_history_db(chat_id, sequence_id):
         conn = sqlite3.connect(sqlite_history_db)
         cursor = conn.cursor()
     except Exception as e:
-        handle_error_no_return("Could not establish connection to DB for chat history storage, encountered error: ", e)
+        handle_error_no_return("Could not establish connection to DB for chat history storage: ", e)
 
     try:
         cursor.execute("SELECT prompt_template FROM chat_history WHERE chat_id = ? AND sequence_id = ?", (int(chat_id), int(sequence_id)))
@@ -6609,7 +6698,7 @@ def get_formatted_prompt_from_history_db(chat_id, sequence_id):
         formatted_prompt = str(result[0])
         
     except Exception as e:
-        handle_error_no_return("Could not determine sequence ID for storage to chat history DB, encountered error: ", e)
+        handle_error_no_return("Could not determine sequence ID for storage to chat history DB: ", e)
 
     return formatted_prompt
 
@@ -6632,7 +6721,7 @@ def get_session_id_and_vector_key(reusable_ssid:str = None) -> tuple[str, str]:
         key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
         return stream_session_id, key_for_vector_results
     except Exception as e:
-        handle_local_error("Could not generate stream_session_id with UUID4, encountered error: ", e)
+        handle_local_error("Could not generate stream_session_id with UUID4: ", e)
 
 
 def read_config_for_llm_response_setup() -> dict:
@@ -6649,7 +6738,7 @@ def read_config_for_llm_response_setup() -> dict:
             'enable_butler_mode_selection'
         ])
     except Exception as e:
-        handle_local_error("Could not read config for setup-for_local_llm_response, encountered error: ", e)
+        handle_local_error("Could not read config for setup-for_local_llm_response: ", e)
 
 
 def read_request_data_for_setup_for_local_llm_response(request: Request) -> tuple[str, str, bool]:
@@ -6667,7 +6756,7 @@ def read_hf_waitress_multimodal_config() -> tuple[bool, bool]:
             str(hf_read_return['vision']).lower() == 'true'
         )
     except Exception as e:
-        handle_error_no_return("Could not determine if flux_diffusers or vision model in method read-hf_waitress_multimodal_config, encountered error: ", e)
+        handle_error_no_return("Could not determine if flux_diffusers or vision model in method read-hf_waitress_multimodal_config: ", e)
         return False, False
 
 
@@ -6691,7 +6780,7 @@ def prepare_quick_response_for_special_model(full_prompt:str, user_query:str, cu
             "server_type":local_llm_server
         }
     except Exception as e:
-        handle_local_error("Could not prepare special model response in method prepare-special_model_response, encountered error: ", e)
+        handle_local_error("Could not prepare special model response in method prepare-special_model_response: ", e)
 
 
 def reject_rag() -> dict:
@@ -6699,7 +6788,7 @@ def reject_rag() -> dict:
         write_config({'do_rag':False, 'perform_graph_rag':False})
         return {"success": True}
     except Exception as e:
-        handle_error_no_return("Could not default do_rag to False in method reject-rag, encountered error: ", e)
+        handle_error_no_return("Could not default do_rag to False in method reject-rag: ", e)
         return {"success": False}
 
 
@@ -6720,7 +6809,7 @@ def get_full_llm_prompt_with_history(chat_id:int, current_sequence_id:int) -> st
             formatted_prompt = get_formatted_prompt_from_history_db(chat_id, current_sequence_id)
         return formatted_prompt
     except Exception as e:
-        handle_local_error("Could not get formatted prompt in method get-full_llm_prompt_with_history, encountered error: ", e)
+        handle_local_error("Could not get formatted prompt in method get-full_llm_prompt_with_history: ", e)
 
 
 def read_request_data_for_setup_response(request: Request) -> tuple[str, str, int, int, bool, bool, bool, bool]:
@@ -6736,7 +6825,7 @@ def read_request_data_for_setup_response(request: Request) -> tuple[str, str, in
         regenerate_with_citations_force_disabled = request.json.get('regenerate_with_citations_force_disabled')
         return stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled
     except Exception as e:
-        handle_local_error("Could not read request data for query-setup API, encountered error: ", e)
+        handle_local_error("Could not read request data for query-setup API: ", e)
 
 
 def read_request_data_for_tools_response(request: Request) -> tuple[str, str, int, dict, bool, int]:
@@ -6749,7 +6838,7 @@ def read_request_data_for_tools_response(request: Request) -> tuple[str, str, in
         sequence_id = int(request.json.get('sequence_id'))  # at this stage, the client sends the seqs_id set in the previous request so no need to handle null case.
         return stream_session_id, user_query, chat_id, llm_set_rag_config, regeneration_request, sequence_id
     except Exception as e:
-        handle_local_error("Could not read request data for tool-invocation API, encountered error: ", e)
+        handle_local_error("Could not read request data for tool-invocation API: ", e)
 
 
 def get_full_prompt_for_server(local_llm_server: str, full_prompt: str, user_query: str, current_sequence_id: int, base_template: str, skip_system_prompt: bool) -> str:
@@ -6777,7 +6866,7 @@ def get_ids_for_llm_response_setup(stream_session_id:str, chat_id:int, sequence_
     '''
     if regeneration_request:
         if stream_session_id is None or stream_session_id == "" or sequence_id == 0:
-            return handle_local_error("Could not process regeneration-request in get-base_values_for_setup_for_local_llm_response, encountered error: ", ValueError("stream_session_id is blank or sequence_id is 0."))
+            return handle_local_error("Could not process regeneration-request in get-base_values_for_setup_for_local_llm_response: ", ValueError("stream_session_id is blank or sequence_id is 0."))
         
         print(f"\nSetting defaults for regeneration for request ID: {stream_session_id}\n")
         key_for_vector_results = "VectorDocsforQueryID_" + stream_session_id
@@ -6790,7 +6879,7 @@ def get_ids_for_llm_response_setup(stream_session_id:str, chat_id:int, sequence_
         print(f"Current Chat ID: {chat_id} & Sequence ID: {current_sequence_id}")
         return new_stream_session_id, key_for_vector_results, current_sequence_id
     except Exception as e:
-        handle_local_error("Error determining sequence_id and/or getting session_id and vector_key in get-base_values_for_setup_for_local_llm_response, encountered error: ", e)
+        handle_local_error("Error determining sequence_id and/or getting session_id and vector_key in get-base_values_for_setup_for_local_llm_response: ", e)
 
 
 def handle_special_model_case(local_llm_server:str, current_sequence_id:int, file_attached:bool, stream_session_id:str, user_query:str, full_prompt:str, regeneration_request:bool) -> tuple[str, Response]:
@@ -6814,7 +6903,7 @@ def handle_special_model_case(local_llm_server:str, current_sequence_id:int, fil
             )
             return new_local_llm_server, jsonify(response)
         except Exception as e:
-            handle_local_error("Could not prepare special model response in method setup-for_local_llm_response, encountered error: ", e)
+            handle_local_error("Could not prepare special model response in method setup-for_local_llm_response: ", e)
     
     if vision: 
         return 'hfw-vision', None
@@ -6828,7 +6917,7 @@ def handle_force_disabled_rag(local_llm_server:str, full_prompt:str, user_query:
     try:
         formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, full_prompt, user_query, current_sequence_id, base_template, skip_system_prompt)
     except Exception as e:
-        handle_local_error("Could not get formatted_updated_prompt in method setup_for_streaming_response, encountered error: ", e)
+        handle_local_error("Could not get formatted_updated_prompt in method setup_for_streaming_response: ", e)
     if not regeneration_request or current_sequence_id == 0: current_sequence_id = int(current_sequence_id) + 1 # Increment the seqID only for regular requests (as seqID stays the same when regenerating a response), or if it's currently 0.
     return jsonify({"success": True, "stream_session_id": stream_session_id, "llm_set_rag_config": DISABLED_CONFIG, "formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "server_type":local_llm_server})
 
@@ -6896,18 +6985,18 @@ def determine_response_service(user_query:str, force_enable_rag:bool = False, en
     try:
         service_request_prompt = prompt_formatting_module.get_service_request_prompt(user_query, enable_butler_mode_selection)
     except Exception as e:
-        handle_local_error("Could not get service request prompt, encountered error: ", e)
+        handle_local_error("Could not get service request prompt: ", e)
 
     try:
         full_response = make_request_to_llm_server(service_request_prompt)
     except Exception as e:
-        handle_local_error("Could not make service-determination request to LLM server, encountered error: ", e)
+        handle_local_error("Could not make service-determination request to LLM server: ", e)
     
     try:
         selected_service = parse_service_response(full_response)
         print(f"\nLLM selected service: {selected_service}\n")  # Will be a dict with a single key: 'service' and a value as per those in get-service_request_prompt() above
     except Exception as e:
-        handle_error_no_return("Could not parse service response, encountered error: ", e)
+        handle_error_no_return("Could not parse service response: ", e)
         selected_service = {'service': 'RAG'}
 
     try:
@@ -6936,7 +7025,7 @@ def get_tools_schema():
         _, full_tools_config = butler_module._full_read_butler_tools_config()
         tools_schema = butler_module.generate_tools_schema(full_tools_config.get('services', {}))
     except Exception as e:
-        return handle_api_error("Error getting tools schema in method get-tools_schema, encountered error: ", e)
+        return handle_api_error("Error getting tools schema in method get-tools_schema: ", e)
     return jsonify({"success": True, "tools_schema": tools_schema})
 
 
@@ -6977,13 +7066,13 @@ def determine_service_and_ids_for_query():
         stream_session_id, user_query, chat_id, sequence_id, file_attached, regeneration_request, regenerate_with_citations_force_enabled, regenerate_with_citations_force_disabled = read_request_data_for_setup_response(request)
         stream_session_id, _, current_sequence_id = get_ids_for_llm_response_setup(stream_session_id, chat_id, sequence_id, regeneration_request)
     except Exception as e:
-        return handle_api_error("Error getting base values for determine-service_and_ids_for_query, encountered error: ", e)
+        return handle_api_error("Error getting base values for determine-service_and_ids_for_query: ", e)
 
     try:    # Get full prompt including history from history-db
         full_prompt = get_full_llm_prompt_with_history(chat_id, current_sequence_id if not regeneration_request else current_sequence_id - 1) # if regeneration_request, then go back one sequence id!
         if full_prompt == "": current_sequence_id = 0   # An empty prompt implies regeneration of the first message in a chat, so we set the sequence_id to 0 for applying the prompt template from scratch. It'll be incremented before final return.
     except Exception as e:
-        return handle_api_error("Could not get full prompt from history db in method determine-service_and_ids_for_query, encountered error: ", e)
+        return handle_api_error("Could not get full prompt from history db in method determine-service_and_ids_for_query: ", e)
     
     try:
         local_llm_server, special_response = handle_special_model_case(config['local_llm_server'], current_sequence_id, file_attached, stream_session_id, user_query, full_prompt, regeneration_request)
@@ -7010,7 +7099,7 @@ def determine_service_and_ids_for_query():
             formatted_updated_prompt = get_full_prompt_for_server(local_llm_server, full_prompt, user_query, current_sequence_id, config['base_template'], config['skip_system_prompt'])  # Get full prompt for server
             # NOTE: seq_id should be incremented later (done below) as the prompt must be formatted accordingly if this is the first message in a chat! 
     except Exception as e:
-        return handle_api_error("Could not get formatted_updated_prompt in method determine-service_and_ids_for_query, encountered error: ", e)
+        return handle_api_error("Could not get formatted_updated_prompt in method determine-service_and_ids_for_query: ", e)
 
     if not regeneration_request or current_sequence_id == 0: current_sequence_id = current_sequence_id + 1 # Increment the seqID only for regular requests (as seqID stays the same when regenerating a response), or if it's currently 0.
     return jsonify({"success": True, "stream_session_id": stream_session_id, "llm_set_rag_config": llm_set_rag_config, "formatted_user_prompt":formatted_updated_prompt, "sequence_id": current_sequence_id, "server_type": local_llm_server})
@@ -7037,13 +7126,13 @@ def invoke_tools_for_query():
         stream_session_id, user_query, chat_id, llm_set_rag_config, regeneration_request, sequence_id = read_request_data_for_tools_response(request)
         stream_session_id, key_for_vector_results, current_sequence_id = get_ids_for_llm_response_setup(stream_session_id, chat_id, sequence_id, regeneration_request, reuse_ssid = True)
     except Exception as e:
-        return handle_api_error("Error getting base values for invoke-tools_for_query, encountered error: ", e)
+        return handle_api_error("Error getting base values for invoke-tools_for_query: ", e)
     
     try:    # Get full prompt including history from history-db
         full_prompt = get_full_llm_prompt_with_history(chat_id, current_sequence_id if not regeneration_request else current_sequence_id - 1)
         if full_prompt == "": current_sequence_id = 0   # An empty prompt implies regeneration of the first message in a chat, so we set the sequence_id to 0 for applying the prompt template from scratch. It'll be incremented before final return.
     except Exception as e:
-        return handle_api_error("Could not get full prompt from history db in method invoke-tools_for_query, encountered error: ", e)
+        return handle_api_error("Could not get full prompt from history db in method invoke-tools_for_query: ", e)
 
     try:
         if llm_set_rag_config.get('butler_mode', False):
@@ -7051,7 +7140,7 @@ def invoke_tools_for_query():
             # print(f"Butler response: {butler_response}")
             user_query = butler_response['action_analysis_prompt']
     except Exception as e:
-        return handle_api_error("Error handling butler mode in method invoke-tools_for_query, encountered error: ", e)
+        return handle_api_error("Error handling butler mode in method invoke-tools_for_query: ", e)
     
     # print("\n\nRAG Routine Begins: Performing semantic search on VectorDB, lexical search on Whoosh index, combining and reranking results and determining if RAG is necessary\n\n")
             
@@ -7060,7 +7149,7 @@ def invoke_tools_for_query():
             user_query, config['selected_embedding_model'], llm_set_rag_config, int(config['filter_top_k_results_by_reranking']), int(config['fetch_top_k_results_from_vectordb'])
         )
     except Exception as e:
-        return handle_api_error("Could not execute RAG tools, encountered error: ", e)
+        return handle_api_error("Could not execute RAG tools: ", e)
 
     try:
         if do_rag and docs:    # Add RAG results to user-query if necessary! Check docstring in get-vector_results_for_get_references for more details.
@@ -7069,12 +7158,12 @@ def invoke_tools_for_query():
             user_query += f"\n\nThe following context might be helpful in answering the user query above. If so, please reference useful documents by name and specific page numbers in your response:\n"
             user_query += f"{graph_rag_context}" if (graph_rag_context and len(graph_rag_context) > 0) else f"{docs}"
     except Exception as e:
-        handle_error_no_return("Could not process RAG results, encountered error: ", e)   # No need to reject-rag as get-vector_results_for_get_references() handles any issues.
+        handle_error_no_return("Could not process RAG results: ", e)   # No need to reject-rag as get-vector_results_for_get_references() handles any issues.
     
     try:    # Get full prompt for server - NOTE: seq_id should be incremented later as the prompt must be formatted accordingly if this is the first message in a chat!
         formatted_updated_prompt = get_full_prompt_for_server(config['local_llm_server'], full_prompt, user_query, current_sequence_id, config['base_template'], config['skip_system_prompt'])
     except Exception as e:
-        return handle_api_error("Could not get formatted_updated_prompt in method invoke-tools_for_query, encountered error: ", e)
+        return handle_api_error("Could not get formatted_updated_prompt in method invoke-tools_for_query: ", e)
 
     if not regeneration_request or current_sequence_id == 0: current_sequence_id = current_sequence_id + 1
     return jsonify({"success": True, "reused_stream_session_id": stream_session_id, "tool_formatted_user_prompt": formatted_updated_prompt, "sequence_id":current_sequence_id, "reconfirmed_server_type":config['local_llm_server']})
@@ -7096,7 +7185,7 @@ def construct_citation_html(pdf_tab_buttons_set: set[str], pdf_tab_content_set: 
 
         return pdf_section_html.strip()
     except Exception as e:
-        handle_local_error("Could not construct citation html, encountered error: ", e)
+        handle_local_error("Could not construct citation html: ", e)
 
 
 def save_pdf_to_download_dir(doc_name: str, stream_session_id: str) -> str:
@@ -7130,7 +7219,7 @@ def save_pdf_to_download_dir(doc_name: str, stream_session_id: str) -> str:
 
         return output_file_name
     except Exception as e:
-        handle_local_error("Could not save PDF to download dir, encountered error: ", e)
+        handle_local_error("Could not save PDF to download dir: ", e)
 
 
 def get_doc_name_and_page_number_from_url(url: str) -> tuple[str, str]:
@@ -7141,7 +7230,7 @@ def get_doc_name_and_page_number_from_url(url: str) -> tuple[str, str]:
         page_number = params.get('page_number', [None])[0]
         return doc_name, page_number
     except Exception as e:
-        handle_local_error("Could not get doc_name and page_number from url, encountered error: ", e)
+        handle_local_error("Could not get doc_name and page_number from url: ", e)
 
 
 def obtain_singular_page_number_from_url(page_number: str) -> str:
@@ -7172,7 +7261,7 @@ def obtain_citation_urls_from_llm_response(llm_response: str) -> list[str]:
         urls = extractor.find_urls(llm_response)
         return [url for url in urls if 'llm-citations-database.net/source' in url]  # Filter out our citation urls
     except Exception as e:
-        handle_local_error("Could not obtain citation urls from llm_response, encountered error: ", e)
+        handle_local_error("Could not obtain citation urls from llm_response: ", e)
 
 
 def remove_embedded_links_from_llm_response(llm_response: str) -> str:
@@ -7181,7 +7270,7 @@ def remove_embedded_links_from_llm_response(llm_response: str) -> str:
         llm_response_without_embedded_links = re.sub(embedded_link_complete_pattern, '', llm_response)
         return llm_response_without_embedded_links
     except Exception as e:
-        handle_local_error("Could not remove embedded links from llm_response, encountered error: ", e)
+        handle_local_error("Could not remove embedded links from llm_response: ", e)
 
 
 def add_citations_and_pdf_browser_to_llm_response(llm_response: str, stream_session_id: str) -> str:
@@ -7193,7 +7282,7 @@ def add_citations_and_pdf_browser_to_llm_response(llm_response: str, stream_sess
     try:
         llm_response_without_embedded_links = remove_embedded_links_from_llm_response(llm_response)
     except Exception as e:
-        handle_local_error("Could not remove embedded links from llm_response, encountered error: ", e)
+        handle_local_error("Could not remove embedded links from llm_response: ", e)
     
     tab_count = 1
     tabs_created_for_doc = {}
@@ -7203,7 +7292,7 @@ def add_citations_and_pdf_browser_to_llm_response(llm_response: str, stream_sess
     try:
         urls = obtain_citation_urls_from_llm_response(llm_response) # Extract all URLs from the LLM response
     except Exception as e:
-        handle_local_error("Could not obtain citation urls from llm_response, encountered error: ", e)
+        handle_local_error("Could not obtain citation urls from llm_response: ", e)
     
     for url in urls:    # For each citation (URL), create the HTML to be substituted into the LLM response, and populate the tab button and content for the PDF viewer
         try:
@@ -7289,7 +7378,7 @@ def get_vector_results_for_get_references(stream_session_id: str) -> tuple[list[
         docs = QUERIES.pop(key_for_vector_results, None)
         return docs, docs is not None
     except Exception as e:
-        handle_local_error("Could not get vector results for stream_session_id in method get-vector_results_for_get_references(), encountered error: ", e)
+        handle_local_error("Could not get vector results for stream_session_id in method get-vector_results_for_get_references(): ", e)
 
 
 def get_request_parameters_for_get_references(request: Request) -> tuple[str, str, str, str, str, str, str, bool]:
@@ -7304,7 +7393,7 @@ def get_request_parameters_for_get_references(request: Request) -> tuple[str, st
         regeneration_request = request.json['regeneration_request']
         return stream_session_id, user_query, user_query_html, llm_response, messages_object, chat_id, sequence_id, regeneration_request
     except Exception as e:
-        handle_local_error("Could not read request content in method get-request_parameters_for_get_references(), encountered error: ", e)
+        handle_local_error("Could not read request content in method get-request_parameters_for_get_references(): ", e)
 
 
 def read_config_for_get_references() -> tuple[str, bool, bool]:
@@ -7312,7 +7401,7 @@ def read_config_for_get_references() -> tuple[str, bool, bool]:
         read_return = read_config(['local_llm_server', 'perform_graph_rag', 'legacy_mode'])
         return read_return['local_llm_server'], read_return['perform_graph_rag'], read_return['legacy_mode']
     except Exception as e:
-        handle_local_error("Could not read config.json in method read-config_for_get_references(), encountered error: ", e)
+        handle_local_error("Could not read config.json in method read-config_for_get_references(): ", e)
 
 
 @app.route('/get_references', methods=['POST'])
@@ -7329,7 +7418,7 @@ def get_references():
     try:
         stream_session_id, user_query, user_query_html, llm_response, messages_object, chat_id, sequence_id, regeneration_request = get_request_parameters_for_get_references(request)
     except Exception as e:
-        return handle_api_error("Could not read request content in method get-references, encountered error: ", e)
+        return handle_api_error("Could not read request content in method get-references: ", e)
     
     if local_llm_server == 'llama-cpp':
         local_llm_chat_template_format = "llama-cpp-jinja"
@@ -7363,7 +7452,7 @@ def get_references():
             else:
                 stored_datetime, chat_id = update_record_in_history_db(chat_id, stream_session_id, user_query, user_query_html, llm_response)
         except Exception as e:
-            handle_error_no_return("Could not store or update chat history DB in get-references(), encountered error: ", e)
+            handle_error_no_return("Could not store or update chat history DB in get-references(): ", e)
         
         return jsonify({'success': True, 'response': llm_response, 'pdf_frame': None, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
 
@@ -7374,7 +7463,7 @@ def get_references():
     except Exception as e:
         pdf_section_html = None
         llm_response_with_citation_links = llm_response
-        handle_error_no_return("Could not add citations and pdf browser to llm_response, encountered error: ", e)
+        handle_error_no_return("Could not add citations and pdf browser to llm_response: ", e)
     
     try:
         if pdf_section_html:
@@ -7382,7 +7471,7 @@ def get_references():
         else:
             model_response_for_history_db = llm_response_with_citation_links
     except Exception as e:
-        handle_error_no_return("Could not prep data to store to chat history DB in get-references(), encountered error: ", e)
+        handle_error_no_return("Could not prep data to store to chat history DB in get-references(): ", e)
 
     try:
         if not regeneration_request:
@@ -7390,7 +7479,7 @@ def get_references():
         else:
             stored_datetime, chat_id = update_record_in_history_db(chat_id, stream_session_id, user_query, user_query_html, model_response_for_history_db)
     except Exception as e:
-        handle_error_no_return("Could not store or update chat history DB in get-references(), encountered error: ", e)
+        handle_error_no_return("Could not store or update chat history DB in get-references(): ", e)
 
     return jsonify({'success': True, 'response': llm_response_with_citation_links, 'pdf_frame':pdf_section_html, 'stored_datetime':stored_datetime, 'local_llm_server':local_llm_server, 'local_llm_chat_template_format':local_llm_chat_template_format, 'chat_id':chat_id})
 
@@ -7498,7 +7587,7 @@ def parse_arguments() -> argparse.ArgumentParser:
         return None
 
     except Exception as e:
-        handle_local_error("Could not parse arguments, encountered error: ", e)
+        handle_local_error("Could not parse arguments: ", e)
 
 
 def get_host_and_port() -> tuple[str, int]:
@@ -7506,7 +7595,7 @@ def get_host_and_port() -> tuple[str, int]:
         read_return = read_config(['lars_host', 'lars_port'])
         return read_return['lars_host'], read_return['lars_port']
     except Exception as e:
-        handle_error_no_return("Could not get host and port from config.json, encountered error: ", e)
+        handle_error_no_return("Could not get host and port from config.json: ", e)
 
 
 def signal_handler(sig, frame):
