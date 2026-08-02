@@ -115,7 +115,7 @@ except Exception as e:
 
 try:
     if not os.path.exists(os.path.join(os.getcwd(), 'exllamav3')):
-        subprocess.run(['git', 'clone', '-b', 'v0.0.17', 'https://github.com/turboderp-org/exllamav3'], check=True)  # check=True raises an exception on non-zero exit code
+        subprocess.run(['git', 'clone', '-b', 'v1.2.1', 'https://github.com/turboderp-org/exllamav3'], check=True)  # check=True raises an exception on non-zero exit code
 except Exception as e:
     print(f"Could not clone exllamav3, encountered error: {e}")
 

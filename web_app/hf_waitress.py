@@ -104,7 +104,7 @@ except Exception as e:
 
 try:
     if not os.path.exists(os.path.join(os.getcwd(), 'exllamav3')):
-        subprocess.run(['git', 'clone', '-b', 'v0.0.17', 'https://github.com/turboderp-org/exllamav3'], check=True)  # check=True raises an exception on non-zero exit code
+        subprocess.run(['git', 'clone', '-b', 'v1.2.1', 'https://github.com/turboderp-org/exllamav3'], check=True)  # check=True raises an exception on non-zero exit code
 except Exception as e:
     print(f"Could not clone exllamav3, encountered error: {e}")
 
@@ -4027,7 +4027,7 @@ def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
         return True # Since the above check is simplistic, an error indicates something is amiss, so best to return True to avoid infinite loops and try auto-truncation
 
 
-def prep_for_exl2_generation(req_body:dict) -> tuple[queue.Queue, dict, str]:
+def prep_and_exec_exl2_job(req_body:dict) -> tuple[queue.Queue, dict, str]:
     try:
         # 1. Setup response queue for this specific request
         user_queue = queue.Queue()
@@ -4142,32 +4142,45 @@ def exl2_stream():
 
     try:
         
-        user_queue, job, _, _ = prep_for_exl2_generation(
-            request.json
-        )
+        user_queue, job, _, _ = prep_and_exec_exl2_job(request.json)
+        completed = False
 
         def generate():
+            nonlocal completed
 
-            global STOP_GENERATION
-            STOP_GENERATION = False
+            try:
+                while True:
+                    try:
+                        token = user_queue.get(timeout=0.5)
+                    except queue.Empty:
+                        '''
+                        SSE heartbeat - lines starting with : are comments
+                        and are ignored by browsers' EventSource.
+                        This block is required for detecting client 
+                        disconnection when waiting on tokens: long prefill, 
+                        tool setup, model stall, upstream latency, etc.
+                        '''
+                        yield ": keepalive\n\n"
+                        continue
 
-            while True:
-                if STOP_GENERATION: # Handle Manual Stop Signal
-                    print("\n\nStopping generation with stop_event\n\n")
+                    if token is None:
+                        completed = True
+                        break
+                    
+                    yield f"data: {json.dumps(token)}\n\n"
+                
+                yield f"event: END\ndata: \"null\"\n\n"
+            
+            except GeneratorExit:
+                # Client disconnected / response iterable closed.
+                raise
+
+            finally:
+                if not completed:
                     try:
                         EXL2_GENERATOR.cancel(job)
                     except:
                         pass
-                    STOP_GENERATION = False
-                    break
-                
-                token = user_queue.get()
-                if token is None:
-                    break
-                
-                yield f"data: {json.dumps(token)}\n\n"
-            
-            yield f"event: END\ndata: \"null\"\n\n"
 
             print("\nexl2-stream done\n")
 
@@ -4354,7 +4367,7 @@ def exl2_fim_stream():
 
 ###################################-------------Exl3 Logic Begins-------------###################################
 
-def prep_for_exl3_generation(req_body:dict) -> tuple[queue.Queue, dict, str]:
+def prep_and_exec_exl3_job(req_body:dict) -> tuple[queue.Queue, dict, str]:
     try:
         # 1. Setup response queue for this specific request
         user_queue = queue.Queue()
@@ -4426,7 +4439,7 @@ def exl3_stream():
 
     try:
         
-        user_queue, job, _, _ = prep_for_exl3_generation(
+        user_queue, job, _, _ = prep_and_exec_exl3_job(
             request.json
         )
 
@@ -5514,7 +5527,7 @@ def handle_exl2_streaming_openai(req_body:dict) -> Response:
     print("\n\nOpenAI/exl2-stream route triggered\n\n")
 
     try:
-        user_queue, _, base_config, _ = prep_for_exl2_generation(req_body)
+        user_queue, _, base_config, _ = prep_and_exec_exl2_job(req_body)
     
         # Streaming Response Generator
         def generate():
@@ -5546,7 +5559,7 @@ def handle_exl2_non_streaming_openai(req_body:dict) -> dict:
     print("\n\nOpenAI/exl2-Non-Streaming route triggered\n\n")
 
     try:
-        user_queue, _, base_config, tokenized_messages = prep_for_exl2_generation(req_body)
+        user_queue, _, base_config, tokenized_messages = prep_and_exec_exl2_job(req_body)
 
         # Consume Queue Synchronously (Accumulate Response)
         full_response = ""
@@ -5577,7 +5590,7 @@ def handle_exl3_streaming_openai(req_body:dict) -> Response:
     print("\n\nOpenAI/exl3-stream route triggered\n\n")
 
     try:
-        user_queue, _, base_config, _ = prep_for_exl3_generation(req_body)
+        user_queue, _, base_config, _ = prep_and_exec_exl3_job(req_body)
 
         # Streaming Response Generator
         def generate():
@@ -5609,7 +5622,7 @@ def handle_exl3_non_streaming_openai(req_body:dict) -> dict:
     print("\n\nOpenAI/exl3-Non-Streaming route triggered\n\n")
 
     try:
-        user_queue, _, base_config, tokenized_messages = prep_for_exl3_generation(req_body)
+        user_queue, _, base_config, tokenized_messages = prep_and_exec_exl3_job(req_body)
 
         # Consume Queue Synchronously (Accumulate Response)
         full_response = ""
@@ -5971,8 +5984,9 @@ def openai_compatible_api():
             }
         ), 503
     
-    # Handle tool choice: The user may wish to force a specific tool or forbid tools altogether, but auto-tokenizer's apply_chat_template() method does not 
-    # support tool_choice! So we need to handle this manually.
+    # Handle tool choice: The user may wish to force a specific tool or forbid tools altogether, 
+    # but auto-tokenizer's apply_chat_template() method does not support tool_choice! 
+    # So we need to handle this manually.
     final_tools = tools
     if tools and tool_choice:
         if tool_choice == 'none':
