@@ -172,8 +172,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
         with open(filename, 'r') as file:
             config = json.load(file)
     except Exception as e:
-        print("Could not read config.json, encountered error: ", e)
-        return {key: default_value for key in keys}     #because a read scenario wherein config.json does not exist shouldn't occur!
+        raise RuntimeError(f"Could not read config.json, encountered error: {e}") from e
     
     return_dict = {}
     update_config_dict = {}
@@ -275,6 +274,8 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                 'llama_cpp_fit':True,
                 'llama_cpp_fit_target':1024,
                 'llama_cpp_fit_min_ctx':4096,
+                'llama_cpp_cuda_all_devices':True,
+                'llama_cpp_cuda_specific_devices':'',
                 'llama_cpp_flash_attn':'auto',
                 'llama_cpp_unified_kv_buffer':False,
                 'llama_cpp_disable_kv_offloading':False,
