@@ -5495,6 +5495,8 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                 'llama_cpp_fit',
                 'llama_cpp_fit_min_ctx',
                 'llama_cpp_fit_target',
+                'llama_cpp_cuda_all_devices',
+                'llama_cpp_cuda_specific_devices',
                 'llama_cpp_flash_attn',
                 'llama_cpp_context_length',
                 'llama_cpp_batch_size',
@@ -5534,7 +5536,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             )
 
     except Exception as e:
-        handle_local_error("Error with core configuration in config.json for llama.cpp server starter method: ", e)
+        handle_local_error("Error in llama.cpp starter config: ", e)
 
     if not read_return['llama_cpp_use_gpu']:
         read_return['llama_cpp_gpu_layers'] = 0
@@ -5575,8 +5577,13 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                     '--spec-draft-model', str(draft_model)
                 ])
 
-        if read_return['llama_cpp_alias'] and read_return['llama_cpp_alias'] != '':
-            llama_cpp_safe_launch_args.extend(['--alias', read_return['llama_cpp_alias']])
+        if (
+            read_return['llama_cpp_alias'] and 
+            read_return['llama_cpp_alias'] != ''
+        ):
+            llama_cpp_safe_launch_args.extend(
+                ['--alias', read_return['llama_cpp_alias']]
+            )
 
         if read_return['llama_cpp_verbose']:
             llama_cpp_safe_launch_args.append('--verbose')
@@ -5604,19 +5611,33 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             ])
 
             if read_return['llama_cpp_split_mode'] == 'none':
-                llama_cpp_safe_launch_args.extend(['--main-gpu', str(read_return['llama_cpp_main_gpu_index'])])
+                llama_cpp_safe_launch_args.extend([
+                    '--main-gpu',
+                    str(read_return['llama_cpp_main_gpu_index'])
+                ])
 
             if read_return['llama_cpp_tensor_split']:
-                llama_cpp_safe_launch_args.extend(['--tensor-split', str(read_return['llama_cpp_tensor_split'])])
+                llama_cpp_safe_launch_args.extend([
+                    '--tensor-split',
+                    str(read_return['llama_cpp_tensor_split'])
+                ])
 
             # MoE Management:
-            if read_return['llama_cpp_override_tensor'] and read_return['llama_cpp_override_tensor'] != '':
+            if (
+                read_return['llama_cpp_override_tensor'] and 
+                read_return['llama_cpp_override_tensor'] != ''
+            ):
                 llama_cpp_safe_launch_args.extend([
-                    '--override-tensor', str(read_return['llama_cpp_override_tensor']),
-                    '--n-gpu-layers', '99'
+                    '--override-tensor',
+                    str(read_return['llama_cpp_override_tensor']),
+                    '--n-gpu-layers',
+                    '99'
                 ])
             else:
-                llama_cpp_safe_launch_args.extend(['--n-gpu-layers', str(read_return["llama_cpp_gpu_layers"])])
+                llama_cpp_safe_launch_args.extend([
+                    '--n-gpu-layers',
+                    str(read_return["llama_cpp_gpu_layers"])
+                ])
                 
                 # MoE specific logic
                 num_cpu_moe = int(read_return.get('llama_cpp_num_cpu_moe', 0))
@@ -5638,8 +5659,14 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
 
         if want_flash_attn and flash_attention_is_installed() and not kv_offload_disabled:  
             llama_cpp_safe_launch_args.extend(['--flash-attn', 'on'])
-            llama_cpp_safe_launch_args.extend(['--cache-type-k', str(read_return["llama_cpp_key_cache_data_type"])])
-            llama_cpp_safe_launch_args.extend(['--cache-type-v', str(read_return["llama_cpp_value_cache_data_type"])])
+            llama_cpp_safe_launch_args.extend([
+                '--cache-type-k',
+                str(read_return["llama_cpp_key_cache_data_type"])
+            ])
+            llama_cpp_safe_launch_args.extend([
+                '--cache-type-v',
+                str(read_return["llama_cpp_value_cache_data_type"])
+            ])
         
         if kv_offload_disabled:
             llama_cpp_safe_launch_args.append('--no-kv-offload')
@@ -5653,16 +5680,31 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
         if read_return['llama_cpp_dio']:
             llama_cpp_safe_launch_args.append('--direct-io')
 
-        if read_return['llama_cpp_misc_args'] and read_return['llama_cpp_misc_args'] != '':
-            llama_cpp_safe_launch_args.append(read_return['llama_cpp_misc_args'].strip())
-        
+        if (
+            read_return['llama_cpp_misc_args'] and 
+            read_return['llama_cpp_misc_args'] != ''
+        ):
+            llama_cpp_safe_launch_args.append(
+                read_return['llama_cpp_misc_args'].strip()
+            )
 
-        print(f"\n\nLaunching llama.cpp server with command: {' '.join(llama_cpp_safe_launch_args)}\n\n")
+        print(
+            "\n\nLaunching llama.cpp server with command: \n"
+            f"{' '.join(llama_cpp_safe_launch_args)}\n\n"
+        )
         # full_command = ' '.join(llama_cpp_safe_launch_args)
         # print(f"Full command: {full_command}\n\n")
 
+        child_env = os.environ.copy()
+        if not read_return['llama_cpp_cuda_all_devices']:
+            child_env['CUDA_VISIBLE_DEVICES'] = utils.clean_cuda_devices_list(
+                read_return['llama_cpp_cuda_specific_devices']
+            )
+
         if platform.system() == 'Windows':
-            # windows_command = f'start cmd /k "{full_command}"'  # /c - closes window after command finishes, /k - keeps window open (useful for debugging)
+            # windows_command = f'start cmd /k "{full_command}"'  
+            # # /c - closes window after command finishes, 
+            # # /k - keeps window open (useful for debugging)
             # LLAMA_CPP_PROCESS = subprocess.Popen(windows_command, shell=True)
 
             # with open('llama_cpp_server_output_log.txt', 'w') as f:
@@ -5673,25 +5715,40 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             #         text=True,
             #         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
             #     )
-            LLAMA_CPP_PROCESS = subprocess.Popen(llama_cpp_safe_launch_args, creationflags=subprocess.CREATE_NEW_CONSOLE)   # only for testing & debugging, see note below!
+                
+            LLAMA_CPP_PROCESS = subprocess.Popen(
+                llama_cpp_safe_launch_args,
+                env=child_env,
+                creationflags=subprocess.CREATE_NEW_CONSOLE
+            )   # only for testing & debugging, see note below!
             '''
             ## Why CREATE_NEW_CONSOLE is less reliable than CREATE_NEW_PROCESS_GROUP:
             
-                - Control events don't reach the child: Python's send_signal(signal.CTRL_BREAK_EVENT) uses GenerateConsoleCtrlEvent, which only delivers to processes that share 
-                the same console as the caller. With CREATE_NEW_CONSOLE, the child is in a different console, so the event is dropped.
+                - Control events don't reach the child: Python's send_signal(signal.CTRL_BREAK_EVENT) uses 
+                GenerateConsoleCtrlEvent, which only delivers to processes that share the same console as the 
+                caller. With CREATE_NEW_CONSOLE, the child is in a different console, so the event is dropped.
                 
-                - Process group targeting requires same console: Even with CREATE_NEW_PROCESS_GROUP, Windows won't deliver the control event to a process group in another console. 
-                You'd have to attach to that console first (not something subprocess does).
+                - Process group targeting requires same console: Even with CREATE_NEW_PROCESS_GROUP, Windows 
+                won't deliver the control event to a process group in another console. You'd have to attach to 
+                that console first (not something subprocess does).
 
-                - Graceful shutdown becomes hit-or-miss: In a separate console, you typically fall back to terminate()/kill(), which is less graceful and can leave resources in a 
-                bad state. This can be observed when invoking `utils.send_ctrl_c_to_process()` on the LLAMA-CPP_PROCESS.
+                - Graceful shutdown becomes hit-or-miss: In a separate console, you typically fall back to 
+                terminate()/kill(), which is less graceful and can leave resources in a bad state. This can be 
+                observed when invoking `utils.send_ctrl_c_to_process()` on the LLAMA-CPP_PROCESS.
 
-                - Logging trade-offs: CREATE_NEW_CONSOLE shows output in a new window but makes file redirection and unified logging harder unless you manually wire stdout/stderr.
+                - Logging trade-offs: CREATE_NEW_CONSOLE shows output in a new window but makes file redirection 
+                and unified logging harder unless you manually wire stdout/stderr.
             '''
         else:           
             # Platform & container agnostic:
             with open('llama_cpp_server_output_log.txt', 'w') as f:
-                LLAMA_CPP_PROCESS = subprocess.Popen(llama_cpp_safe_launch_args, stdout=f, stderr=subprocess.STDOUT, text=True)    #stdout has already been redirected to the file, so simply direct stderr to stdout!
+                LLAMA_CPP_PROCESS = subprocess.Popen(
+                    llama_cpp_safe_launch_args,
+                    env=child_env,
+                    stdout=f,
+                    stderr=subprocess.STDOUT,
+                    text=True
+                ) # stdout has already been redirected to the file, so simply direct stderr to stdout!
 
     except Exception as e:
         handle_local_error("Could not launch llama.cpp process: ", e)
@@ -5724,8 +5781,13 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                 }
             
             time.sleep(read_return['llama_cpp_server_timeout_seconds'])
+    
     except Exception as e:
-        handle_error_no_return("Could not check server status after launch attempt, printing error and returning: ", e)
+        err_str = (
+            "Could not check llama-server status after launch attempt, "
+            "printing error and returning: "
+        )
+        handle_error_no_return(err_str, e)
 
     return {
         'success': False,

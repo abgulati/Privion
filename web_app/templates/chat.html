@@ -994,7 +994,13 @@
                                                             <tr class="settings-table-row" id="llama_cpp_flash_attn">
                                                                 <td class="settings_table_setting_name">--flash-attn</td>
                                                                 <td class="settings_table_setting_description">Use Flash Attention for inference ['on', 'off', or 'auto' | Default: 'auto']</td>
-                                                                <td class="settings_table_setting_value"><input type="text" id="LlamaCppFlashAttn" name="LlamaCppFlashAttn" style="margin-left: 7px;" value="auto"></td>
+                                                                <td class="settings_table_setting_value">
+                                                                    <select class="modal-selects" id="LlamaCppFlashAttn">
+                                                                        <option value="on">on</option>
+                                                                        <option value="off">off</option>
+                                                                        <option value="auto">auto (Default)</option>
+                                                                    </select>
+                                                                </td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="llama_cpp_fit">
                                                                 <td class="settings_table_setting_name">--fit</td>
@@ -1012,9 +1018,27 @@
                                                                 <td class="settings_table_setting_description">Minimum context size for fit mode (default: 4096)</td>
                                                                 <td class="settings_table_setting_value"><input type="number" id="LlamaCppFitMinCtx" name="LlamaCppFitMinCtx" min="128" class="settings-input-fields" value="4096"></td>
                                                             </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_cuda_visible_devices">
+                                                                <td class="settings_table_setting_name">--cuda-visible-devices</td>
+                                                                <td class="settings_table_setting_description">Comma-separated list of CUDA visible devices to use for inference (default: all).<br>
+                                                                    Sets the `CUDA_VISIBLE_DEVICES` environment variable for the llama-server process if 'all' isn't selected.<br>
+                                                                    Specify devices as a comma-separated list of numbers representing the device indices (e.g. 0,1,2).<br>
+                                                                    Use `llama-server --list-devices` to see a list of available devices.
+                                                                    Has no effect if CUDA GPUs are unavailable on the host system.
+                                                                </td>
+                                                                <td class="settings_table_setting_value">
+                                                                    <input type="checkbox" id="CudaAllDevicesCheckbox" name="CudaAllDevicesCheckbox" style="margin-left: 7px;" checked>
+                                                                    <label for="CudaAllDevicesCheckbox"> Use All GPUs </label><br><br>
+                                                                    <input type="text" id="CudaSpecifyDevices" name="CudaSpecifyDevices" class="settings-input-fields" value="" disabled style="display: none;">
+                                                                </td>
+                                                            </tr>
                                                             <tr class="settings-table-row" id="llm_ctx_length">
                                                                 <td class="settings_table_setting_name">--ctx-size</td>
-                                                                <td class="settings_table_setting_description">Size of the prompt context (default: 4096, 0 = loaded from model)<br>NOTE: This flag will be IGNORED if fit is ON.</td>
+                                                                <td class="settings_table_setting_description">
+                                                                    Size of the prompt context (default: 4096, 0 = loaded from model)<br>
+                                                                    Must be a multiple of 256: 1024, 2048, 4096, 8192, 16384, 32768, 44800, 49152, 65536, 131072, 262144 etc.[Default: 2048]<br>
+                                                                    If --fit is ON, llama-server will try to allocate upto the context length specified here.
+                                                                </td>
                                                                 <td class="settings_table_setting_value"><input type="number" id="LlmCtxLgt" name="LlmCtxLgt" min="128" class="settings-input-fields" value="4096"></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="llama_cpp_batch_size">

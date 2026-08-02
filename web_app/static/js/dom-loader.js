@@ -164,6 +164,8 @@ function loadCoreLarsConfig() {
         'llama_cpp_fit',
         'llama_cpp_fit_target',
         'llama_cpp_fit_min_ctx',
+        'llama_cpp_cuda_all_devices',
+        'llama_cpp_cuda_specific_devices',
         'llama_cpp_flash_attn',
         'llama_cpp_warmup',
         'llama_cpp_alias',
@@ -471,69 +473,7 @@ function initializeHfwServerConfig() {
 }
 
 
-function setLlamaCppDropdowns(values) {
-    const keyCacheDataType = document.getElementById('KeyCacheDataType');
-    for (let option of keyCacheDataType.options) {
-        if (option.value == values.llama_cpp_key_cache_data_type) {
-            option.selected = true;
-            break;
-        }
-    }
-    const valueCacheDataType = document.getElementById('ValueCacheDataType');
-    for (let option of valueCacheDataType.options) {
-        if (option.value == values.llama_cpp_value_cache_data_type) {
-            option.selected = true;
-            break;
-        }
-    }
-
-    const splitMode = document.getElementById('SplitMode');
-    for (let option of splitMode.options) {
-        if (option.value == values.llama_cpp_split_mode) {
-            option.selected = true;
-            break;
-        }
-    }
-}
-
-
-function setLlamaCppCheckboxes(values) {
-    document.getElementById('UseGpu').checked = values.llama_cpp_use_gpu;
-    document.getElementById('UnifiedKvBuffer').checked = values.llama_cpp_unified_kv_buffer;
-    document.getElementById('DisableKvOffloading').checked = values.llama_cpp_disable_kv_offloading;
-    document.getElementById('CpuOnlyMoe').checked = values.llama_cpp_cpu_only_moe;
-    document.getElementById('Mlock').checked = values.llama_cpp_mlock;
-    document.getElementById('NoMmap').checked = values.llama_cpp_no_mmap;
-}
-
-
-function setLlamaCppValues(values) {
-    document.getElementById('SpecType').value = values.llama_cpp_spec_type;
-    document.getElementById('SpecDraftModel').value = values.llama_cpp_spec_draft_model;
-    document.getElementById('LlamaCppSpecDraftNMax').value = values.llama_cpp_spec_draft_n_max;
-    document.getElementById('NumbGpuLayers').value = values.llama_cpp_gpu_layers;
-    document.getElementById('LlamaCppWarmup').checked = values.llama_cpp_warmup;
-    document.getElementById('LlamaCppAlias').value = values.llama_cpp_alias;
-    document.getElementById('LlamaCppMiscArgs').value = values.llama_cpp_misc_args;
-    document.getElementById('LlamaCppCheckTensors').checked = values.llama_cpp_check_tensors;
-    document.getElementById('LlamaCppVerbose').checked = values.llama_cpp_verbose;
-    document.getElementById('LlamaCppSpecialTokensOutput').checked = values.llama_cpp_special_tokens_output;
-    document.getElementById('LlamaCppReasoningBudget').value = values.llama_cpp_reasoning_budget;
-    document.getElementById('LlamaCppDio').checked = values.llama_cpp_dio;
-    document.getElementById('LlamaCppMainGpuIndex').value = values.llama_cpp_main_gpu_index;
-    document.getElementById('LlamaCppFit').checked = values.llama_cpp_fit;
-    document.getElementById('LlamaCppFitTarget').value = values.llama_cpp_fit_target;
-    document.getElementById('LlamaCppFitMinCtx').value = values.llama_cpp_fit_min_ctx;
-    document.getElementById('LlamaCppFlashAttn').value = values.llama_cpp_flash_attn;
-    document.getElementById('LlmCtxLgt').value = values.llama_cpp_context_length;
-    document.getElementById('LlamaCppBatchSize').value = values.llama_cpp_batch_size;
-    document.getElementById('LlamaCppUbatchSize').value = values.llama_cpp_ubatch_size;
-    document.getElementById('NoOfSeqsToParDecode').value = values.llama_cpp_no_of_seqs_to_par_decode;
-    document.getElementById('OffloadToDevices').value = values.llama_cpp_offload_to_devices;
-    document.getElementById('TensorSplit').value = values.llama_cpp_tensor_split;
-    document.getElementById('OverrideTensor').value = values.llama_cpp_override_tensor;
-    document.getElementById('MaxNewToks').value = values.llama_cpp_max_new_tokens;
-    document.getElementById('LlamaCppNumCpuMoe').value = values.llama_cpp_num_cpu_moe;
+function setLlamaCppValuesAndCheckboxes(values) {
     document.getElementById('tempSlider').value = values.llama_cpp_temperature;
     document.getElementById('tempSliderValue').textContent = values.llama_cpp_temperature;
     document.getElementById('topkSlider').value = values.llama_cpp_top_k;
@@ -554,6 +494,43 @@ function setLlamaCppValues(values) {
     document.getElementById('LlamaCppServingHost').value = values.llama_cpp_serving_url;
     document.getElementById('LlamaCppAccessUrl').value = values.llama_cpp_access_url;
     document.getElementById('LlamaCppServingPort').value = values.llama_cpp_server_port;
+    document.getElementById('LlamaCppAlias').value = values.llama_cpp_alias;
+    document.getElementById('LlamaCppWarmup').checked = values.llama_cpp_warmup;
+    document.getElementById('LlamaCppCheckTensors').checked = values.llama_cpp_check_tensors;
+    document.getElementById('LlamaCppVerbose').checked = values.llama_cpp_verbose;
+    document.getElementById('LlamaCppSpecialTokensOutput').checked = values.llama_cpp_special_tokens_output;
+    document.getElementById('SpecType').value = values.llama_cpp_spec_type;
+    document.getElementById('SpecDraftModel').value = values.llama_cpp_spec_draft_model;
+    document.getElementById('LlamaCppSpecDraftNMax').value = values.llama_cpp_spec_draft_n_max;
+    document.getElementById('LlamaCppReasoningBudget').value = values.llama_cpp_reasoning_budget;
+    document.getElementById('UseGpu').checked = values.llama_cpp_use_gpu;
+    document.getElementById('NumbGpuLayers').value = values.llama_cpp_gpu_layers;
+    document.getElementById('LlamaCppFlashAttn').value = values.llama_cpp_flash_attn;
+    document.getElementById('LlamaCppFit').checked = values.llama_cpp_fit;
+    document.getElementById('LlamaCppFitTarget').value = values.llama_cpp_fit_target;
+    document.getElementById('LlamaCppFitMinCtx').value = values.llama_cpp_fit_min_ctx;
+    document.getElementById('CudaAllDevicesCheckbox').checked = values.llama_cpp_cuda_all_devices;
+    document.getElementById('CudaSpecifyDevices').value = values.llama_cpp_cuda_specific_devices;
+    document.getElementById('LlmCtxLgt').value = values.llama_cpp_context_length;
+    document.getElementById('LlamaCppBatchSize').value = values.llama_cpp_batch_size;
+    document.getElementById('LlamaCppUbatchSize').value = values.llama_cpp_ubatch_size;
+    document.getElementById('MaxNewToks').value = values.llama_cpp_max_new_tokens;
+    document.getElementById('UnifiedKvBuffer').checked = values.llama_cpp_unified_kv_buffer;
+    document.getElementById('DisableKvOffloading').checked = values.llama_cpp_disable_kv_offloading;
+    document.getElementById('KeyCacheDataType').value = values.llama_cpp_key_cache_data_type;
+    document.getElementById('ValueCacheDataType').value = values.llama_cpp_value_cache_data_type;
+    document.getElementById('NoOfSeqsToParDecode').value = values.llama_cpp_no_of_seqs_to_par_decode;
+    document.getElementById('OffloadToDevices').value = values.llama_cpp_offload_to_devices;
+    document.getElementById('CpuOnlyMoe').checked = values.llama_cpp_cpu_only_moe;
+    document.getElementById('LlamaCppNumCpuMoe').value = values.llama_cpp_num_cpu_moe;
+    document.getElementById('Mlock').checked = values.llama_cpp_mlock;
+    document.getElementById('NoMmap').checked = values.llama_cpp_no_mmap;
+    document.getElementById('LlamaCppDio').checked = values.llama_cpp_dio;
+    document.getElementById('SplitMode').value = values.llama_cpp_split_mode;
+    document.getElementById('LlamaCppMainGpuIndex').value = values.llama_cpp_main_gpu_index;
+    document.getElementById('TensorSplit').value = values.llama_cpp_tensor_split;
+    document.getElementById('OverrideTensor').value = values.llama_cpp_override_tensor;
+    document.getElementById('LlamaCppMiscArgs').value = values.llama_cpp_misc_args;
 }
 
 
@@ -725,6 +702,13 @@ function toggleNGL() {  // Enable or disable ngl based on use_gpu
 }
 
 
+function toggleLlamaCppCudaAllDevices() {
+    var selection = document.getElementById('CudaAllDevicesCheckbox').checked;
+    document.getElementById('CudaSpecifyDevices').disabled = selection;
+    document.getElementById('CudaSpecifyDevices').style.display = selection ? 'none' : 'inline-block';
+}
+
+
 function toggleLlamaCppCpuMoE() {
     var selection = document.getElementById('CpuOnlyMoe').checked;
     if (selection) {
@@ -873,6 +857,9 @@ function initializeEventListenersForLLMTab() {
     // Event Listener for toggle GPU:
     document.getElementById('UseGpu').addEventListener('change', toggleNGL);
 
+    // Event listener for toggle CUDA All Devices:
+    document.getElementById('CudaAllDevicesCheckbox').addEventListener('change', toggleLlamaCppCudaAllDevices);
+
     // Event listener for CPU-MoE Toggle:
     document.getElementById('CpuOnlyMoe').addEventListener('change', toggleLlamaCppCpuMoE);
 
@@ -909,6 +896,7 @@ function initializeEventListenersForLLMTab() {
     toggleLocalLlmSelection();
     toggleLlmApiForm();
     toggleNGL();
+    toggleLlamaCppCudaAllDevices();
     toggleLlamaCppCpuMoE();
 
     document.getElementById('update_azure_gpt').addEventListener('change', function() {
@@ -1000,9 +988,7 @@ function initializeLLMTabComponents(values) {
         );
     }
     
-    setLlamaCppValues(values);
-    setLlamaCppCheckboxes(values);
-    setLlamaCppDropdowns(values);
+    setLlamaCppValuesAndCheckboxes(values);
     initializeLocalLLMServerDropdown(values.local_llm_server, values.exclusive_server_mode);
     initializeModelDropdown(values.model_choice);   
     //initializeLLMTemplateDropdown(values.local_llm_chat_template_format);
