@@ -514,7 +514,8 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                     'Education',
                     'Casual'
                 ],
-                'selected_knowledge_domain':'General'
+                'selected_knowledge_domain':'General',
+                'subprocess_popen_on_close_behavior':'c'    # default to closing the window after the command finishes
             }.get(key, 'undefined') # "implicit string concatenation" used for keys with large-string values!
 
             if default_value == 'undefined':

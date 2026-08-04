@@ -73,6 +73,7 @@ function loadCoreLarsConfig() {
         'local_llm_server',
         'exclusive_server_mode',
         'model_choice',
+        'subprocess_popen_on_close_behavior',
         'use_local_llm',
         'embedding_torch_device',
         'reranker_torch_device',
@@ -1551,6 +1552,7 @@ function initializeWebSearchTabComponents(values) {
 function initializeAdvancedSettingsTabComponents(values) {
     document.getElementById('legacy_mode').checked = values.legacy_mode;
     document.getElementById('tool_response_mode').value = values.tool_response_mode;
+    document.getElementById('subprocess_popen_on_close_behavior').value = values.subprocess_popen_on_close_behavior;
     setLegacyMode(values.legacy_mode);
 }
 

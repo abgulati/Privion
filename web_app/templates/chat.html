@@ -119,7 +119,7 @@
             <div class="input-area" id="input-area">
                 <div class="input-wrapper">
                     <textarea rows="1" cols="50" class="form-control" id="user-input" onclick="closeNav()" placeholder="Type your prompts here..."></textarea>
-                    <button id="stopGenerationButton" class="btn btn-sm btn-danger" style="display: none;" onclick="stopGeneration()" title="Stop the current LLM's response generation"><i class="fas fa-stop"></i></button>
+                    <button id="stopGenerationButton" class="btn btn-sm btn-danger" onclick="stopGeneration()" title="Stop the current LLM's response generation"><i class="fas fa-stop"></i></button>
                     <input type="file" id="textAttachmentInput" style="display: none;">
                     <button type="button" id="textAttachmentButton" class="btn btn-sm btn-outline-secondary" onclick="closeNav(); document.getElementById('textAttachmentInput').click();" title="Attach a file to your message for Vision inferencing" disabled>
                         <i class="fas fa-paperclip"></i>
@@ -1114,7 +1114,8 @@
                                                             <tr class="settings-table-row" id="llm_offload_to_devices">
                                                                 <td class="settings_table_setting_name">--device</td>
                                                                 <td class="settings_table_setting_description">Comma-separated list of devices to use for offloading (none = don't offload).
-                                                                    Use `llama-server --list-devices` to see a list of available devices. <br>NOTE: This flag will be IGNORED if fit is ON.</td>
+                                                                    Use `llama-server --list-devices` to see a list of available devices. <br>NOTE: This flag will be IGNORED if fit is ON.<br>
+                                                                    NOTE: CUDA device IDs are affected when setting the CUDA_VISIBLE_DEVICES environment variable!</td>
                                                                 <td class="settings_table_setting_value"><input type="text" id="OffloadToDevices" name="OffloadToDevices" value="none"></td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="llm_cpu_only_moe">
@@ -2538,6 +2539,20 @@
                                                 <td class="settings_table_setting_name">Legacy Mode</td>
                                                 <td class="settings_table_setting_description">Enable legacy mode. This is a temporary feature to help with the transition to a new native tool-calling system. It will be removed in the future.</td>
                                                 <td class="settings_table_setting_value"><input class="settings-input-fields" type="checkbox" id="legacy_mode" name="legacy_mode" value="false"></td>
+                                            </tr>
+                                            <tr class="settings-table-row">
+                                                <td class="settings_table_setting_name">Subprocess.Popen() On-Close Behavior</td>
+                                                <td class="settings_table_setting_description">On sub-process exit (hf-waitress, llama-server, asr-waitress etc):
+                                                    /k - keeps window open (Debugging ONLY | NOTE: Breaks error detection via .poll() functionality!)
+                                                    /c - closes window after command finishes (default)
+                                                    NOTE: Windows only!
+                                                </td>
+                                                <td class="settings_table_setting_value">
+                                                    <select id="subprocess_popen_on_close_behavior" name="subprocess_popen_on_close_behavior" class="modal-selects">
+                                                        <option value="k">/k</option>
+                                                        <option value="c">/c</option>
+                                                    </select>
+                                                </td>
                                             </tr>
                                             <tr class="settings-table-row">
                                                 <td class="settings_table_setting_name">Chat Template Mode</td>

@@ -1291,9 +1291,17 @@ def kosmos_ocr_page(page_as_pil_image_object, retry_count:int=0) -> str:
         print("\nSending request to Kosmos\n")
         '''
         # 100 seconds is more than enough for Kosmos to be loaded and process the request! 
-        # NOTE: Does NOT account for model download time! Ensure the service has been previously run so the models have been downloaded.
+        # NOTE: Does NOT account for model download time! Ensure the service has been 
+        # previously run so the models have been downloaded.
         '''
-        with requests.post(kosmos_local_url, headers=headers, data=payload, files=file_payload, stream=True, timeout=100) as response:
+        with requests.post(
+            kosmos_local_url,
+            headers=headers,
+            data=payload,
+            files=file_payload,
+            stream=True,
+            timeout=100
+        ) as response:
             response.raise_for_status() # Raise an exception for bad 4xx or 5xx status codes
 
             print("\nReceiving event-streaming response from Kosmos\n")
@@ -1308,26 +1316,45 @@ def kosmos_ocr_page(page_as_pil_image_object, retry_count:int=0) -> str:
                             else:
                                 print(f"\n\nReceived plain-text event from Kosmos: {event_data}\n\n")
                         except json.JSONDecodeError as e:
-                            print(f"\n\nCould not parse event from Kosmos as JSON dictionary: {e}\n\n")
-                            print(f"\n\nReceived plain-text event from Kosmos: {event}\n\n")
+                            print(
+                                f"\n\nCould not parse event from Kosmos as JSON dictionary: {e}\n"
+                                f"Received plain-text event from Kosmos: {event}\n\n"
+                            )
                         except Exception as e:
                             handle_local_error("Could not process event from Kosmos: ", e)
+    
     except requests.exceptions.RequestException as e:
-        handle_error_no_return(f"Could not send request to Kosmos, checking if Kosmos is running and attempting to start the service if not. Retry attempt {retry_count+1} of 3. Encountered error: ", e)
+        err_str = (
+            "Could not send request to Kosmos, checking if Kosmos is running "
+            "and attempting to start the service if not. "
+            f"Retry attempt {retry_count+1} of 3. Encountered error: "
+        )
+        handle_error_no_return(err_str, e)
+        
         if retry_count >= 3:
-            handle_local_error("Failed to receive a proper response from the Kosmos OCR service even after 3 retries, stopping execution. Encountered error: ", e)
+            err_str = (
+                "Failed to receive a proper response from the Kosmos OCR service " 
+                "even after 3 retries, stopping execution. "
+                "Encountered error: "
+            )
+            handle_local_error(err_str, e)
         else:
             try:
                 start_kosmos_container()    # Will do nothing if the container is already running!
                 return kosmos_ocr_page(page_as_pil_image_object, retry_count=retry_count+1)
             except Exception as e:
                 handle_local_error("Could not start Kosmos Docker container: ", e)
+    
     except Exception as e:
-        handle_local_error("Could not receive a complete response from the Kosmos OCR service: ", e)
+        handle_local_error("Received incomplete response from the Kosmos OCR service: ", e)
     finally:
         if 'img_stream' in locals() and img_stream:
-            img_stream.close()  # io.BytesIO objects are in-memory streams, and while the GC will eventually close them, it's best to do it explicitly here.
-
+            img_stream.close()  
+            '''
+            io.BytesIO objects are in-memory streams, 
+            and while the GC will eventually close them, 
+            it's best to do it explicitly here.
+            '''
 
 def PDFtoKosmosOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
     '''
@@ -5520,7 +5547,8 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                 'llama_cpp_tensor_split',
                 'llama_cpp_override_tensor',
                 'llama_cpp_serving_url',
-                'llama_cpp_server_port'
+                'llama_cpp_server_port',
+                'subprocess_popen_on_close_behavior'
             ]
         )
         llama_cpp_base_url = get_url_for_server('llama-cpp')
@@ -5701,6 +5729,10 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                 read_return['llama_cpp_cuda_specific_devices']
             )
 
+        cmd_onclose = '/c'
+        if read_return['subprocess_popen_on_close_behavior'] == 'k':
+            cmd_onclose = '/k'
+
         if platform.system() == 'Windows':
             # windows_command = f'start cmd /k "{full_command}"'  
             # # /c - closes window after command finishes, 
@@ -5717,7 +5749,7 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             #     )
                 
             LLAMA_CPP_PROCESS = subprocess.Popen(
-                llama_cpp_safe_launch_args,
+                ['cmd.exe', cmd_onclose] + llama_cpp_safe_launch_args,
                 env=child_env,
                 creationflags=subprocess.CREATE_NEW_CONSOLE
             )   # only for testing & debugging, see note below!

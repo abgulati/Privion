@@ -403,7 +403,8 @@ function getWebSearchConfig() {
 function getAdvancedSettingsConfig() {
     config = {
         'legacy_mode': document.getElementById('legacy_mode').checked,
-        'tool_response_mode': document.getElementById('tool_response_mode').value
+        'tool_response_mode': document.getElementById('tool_response_mode').value,
+        'subprocess_popen_on_close_behavior': document.getElementById('subprocess_popen_on_close_behavior').value,
     };
     setLegacyMode(config.legacy_mode);
     return config;
