@@ -1589,7 +1589,11 @@ def get_docling_converter(docling_config:dict):
         handle_local_error("Could not get Docling converter: ", e)
 
 
-def docling_ocr_page(page_as_pdf_bytes:bytes, page_number:int, retry_count:int=0) -> str:
+def docling_ocr_page(
+    page_as_pdf_bytes:bytes,
+    page_number:int,
+    retry_count:int=0
+) -> str:
     '''
     OCR a single page using Docling
     '''
@@ -1597,22 +1601,44 @@ def docling_ocr_page(page_as_pdf_bytes:bytes, page_number:int, retry_count:int=0
     try:
         # Create Document-Stream object from bytes
         buf = io.BytesIO(page_as_pdf_bytes)
-        source = DocumentStream(name=f"page_{page_number}.pdf", stream=buf)
+        source = DocumentStream(
+            name=f"page_{page_number}.pdf",
+            stream=buf
+        )
 
         # Get Docling converter
         docling_config = get_docling_config()
-        DOCLING_CONVERTER = get_docling_converter(docling_config) if DOCLING_CONVERTER is None else DOCLING_CONVERTER
+        if DOCLING_CONVERTER is None:
+            DOCLING_CONVERTER = get_docling_converter(docling_config)
+   
 
         # Extract text and return the result
         result = DOCLING_CONVERTER.convert(source=source)
-        return str(result.document.export_to_markdown(image_mode=ImageRefMode.PLACEHOLDER))
+        
+        return str(
+            result.document.export_to_markdown(
+                image_mode=ImageRefMode.PLACEHOLDER
+            )
+        )
 
     except Exception as e:
         if retry_count < 3:
-            print(f"Retrying Docling OCR for page {page_number}, retry attempt {retry_count+1} of 3. Encountered error: {e}")
-            return docling_ocr_page(page_as_pdf_bytes, page_number, retry_count + 1)
+            print(
+                f"Retrying Docling OCR for page {page_number}, "
+                f"retry attempt {retry_count+1} of 3. "
+                f"Encountered error: {e}"
+            )
+            return docling_ocr_page(
+                page_as_pdf_bytes,
+                page_number,
+                retry_count + 1
+            )
         else:
-            handle_local_error("Failed to receive a proper response from the Docling OCR service even after 3 retries, stopping execution. Encountered error: ", e)
+            error_message = (
+                "Failed to receive a proper response from the Docling OCR service "
+                "even after 3 retries, stopping execution. Encountered error: "
+            )
+            handle_local_error(error_message, e)
 
 
 def PDFtoDoclingOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
