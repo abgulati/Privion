@@ -1510,7 +1510,9 @@ def get_docling_converter(docling_config:dict):
             # a. Set VLM Pipeline Options
             vlm_pipeline_options = None
             vlm_pipeline_options = VlmPipelineOptions()
-            vlm_pipeline_options.vlm_options = get_docling_vlm_model(docling_config['docling_vlm_model'])
+            vlm_pipeline_options.vlm_options = get_docling_vlm_model(
+                docling_config['docling_vlm_model']
+            )
 
             # b. VLM Converter
             vlm_converter = DocumentConverter(
@@ -1528,23 +1530,48 @@ def get_docling_converter(docling_config:dict):
         # a. Set PDF Pipeline Options
         pdf_pipeline_options = None
         pdf_pipeline_options = PdfPipelineOptions()
-        pdf_pipeline_options.do_ocr = str(docling_config['docling_do_ocr']).lower() == 'true'
-        pdf_pipeline_options.do_code_enrichment = str(docling_config['docling_do_code_enrichment']).lower() == 'true'
-        pdf_pipeline_options.do_formula_enrichment = str(docling_config['docling_do_formula_enrichment']).lower() == 'true'
-        pdf_pipeline_options.do_table_structure = str(docling_config['docling_do_table_structure']).lower() == 'true'
-        pdf_pipeline_options.do_picture_classification = str(docling_config['docling_do_picture_classification']).lower() == 'true'
-        pdf_pipeline_options.do_picture_description = str(docling_config['docling_do_picture_description']).lower() == 'true'
-        pdf_pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE if str(docling_config['docling_table_structure_mode']) == 'accurate' else TableFormerMode.FAST
-        pdf_pipeline_options.table_structure_options.do_cell_matching = str(docling_config['docling_do_cell_matching']).lower() == 'true'
+        pdf_pipeline_options.do_ocr = (
+            str(docling_config['docling_do_ocr']).lower() == 'true'
+        )
+        pdf_pipeline_options.do_code_enrichment = (
+            str(docling_config['docling_do_code_enrichment']).lower() == 'true'
+        )
+        pdf_pipeline_options.do_formula_enrichment = (
+            str(docling_config['docling_do_formula_enrichment']).lower() == 'true'
+        )
+        pdf_pipeline_options.do_table_structure = (
+            str(docling_config['docling_do_table_structure']).lower() == 'true'
+        )
+        pdf_pipeline_options.do_picture_classification = (
+            str(docling_config['docling_do_picture_classification']).lower() == 'true'
+        )
+        pdf_pipeline_options.do_picture_description = (
+            str(docling_config['docling_do_picture_description']).lower() == 'true'
+        )
+        pdf_pipeline_options.table_structure_options.mode = (
+            TableFormerMode.ACCURATE
+            if str(docling_config['docling_table_structure_mode']) == 'accurate'
+            else TableFormerMode.FAST
+        )
+        pdf_pipeline_options.table_structure_options.do_cell_matching = (
+            str(docling_config['docling_do_cell_matching']).lower() == 'true'
+        )
+   
         pdf_pipeline_options.accelerator_options = AcceleratorOptions(
             num_threads = int(docling_config['docling_num_threads']),
             device = AcceleratorDevice.AUTO,
-            # cuda_use_flash_attention_2 = str(docling_config['docling_cuda_use_flash_attention_2']).lower() == 'true'
+            # cuda_use_flash_attention_2 = (
+            #     str(docling_config['docling_cuda_use_flash_attention_2']).lower() == 'true'
+            # )
         )
 
         # b. Set OCR Options
-        ocr_options = get_docling_ocr_model(str(docling_config['docling_ocr_model']))
-        ocr_options.force_full_page_ocr = str(docling_config['docling_force_full_page_ocr']).lower() == 'true'
+        ocr_options = get_docling_ocr_model(
+            docling_config['docling_ocr_model']
+        )
+        ocr_options.force_full_page_ocr = (
+            str(docling_config['docling_force_full_page_ocr']).lower() == 'true'
+        )
         pdf_pipeline_options.ocr_options = ocr_options
 
         # c. Initialize converter and process
