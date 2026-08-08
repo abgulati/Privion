@@ -1358,43 +1358,60 @@ def kosmos_ocr_page(page_as_pil_image_object, retry_count:int=0) -> str:
 
 def PDFtoKosmosOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
     '''
-    OCR PDFs using Kosmos by iterating through each page, converting to a binary stream and then invoking `infer_file_stream()`
+    OCR PDFs using Kosmos-2.5:
+    - Iterating through each page
+    - Converting to a binary stream
+    - Invoking `infer_file_stream()`
 
     Args:
-        - input_pdf_filepath: pathlib.Path object of the PDF file to be OCR'ed
+        - input_pdf_filepath: pathlib.Path to the target PDF
 
     Returns:
-        - pathlib.Path object of the output text file
+        - pathlib.Path to the output text file
 
     Raises:
-        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+        - Exception:
+            - If the PDF file cannot be opened
+            - If the output text file cannot be initialized
+            - If the OCR process fails
     '''
     try:
         read_return = read_config(['ocr_pdfs', 'force_re_extract'])
     except Exception as e:
-        handle_local_error("Missing OCR PDFs directory for Kosmos OCR, please provide required API config. Error: ", e)
+        handle_local_error("Error reading Kosmos OCR config: ", e)
 
     try:
         source_filename = input_pdf_filepath.name
         print(f"\n\nApplying Kosmos OCR to PDF file: {source_filename}\n\n")
 
         output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
-        output_text_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
+        output_text_file_path = pathlib.Path(
+            rf"{read_return['ocr_pdfs']}"
+        ).resolve() / output_text_file_name   # normalize and append filename
     except Exception as e:
         handle_local_error("Could not extract filename: ", e)
 
     if output_text_file_path.exists() and not read_return['force_re_extract']:
-        if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
-            print("Kosmos OCR'ed doc already exists and is not empty! Returning existing file.")
+        if (
+            output_text_file_path.is_file() and 
+            output_text_file_path.stat().st_size > 0
+        ):
+            print("Kosmos OCR'ed doc already exists and is not empty! Returning...")
             return output_text_file_path
         else:
-            print("Kosmos OCR'ed doc already exists but is empty! Overwriting with new OCR'ed file.")
+            print("Kosmos OCR'ed doc already exists but is empty! Overwriting...")
 
     # Convert PDF to  a list of images
     pil_image_object_list = []
     try:
         print("\n\nConverting PDF to a list of Images\n\n")
-        pil_image_object_list = convert_from_path(input_pdf_filepath, 300) # The convert-from_path() function from pdf2image lib intertnally uses Poppler to convert PDF pages to images, and then creates PIP Image objects from them. 300dpi - good balance between quality and performance
+        pil_image_object_list = convert_from_path(input_pdf_filepath, 300)
+        '''
+        The convert-from_path() function from pdf2image lib 
+        intertnally uses Poppler to convert PDF pages to images, 
+        and then creates PIP Image objects from them. 
+        300dpi is a good balance between quality and performance.
+        '''
         pdf_document_length = len(pil_image_object_list)
     except Exception as e:
         handle_local_error("Could not image PDF file: ", e)
@@ -1408,7 +1425,10 @@ def PDFtoKosmosOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
     # Initialize page number
     for page_number, image in enumerate(pil_image_object_list, start=1):
         try:
-            print(f"\nProcessing Page: {page_number} of {pdf_document_length} from file: {source_filename}\n")
+            print(
+                f"\nProcessing Page: {page_number} of {pdf_document_length} from file: "
+                f"{source_filename}\n"
+            )
             full_parsed_text = kosmos_ocr_page(image)
             output_text_file.write(f"[PAGE:{page_number}]\n{full_parsed_text}\n")
         except Exception as e:
@@ -1643,37 +1663,48 @@ def docling_ocr_page(
 
 def PDFtoDoclingOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
     '''
-    OCR PDFs using Docling by iterating through each page, converting to a binary stream and then invoking `dolcing_ocr_page()`
+    OCR PDFs using Docling:
+    - Iterating through each page
+    - Converting to a binary stream
+    - Invoking `dolcing_ocr_page()`
 
     Args:
-        - input_pdf_filepath: pathlib.Path object of the PDF file to be OCR'ed
+        - input_pdf_filepath: pathlib.Path to the target PDF
 
     Returns:
-        - pathlib.Path object of the output text file
+        - pathlib.Path to the output text file
 
     Raises:
-        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+        - Exception:
+            - If the PDF file cannot be opened
+            - If the output text file cannot be initialized
+            - If the OCR process fails
     '''
     try:
         read_return = read_config(['force_re_extract', 'ocr_pdfs'])
     except Exception as e:
-        handle_local_error("Could not read required values from config.json when attempting to convert PDF to TXT: ", e)
+        handle_local_error("Error reading Docling OCR config: ", e)
     
     try:
         source_filename = input_pdf_filepath.name
         print(f"\n\nApplying Docling OCR to PDF file: {source_filename}\n\n")
 
         output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
-        output_text_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
+        output_text_file_path = pathlib.Path(
+            rf"{read_return['ocr_pdfs']}"
+        ).resolve() / output_text_file_name   # normalize and append filename
     except Exception as e:
         handle_local_error("Could not extract filename: ", e)
 
     if output_text_file_path.exists() and not read_return['force_re_extract']:
-        if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
-            print("Docling OCR'ed doc already exists and is not empty! Returning existing file.")
+        if (
+            output_text_file_path.is_file() and 
+            output_text_file_path.stat().st_size > 0
+        ):
+            print("Docling OCR'ed doc already exists and is not empty! Returning...")
             return output_text_file_path
         else:
-            print("Docling OCR'ed doc already exists but is empty! Overwriting with new OCR'ed file.")
+            print("Docling OCR'ed doc already exists but is empty! Overwriting...")
 
     # Open with PyMuPDF for conversion to binary byte stream
     try:
@@ -1691,11 +1722,16 @@ def PDFtoDoclingOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
     # Iterate through each page and OCR
     for page_number in range(pdf_document_length):
         try:
-            print(f"\n\nProcessing Page: {page_number + 1} of {pdf_document_length} from file: {source_filename}\n\n")
+            print(
+                f"\n\nProcessing Page: {page_number + 1} of {pdf_document_length} from file: "
+                f"{source_filename}\n\n"
+            )
 
             # Extract single page as a new PDF
             single_page_pdf = fitz.open()
-            single_page_pdf.insert_pdf(pdf_document, from_page=page_number, to_page=page_number)
+            single_page_pdf.insert_pdf(
+                pdf_document, from_page=page_number, to_page=page_number
+            )
 
             # Convert to bytes
             single_page_pdf_bytes = single_page_pdf.tobytes()
@@ -1708,7 +1744,10 @@ def PDFtoDoclingOCRTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
             output_text_file.write(f"[PAGE:{page_number + 1}]\n{full_parsed_text}\n")
 
         except Exception as e:
-            handle_error_no_return(f"Could not process page {page_number+1} of {pdf_document_length}: ", e)
+            handle_error_no_return(
+                f"Docling OCR failed for page {page_number+1} of {pdf_document_length}: ", 
+                e
+            )
             continue
     
     # Close & return
@@ -1722,19 +1761,22 @@ def UseBackupOcrOnPage(input_pdf_filepath:pathlib.Path, current_page_num:int) ->
     OCR a single page using the backup OCR service
     
     Args:
-        - input_pdf_filepath: pathlib.Path object of the PDF file to be OCR'ed
+        - input_pdf_filepath: pathlib.Path to the target PDF
         - current_page_num: int of the page number to be OCR'ed
 
     Returns:
         - str of the OCR'ed text
     
     Raises:
-        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+        - Exception:
+            - If the PDF file cannot be opened
+            - If the output text file cannot be initialized
+            - If the OCR process fails
     '''
     try:
         read_return = read_config(['backup_ocr_service_choice'])
     except Exception as e:
-        handle_local_error("Could not read required values from config.json when attempting to use backup OCR on page: ", e)
+        handle_local_error("Error reading backup OCR config: ", e)
     
     if read_return['backup_ocr_service_choice'] == 'Kosmos':
         try:
@@ -1747,84 +1789,138 @@ def UseBackupOcrOnPage(input_pdf_filepath:pathlib.Path, current_page_num:int) ->
        
             if current_page_as_pil_image_object:
                 ocr_result = kosmos_ocr_page(current_page_as_pil_image_object)
-                return ocr_result if ocr_result is not None else ""
+                return (
+                    ocr_result 
+                    if ocr_result is not None 
+                    else ""
+                )
             else:
-                raise Exception(f"Imaged page is empty. Skipping page {current_page_num}.")
+                raise Exception(
+                    f"Kosmos OCR failed: Image page is empty for page {current_page_num}."
+                )
         
         except Exception as e:
-            handle_local_error("Could not OCR page with Kosmos, skipping. Encountered error: ", e)
+            handle_local_error("Kosmos OCR failed: ", e)
         
     elif read_return['backup_ocr_service_choice'] == 'Docling':
         try:
             pdf_document = fitz.open(input_pdf_filepath)
             # Extract single page as a new PDF
             single_page_pdf = fitz.open()
-            single_page_pdf.insert_pdf(pdf_document, from_page=current_page_num, to_page=current_page_num)
+            
+            single_page_pdf.insert_pdf(
+                pdf_document,
+                from_page=current_page_num,
+                to_page=current_page_num
+            )
 
             # Convert to bytes
             single_page_pdf_bytes = single_page_pdf.tobytes()
             single_page_pdf.close()
 
             # Process with Docling
-            full_parsed_text = docling_ocr_page(single_page_pdf_bytes, current_page_num)
-            return full_parsed_text if full_parsed_text is not None else ""
+            full_parsed_text = docling_ocr_page(
+                single_page_pdf_bytes,
+                current_page_num
+            )
+            return (
+                full_parsed_text 
+                if full_parsed_text is not None 
+                else ""
+            )
         except Exception as e:
-            handle_local_error("Could not OCR page with Docling, skipping. Encountered error: ", e)
+            handle_local_error("Docling OCR failed: ", e)
 
     else:
-        handle_local_error("Invalid backup OCR service choice, skipping. Encountered error: ", read_return['backup_ocr_service_choice'])
+        handle_local_error(
+            f"Invalid backup OCR service choice: {read_return['backup_ocr_service_choice']}"
+        )
     
 
 def PDFtoTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
     '''
-    OCR PDFs using PyPDF2 by iterating through each page, converting to a binary stream and then invoking `Use-BackupOcrOnPage()`
+    OCR PDFs using PyPDF2:
+    - Iterating through each page
+    - Converting to a binary stream
+    - Invoking `UseBackupOcrOnPage()` if PyPDF2 fails to extract text
 
     Args:
-        - input_pdf_filepath: pathlib.Path object of the PDF file to be OCR'ed
+        - input_pdf_filepath: pathlib.Path to the target PDF
 
     Returns:
-        - pathlib.Path object of the output text file
+        - pathlib.Path to the output text file
 
     Raises:
-        - Exception: If the PDF file cannot be opened, the output text file cannot be initialized, or the OCR process fails
+        - Exception:
+            - If the PDF file cannot be opened
+            - If the output text file cannot be initialized
+            - If the OCR process fails
     '''
     try:
-        read_return = read_config(['pdfs_to_txts', 'force_re_extract', 'ocr_pdfs', 'min_char_threshold_for_backup_ocr'])
+        read_return = read_config([
+            'pdfs_to_txts',
+            'force_re_extract',
+            'ocr_pdfs',
+            'min_char_threshold_for_backup_ocr'
+        ])
     except Exception as e:
-        handle_local_error("Could not read required values from config.json when attempting to convert PDF to TXT: ", e)
+        handle_local_error("Error reading PDF-to-TXT config: ", e)
 
     try:
         source_filename = input_pdf_filepath.name
         print(f"\n\nApplying PyPDF2 OCR to PDF file: {source_filename}\n\n")
 
         output_text_file_name = input_pdf_filepath.with_suffix(".txt").name
-        output_text_file_path = pathlib.Path(rf"{read_return['pdfs_to_txts']}").resolve() / output_text_file_name   # normalize and append filename
-        ocr_pdf_file_path = pathlib.Path(rf"{read_return['ocr_pdfs']}").resolve() / output_text_file_name   # normalize and append filename
+        output_text_file_path = pathlib.Path(
+            rf"{read_return['pdfs_to_txts']}"
+        ).resolve() / output_text_file_name   # normalize and append filename
+        ocr_pdf_file_path = pathlib.Path(
+            rf"{read_return['ocr_pdfs']}"
+        ).resolve() / output_text_file_name   # normalize and append filename
 
         if not read_return['force_re_extract']:
-            if output_text_file_path.is_file() and output_text_file_path.stat().st_size > 0:
-                print("PyPDF2-extracted .txt already exists and is not empty! Returning existing file.")
+            if (
+                output_text_file_path.is_file() and 
+                output_text_file_path.stat().st_size > 0
+            ):
+                print("PyPDF2-extracted .txt already exists and is not empty! Returning...")
                 return output_text_file_path
-            elif ocr_pdf_file_path.is_file() and ocr_pdf_file_path.stat().st_size > 0:
-                print("OCR'ed .txt already exists and is not empty! Returning existing file.")
+            elif (
+                ocr_pdf_file_path.is_file() and 
+                ocr_pdf_file_path.stat().st_size > 0
+            ):
+                print("OCR'ed .txt already exists and is not empty! Returning...")
                 return ocr_pdf_file_path
             else:
-                print("PyPDF2-extracted .txt already exists but is empty! Overwriting with new .txt file.")
+                print("PyPDF2-extracted .txt already exists but is empty! Overwriting...")
     
     except Exception as e:
-        handle_local_error("Could not complete necessary file system operations when attempting to convert PDF to TXT: ", e)
+        handle_local_error("File system error during PDF-to-TXT conversion: ", e)
     
     try:
-        with open(input_pdf_filepath, 'rb') as pdf_file_obj:    # Open PDF file as binary stream. The `with open()` block will automatically close the file after the block is executed.
+        with open(input_pdf_filepath, 'rb') as pdf_file_obj:
+            '''
+            Open PDF file as binary stream. The `with open()` 
+            block will automatically close the file after the 
+            block is executed.
+            '''
             pdf_reader = PyPDF2.PdfReader(pdf_file_obj)
             num_pages = len(pdf_reader.pages)
 
-            with open(output_text_file_path, 'w', encoding='utf-8') as output_text_file:
+            with open(
+                output_text_file_path,
+                'w',
+                encoding='utf-8'
+            ) as output_text_file:
+       
 
                 # Loop through all the pages and extract text
                 for page_num in range(num_pages):
                     current_page_num = int(page_num) + 1
-                    print(f"\nProcessing page {current_page_num} of {num_pages} from file: {source_filename}\n")
+                    print(
+                        f"\nProcessing page {current_page_num} of {num_pages} from file: "
+                        f"{source_filename}\n"
+                    )
 
                     use_backup_ocr = False
                     pypdf2_text = ""
@@ -1833,40 +1929,64 @@ def PDFtoTXT(input_pdf_filepath:pathlib.Path) -> pathlib.Path:
                         page = pdf_reader.pages[page_num]
                         pypdf2_text = page.extract_text()
                     except Exception as e:
-                        handle_error_no_return("Could not extract text from page, attempting to OCR. Encountered error: ", e)
+                        handle_error_no_return("PyPDF2 text-extraction error, attempting OCR: ", e)
                         use_backup_ocr = True
                         pypdf2_text = ""
 
-                    if use_backup_ocr or pypdf2_text is None or len(pypdf2_text) < read_return['min_char_threshold_for_backup_ocr']:
-                        print(f"OCR Necessary - Attempting to OCR page {current_page_num} of {num_pages} using backup OCR method.")
+                    if (
+                        use_backup_ocr
+                        or pypdf2_text is None
+                        or len(pypdf2_text) < read_return['min_char_threshold_for_backup_ocr']
+                    ):
+               
+                        print(
+                            "OCR Necessary - Attempting to OCR page "
+                            f"{current_page_num} of {num_pages} using backup OCR method."
+                        )
                         try:
                             ocr_text = UseBackupOcrOnPage(input_pdf_filepath, current_page_num)
                         except Exception as e:
-                            handle_error_no_return("Could not OCR page with backup OCR method, skipping. Encountered error: ", e)
+                            handle_error_no_return("OCR with backup method failed: ", e)
                             ocr_text = ""
                         
                     try:
-                        text_to_write = pypdf2_text if len(pypdf2_text) >= len(ocr_text) else ocr_text
-                        output_text_file.write(f"[PAGE:{current_page_num}]\n{text_to_write}\n")
+                        if len(pypdf2_text) >= len(ocr_text):
+                            text_to_write = pypdf2_text
+                        else:
+                            text_to_write = ocr_text
+                   
+                        output_text_file.write(
+                            f"[PAGE:{current_page_num}]\n{text_to_write}\n"
+                        )
                     except Exception as e:
-                        handle_error_no_return("Could not write to output text file: ", e)
+                        handle_error_no_return("Error writing to output text file: ", e)
                         continue
     except Exception as e:
         handle_local_error("Could not process PDF file: ", e)
 
-    print(f"\n\nCompleted default-extraction for PDF file: {input_pdf_filepath}\n\n")
+    print(f"\n\nCompleted PDF-to-TXT conversion for file: {input_pdf_filepath}\n\n")
     return output_text_file_path
 
 
-def add_column_if_not_exists(cursor, table_name, column_name, column_type):
+def add_column_if_not_exists(
+    cursor:sqlite3.Cursor,
+    table_name:str,
+    column_name:str,
+    column_type:str
+) -> None:
     try:
         cursor.execute(f"PRAGMA table_info({table_name})")
         columns = cursor.fetchall()
         column_names = [column[1] for column in columns]
+        
         if column_name not in column_names:
-            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+            cursor.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+            )
     except Exception as e:
-        handle_error_no_return(f"Error adding column {column_name} to {table_name}: ", e)
+        handle_error_no_return(
+            f"Error adding column {column_name} to {table_name}: ", e
+        )
 
 
 def init_and_connect_to_docs_loaded_db() -> tuple[sqlite3.Connection, sqlite3.Cursor]:
@@ -1874,7 +1994,7 @@ def init_and_connect_to_docs_loaded_db() -> tuple[sqlite3.Connection, sqlite3.Cu
         read_return = read_config(['sqlite_docs_loaded_db'])
         sqlite_docs_loaded_db = read_return['sqlite_docs_loaded_db']
     except Exception as e:
-        handle_local_error("Missing sqlite_docs_loaded_db in config.json for method init_and_get_cursor_fordocs_loaded_db. Error: ", e)
+        handle_local_error("Missing sqlite_docs_loaded_db in config. Error: ", e)
 
     try:
         conn = sqlite3.connect(sqlite_docs_loaded_db)
@@ -1913,13 +2033,23 @@ def init_and_connect_to_docs_loaded_db() -> tuple[sqlite3.Connection, sqlite3.Cu
     return conn, cursor
 
 
-def is_doc_already_loaded_to_db(document_name:str, embedding_model:str, chunk_size:int, chunk_overlap:int, knowledge_domain:str) -> bool:
-    print(f"Checking if {document_name} already exists in the appropriate records DB")
+def is_doc_already_loaded_to_db(
+    document_name:str,
+    embedding_model:str,
+    chunk_size:int,
+    chunk_overlap:int,
+    knowledge_domain:str
+) -> bool:
+    print(f"Checking if {document_name} already exists in the RecordsDB")
 
     try:
         conn, cursor = init_and_connect_to_docs_loaded_db()
     except Exception as e:
-        handle_local_error("Could not initialize and connect to docs_loaded_db to check_if_doc_already_loaded_to_db: ", e)
+        err_str = (
+            "Could not initialize and connect to docs_loaded_db "
+            "to check if document is already loaded to RecordsDB: "
+        )
+        handle_local_error(err_str, e)
 
     try:
         cursor.execute("""
@@ -1929,18 +2059,24 @@ def is_doc_already_loaded_to_db(document_name:str, embedding_model:str, chunk_si
             AND chunk_size = ?
             AND chunk_overlap = ?
             AND knowledge_domain = ?
-        """, (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain))
+        """, (document_name,embedding_model, chunk_size, chunk_overlap, knowledge_domain))
         existing_record = cursor.fetchone()
+        
         if existing_record is not None:
-            print(f"Document '{document_name}' already exists in records DB as loaded into {knowledge_domain} with embedding model '{embedding_model}' and chunk size {chunk_size} and chunk overlap {chunk_overlap}.")
+            print(
+                f"Document '{document_name}' already exists in records DB as loaded into "
+                f"{knowledge_domain} with embedding model '{embedding_model}' and chunk "
+                f"size {chunk_size} and chunk overlap {chunk_overlap}."
+            )
             conn.close()
             return True
         else:
             print("Document does not exist in records DB.")
             conn.close()
             return False
+    
     except Exception as e:
-        handle_error_no_return("Could not check if document exists in records DB, returning False. Encountered error: ", e)
+        handle_error_no_return("Could not check if document exists in records DB, error: ", e)
         conn.close()
         return False
 
@@ -1954,9 +2090,15 @@ def record_doc_loaded_to_db(document_name:str, chunk_size:int, chunk_overlap:int
         embedding_model = read_return['selected_embedding_model']
         knowledge_domain = read_return['selected_knowledge_domain']
     except Exception as e:
-        handle_local_error("Could not determine embedding model and knowledge domain in config.json. Error: ", e)
+        handle_local_error("Missing values in config.json for record-doc_loaded_to_db: ", e)
 
-    if is_doc_already_loaded_to_db(document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain):
+    if is_doc_already_loaded_to_db(
+        document_name,
+        embedding_model,
+        chunk_size,
+        chunk_overlap,
+        knowledge_domain
+    ):
         print("Document already exists in records DB, skipping insertion.")
         return True
 
@@ -1966,7 +2108,13 @@ def record_doc_loaded_to_db(document_name:str, chunk_size:int, chunk_overlap:int
         handle_local_error("Could not connect to docs_loaded_db: ", e)
     
     try:
-        cursor.execute("INSERT INTO document_records (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain) VALUES (?, ?, ?, ?, ?)", (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain))
+        cursor.execute(
+            "INSERT INTO document_records ("
+            "document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain"
+            ") VALUES (?, ?, ?, ?, ?)",
+            (document_name, embedding_model, chunk_size, chunk_overlap, knowledge_domain)
+        )
+   
         conn.commit()
         conn.close()
         print("\nDocument record added to document_records DB\n")
@@ -1978,14 +2126,33 @@ def record_doc_loaded_to_db(document_name:str, chunk_size:int, chunk_overlap:int
 
 # List-splitter function for a large number of embeddings!
 def split_embeddings_list(all_splits, max_emmbeddings_list_size):
-    for i in range(0, len(all_splits), max_emmbeddings_list_size):  # Step through the large list in steps of max size
-        yield all_splits[i:i + max_emmbeddings_list_size]   # Yield a slice of all_splits from index i upto but NOT including i+max_size. 
+    for i in range(0, len(all_splits), max_emmbeddings_list_size):
+        yield all_splits[i:i + max_emmbeddings_list_size]
         '''
-        While memory efficient, there is a key limitation: cannot use len() on the yielded object as if it were a list! This is because the yielded object is a generator object created via iteration, not a list!
-        Also, issues may arise if attmepting to enumerate() as there's an implicit split_docs[i] indexing, especially if anywhere in the loop you then try a len() on the yielded object!
-        This is because you would be using the generator multiple times (once for length, then again for iteration): Generators are "single-use" iterators - once you iterate through them, 
-        they're exhausted and can't be used again without recreating them. Plus, they don't support random access or length checking because they generate values on-the-fly!
-        Hence this method is not used by core-embedder(), but the code retained here for future reference and debugging/documentation purposes!
+        Step through the large list in steps of max size and 
+        yield a slice of the 'all_splits' list from index i upto 
+        but NOT including i+max_size.
+        
+        While memory efficient, there is a key limitation: cannot use 
+        len() on the yielded object as if it were a list! This is 
+        because the yielded object is a generator object created via 
+        iteration, not a list!
+        
+        Also, issues may arise if attmepting to enumerate() as there's 
+        an implicit split_docs[i] indexing, especially if anywhere in 
+        the loop you then try a len() on the yielded object!
+        
+        This is because you would be using the generator multiple times 
+        (once for length, then again for iteration): Generators are 
+        "single-use" iterators - once you iterate through them, they're 
+        exhausted and can't be used again without recreating them. 
+        
+        Plus, they don't support random access or length checking 
+        because they generate values on-the-fly!
+        
+        Hence this method is not used by core-embedder(), but the code 
+        retained here for future reference and debugging/documentation 
+        purposes!
         '''
 
 
