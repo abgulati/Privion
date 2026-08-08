@@ -976,6 +976,22 @@
                                                                 <td class="settings_table_setting_description">Number of tokens to draft for speculative decoding (default: 3)</td>
                                                                 <td class="settings_table_setting_value"><input type="number" id="LlamaCppSpecDraftNMax" name="LlamaCppSpecDraftNMax" min="1" class="settings-input-fields" value="3"></td>
                                                             </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_spec_draft_p_min">
+                                                                <td class="settings_table_setting_name">--spec-draft-p-min</td>
+                                                                <td class="settings_table_setting_description">Minimum probability for a token to be considered for speculative decoding (greedy) (default: 0.00)</td>
+                                                                <td class="settings_table_setting_value"><input type="number" id="LlamaCppSpecDraftPMin" name="LlamaCppSpecDraftPMin" min="0.00" max="1.00" step="0.01" class="settings-input-fields" value="0.00"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_spec_draft_device">
+                                                                <td class="settings_table_setting_name">--spec-draft-device</td>
+                                                                <td class="settings_table_setting_description">comma-separated list of devices to use for offloading the draft model (none = don't offload)<br>
+                                                                    use --list-devices to see a list of available devices (default: none)</td>
+                                                                <td class="settings_table_setting_value"><input type="text" id="LlamaCppSpecDraftDevice" name="LlamaCppSpecDraftDevice" class="settings-input-fields" value="none"></td>
+                                                            </tr>
+                                                            <tr class="settings-table-row" id="llama_cpp_spec_draft_ngl">
+                                                                <td class="settings_table_setting_name">--spec-draft-ngl</td>
+                                                                <td class="settings_table_setting_description">max. number of draft model layers to store in VRAM, either an exact number, 'auto', or 'all' (default: auto)</td>
+                                                                <td class="settings_table_setting_value"><input type="text" id="LlamaCppSpecDraftNgl" name="LlamaCppSpecDraftNgl" class="settings-input-fields" value="auto"></td>
+                                                            </tr>
                                                             <tr class="settings-table-row" id="llama_cpp_reasoning_budget">
                                                                 <td class="settings_table_setting_name">--reasoning-budget</td>
                                                                 <td class="settings_table_setting_description">Controls the amount of thinking allowed; currently only one of: -1 for unrestricted thinking budget, or 0 to disable thinking [default: -1]</td>

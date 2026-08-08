@@ -37,6 +37,9 @@ function getLlmConfig() {
             config.llama_cpp_spec_type = document.getElementById('SpecType').value;
             config.llama_cpp_spec_draft_model = document.getElementById('SpecDraftModel').value;
             config.llama_cpp_spec_draft_n_max = parseInt(document.getElementById('LlamaCppSpecDraftNMax').value);
+            config.llama_cpp_spec_draft_p_min = parseFloat(document.getElementById('LlamaCppSpecDraftPMin').value);
+            config.llama_cpp_spec_draft_device = document.getElementById('LlamaCppSpecDraftDevice').value;
+            config.llama_cpp_spec_draft_ngl = document.getElementById('LlamaCppSpecDraftNgl').value;
             config.llama_cpp_reasoning_budget = parseInt(document.getElementById('LlamaCppReasoningBudget').value);
             config.llama_cpp_use_gpu = document.getElementById('UseGpu').checked;
             config.llama_cpp_gpu_layers = parseInt(document.getElementById('NumbGpuLayers').value);

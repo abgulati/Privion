@@ -5561,6 +5561,9 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
                 'llama_cpp_spec_type',
                 'llama_cpp_spec_draft_model',
                 'llama_cpp_spec_draft_n_max',
+                'llama_cpp_spec_draft_p_min',
+                'llama_cpp_spec_draft_device',
+                'llama_cpp_spec_draft_ngl',
                 'llama_cpp_warmup',
                 'llama_cpp_alias',
                 'llama_cpp_misc_args',
@@ -5651,7 +5654,10 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
         if spec_type and spec_type != 'none':
             llama_cpp_safe_launch_args.extend([
                 '--spec-type', str(spec_type),
-                '--spec-draft-n-max', str(read_return['llama_cpp_spec_draft_n_max'])
+                '--spec-draft-n-max', str(read_return['llama_cpp_spec_draft_n_max']),
+                '--spec-draft-p-min', str(read_return['llama_cpp_spec_draft_p_min']),
+                '--spec-draft-device', str(read_return['llama_cpp_spec_draft_device']),
+                '--spec-draft-ngl', str(read_return['llama_cpp_spec_draft_ngl']),
             ])
             if draft_model:
                 llama_cpp_safe_launch_args.extend([

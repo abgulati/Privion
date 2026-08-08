@@ -42,6 +42,9 @@ def write_config(config_updates:dict, filename=None) -> dict:
         'llama_cpp_spec_type',
         'llama_cpp_spec_draft_model',
         'llama_cpp_spec_draft_n_max',
+        'llama_cpp_spec_draft_p_min',
+        'llama_cpp_spec_draft_device',
+        'llama_cpp_spec_draft_ngl',
         'llama_cpp_context_length',
         'llama_cpp_batch_size',
         'llama_cpp_ubatch_size',
@@ -134,7 +137,8 @@ def write_config(config_updates:dict, filename=None) -> dict:
 def safe_write_config(config_updates:dict, filename=None) -> dict:
     '''
     Wrapper for write-config() that handles errors silently.
-    Directly invoke write-config() instead of this method anytime a write-specific error must be raised!
+    Directly invoke write-config() instead of this method anytime 
+    a write-specific error must be raised!
     '''
     try:
         return write_config(config_updates, filename)
@@ -258,6 +262,9 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
                 'llama_cpp_spec_type': 'none',
                 'llama_cpp_spec_draft_model': 'none',
                 'llama_cpp_spec_draft_n_max': 3,
+                'llama_cpp_spec_draft_p_min':0.00,
+                'llama_cpp_spec_draft_device':'none',
+                'llama_cpp_spec_draft_ngl':'auto',
                 'llama_cpp_warmup':True,
                 'llama_cpp_alias':'',
                 'llama_cpp_misc_args':'',

@@ -160,6 +160,9 @@ function loadCoreLarsConfig() {
         'llama_cpp_spec_type',
         'llama_cpp_spec_draft_model',
         'llama_cpp_spec_draft_n_max',
+        'llama_cpp_spec_draft_p_min',
+        'llama_cpp_spec_draft_device',
+        'llama_cpp_spec_draft_ngl',
         'llama_cpp_use_gpu',
         'llama_cpp_gpu_layers',
         'llama_cpp_fit',
@@ -503,6 +506,9 @@ function setLlamaCppValuesAndCheckboxes(values) {
     document.getElementById('SpecType').value = values.llama_cpp_spec_type;
     document.getElementById('SpecDraftModel').value = values.llama_cpp_spec_draft_model;
     document.getElementById('LlamaCppSpecDraftNMax').value = values.llama_cpp_spec_draft_n_max;
+    document.getElementById('LlamaCppSpecDraftPMin').value = values.llama_cpp_spec_draft_p_min;
+    document.getElementById('LlamaCppSpecDraftDevice').value = values.llama_cpp_spec_draft_device;
+    document.getElementById('LlamaCppSpecDraftNgl').value = values.llama_cpp_spec_draft_ngl;
     document.getElementById('LlamaCppReasoningBudget').value = values.llama_cpp_reasoning_budget;
     document.getElementById('UseGpu').checked = values.llama_cpp_use_gpu;
     document.getElementById('NumbGpuLayers').value = values.llama_cpp_gpu_layers;
