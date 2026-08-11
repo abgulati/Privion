@@ -6,6 +6,7 @@ import math
 import torch
 import time
 import multiprocessing
+import re
 
 from pynvml import *
 
@@ -99,6 +100,26 @@ def safe_empty_cuda_cache(timeout:int=10):
 
     except Exception:
         print("\nReturning without emptying CUDA cache\n")
+
+
+def clean_cuda_devices_list(cuda_devices_list:str | list[str | int]) -> str:
+    if isinstance(cuda_devices_list, str):
+        cleaned = re.sub(r'\s+', '', cuda_devices_list)
+    elif isinstance(cuda_devices_list, list):
+        cleaned = ','.join(str(x).strip() for x in cuda_devices_list)
+    else:
+        raise ValueError(
+            "Invalid type for cuda_devices_list:"
+            f"{type(cuda_devices_list)}"
+        )
+
+    if not cleaned:
+        raise ValueError(
+            "CUDA device list is empty. Provide device IDs like '0' or '0,1', "
+            "or enable llama_cpp_cuda_all_devices."
+        )
+
+    return cleaned
 
 
 def add_column_if_not_exists(cursor, table_name, column_name, column_type):
