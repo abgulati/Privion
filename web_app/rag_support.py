@@ -19,57 +19,71 @@ import os
 
 def sanitize_names(name:str) -> str:
     name_str = str(name).lower()
-    sanitized = re.sub(r'[^a-zA-Z0-9]', '_', name_str)  # Matches all non-alphanumeric characters and replaces them with an underscore as OpenCypher spec disallows them in node names
+    sanitized = re.sub(r'[^a-zA-Z0-9]', '_', name_str)
+    '''
+    Matches all non-alphanumeric characters disallowed by 
+    the OpenCypher spec and replaces them with an underscore.
+    '''
     if sanitized[0].isdigit():
-        sanitized = 'n_' + sanitized    # OpenCypher spec disallows digits at the beginning of a node name, even if they're strings eg "2025"!
+        sanitized = 'n_' + sanitized
+        '''
+        OpenCypher spec disallows digits at the beginning of a node name, 
+        even if they're strings eg "2025"!
+        '''
     return sanitized
 
 
 def get_path_to_knowledge_domain() -> pathlib.Path:
-    '''
-    Get the path to the knowledge domain.
-
-    Returns:
-        - pathlib.Path: The path to the knowledge domain
-    '''
-    print("Getting path to knowledge domain")
+    '''Returns the Pathlib.Path to the knowledge domain.'''
+    
     try:
-        read_return = config_manager.read_config(['selected_knowledge_domain', 'knowledge_domain_base_directory'])
+        read_return = config_manager.read_config([
+            'selected_knowledge_domain',
+            'knowledge_domain_base_directory'
+        ])
     except Exception as e:
-        print(f"Missing values in config.json, could not get path to knowledge domain. Error: {e}")
+        print(f"Missing config for knowledge domain path. Error: {e}")
 
     try:
-        path_to_knowledge_domain = pathlib.Path(rf"{str(read_return['knowledge_domain_base_directory'])}").resolve() / str(read_return['selected_knowledge_domain'])
+        path_to_knowledge_domain = pathlib.Path(
+            (
+                rf"{str(read_return['knowledge_domain_base_directory'])}"
+            ).resolve() / str(
+                read_return['selected_knowledge_domain']
+            )
+        )
 
         if not path_to_knowledge_domain.exists():
             path_to_knowledge_domain.mkdir(parents=True, exist_ok=True)
-            print(f"\n\nCreated knowledge domain directory: {path_to_knowledge_domain}\n\n")
+            print(
+                "\n\nCreated knowledge domain directory: "
+                f"{path_to_knowledge_domain}\n\n"
+            )
         
         return path_to_knowledge_domain
     except Exception as e:
-        print(f"Could not create knowledge domain folder, encountered error: {e}")
+        print(f"Could not create knowledge domain folder, error: {e}")
 
 
 def determine_whoosh_index_folder() -> pathlib.Path:
-    '''
-    Determine the path to the Whoosh Index folder.
-
-    Returns:
-        - pathlib.Path: The path to the Whoosh Index folder
-    '''
-    print("Determining Whoosh Index Folder")
-
-    path_to_knowledge_domain = get_path_to_knowledge_domain()
+    '''Returns the Pathlib.Path to the Whoosh Index folder.'''
 
     try:
-        selected_embedding_model = str(config_manager.read_config(['selected_embedding_model'])['selected_embedding_model'])
+        path_to_knowledge_domain = get_path_to_knowledge_domain()
+        config_data = config_manager.read_config(['selected_embedding_model'])
+        selected_embedding_model = str(config_data['selected_embedding_model'])
     except Exception as e:
-        raise Exception(f"Could not determine selected embedding model, encountered error: {e}")
+        raise Exception(f"Error determining selected embedding model: {e}")
 
     try:
-        whoosh_index_folder = path_to_knowledge_domain / "vector_db_and_whoosh_index" / selected_embedding_model / "whoosh_index"
+        whoosh_index_folder = (
+            path_to_knowledge_domain
+            / "vector_db_and_whoosh_index"
+            / selected_embedding_model
+            / "whoosh_index"
+        )
     except Exception as e:
-        raise Exception(f"Could not determine whoosh index folder, encountered error: {e}")
+        raise Exception(f"Error determining whoosh index folder: {e}")
 
     return whoosh_index_folder
 
@@ -91,12 +105,12 @@ def create_whoosh_index_in_folder(whoosh_index_folder:pathlib.Path):
     try:
         whoosh_index_folder.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        raise Exception(f"Failed to create directory for the Whoosh Index, encountered error: {e}")
+        raise Exception(f"Error creating directory for the Whoosh Index: {e}")
     # Create the index based on the schema definted above
     try:
         ix = create_in(str(whoosh_index_folder), schema)
     except Exception as e:
-        raise Exception(f"Failed to create Whoosh Index, encountered error: {e}")
+        raise Exception(f"Error creating Whoosh Index: {e}")
 
     return ix
 
@@ -109,41 +123,51 @@ def get_whoosh_index_object_for_folder(whoosh_index_folder:pathlib.Path):
         try:
             ix = create_whoosh_index_in_folder(whoosh_index_folder)
         except Exception as e:
-            raise Exception(f"Failed to create Whoosh Index, encountered error: {e}")
+            raise Exception(f"Error creating Whoosh Index: {e}")
     else:
         try:
             ix = open_dir(str(whoosh_index_folder))
         except Exception as e:
-            raise Exception(f"Failed to open Whoosh Index, encountered error: {e}")
+            raise Exception(f"Error opening Whoosh Index: {e}")
 
     return ix
 
 
-def create_vector_db_directory(path_to_knowledge_domain:pathlib.Path, embedding_function:str) -> pathlib.Path:
+def create_vector_db_directory(
+    path_to_knowledge_domain:pathlib.Path, 
+    embedding_function:str
+) -> pathlib.Path:
     '''
     Create the vector_db directory.
 
     Args:
-        - path_to_knowledge_domain: pathlib.Path of the path to the knowledge domain
+        - path_to_knowledge_domain: pathlib.Path of the knowledge domain
         - embedding_function: str of the embedding function
 
     Returns:
-        - pathlib.Path: The path to the vector_db directory
+        - pathlib.Path: To the vector_db directory
 
     Raises:
         - Exception: If the vector_db directory cannot be created
     '''
 
     try:
-        vector_db_path = path_to_knowledge_domain / "vector_db_and_whoosh_index" / embedding_function
+        vector_db_path = (
+            path_to_knowledge_domain
+            / "vector_db_and_whoosh_index"
+            / embedding_function
+        )
         if not vector_db_path.exists():
             vector_db_path.mkdir(parents=True, exist_ok=True)
             print(f"\n\nCreated vector_db directory: {vector_db_path}\n\n")
         else:
-            print(f"\n\nVector_db directory already exists, returning path: {vector_db_path}\n\n")
+            print(
+                "\n\nVector_db directory already exists, "
+                f"returning path: {vector_db_path}\n\n"
+            )
         return vector_db_path
     except Exception as e:
-        print(f"Could not create vector_db directory, encountered error: {e}")
+        print(f"Error creating vector_db directory: {e}")
 
 
 def bring_graph_db_online():    # launch FalkorDB Docker container
