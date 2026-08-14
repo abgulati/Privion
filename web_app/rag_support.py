@@ -170,55 +170,77 @@ def create_vector_db_directory(
         print(f"Error creating vector_db directory: {e}")
 
 
-def bring_graph_db_online():    # launch FalkorDB Docker container
+def bring_graph_db_online():
+    '''Launches the FalkorDB Docker container.'''
+    
     print(f"\nLaunching FalkorDB Docker container...\n")
-
     try:
-        read_return = config_manager.read_config([
-            'launch_graph_db_with_ui', 'assign_host_port_to_graph_db_server', 
-            'assign_host_port_to_graph_db_ui', 'graph_db_data_directory'])
-        launch_graph_db_with_ui = read_return['launch_graph_db_with_ui']
-        assign_host_port_to_graph_db_server = read_return['assign_host_port_to_graph_db_server']
-        assign_host_port_to_graph_db_ui = read_return['assign_host_port_to_graph_db_ui']
-        graph_db_data_directory = read_return['graph_db_data_directory']
+        config = config_manager.read_config([
+            'launch_graph_db_with_ui',
+            'assign_host_port_to_graph_db_server', 
+            'assign_host_port_to_graph_db_ui',
+            'graph_db_data_directory'
+        ])
     except Exception as e:
-        raise Exception(f"Could not read graph DB config when attempting to bring FalkorDB online, encountered error: {e}")
+        raise Exception(f"Config error for FalkorDB launch: {e}")
 
-    # Check if Docker Engine is running
-    try:
-        subprocess.run(['docker', 'info'], capture_output=True, check=True)  # check=True will raise an exception if the command returns a non-zero exit code
+    try:    # Check if Docker Engine is online
+        subprocess.run(
+            ['docker', 'info'],
+            capture_output=True,
+            check=True
+        )  # check=True raises if the command returns a non-zero exit code
     except Exception as e:
-        raise Exception(f"Docker Engine is not running, encountered error: {e}")
+        raise Exception(f"Docker Engine is not running: {e}")
 
-    print("\nDocker Engine is running, proceeding with FalkorDB Docker container launch...\n")
+    print("\nDocker Engine online, proceeding with FalkorDB container launch...\n")
 
     if utils_module.check_if_container_is_running('falkor-db'):
-        print("\nFalkorDB Docker container is already running, skipping launch...\n")
+        print("\nFalkorDB container is already running, skipping...\n")
         return True
 
     command = [
-        'docker', 'run', '-p', f'{assign_host_port_to_graph_db_server}:6379',
-        *(['-p', f'{assign_host_port_to_graph_db_ui}:3000'] if launch_graph_db_with_ui else []),
+        'docker', 'run',
+        '-p', f"{config['assign_host_port_to_graph_db_server']}:6379",
+        *(
+            ['-p', f"{config['assign_host_port_to_graph_db_ui']}:3000"]
+            if config['launch_graph_db_with_ui'] else []
+        ),
         '--name', 'falkor-db',
-        '-it', '--rm', '-v', f'{graph_db_data_directory}:/var/lib/falkordb/data', 'falkordb/falkordb:edge'
-    ]   # Using conditional list-unpacking with * to handle optional arguments!
+        '-it', '--rm',
+        '-v', f"{config['graph_db_data_directory']}:/var/lib/falkordb/data",
+        'falkordb/falkordb:edge'
+    ]   # Using conditional list-unpacking with * to handle optional args!
 
     try:
-        subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE) if platform.system() == 'Windows' else subprocess.Popen(command, shell=True)
+        if platform.system() == 'Windows':
+            subprocess.Popen(
+                command, 
+                creationflags=subprocess.CREATE_NEW_CONSOLE
+            )
+        else:
+            subprocess.Popen(
+                command, 
+                shell=True
+            )
+   
         # Check if the container is running
         container_name = 'falkor-db'
         timeout = 2
         attempts = 50
         for _ in range(attempts):
             if utils_module.check_if_container_is_running(container_name):
-                print(f"\nFalkorDB Docker container launched successfully!\n")
+                print(f"\nFalkorDB container launched successfully!\n")
                 return True
             else:
-                print(f"\n\nFalkorDB Docker container not yet running, waiting {timeout} seconds before retrying...\n\n")
+                print(
+                    "\n\nFalkorDB container not yet running, "
+                    f"waiting {timeout} seconds before retrying...\n\n"
+                )
                 time.sleep(timeout)
 
     except Exception as e:
-        raise Exception(f"Could not launch FalkorDB Docker container, encountered error: {e}")
+        raise Exception(f"Could not launch FalkorDB container: {e}")
 
     return True
 
@@ -227,79 +249,98 @@ def get_graph_db_client():
     print("\nObtaining Graph DB Client\n")
 
     try:
-        read_return = config_manager.read_config(['graph_db_server_host', 'assign_host_port_to_graph_db_server'])
-        graph_db_server_host = str(read_return['graph_db_server_host'])
-        assign_host_port_to_graph_db_server = int(read_return['assign_host_port_to_graph_db_server'])
+        config = config_manager.read_config([
+            'graph_db_server_host',
+            'assign_host_port_to_graph_db_server'
+        ])
 
-        client = FalkorDB(host=graph_db_server_host, port=assign_host_port_to_graph_db_server)
-        print(f"\nGraph DB Client obtained successfully!\n")
+        client = FalkorDB(
+            host=config['graph_db_server_host'],
+            port=config['assign_host_port_to_graph_db_server']
+        )
+        print(f"\nGraphDB Client obtained successfully!\n")
         return client
     except Exception as e:
-        raise Exception(f"Could not obtain Graph DB Client, encountered error: {e}")
+        raise Exception(f"Could not get GraphDB Client: {e}")
 
 
 def bring_perplexica_online():    # launch Perplexica Docker container
     print(f"\nLaunching Perplexica Docker container...\n")
 
     try:
-        read_return = config_manager.read_config(['assign_host_port_to_perplexica_server', 'perplexica_version'])
-        assign_host_port_to_perplexica_server = read_return['assign_host_port_to_perplexica_server']
-        perplexity_version = read_return['perplexica_version']
-        container_name = f'perplexica-{perplexity_version}'
+        config = config_manager.read_config([
+            'assign_host_port_to_perplexica_server',
+            'perplexica_version'
+        ])
+        container_name = f'perplexica-{config['perplexica_version']}'
     except Exception as e:
-        raise Exception(f"Could not read Perplexica config when attempting to bring Perplexica Docker container online, encountered error: {e}")
+        raise Exception(f"Config error for Perplexica launch: {e}")
 
-    # Check if Docker Engine is running
-    try:
-        subprocess.run(['docker', 'info'], capture_output=True, check=True)  # check=True will raise an exception if the command returns a non-zero exit code
+    try:    # Check if Docker Engine is online
+        subprocess.run(
+            ['docker', 'info'],
+            capture_output=True,
+            check=True
+        )  # check=True raises if the command returns a non-zero exit code
     except Exception as e:
-        raise Exception(f"Docker Engine is not running, encountered error: {e}")
+        raise Exception(f"Docker Engine is not online: {e}")
 
     # Check if container is running
     if utils_module.check_if_container_is_running(container_name):
-        print("\nPerplexica Docker container is already running, skipping launch...\n")
+        print("\nPerplexica container is already running, skipping...\n")
         return True
 
     # Check if container exists, but is stopped
     if utils_module.check_if_container_exists(container_name):
-        print("\nPerplexica Docker container exists, but is stopped, starting it...\n")
+        print("\nPerplexica container exists but is stopped, restarting...\n")
         try:
             return utils_module.start_container(container_name)
         except Exception as e:
-            raise Exception(f"Could not start Perplexica Docker container, encountered error: {e}")
+            raise Exception(f"Could not start Perplexica Docker container: {e}")
 
     # Container doesn't exist, create it
-    print("\nDocker Engine is running, proceeding with Perplexica Docker container launch...\n")
+    print("\nDocker Engine online, proceeding with Perplexica container launch...\n")
 
     command = [
-        'docker', 'run', '-d', '-p', f'{assign_host_port_to_perplexica_server}:3000',
+        'docker', 'run', '-d',
+        '-p', f"{config['assign_host_port_to_perplexica_server']}:3000",
         '-v', 'perplexica-data:/home/perplexica/data',
-        '--name', container_name, f'itzcrazykns1337/perplexica:{perplexity_version}'
+        '--name', container_name,
+        f"itzcrazykns1337/perplexica:{config['perplexica_version']}"
     ]
 
     try:
         if platform.system() == 'Windows':
-            subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
+            subprocess.Popen(
+                command,
+                creationflags=subprocess.CREATE_NEW_CONSOLE
+            )
         else:
-            subprocess.Popen(command, shell=True)
+            subprocess.Popen(
+                command,
+                shell=True
+            )
         
-        print(f"\nPerplexica Docker container launched successfully!\n")
+        print(f"\nPerplexica container launched successfully!\n")
         return True
         
     except Exception as e:
-        raise Exception(f"Could not launch Perplexica Docker container, encountered error: {e}")
+        raise Exception(f"Could not launch Perplexica container: {e}")
 
 
 def get_perplexica_providers():
     print("\nGetting Perplexica Providers\n")
     try:
-        port = config_manager.read_config(['assign_host_port_to_perplexica_server'])['assign_host_port_to_perplexica_server']
+        config = config_manager.read_config([
+            'assign_host_port_to_perplexica_server'
+        ])
+        port = config['assign_host_port_to_perplexica_server']
 
-        url = f'http://localhost:{port}/api/providers'
+        url = f"http://localhost:{port}/api/providers"
         payload = {}
         headers = {}
 
-        response = requests.request("GET", url, headers=headers, data=payload)
+        response = requests.request("GET",url,headers=headers,data=payload)
         response.raise_for_status()
         full_response = response.json()
 
@@ -313,7 +354,7 @@ def get_perplexica_providers():
         return provider_ids
 
     except Exception as e:
-        raise Exception(f"Could not get Perplexica Providers, encountered error: {e}")
+        raise Exception(f"Could not get Perplexica Providers: {e}")
 
 
 def perplexica_search(query:str, history:list) -> str:
@@ -344,7 +385,12 @@ def perplexica_search(query:str, history:list) -> str:
             "optimizationMode": config['perplexica_optimization_mode'],
             "sources": config['perplexica_sources'],
             "query": query,
-            "history": history if config['perplexica_include_history'] and history else [],
+            "history": (
+                history 
+                if config['perplexica_include_history'] and history 
+                else []
+            ),
+       
             "systemInstructions": config['perplexica_system_instructions'],
             "stream": False
         })
@@ -352,20 +398,20 @@ def perplexica_search(query:str, history:list) -> str:
         'Content-Type': 'application/json'
         }
 
-        response = requests.request("POST", url, headers=headers, data=payload)
+        response = requests.request("POST",url,headers=headers,data=payload)
 
         print(response.text)
 
     except Exception as e:
-        raise Exception(f"Could not perform Perplexica Search, encountered error: {e}")
+        raise Exception(f"Could not perform Perplexica Search: {e}")
 
 
 def setup_searxng_settings_yaml():
     try:
-        read_return = config_manager.read_config(['searxng_dir'])
+        config = config_manager.read_config(['searxng_dir'])
 
         # Ensure path is absolute for Docker volume mounting
-        searxng_path = os.path.abspath(read_return['searxng_dir'])
+        searxng_path = os.path.abspath(config['searxng_dir'])
         os.makedirs(searxng_path, exist_ok=True)
 
         file_path = os.path.join(searxng_path, 'settings.yml')
@@ -396,17 +442,20 @@ def setup_searxng_settings_yaml():
                 """)
 
                 f.write(settings_yaml)
-            print(f"\nSearXNG settings.yml created successfully at {file_path}!\n")
+            print(f"\nSearXNG `settings.yml` created successfully at {file_path}!\n")
 
         return True
     except Exception as e:
-        raise Exception(f"Could not setup SearXNG settings.yaml, encountered error: {e}")
+        raise Exception(f"Could not setup SearXNG `settings.yml`: {e}")
 
 
 def bring_searxng_online():
     try:
 
-        config = config_manager.read_config(['assign_host_port_to_searxng_server', 'searxng_dir'])
+        config = config_manager.read_config([
+            'assign_host_port_to_searxng_server',
+            'searxng_dir'
+        ])
         container_name = 'searxng'
 
         # Ensure absolute path for volume mount
@@ -416,38 +465,50 @@ def bring_searxng_online():
         setup_searxng_settings_yaml()
 
         # Check if Docker Engine is running
-        subprocess.run(['docker', 'info'], capture_output=True, check=True)  # check=True will raise an exception if the command returns a non-zero exit code
+        subprocess.run(
+            ['docker', 'info'],
+            capture_output=True,
+            check=True
+        )  # check=True raises if the command returns a non-zero exit code
 
         # Check if container is running
         if utils_module.check_if_container_is_running(container_name):
-            print("\nSearXNG Docker container is already running, skipping launch...\n")
+            print("\nSearXNG container is already running, skipping...\n")
             return True
 
         # Check if container exists, but is stopped
         if utils_module.check_if_container_exists(container_name):
-            print("\nSearXNG Docker container exists, but is stopped, starting it...\n")
+            print("\nSearXNG container exists but is stopped, restarting...\n")
             return utils_module.start_container(container_name)
 
         # Container doesn't exist, create it
-        print("\nDocker Engine is running, proceeding with SearXNG Docker container launch...\n")
+        print("\nDocker Engine online, proceeding with SearXNG container launch...\n")
 
         command = [
             'docker', 'run', '-d',
             '--name', container_name,
-            '-p', f'{host_port}:8080',
-            '-v', f'{abs_searxng_dir}:/etc/searxng',
+            '-p', f"{host_port}:8080",
+            '-v', f"{abs_searxng_dir}:/etc/searxng",
             'searxng/searxng:latest'
         ]
 
         if platform.system() == 'Windows':
-            subprocess.Popen(command, creationflags=subprocess.CREATE_NEW_CONSOLE)
+            subprocess.Popen(
+                command,
+                creationflags=subprocess.CREATE_NEW_CONSOLE
+            )
         else:
-            # shell=True is dangerous/buggy with list arguments on Linux. 
-            # Use shell=False (default) when passing a list.
-            subprocess.Popen(command, shell=False)
+            '''
+            shell=True is dangerous/buggy with list arguments on Linux. 
+            Use shell=False (default) when passing a list.
+            '''
+            subprocess.Popen(
+                command,
+                shell=False
+            )
         
-        print(f"\nSearXNG Docker container launched successfully!\n")
+        print(f"\nSearXNG container launched successfully!\n")
         return True
 
     except Exception as e:
-        raise Exception(f"Could not bring SearXNG online, encountered error: {e}")
+        raise Exception(f"Could not launch SearXNG container: {e}")
