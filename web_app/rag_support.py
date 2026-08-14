@@ -272,7 +272,7 @@ def bring_perplexica_online():    # launch Perplexica Docker container
             'assign_host_port_to_perplexica_server',
             'perplexica_version'
         ])
-        container_name = f'perplexica-{config['perplexica_version']}'
+        container_name = f"perplexica-{config['perplexica_version']}"
     except Exception as e:
         raise Exception(f"Config error for Perplexica launch: {e}")
 
