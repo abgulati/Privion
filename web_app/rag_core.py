@@ -31,23 +31,24 @@ class Document:
         self.page_content = page_content
         self.metadata = metadata
 
-    def __repr__(self): # to provide string-representation of an object
-        # return f"Document(page_content='{self.page_content[:50]}...', metadata={self.metadata})"    # Does not truncate the actual page_content or even str(doc.page_content), rather it only comes into play for display purposes when we print the entire object as a string!
+    def __repr__(self):
+        '''Provides string-representation of an object'''
+        # return f"Document(page_content='{self.page_content[:50]}...', metadata={self.metadata})"
         return f"Document(page_content='{self.page_content}', metadata={self.metadata})"
 
 
 def init_and_connect_to_rag_context_db() -> tuple[sqlite3.Connection, sqlite3.Cursor]:
     try:
-        read_return = config_manager.read_config(['rag_context_db'])
-        rag_context_db = read_return['rag_context_db']
+        config = config_manager.read_config(['rag_context_db'])
+        rag_context_db = config['rag_context_db']
     except Exception as e:
-        raise Exception(f"Could not read rag context db in method init_and_connect_to_rag_context_db, encountered error: {e}")
+        raise Exception(f"Missing config value for rag_context_db: {e}")
     
     try:
         conn = sqlite3.connect(rag_context_db)
         cursor = conn.cursor()
     except Exception as e:
-        raise Exception(f"Could not connect to rag context db in method init_and_connect_to_rag_context_db, encountered error: {e}")
+        raise Exception(f"Could not connect to rag context database: {e}")
     
     try:
         cursor.execute('''
@@ -59,117 +60,191 @@ def init_and_connect_to_rag_context_db() -> tuple[sqlite3.Connection, sqlite3.Cu
         ''')
         conn.commit()
     except Exception as e:
-        raise Exception(f"Could not create rag context table in method init_and_connect_to_rag_context_db, encountered error: {e}")
+        raise Exception(f"Could not create rag context table: {e}")
     
     try:
-        privion_utils_module.add_column_if_not_exists(cursor, 'rag_context', 'stream_session_id', 'TEXT')
-        privion_utils_module.add_column_if_not_exists(cursor, 'rag_context', 'rag_context', 'TEXT')
+        privion_utils_module.add_column_if_not_exists(
+            cursor,
+            'rag_context',
+            'stream_session_id',
+            'TEXT'
+        )
+        privion_utils_module.add_column_if_not_exists(
+            cursor,
+            'rag_context',
+            'rag_context',
+            'TEXT'
+        )
+   
     except Exception as e:
-        raise Exception(f"Could not add necessary columns to rag context table in method init_and_connect_to_rag_context_db, encountered error: {e}")
+        raise Exception(f"Could not add necessary columns to rag context table: {e}")
     
     return conn, cursor
 
 
 def persist_rag_context(stream_session_id: str, docs: list[Document]):
-    print(f"Persisting rag context for stream session {stream_session_id} to facilitate calls to get_references()")
+    print(
+        "Persisting rag context for sessionID "
+        f"{stream_session_id} to facilitate calls to get_references()"
+    )
 
     try:
         conn, cursor = init_and_connect_to_rag_context_db()
     except Exception as e:
-        raise Exception(f"Could not initialize and connect to rag context db in method persist-rag_context, encountered error: {e}")
+        raise Exception(f"Could not initialize and connect to rag context database: {e}")
     
     try:
-        cursor.execute("INSERT INTO rag_context (stream_session_id, rag_context) VALUES (?, ?)", (stream_session_id, str(docs)))
+        cursor.execute(
+            "INSERT INTO rag_context (stream_session_id, rag_context) VALUES (?, ?)",
+            (stream_session_id, str(docs))
+        )
+   
         conn.commit()
     except Exception as e:
-        raise Exception(f"Could not persist rag context for stream session {stream_session_id} in method persist-rag_context, encountered error: {e}")
+        raise Exception(
+            "Could not persist rag context for stream session "
+            f"{stream_session_id}: {e}"
+        )
     finally:
         cursor.close()
         conn.close()
     
-    print(f"Successfully persisted rag context for stream session {stream_session_id}")
+    print(f"Successfully persisted rag context for sessionID: {stream_session_id}")
     return True
 
 
-def fetch_rag_context(stream_session_id: str, persist_in_db: bool = True) -> tuple[list[Document], bool]:
-    print(f"Fetching rag context for stream session {stream_session_id}")
+def fetch_rag_context(
+    stream_session_id: str, 
+    persist_in_db: bool = True
+) -> tuple[list[Document], bool]:
+    print(f"Fetching rag context for sessionID: {stream_session_id}")
     
     try:
         conn, cursor = init_and_connect_to_rag_context_db()
     except Exception as e:
-        raise Exception(f"Could not initialize and connect to rag context db in method fetch_rag_context, encountered error: {e}")
+        raise Exception(f"Could not initialize and connect to rag context database: {e}")
     
     try:
-        cursor.execute("SELECT rag_context FROM rag_context WHERE stream_session_id = ?", (stream_session_id,))
+        cursor.execute(
+            "SELECT rag_context FROM rag_context WHERE stream_session_id = ?",
+            (stream_session_id,)
+        )
+   
         result = cursor.fetchone()
         rag_context = result[0] if result else None
 
         if rag_context and not persist_in_db:
-            print(f"Deleting rag context for stream session {stream_session_id} from database as persist_in_db is False")
-            cursor.execute("DELETE FROM rag_context WHERE stream_session_id = ?", (stream_session_id,))
+            print(
+                "Deleting rag context for sessionID "
+                f"{stream_session_id} from database as persist_in_db is False"
+            )
+            cursor.execute(
+                "DELETE FROM rag_context WHERE stream_session_id = ?", 
+                (stream_session_id,)
+            )
+       
             conn.commit()
     
     except Exception as e:
-        raise Exception(f"Could not fetch rag context for stream session {stream_session_id} in method fetch_rag_context, encountered error: {e}")
+        raise Exception(f"Could not fetch rag context for sessionID: {stream_session_id}: {e}")
     finally:
         cursor.close()
         conn.close()
     
-    print(f"Successfully fetched rag context for stream session {stream_session_id}")
+    print(f"Successfully fetched rag context for sessionID: {stream_session_id}")
     return rag_context, rag_context is not None
 
 
 def delete_rag_context(stream_session_id: str) -> bool:
-    print(f"Deleting rag context for stream session {stream_session_id}")
+    print(f"Deleting rag context for sessionID: {stream_session_id}")
     
     try:
         conn, cursor = init_and_connect_to_rag_context_db()
     except Exception as e:
-        raise Exception(f"Could not initialize and connect to rag context db in method delete_rag_context, encountered error: {e}")
+        raise Exception(f"Could not initialize and connect to rag context database: {e}")
     
     try:
-        cursor.execute("DELETE FROM rag_context WHERE stream_session_id = ?", (stream_session_id,))
+        cursor.execute(
+            "DELETE FROM rag_context WHERE stream_session_id = ?",
+            (stream_session_id,)
+        )
+   
         conn.commit()
     except Exception as e:
-        raise Exception(f"Could not delete rag context for stream session {stream_session_id} in method delete_rag_context, encountered error: {e}")
+        raise Exception(f"Could not delete rag context for sessionID: {stream_session_id}: {e}")
     finally:
         cursor.close()
         conn.close()
     
-    print(f"Successfully deleted rag context for stream session {stream_session_id}")
+    print(f"Successfully deleted rag context for sessionID: {stream_session_id}")
     return True
 
 
-def extract_content_source_and_page_data_from_summary_text(summary_text: str) -> tuple[str, str, list]:
+def extract_content_source_and_page_data_from_summary_text(
+    summary_text: str
+) -> tuple[str, str, list]:
     '''
-    Extracts content data, source document name and page numbers from a text string ending with the pattern:
-    {Source Document Name: xxx}\n{Page Number(s): [y,z]}\n\n
-    This pattern is established in the process_nodes_and_relationships method of hf_waitress.py
+    Extracts content data, source document name and page numbers 
+    from a text string ending with the pattern:
+    `{Source Document Name: xxx}\n{Page Number(s): [y,z]}\n\n`
+    
+    This pattern is established in the `process_nodes_and_relationships()` 
+    method of `hf_waitress.py`.
     
     Args:
         summary_text (str): The input text containing the metadata
     
     Returns:
-        tuple[str, str, list]: (content_data, source_document_name, page_numbers_list)
+        tuple[str, str, list]: (
+            content_data, source_document_name, page_numbers_list
+        )
     '''
     try:
-        source_pattern = r'{Source Document Name: (.*?)}'   # () creates a capturing group and .*? matches any char except newline zero or more times, non-greedily
-        source_match = re.search(source_pattern, summary_text)
-        source_doc_name = source_match.group(1) if source_match else ""  # group(1) returns the first (and in this case, only) capturing group. 0 would return the entire match.
+        source_pattern = r'{Source Document Name: (.*?)}'
+        '''
+        () creates a capturing group and .*? matches any char 
+        except newline zero or more times, non-greedily
+        '''
         
+        source_match = re.search(source_pattern, summary_text)
+        source_doc_name = source_match.group(1) if source_match else ""
+        '''
+        group(1) returns the first (and in this case, only) 
+        capturing group. 0 would return the entire match.
+        '''
+
         page_pattern = r'{Page Number\(s\): \[(.*?)\]}'
         page_match = re.search(page_pattern, summary_text)
-        if page_match:  # Convert string representation of list to actual list of integers
+        if page_match:
+            '''
+            Convert a string representation of a list of 
+            integers to an actual list of integers
+            '''
             pages_str = page_match.group(1)
-            pages = [int(p.strip()) for p in pages_str.split(',')] if pages_str else [1]
+            if pages_str:
+                pages = [
+                    int(p.strip())
+                    for p in pages_str.split(',')
+                ]
+            else:
+                pages = [1]
+       
         else:
             pages = [1]
         
-        content_data = summary_text[:source_match.start()].strip() if source_match else summary_text.strip()
+        if source_match:
+            content_data = summary_text[:source_match.start()].strip()
+        else:
+            content_data = summary_text.strip()
+   
 
         return content_data, source_doc_name, pages
     except Exception as e:
-        print(f"Could not extract content data, source document name and page numbers from summary text, returning unchanged summary text. Encountered error: {e}")
+        print(
+            "Could not extract content data, source document name "
+            "and page numbers from summary text, returning unchanged "
+            f"summary text. Encountered error: {e}"
+        )
         return summary_text, "", [1]
 
 
@@ -504,7 +579,7 @@ def get_summaries_from_graph_db(chunk_entities: dict, selected_knowledge_domain:
                 print(f"Error checking for existing summaries for relationships, skipping chunk {chunk_number}. Encountered error: {e}")
     
     except Exception as e:
-        print(f"Could not get summaries from graph DB, encountered error: {e}")
+        print(f"Could not get summaries from graph DB: {e}")
 
     return chunk_entities
 
@@ -637,10 +712,10 @@ def assemble_chunks_for_graph_rag(docs:list[Document], user_query:str=None) -> d
                 }   # check note in the docstring for more details on which keys are added here and why!
                 graph_chunk_count += 1
             except Exception as e:
-                print(f"Error processing context document number {count} of {len(docs)} documents in assemble-chunks_for_graph_db(), encountered error: {e}")
+                print(f"Error processing context document number {count} of {len(docs)} documents in assemble-chunks_for_graph_db(): {e}")
 
     except Exception as e:
-        raise Exception(f"Could not assemble chunk_entities dictionary for GraphRAG, encountered error: {e}")
+        raise Exception(f"Could not assemble chunk_entities dictionary for GraphRAG: {e}")
 
     return chunk_entities
 
@@ -682,14 +757,14 @@ def execute_graph_rag(user_query:str, docs_with_graph_entities: list[Document]) 
     try:
         rag_support_module.bring_graph_db_online()
     except Exception as e:
-        raise Exception(f"Could not bring graph DB or graphing model online, encountered error: {e}")
+        raise Exception(f"Could not bring graph DB or graphing model online: {e}")
     
     try:
         selected_knowledge_domain = config_manager.read_config(['selected_knowledge_domain'])['selected_knowledge_domain']    
         client = rag_support_module.get_graph_db_client()
         graph = client.select_graph(selected_knowledge_domain)  # Will create the graph if it doesn't exist
     except Exception as e:
-        raise Exception(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB, encountered error: {e}")
+        raise Exception(f"Could not connect to / initialize graph for '{selected_knowledge_domain}' domain in graph DB: {e}")
 
     # --- 3. EXECUTE GRAPH PIPELINE (ON GRAPH DOCS ONLY) ---
     summaries_list = []
@@ -702,7 +777,7 @@ def execute_graph_rag(user_query:str, docs_with_graph_entities: list[Document]) 
             # for item in list(complete_chunk_entities.items()):
             #     print(f"\n\n{item}\n\n")
         except Exception as e:
-            raise Exception(f"Could not assemble chunks for graph DB, encountered error: {e}")
+            raise Exception(f"Could not assemble chunks for graph DB: {e}")
 
         try:
             merged_graph_rag_entities_and_relationships_dict = merge_chunk_entities_for_graph_rag(complete_chunk_entities)
@@ -713,13 +788,13 @@ def execute_graph_rag(user_query:str, docs_with_graph_entities: list[Document]) 
         try:
             summarized_and_deduplicated_chunk_entities = get_summaries_from_graph_db(merged_graph_rag_entities_and_relationships_dict, selected_knowledge_domain, graph)
         except Exception as e:
-            raise Exception(f"Could not fetch summaries for entities and relationships from graph DB, encountered error: {e}")
+            raise Exception(f"Could not fetch summaries for entities and relationships from graph DB: {e}")
 
         try:
             graph_rag_context_length_limit_chars = int(config_manager.read_config(['graph_rag_context_length_limit_chars'])['graph_rag_context_length_limit_chars'])
             summary_report, summaries_list = get_summary_report(summarized_and_deduplicated_chunk_entities, graph_rag_context_length_limit_chars, user_query)
         except Exception as e:
-            raise Exception(f"Could not get summary report, encountered error: {e}")
+            raise Exception(f"Could not get summary report: {e}")
     
     else:
         print("No Graph Docs found (Web Search only).")
@@ -925,12 +1000,12 @@ def search_whoosh_index(query:str) -> list[dict]:
     try:
         whoosh_index_folder = rag_support_module.determine_whoosh_index_folder()
     except Exception as e:
-        raise Exception(f"Failed to determine Whoosh Index Folder, encountered error: {e}")
+        raise Exception(f"Failed to determine Whoosh Index Folder: {e}")
 
     try:
         ix = rag_support_module.get_whoosh_index_object_for_folder(whoosh_index_folder)
     except Exception as e:
-        raise Exception(f"Failed to get Whoosh Index Object, encountered error: {e}")
+        raise Exception(f"Failed to get Whoosh Index Object: {e}")
 
     whoosh_weighting = scoring.BM25F()  # Rough ranges: 0.0: No Match; 1-2: Weak Match; 3-5: Moderate Match; 6+: Strong Match
     if whoosh_search_weighting == "TF-IDF":
@@ -986,7 +1061,7 @@ def search_whoosh_index(query:str) -> list[dict]:
             # return [{'content': result['content'], 'source': result['source'], 'page_number': result['page_number']} for result in results]
 
     except Exception as e:
-        print(f"Failed to search Whoosh Index, encountered error: {e}")
+        print(f"Failed to search Whoosh Index: {e}")
         return []
 
 
@@ -1007,7 +1082,7 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
     try:
         embedding_model = SentenceTransformer(embedding_function, trust_remote_code=True, device=torch_device)
     except Exception as e:
-        print(f"Could not load embedding model for searching the vector database, encountered error: {e}")
+        print(f"Could not load embedding model for searching the vector database: {e}")
 
     try:
         # Initialize Chroma Client and collection
@@ -1043,7 +1118,7 @@ def search_vector_db(user_query:str, embedding_function:str, fetch_top_k_results
         print(f"Result of Semantic Search: Found {len(docs_list_with_cosine_distance)} documents of {len(results['documents'][0])} with a minimum semantic similarity threshold of {min_semantic_similarity_threshold}")
         return docs_list_with_cosine_distance
     except Exception as e:
-        print(f"Could not perform similarity_search to determine do_rag when attempting to setup_for_streaming_response, encountered error: {e}")
+        print(f"Could not perform similarity_search to determine do_rag when attempting to setup_for_streaming_response: {e}")
         return []
     # finally:
     #     # if embedding_model is not None:
@@ -1104,7 +1179,7 @@ def search_searxng(user_query:str, category:str='general') -> list[Document]:
         return documents
 
     except Exception as e:
-        print(f"Could not search SearXNG, encountered error: {e}")
+        print(f"Could not search SearXNG: {e}")
         return []
 
 
@@ -1269,13 +1344,13 @@ def legacy_execute_search_tools_on_query(
         docs_list_with_cosine_distance = search_vector_db(user_query, embedding_function, int(fetch_top_k_results_from_vectordb))
         filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc, score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of both the Document object and a float score!
     except Exception as e:
-        print(f"Could not perform vector search to determine do_rag when attempting to search-knowledge-base, encountered error: {e}")
+        print(f"Could not perform vector search to determine do_rag when attempting to search-knowledge-base: {e}")
 
     whoosh_results = []
     try:
         whoosh_results = search_whoosh_index(user_query)
     except Exception as e:
-        print(f"Could not perform whoosh search to determine do_rag when attempting to search-knowledge-base, encountered error: {e}")
+        print(f"Could not perform whoosh search to determine do_rag when attempting to search-knowledge-base: {e}")
 
     combined_docs = []
     try:
@@ -1305,7 +1380,7 @@ def legacy_execute_search_tools_on_query(
             if len(summaries_list) > 0:
                 return summaries_list, llm_set_config.get('do_rag', True), graph_rag_context
         except Exception as e:
-            print(f"Could not execute graph RAG, encountered error: {e}")
+            print(f"Could not execute graph RAG: {e}")
     else:
         config_manager.safe_write_config({'perform_graph_rag': False})  # In-case the LLM elected to use GraphRAG but the user has explicitly disabled it, we need to set perform-graph_rag to False to avoid any issues downstream!
 
@@ -1322,7 +1397,7 @@ def execute_full_search(query:str, category:str, stream_session_id: str = None) 
             'force_disable_rag', 'enable_web_search'
         ])
     except Exception as e:
-        raise Exception(f"Could not read rag config in method execute-full_search, encountered error: {e}")
+        raise Exception(f"Could not read rag config in method execute-full_search: {e}")
     
     if rag_config['force_disable_rag']:
         print("Force disable rag is True, returning...")
@@ -1333,13 +1408,13 @@ def execute_full_search(query:str, category:str, stream_session_id: str = None) 
         docs_list_with_cosine_distance = search_vector_db(query, rag_config['selected_embedding_model'], int(rag_config['fetch_top_k_results_from_vectordb']))
         filtered_docs = [doc for doc, score in docs_list_with_cosine_distance]  # the `doc, score` is crucial, as it ensure we select only the Document object, and not a tuple comprising of both the Document object and a float score!
     except Exception as e:
-        print(f"Could not perform vector search to determine do_rag when attempting to search-knowledge-base, encountered error: {e}")
+        print(f"Could not perform vector search to determine do_rag when attempting to search-knowledge-base: {e}")
 
     whoosh_results = []
     try:
         whoosh_results = search_whoosh_index(query)
     except Exception as e:
-        print(f"Could not perform whoosh search to determine do_rag when attempting to search-knowledge-base, encountered error: {e}")
+        print(f"Could not perform whoosh search to determine do_rag when attempting to search-knowledge-base: {e}")
 
     combined_docs = []
     graph_entities_map = {}
@@ -1356,7 +1431,7 @@ def execute_full_search(query:str, category:str, stream_session_id: str = None) 
             web_docs = search_searxng(query, category)
             print(f"Web search returned {len(web_docs)} documents")
         except Exception as e:
-            print(f"Could not perform web search, encountered error: {e}")
+            print(f"Could not perform web search: {e}")
 
     # We merge AFTER Document-RAG deduplication so we don't break existing GraphRAG logic, but BEFORE reranking so the AI can choose the best content.
     if web_docs:
@@ -1386,7 +1461,7 @@ def execute_full_search(query:str, category:str, stream_session_id: str = None) 
                 return {'success': True, 'message': graph_rag_context, 'docs': summaries_list, 'do_rag': True, 'graph_rag_context': graph_rag_context}                
         
         except Exception as e:
-            print(f"Could not execute graph RAG, encountered error: {e}")
+            print(f"Could not execute graph RAG: {e}")
     
     else:
         persist_rag_context(stream_session_id, docs)
