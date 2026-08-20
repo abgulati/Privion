@@ -129,7 +129,7 @@ def write_config(config_updates:dict, filename=None) -> dict:
         with open(filename, 'w') as file:
             json.dump(config, file, indent=4)
     except Exception as e:
-        raise Exception(f"Could not update config.json, encountered error: {e}")
+        raise RuntimeError(f"Error writing config.json: {e}") from e
      
     return {'success': True, 'restart_required':restart_required, 'skip_reload_trigger':skip_reload_trigger, 'reload_tts':reload_tts, 'reload_asr':reload_asr}
 
@@ -176,7 +176,7 @@ def read_config(keys:list, default_value=None, filename=None) -> dict:
         with open(filename, 'r') as file:
             config = json.load(file)
     except Exception as e:
-        raise RuntimeError(f"Could not read config.json, encountered error: {e}") from e
+        raise RuntimeError(f"Error reading config.json: {e}") from e
     
     return_dict = {}
     update_config_dict = {}

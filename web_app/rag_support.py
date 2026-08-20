@@ -41,28 +41,14 @@ def get_path_to_knowledge_domain() -> pathlib.Path:
             'selected_knowledge_domain',
             'knowledge_domain_base_directory'
         ])
-    except Exception as e:
-        print(f"Missing config for knowledge domain path. Error: {e}")
-
-    try:
-        path_to_knowledge_domain = pathlib.Path(
-            (
-                rf"{str(read_return['knowledge_domain_base_directory'])}"
-            ).resolve() / str(
-                read_return['selected_knowledge_domain']
-            )
+        path = (
+            pathlib.Path(read_return['knowledge_domain_base_directory']).resolve() 
+            / str(read_return['selected_knowledge_domain'])
         )
-
-        if not path_to_knowledge_domain.exists():
-            path_to_knowledge_domain.mkdir(parents=True, exist_ok=True)
-            print(
-                "\n\nCreated knowledge domain directory: "
-                f"{path_to_knowledge_domain}\n\n"
-            )
-        
-        return path_to_knowledge_domain
+        path.mkdir(parents=True, exist_ok=True)        
+        return path
     except Exception as e:
-        print(f"Could not create knowledge domain folder, error: {e}")
+        raise RuntimeError(f"Could not resolve knowledge domain path: {e}") from e
 
 
 def determine_whoosh_index_folder() -> pathlib.Path:
@@ -72,65 +58,54 @@ def determine_whoosh_index_folder() -> pathlib.Path:
         path_to_knowledge_domain = get_path_to_knowledge_domain()
         config_data = config_manager.read_config(['selected_embedding_model'])
         selected_embedding_model = str(config_data['selected_embedding_model'])
-    except Exception as e:
-        raise Exception(f"Error determining selected embedding model: {e}")
 
-    try:
         whoosh_index_folder = (
             path_to_knowledge_domain
             / "vector_db_and_whoosh_index"
             / selected_embedding_model
             / "whoosh_index"
         )
+        return whoosh_index_folder
     except Exception as e:
-        raise Exception(f"Error determining whoosh index folder: {e}")
-
-    return whoosh_index_folder
+        raise RuntimeError(f"Error determining whoosh index folder: {e}") from e
 
 
 def create_whoosh_index_in_folder(whoosh_index_folder:pathlib.Path):
 
     print(f"Creating Whoosh Index in folder: {whoosh_index_folder}")
-    
-     # Define the Index schema: what fields it contains
-    schema = Schema(
-        content=TEXT(stored=True),
-        source_link=ID(stored=True),
-        source=ID(stored=True),
-        page_number=ID(stored=True),
-        entities_and_relationships=ID(stored=True)
-    )
 
-    # Create a directory for persistent storage of the index to disk
     try:
+        # Define the Index schema: what fields it contains
+        schema = Schema(
+            content=TEXT(stored=True),
+            source_link=ID(stored=True),
+            source=ID(stored=True),
+            page_number=ID(stored=True),
+            entities_and_relationships=ID(stored=True)
+        )
+
+        # Create a directory for persistent storage of the index to disk
         whoosh_index_folder.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        raise Exception(f"Error creating directory for the Whoosh Index: {e}")
-    # Create the index based on the schema definted above
-    try:
+        
+        # Create the index based on the schema definted above
         ix = create_in(str(whoosh_index_folder), schema)
-    except Exception as e:
-        raise Exception(f"Error creating Whoosh Index: {e}")
+        return ix
 
-    return ix
+    except Exception as e:
+        raise RuntimeError(f"Error creating Whoosh Index: {e}") from e
 
 
 def get_whoosh_index_object_for_folder(whoosh_index_folder:pathlib.Path):
 
     print(f"Getting Whoosh Index Object for folder: {whoosh_index_folder}")
-
-    if not whoosh_index_folder.exists():
-        try:
+    try:
+        if not whoosh_index_folder.exists():
             ix = create_whoosh_index_in_folder(whoosh_index_folder)
-        except Exception as e:
-            raise Exception(f"Error creating Whoosh Index: {e}")
-    else:
-        try:
+        else:
             ix = open_dir(str(whoosh_index_folder))
-        except Exception as e:
-            raise Exception(f"Error opening Whoosh Index: {e}")
-
-    return ix
+        return ix
+    except Exception as e:
+        raise RuntimeError(f"Error getting Whoosh Index Object: {e}") from e
 
 
 def create_vector_db_directory(
@@ -157,17 +132,10 @@ def create_vector_db_directory(
             / "vector_db_and_whoosh_index"
             / embedding_function
         )
-        if not vector_db_path.exists():
-            vector_db_path.mkdir(parents=True, exist_ok=True)
-            print(f"\n\nCreated vector_db directory: {vector_db_path}\n\n")
-        else:
-            print(
-                "\n\nVector_db directory already exists, "
-                f"returning path: {vector_db_path}\n\n"
-            )
+        vector_db_path.mkdir(parents=True, exist_ok=True)
         return vector_db_path
     except Exception as e:
-        print(f"Error creating vector_db directory: {e}")
+        raise RuntimeError(f"Error creating vector_db directory: {e}") from e
 
 
 def bring_graph_db_online():
@@ -181,38 +149,33 @@ def bring_graph_db_online():
             'assign_host_port_to_graph_db_ui',
             'graph_db_data_directory'
         ])
-    except Exception as e:
-        raise Exception(f"Config error for FalkorDB launch: {e}")
-
-    try:    # Check if Docker Engine is online
+        
+        # Check if Docker Engine is online
         subprocess.run(
             ['docker', 'info'],
             capture_output=True,
             check=True
         )  # check=True raises if the command returns a non-zero exit code
-    except Exception as e:
-        raise Exception(f"Docker Engine is not running: {e}")
+    
+        print("\nDocker Engine online, proceeding with FalkorDB container launch...\n")
 
-    print("\nDocker Engine online, proceeding with FalkorDB container launch...\n")
+        if utils_module.check_if_container_is_running('falkor-db'):
+            print("\nFalkorDB container is already running, skipping...\n")
+            return True
 
-    if utils_module.check_if_container_is_running('falkor-db'):
-        print("\nFalkorDB container is already running, skipping...\n")
-        return True
+        command = [
+            'docker', 'run',
+            '-p', f"{config['assign_host_port_to_graph_db_server']}:6379",
+            *(
+                ['-p', f"{config['assign_host_port_to_graph_db_ui']}:3000"]
+                if config['launch_graph_db_with_ui'] else []
+            ),
+            '--name', 'falkor-db',
+            '-it', '--rm',
+            '-v', f"{config['graph_db_data_directory']}:/var/lib/falkordb/data",
+            'falkordb/falkordb:edge'
+        ]   # Using conditional list-unpacking with * to handle optional args!
 
-    command = [
-        'docker', 'run',
-        '-p', f"{config['assign_host_port_to_graph_db_server']}:6379",
-        *(
-            ['-p', f"{config['assign_host_port_to_graph_db_ui']}:3000"]
-            if config['launch_graph_db_with_ui'] else []
-        ),
-        '--name', 'falkor-db',
-        '-it', '--rm',
-        '-v', f"{config['graph_db_data_directory']}:/var/lib/falkordb/data",
-        'falkordb/falkordb:edge'
-    ]   # Using conditional list-unpacking with * to handle optional args!
-
-    try:
         if platform.system() == 'Windows':
             subprocess.Popen(
                 command, 
@@ -238,12 +201,12 @@ def bring_graph_db_online():
                     f"waiting {timeout} seconds before retrying...\n\n"
                 )
                 time.sleep(timeout)
+        
+        raise RuntimeError(f"FalkorDB container failed to launch after {attempts} attempts.")
 
     except Exception as e:
-        raise Exception(f"Could not launch FalkorDB container: {e}")
-
-    return True
-
+        raise RuntimeError(f"Error launching FalkorDB container: {e}") from e
+    
 
 def get_graph_db_client():
     print("\nObtaining Graph DB Client\n")
@@ -261,7 +224,7 @@ def get_graph_db_client():
         print(f"\nGraphDB Client obtained successfully!\n")
         return client
     except Exception as e:
-        raise Exception(f"Could not get GraphDB Client: {e}")
+        raise RuntimeError(f"Error getting GraphDB Client: {e}") from e
 
 
 def bring_perplexica_online():    # launch Perplexica Docker container
@@ -273,43 +236,38 @@ def bring_perplexica_online():    # launch Perplexica Docker container
             'perplexica_version'
         ])
         container_name = f"perplexica-{config['perplexica_version']}"
-    except Exception as e:
-        raise Exception(f"Config error for Perplexica launch: {e}")
-
-    try:    # Check if Docker Engine is online
+        
+        # Check if Docker Engine is online
         subprocess.run(
             ['docker', 'info'],
             capture_output=True,
             check=True
         )  # check=True raises if the command returns a non-zero exit code
-    except Exception as e:
-        raise Exception(f"Docker Engine is not online: {e}")
 
-    # Check if container is running
-    if utils_module.check_if_container_is_running(container_name):
-        print("\nPerplexica container is already running, skipping...\n")
-        return True
+        # Check if container is running
+        if utils_module.check_if_container_is_running(container_name):
+            print("\nPerplexica container is already running, skipping...\n")
+            return True
 
-    # Check if container exists, but is stopped
-    if utils_module.check_if_container_exists(container_name):
-        print("\nPerplexica container exists but is stopped, restarting...\n")
-        try:
-            return utils_module.start_container(container_name)
-        except Exception as e:
-            raise Exception(f"Could not start Perplexica Docker container: {e}")
+        # Check if container exists, but is stopped
+        if utils_module.check_if_container_exists(container_name):
+            print("\nPerplexica container exists but is stopped, restarting...\n")
+            try:
+                return utils_module.start_container(container_name)
+            except Exception as e:
+                raise Exception(f"Could not start Perplexica Docker container: {e}")
 
-    # Container doesn't exist, create it
-    print("\nDocker Engine online, proceeding with Perplexica container launch...\n")
+        # Container doesn't exist, create it
+        print("\nDocker Engine online, proceeding with Perplexica container launch...\n")
 
-    command = [
-        'docker', 'run', '-d',
-        '-p', f"{config['assign_host_port_to_perplexica_server']}:3000",
-        '-v', 'perplexica-data:/home/perplexica/data',
-        '--name', container_name,
-        f"itzcrazykns1337/perplexica:{config['perplexica_version']}"
-    ]
+        command = [
+            'docker', 'run', '-d',
+            '-p', f"{config['assign_host_port_to_perplexica_server']}:3000",
+            '-v', 'perplexica-data:/home/perplexica/data',
+            '--name', container_name,
+            f"itzcrazykns1337/perplexica:{config['perplexica_version']}"
+        ]
 
-    try:
         if platform.system() == 'Windows':
             subprocess.Popen(
                 command,
@@ -325,7 +283,7 @@ def bring_perplexica_online():    # launch Perplexica Docker container
         return True
         
     except Exception as e:
-        raise Exception(f"Could not launch Perplexica container: {e}")
+        raise RuntimeError(f"Error launching Perplexica container: {e}") from e
 
 
 def get_perplexica_providers():
@@ -354,7 +312,7 @@ def get_perplexica_providers():
         return provider_ids
 
     except Exception as e:
-        raise Exception(f"Could not get Perplexica Providers: {e}")
+        raise RuntimeError(f"Error getting Perplexica Providers: {e}") from e
 
 
 def perplexica_search(query:str, history:list) -> str:
@@ -399,11 +357,10 @@ def perplexica_search(query:str, history:list) -> str:
         }
 
         response = requests.request("POST",url,headers=headers,data=payload)
-
         print(response.text)
 
     except Exception as e:
-        raise Exception(f"Could not perform Perplexica Search: {e}")
+        raise RuntimeError(f"Error performing Perplexica Search: {e}") from e
 
 
 def setup_searxng_settings_yaml():
@@ -445,8 +402,9 @@ def setup_searxng_settings_yaml():
             print(f"\nSearXNG `settings.yml` created successfully at {file_path}!\n")
 
         return True
+    
     except Exception as e:
-        raise Exception(f"Could not setup SearXNG `settings.yml`: {e}")
+        raise RuntimeError(f"Error setting up SearXNG `settings.yml`: {e}") from e
 
 
 def bring_searxng_online():
@@ -511,4 +469,4 @@ def bring_searxng_online():
         return True
 
     except Exception as e:
-        raise Exception(f"Could not launch SearXNG container: {e}")
+        raise RuntimeError(f"Error launching SearXNG container: {e}") from e
