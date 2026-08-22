@@ -325,18 +325,39 @@ def send_ctrl_c_to_process(process:subprocess.Popen) -> dict:
     '''
 
     try:
-        if process.poll() is None:  # check if process is still running via poll(), which returns None if a process is still running 
-            if platform.system() == 'Windows':
-                process.send_signal(signal.CTRL_BREAK_EVENT)
-            else:
-                process.send_signal(signal.SIGINT)
+        if process.poll() is None:  # check if process is still running via poll(), which returns None if a process is still running
+            try:
+                if platform.system() == 'Windows':
+                    process.send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    process.send_signal(signal.SIGINT)
+            except Exception as e:
+                print(f"\n\nProcess termination signal failed: {e}\n\n")
             
             try:
                 process.wait(timeout=3) # Wait a bit for the process to terminate gracefully
             except subprocess.TimeoutExpired:
                 print("\n\nProcess did not terminate within timeout, will be force-killed.\n\n")
-                process.kill()  # Sends 'SIGKILL' on Unix-like to force-kill immediately / 'TerminateProcess' on Windows which still allows for graceful termination
-                process.wait()
+                if platform.system() == 'Windows':
+                    # Force-kill the ENTIRE process tree (e.g. cmd.exe + llama-server).
+                    # process.kill() only terminates the direct child (cmd.exe), leaving the
+                    # grandchild (llama-server) orphaned and still holding VRAM. taskkill /F /T
+                    # kills the whole tree so the GPU memory is actually released.
+                    taskkill_result = subprocess.run(
+                        ['taskkill', '/F', '/T', '/PID', str(process.pid)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    if taskkill_result.returncode != 0:
+                        # Non-zero can mean access denied OR that the process had already exited.
+                        # The bounded wait + poll() check below verifies the actual state.
+                        print(f"\n\ntaskkill returned {taskkill_result.returncode} for PID {process.pid}.\n\n")
+                else:
+                    process.kill()  # Sends 'SIGKILL' on Unix-like to force-kill immediately
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    raise Exception(f"\n\nProcess {process.pid} did not exit within timeout after force kill.\n\n")
             
             if process.poll() is not None:
                 print("\n\nProcess terminated successfully.\n\n")

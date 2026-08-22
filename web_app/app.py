@@ -5968,21 +5968,22 @@ def llama_cpp_server_starter(exclusive_server_mode: bool):
             # with open('llama_cpp_server_output_log.txt', 'w') as f:
             #     LLAMA_CPP_PROCESS = subprocess.Popen(
             #         llama_cpp_safe_launch_args,
+            #         env=child_env,
             #         stdout=f,
             #         stderr=subprocess.STDOUT,
             #         text=True,
             #         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
             #     )
-                
+
             LLAMA_CPP_PROCESS = subprocess.Popen(
                 ['cmd.exe', cmd_onclose] + llama_cpp_safe_launch_args,
                 env=child_env,
                 creationflags=subprocess.CREATE_NEW_CONSOLE
-            )   # only for testing & debugging, see note below!
+            )   # visible CMD window; shutdown handled via taskkill /F /T in utils.send_ctrl_c_to_process
             '''
             ## Why CREATE_NEW_CONSOLE is less reliable than CREATE_NEW_PROCESS_GROUP:
             
-                - Control events don't reach the child: Python's send_signal(signal.CTRL_BREAK_EVENT) uses 
+                - Control events don't reach the child: Python's `send_signal(signal.CTRL_BREAK_EVENT)` uses 
                 GenerateConsoleCtrlEvent, which only delivers to processes that share the same console as the 
                 caller. With CREATE_NEW_CONSOLE, the child is in a different console, so the event is dropped.
                 
