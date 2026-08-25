@@ -42,13 +42,13 @@ def init_and_connect_to_rag_context_db() -> tuple[sqlite3.Connection, sqlite3.Cu
         config = config_manager.read_config(['rag_context_db'])
         rag_context_db = config['rag_context_db']
     except Exception as e:
-        raise Exception(f"Missing config value for rag_context_db: {e}")
+        raise RuntimeError(f"Missing config value for rag_context_db: {e}") from e
     
     try:
         conn = sqlite3.connect(rag_context_db)
         cursor = conn.cursor()
     except Exception as e:
-        raise Exception(f"Could not connect to rag context database: {e}")
+        raise RuntimeError(f"Could not connect to rag context database: {e}") from e
     
     try:
         cursor.execute('''
@@ -60,7 +60,7 @@ def init_and_connect_to_rag_context_db() -> tuple[sqlite3.Connection, sqlite3.Cu
         ''')
         conn.commit()
     except Exception as e:
-        raise Exception(f"Could not create rag context table: {e}")
+        raise RuntimeError(f"Could not create rag context table: {e}") from e
     
     try:
         privion_utils_module.add_column_if_not_exists(
@@ -77,7 +77,7 @@ def init_and_connect_to_rag_context_db() -> tuple[sqlite3.Connection, sqlite3.Cu
         )
    
     except Exception as e:
-        raise Exception(f"Could not add necessary columns to rag context table: {e}")
+        raise RuntimeError(f"Could not add necessary columns to rag context table: {e}") from e
     
     return conn, cursor
 
@@ -91,7 +91,7 @@ def persist_rag_context(stream_session_id: str, docs: list[Document]):
     try:
         conn, cursor = init_and_connect_to_rag_context_db()
     except Exception as e:
-        raise Exception(f"Could not initialize and connect to rag context database: {e}")
+        raise RuntimeError(f"Could not initialize and connect to rag context database: {e}") from e
     
     try:
         cursor.execute(
@@ -101,10 +101,10 @@ def persist_rag_context(stream_session_id: str, docs: list[Document]):
    
         conn.commit()
     except Exception as e:
-        raise Exception(
+        raise RuntimeError(
             "Could not persist rag context for stream session "
             f"{stream_session_id}: {e}"
-        )
+        ) from e
     finally:
         cursor.close()
         conn.close()
@@ -122,7 +122,7 @@ def fetch_rag_context(
     try:
         conn, cursor = init_and_connect_to_rag_context_db()
     except Exception as e:
-        raise Exception(f"Could not initialize and connect to rag context database: {e}")
+        raise RuntimeError(f"Could not initialize and connect to rag context database: {e}") from e
     
     try:
         cursor.execute(
@@ -146,7 +146,7 @@ def fetch_rag_context(
             conn.commit()
     
     except Exception as e:
-        raise Exception(f"Could not fetch rag context for sessionID: {stream_session_id}: {e}")
+        raise RuntimeError(f"Could not fetch rag context for sessionID: {stream_session_id}: {e}") from e
     finally:
         cursor.close()
         conn.close()
@@ -161,7 +161,7 @@ def delete_rag_context(stream_session_id: str) -> bool:
     try:
         conn, cursor = init_and_connect_to_rag_context_db()
     except Exception as e:
-        raise Exception(f"Could not initialize and connect to rag context database: {e}")
+        raise RuntimeError(f"Could not initialize and connect to rag context database: {e}") from e
     
     try:
         cursor.execute(
@@ -171,7 +171,7 @@ def delete_rag_context(stream_session_id: str) -> bool:
    
         conn.commit()
     except Exception as e:
-        raise Exception(f"Could not delete rag context for sessionID: {stream_session_id}: {e}")
+        raise RuntimeError(f"Could not delete rag context for sessionID: {stream_session_id}: {e}") from e
     finally:
         cursor.close()
         conn.close()
@@ -248,29 +248,37 @@ def extract_content_source_and_page_data_from_summary_text(
         return summary_text, "", [1]
 
 
-def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length_limit_chars: int, user_query: str) -> tuple[str, list[Document]]:
+def get_summary_report(
+    summarized_chunk_entities: dict,
+    graph_rag_context_length_limit_chars: int,
+    user_query: str
+) -> tuple[str, list[Document]]:
     '''
-    Receives a dictionary of chunk entities complete with summaries for the comprising nodes and relationships, 
-    the graph RAG context length limit in characters, and the user query.
+    Receives a dictionary of chunk entities complete with 1) The summaries for the 
+    comprising nodes and relationships, 2) The graph RAG context length limit in 
+    characters, and 3) The user query.
 
     The user query is used to rerank the summaries if the provided limit is exceeded.
 
-    Returns a summary report string and a list of Document objects, comprising the summaries as Document objects, which
-    are assembled as follows:
+    Returns a summary report string and a list of Document objects, comprising the 
+    summaries as Document objects, which are assembled as follows:
 
-        1. A summary-preface-string is constructed basis the node/relationship entities details
-        2. For a given summary, the source-doc-name and page number(s) are extracted from the summary text.
-        3. A source-link is constructed using the source-doc-name and page number(s)
-        4. An entry is formatted as follows:
-            {Summary Preface String} -
-            source_link:{source_link}:
-            {Summary Text}
-            source_link:{source_link}
-            \n\n
-        5. The entry is added to the summary-report set and the summary-doc-objects list, with exceptions handled via a simplified entry fallback.
+    1. A summary-preface string is constructed basis the node/relationship entity's details
+    2. For a given summary, the source-doc-name and page number(s) are extracted from the summary text.
+    3. A source-link is constructed using the source-doc-name and page number(s)
+    4. An entry is formatted as follows:
+        {Summary Preface String} -
+        source_link:{source_link}:
+        {Summary Text}
+        source_link:{source_link}
+        \n\n
+    5. The entry is added to the summary-report set and the summary-doc-objects list, 
+    with exceptions handled via a simplified entry fallback.
 
-    The summary-report set is used to ensure that the same summary is not added multiple times to the summary report.
-    The summary-doc-objects list is used to store the summaries as Document objects, which are then used to rerank the summaries if the provided limit is exceeded.
+    The summary-report set is used to ensure that the same summary is not added multiple 
+    times to the summary report.
+    The summary-doc-objects list is used to store the summaries as Document objects, 
+    which are then used to rerank the summaries if the provided limit is exceeded.
 
     '''
     print(f"\n\nGetting summary report\n\n")
@@ -308,7 +316,10 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
                                 summary_doc_objects.append(Document(page_content=page_content_entry, metadata={'page_number': pages, 'source': source_doc_name}))
                             
                             except Exception as e:
-                                print(f"Could not convert GraphRAG context to Document object, skipping. Encountered error: {e}")
+                                print(
+                                    "Could not convert GraphRAG context to Document object, skipping. "
+                                    f"Encountered error: {e}"
+                                )
                                 page_content_entry = (
                                     f"{summary_preface_string} - {summary}" #The summary, as generated in the process_nodes_and_relationships method of hf_waitress.py, contains metadata and newline spacing.
                                 )
@@ -316,11 +327,18 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
                             summary_report.add(page_content_entry)
                         
                         except Exception as e:
-                            print(f"Error processing a node's summary when adding to summary report. Skipping this summary. encountered error: {e}")
+                            print(
+                                "Error processing a node's summary when adding to summary report. "
+                                f"Skipping this summary. Encountered error: {e}"
+                            )
                             continue
             
             except Exception as e:
-                print(f"Error processing node in chunk_data when adding to summary report, likely a corrupt dict. Skipping node summaries for this chunk. encountered error: {e}")
+                print(
+                    "Error processing node in chunk_data when adding to summary report, "
+                    "likely a corrupt dict. Skipping node summaries for this chunk. "
+                    f"Encountered error: {e}"
+                )
             
             try:
                 for relationship in chunk_data['entities_and_relationships']['relationships']:
@@ -351,14 +369,24 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
                             summary_report.add(page_content_entry)
                         
                         except Exception as e:
-                            print(f"Error processing a relationship's summary when adding to summary report. Skipping this summary. encountered error: {e}")
+                            print(
+                                "Error processing a relationship's summary when adding to summary report. "
+                                "Skipping this summary. Encountered error: {e}"
+                            )
                             continue
             
             except Exception as e:
-                print(f"Error processing relationship in chunk_data when adding to summary report, likely a corrupt dict. Skipping relationship summaries for this chunk. encountered error: {e}")
+                print(
+                    "Error processing relationship in chunk_data when adding to summary report, "
+                    "likely a corrupt dict. Skipping relationship summaries for this chunk. "
+                    f"Encountered error: {e}"
+                )
     
     except Exception as e:
-        print(f"Could not process summary report, skipping remaining items and exiting. Encountered error: {e}")
+        print(
+            "Could not process summary report, skipping remaining items and exiting. "
+            f"Encountered error: {e}"
+        )
     
     textual_summary_report = ''.join(summary_report)
 
@@ -366,7 +394,12 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
         trimmed_summary_report = ''
         try:
             
-            reranked_summaries_list = rerank_results_ml(user_query, summary_doc_objects, top_n=len(summary_doc_objects), ascending_relevance_sort=False)
+            reranked_summaries_list = rerank_results_ml(
+                user_query,
+                summary_doc_objects,
+                top_n=len(summary_doc_objects),
+                ascending_relevance_sort=False
+            )
             
             for doc in reranked_summaries_list:
                 
@@ -377,7 +410,10 @@ def get_summary_report(summarized_chunk_entities: dict, graph_rag_context_length
             return trimmed_summary_report, reranked_summaries_list
 
         except Exception as e:
-            print(f"Could not rerank & trim GraphRAG summaries, returning original summary report. Encountered error: {e}")
+            print(
+                "Could not rerank & trim GraphRAG summaries, returning original summary report. "
+                f"Encountered error: {e}"
+            )
 
     return textual_summary_report, summary_doc_objects
 
