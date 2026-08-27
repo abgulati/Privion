@@ -1,3 +1,29 @@
+import os
+
+###---Complete List of HF-Transformers Environment Variables: https://huggingface.co/docs/huggingface_hub/en/package_reference/environment_variables
+# These MUST be set BEFORE `transformers`/`huggingface_hub` are imported below:
+# huggingface_hub reads them at import time (module-level constants), so setting them later has no effect on this process.
+# os.environ is platform-agnostic (Windows/Linux/macOS) - no shell (PowerShell/bash) is involved.
+#
+# We use os.environ.setdefault() so that any value the user has already exported in their
+# shell (PowerShell, bash, zsh, etc.) takes precedence over our defaults below.
+# All other standard HF_* variables (HF_HOME, HF_TOKEN, HF_HUB_DOWNLOAD_TIMEOUT, ...) are
+# never touched here, so the user can configure them purely via their shell environment.
+#
+# To override our defaults, e.g. in PowerShell:
+#   $env:HF_HUB_DISABLE_XET = "false"; $env:HF_XET_HIGH_PERFORMANCE = "true"
+# or in bash/zsh:
+#   export HF_HUB_DISABLE_XET=false HF_XET_HIGH_PERFORMANCE=true
+#
+# Default: classic HTTP downloads (Xet can misbehave). Set HF_HUB_DISABLE_XET=false in your shell to re-enable Xet.
+os.environ.setdefault('HF_HUB_DISABLE_XET', 'true')
+# HF_XET_HIGH_PERFORMANCE: enables high-performance Xet-based transfers (replaces the deprecated HF_HUB_ENABLE_HF_TRANSFER).
+# No-op while HF_HUB_DISABLE_XET is true, but kept as a knob: if you re-enable Xet via your shell, it comes up in high-performance mode.
+os.environ.setdefault('HF_XET_HIGH_PERFORMANCE', 'true')
+# os.environ.setdefault('HUGGINGFACE_HUB_CACHE', transformer_models_folder)
+# os.environ.setdefault('TRANSFORMERS_CACHE', transformer_models_folder)
+# os.environ.setdefault('HF_HOME', transformer_models_folder)
+
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel
 from transformers import StoppingCriteria, StoppingCriteriaList
 from transformers.utils import TensorType
@@ -85,7 +111,6 @@ import json
 import uuid
 import sys
 import ast
-import os
 import io
 import re
 
@@ -160,16 +185,6 @@ llm_semaphore = threading.Semaphore(1)
 reader_semaphore = threading.Semaphore(3)
 config_writer_semaphore = threading.Semaphore(1)
 error_logging_semaphore = threading.Semaphore(1)
-
-###---Complete List of HF-Transformers Environment Variables: https://huggingface.co/docs/huggingface_hub/en/package_reference/environment_variables
-
-# os.environ['HUGGINGFACE_HUB_CACHE'] = transformer_models_folder
-# os.environ['TRANSFORMERS_CACHE'] = transformer_models_folder
-# os.environ['HF_HOME'] = transformer_models_folder
-os.environ['HF_HUB_ENABLE_EMERGENCY_RETRY'] = 'true'
-os.environ['HF_HUB_EMERGENCY_RETRY_WAIT_TIME'] = '10'
-os.environ['HF_XET_HIGH_PERFORMANCE'] = 'true'
-os.environ['HF_HUB_DISABLE_XET'] = 'true'
 
 #########################------------------------------------------------###############################
 
