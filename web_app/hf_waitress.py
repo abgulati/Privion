@@ -4597,15 +4597,16 @@ THINKING_TAG_PAIRS = [
 
 TOOL_TAG_PAIRS = [
     ['<tool_call>', '</tool_call>'],
-    ['<|tool_call>', '<tool_call|>']
+    ['<|tool_call>', '<tool_call|>'],
+    ['<atem:function_calls>', '</atem:function_calls>']
 ]
 
 
 def manually_parse_response(full_response: str) -> dict:
     '''
-    DEV NOTE: Right now, `manually_extract_tool_calls_from_response` is invoked twice whereas
+    DEV NOTE: Right now, `manually-extract_tool_calls_from_response` is invoked twice whereas
     a single call right at the start would do, and `collect_reasoning` could be called on the 
-    tool-free text returned by `manually_extract_tool_calls_from_response`.
+    tool-free text returned by `manually-extract_tool_calls_from_response`.
     
     However, the below flow can currently attribute tool calls to specific thinking blocks,
     which though no used downstream for now, might become useful in the future especially in
@@ -4715,6 +4716,24 @@ def parse_llm_response(full_response: str) -> dict:
 ###################################
 
 def qwen3_tools_extractor(full_response_text:str) -> list[dict]:
+    '''
+    Converts pattern from
+    https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=Qwen%2FQwen3-14B (etc)
+        ```
+        <tool_call>
+        {"name": <function-name>, "arguments": <args-json-object>}
+        </tool_call>
+        ```
+    To:
+        {
+            'id': 'call_<uuid>',
+            'type': 'function',
+            'function': {
+                'name': 'get_weather',
+                'arguments': '{"location": "New York", "unit": "celsius"}'
+            }
+        }
+    '''
     tool_calls = []
 
     # 1. Regex to find ALL occurrences of <tool_call>...</tool_call>
@@ -4768,6 +4787,31 @@ def qwen3_tools_extractor(full_response_text:str) -> list[dict]:
 
 
 def qwen3_coder_next_tools_extractor(full_response_text:str) -> list[dict]:
+    '''
+    Converts pattern from
+    https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=Qwen%2FQwen3.8-27B
+        ```
+        <tool_call>
+        <function=get_weather>
+        <parameter=location>
+        New York
+        </parameter>
+        <parameter=unit>
+        celsius
+        </parameter>
+        </function>
+        </tool_call>
+        ```
+    To:
+        {
+            'id': 'call_<uuid>',
+            'type': 'function',
+            'function': {
+                'name': 'get_weather',
+                'arguments': '{"location": "New York", "unit": "celsius"}'
+            }
+        }
+    '''
     tool_calls = []
 
     # 1. Regex to find ALL occurrences of <tool_call>...</tool_call>
@@ -4811,6 +4855,22 @@ def qwen3_coder_next_tools_extractor(full_response_text:str) -> list[dict]:
 
 
 def gemma4_tools_extractor(full_response_text:str) -> list[dict]:
+    '''
+    Converts pattern from
+    https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=google%2Fgemma-4-31B-it
+        ```
+        <|tool_call>call:get_weather{location:<|"|>New York<|"|>,unit:<|"|>celsius<|"|>}<tool_call|>
+        ```
+    To:
+        {
+            'id': 'call_<uuid>',
+            'type': 'function',
+            'function': {
+                'name': 'get_weather',
+                'arguments': '{"location": "New York", "unit": "celsius"}'
+            }
+        }
+    '''
     tool_calls = []
 
     # Eg: "<|tool_call>call:search{query:<|\"|>weather in Vancouver today<|\"|>}<tool_call|><|tool_call>call:lamp_turn_on{}<tool_call|><|tool_response>"
@@ -4843,7 +4903,78 @@ def gemma4_tools_extractor(full_response_text:str) -> list[dict]:
     return result
 
 
+def muse_glimmer_30b_tools_extractor(full_response_text:str) -> list[dict]:
+    '''
+    Converts pattern from
+    https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=meta-models%2FMuse-Glimmer-30B
+        ```
+        <atem:invoke name="get_weather">
+        <atem:parameter name="location">New York</atem:parameter>
+        <atem:parameter name="unit">celsius</atem:parameter>
+        </atem:invoke>
+        ```
+    To:
+        {
+            'id': 'call_<uuid>',
+            'type': 'function',
+            'function': {
+                'name': 'get_weather',
+                'arguments': '{"location": "New York", "unit": "celsius"}'
+            }
+        }
+    '''
+    tool_calls = []
+
+    # Eg: "<atem:invoke name=\"get_weather\"><atem:parameter name=\"location\">New York</atem:parameter><atem:parameter name=\"unit\">celsius</atem:parameter></atem:invoke>"
+    tool_regex = re.compile(r'<atem:invoke name="([^"]+)">([\s\S]*?)</atem:invoke>', re.DOTALL)
+    param_regex = re.compile(r'<atem:parameter name="([^"]+)">([\s\S]*?)</atem:parameter>', re.DOTALL)
+
+    for match in tool_regex.finditer(full_response_text):
+        function_name = match.group(1).strip()
+        raw_args = match.group(2).strip() # Parse "<atem:parameter name=\"key\">value</atem:parameter>" pairs into a Python dictionary
+
+        args = {}
+        for paramMatch in param_regex.finditer(raw_args):
+            key = paramMatch[1].strip()
+            value = paramMatch[2].strip()
+            args[key] = value
+
+        tool_calls.append({
+            'id': 'call_' + str(uuid.uuid4())[:8],
+            'type': 'function',
+            'function': {
+                'name': function_name,
+                'arguments': json.dumps(args)
+            }   # OpenAI clients expect a JSON string for args, not a dict
+        })
+
+    content = tool_regex.sub('', full_response_text).strip()
+    result = {'role': 'assistant', 'content': content}
+    if tool_calls:
+        result['tool_calls'] = tool_calls
+    return result
+
+
 def fallback_tools_extractor(full_response_text:str) -> list[dict]:
+    '''
+    Fallback tool extractor for models without a specific tool extraction strategy.
+    It attempts to parse both JSON and custom XML formats for tool calls.
+    If neither format is detected, it returns the original text without tool calls.
+    
+    1. JSON format:
+        ```
+        <tool_call>{"name": "function_name", "arguments": {"arg1": "value1", "arg2": "value2"}}</tool_call>
+        ```
+    2. Custom XML format:
+        ```
+        <tool_call>
+        <function=function_name>
+        <parameter=arg1>value1</parameter>
+        <parameter=arg2>value2</parameter>
+        </function>
+        </tool_call>
+        ```
+    '''
     tool_calls = []
 
     # 1. Regex to find ALL occurrences of <tool_call>...</tool_call>
@@ -4944,7 +5075,10 @@ LLM_TO_TOOLS_EXTRACTOR_MAPPING = {
     'Qwen/Qwen3-Coder-Next': qwen3_coder_next_tools_extractor,
     'Qwen/Qwen3.5': qwen3_coder_next_tools_extractor,
     'Qwen/Qwen3.6': qwen3_coder_next_tools_extractor,
-    'google/gemma-4': gemma4_tools_extractor
+    'Qwen/Qwen3.8': qwen3_coder_next_tools_extractor,
+    'google/gemma-4': gemma4_tools_extractor,
+    'meta-models/Muse-Glimmer-30B': muse_glimmer_30b_tools_extractor,
+    'nvidia/NVIDIA-Nemotron-3.5-Lightning': qwen3_coder_next_tools_extractor,
 }
 
 
@@ -5664,6 +5798,55 @@ def handle_openai_non_streaming(backend:str, req_body:dict) -> dict:
     elif backend == 'exl3': return handle_exl3_non_streaming_openai(req_body)
 
 
+'''
+REFERENCE_MESSAGE OBJECT:
+    ```
+    messages = [
+        {
+            "role": "system",
+            "content": "The Current Date is: 2026-08-27T01:45:22.546Z\n\nYou are a helpful assistant...
+        },
+        {
+            "role": "user",
+            "content": "Hi!"
+        },
+        {
+            "role": "assistant",
+            "content": "<think>The user is just saying \"Hi!\" This is a simple greeting. I should reply in a friendly way.\n</think>Hey there! 👋"
+        },
+        {
+            "role": "user",
+            "content": "What's the weather in Vancouver?"
+        },
+        {
+            "role": "assistant",
+            "content": "<think>The user is asking about the weather in Vancouver. Since there's no dedicated weather tool, I need to use the search tool.\n</think>",
+            "tool_calls": [
+                {
+                    "id": "TfR5v54yDuc8OqsDD7KppxuPlWcYB8nq",
+                    "type": "function",
+                    "function": {
+                        "name": "search",
+                        "arguments": "{\"query\":\"current weather in Vancouver today temperature conditions\",\"category\":\"web\"}"
+                    }
+                }
+            ]
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "TfR5v54yDuc8OqsDD7KppxuPlWcYB8nq",
+            "name": "search",
+            "content": "\n\n====================\n EXTERNAL WEB SEARCH RESULTS \n====================\n\n...
+        },
+        {
+            "role": "assistant",
+            "content": "<think>I have the search results from the tool call...\n</think>The current weather in Vancouver is 15°C with cloudy conditions."
+        }
+    ]
+    ```
+'''
+
+
 def openai_completions_messages_parser(messages: list[dict]) -> list[dict]:
     '''
     Prep the received messages obj for use with a model that follows the OpenAI /completions
@@ -5674,7 +5857,12 @@ def openai_completions_messages_parser(messages: list[dict]) -> list[dict]:
 
     This is as per official docs:
     https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
-    Toggle the 'Functions' taba nd note null content in choices/messages/content 
+    Toggle the 'Functions' tab and note null content in choices/messages/content 
+
+    From: REFERENCE_MESSAGE OBJECT above
+
+    To: Same, only with assistant content nulled out for the turn generating the tool call, as per 
+    OpenAI /completions API spec.
     '''
     
     final_messages = []
@@ -5706,7 +5894,39 @@ def qwen3_messages_parser(messages: list[dict]) -> list[dict]:
     https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=Qwen%2FQwen3.5-2B
     https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=Qwen%2FQwen3.6-35B-A3B
     https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=Qwen%2FQwen3.6-27B
+    https://huggingface.co/spaces/huggingfacejs/chat-template-playground?modelId=Qwen%2FQwen3.8-27B
 
+    From: REFERENCE_MESSAGE OBJECT above 
+
+    To:
+        1) Tool-call generating turn parsed as a dictionary instead of as a JSON string:
+        ```
+        {
+            'role': 'assistant',
+            'content': '<think>The user is asking about the weather in Vancouver. Since there\'s no dedicated weather tool, I need to use the search tool.\n</think>',
+            'tool_calls': [
+                {
+                    'id': 'TfR5v54yDuc8OqsDD7KppxuPlWcYB8nq',
+                    'type': 'function',
+                    'function': {
+                        'name': 'search',
+                        'arguments': {
+                            'query': 'current weather in Vancouver',
+                            'category': 'web'
+                        }
+                    }
+                }
+            ]
+        },
+        ```
+
+        2) Tool-response turn changed: a) role 'user' instead of tool, b) content wrapped in <tool_response> tags, and c) no tool-call_id, name, etc.:
+        ```
+        {
+            'role': 'user',
+            'content': f"<tool_response>\n\n====================\n EXTERNAL WEB SEARCH RESULTS \n====================\n\n...</tool_response>"
+        },
+        ```
     '''
     
     final_messages = []
@@ -5771,6 +5991,31 @@ def qwen3_5_legacy_messages_parser(messages: list[dict]) -> list[dict]:
 
     HuggingFace's chat-template-playground for Qwen3.5/3.6 no longer shows this spec, but 
     since it was the original spec it has been implemented here for reference purposes.
+
+    From: REFERENCE_MESSAGE OBJECT above
+
+    To:
+        1) Tool-generation turn appended to (thinking) content with a preceeding '<|tool_call|>' tag:
+        ```
+        {
+            'role': 'assistant',
+            'content': (
+                '<think>The user is asking about the weather in Vancouver. Since there\'s no dedicated weather tool, '
+                'I need to use the search tool.\n</think>\n'
+                '<|tool_call|>["{"name": "search", "arguments": {"query": "current weather in Vancouver today temperature conditions", "category": "web"}}]'
+            )
+        },
+        ```
+        2) Tool-response turn with 'name' and 'result' under 'content' and without tool-call_id, etc.:
+        ```
+        {
+            'role': 'tool',
+            'content': json.dumps({
+                'name': 'search',
+                'result': '\n\n====================\n EXTERNAL WEB SEARCH RESULTS \n====================\n\n...'
+            })
+        },
+        ```
     '''
     final_messages = []
 
@@ -5827,6 +6072,32 @@ def gemma4_messages_parser(messages: list[dict]) -> list[dict]:
 
     Reference:
     https://ai.google.dev/gemma/docs/capabilities/text/function-calling-gemma4#developers_turn
+
+    From: REFERENCE_MESSAGE OBJECT above
+
+    To: Same, with only tool-call generation and response turns modified as per Gemma4 spec:
+        ```
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                "function": {
+                    "name": "search",
+                    "arguments": {
+                        "query": "current weather in Vancouver today temperature conditions",
+                        "category": "web"
+                    }
+                }
+                }
+            ],
+            "tool_responses": [
+                {
+                "name": "search",
+                "response": "<tool_response>\n\n====================\n EXTERNAL WEB SEARCH RESULTS \n====================\n\n...</tool_response>"
+                }
+            ]
+        }
+        ```
     '''
     final_messages = []
     idx = 0
@@ -5867,7 +6138,10 @@ MESSAGE_PARSER_MAPPING = {
     'Qwen/Qwen3-Coder-Next': qwen3_messages_parser,
     'Qwen/Qwen3.5': qwen3_messages_parser,
     'Qwen/Qwen3.6': qwen3_messages_parser,
-    'google/gemma-4': gemma4_messages_parser
+    'Qwen/Qwen3.8': qwen3_messages_parser,
+    'google/gemma-4': gemma4_messages_parser,
+    'meta-models/Muse-Glimmer-30B': qwen3_messages_parser,
+    'nvidia/NVIDIA-Nemotron-3.5-Lightning': qwen3_messages_parser,
 }
 
 
@@ -5986,8 +6260,9 @@ def openai_compatible_api():
             }
         ), 503
     
-    # Handle tool choice: The user may wish to force a specific tool or forbid tools altogether, but auto-tokenizer's apply_chat_template() method does not 
-    # support tool_choice! So we need to handle this manually.
+    # Handle tool choice: The user may wish to force a specific tool or forbid tools altogether, 
+    # but auto-tokenizer's apply-chat_template() method does not support tool_choice! 
+    # So we need to handle this manually.
     final_tools = tools
     if tools and tool_choice:
         if tool_choice == 'none':
