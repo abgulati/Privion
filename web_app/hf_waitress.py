@@ -2386,8 +2386,17 @@ def define_exllamav3_generator_components(quantized_model_path: os.PathLike):
         if exl3_config['exl3_tensor_parallel']:
             load_kwargs.update(
                 tensor_p=True,
-                tp_output_device=exl3_config['exl3_tp_output_device'],
-                use_per_device=[int(device_number) for device_number in exl3_config['exl3_use_per_device'].split(',')],
+                tp_output_device=exl3_config['exl3_tp_output_device']
+            )
+        elif (
+            exl3_config['exl3_use_per_device'] 
+            and exl3_config['exl3_use_per_device'] != 'None' 
+            and exl3_config['exl3_use_per_device'] != ''
+        ):
+            load_kwargs.update(
+                use_per_device=[
+                    int(device_id) for device_id in exl3_config['exl3_use_per_device'].split(',')
+                ]
             )
         else:
             load_kwargs.update(
