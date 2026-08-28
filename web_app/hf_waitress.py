@@ -2393,11 +2393,14 @@ def define_exllamav3_generator_components(quantized_model_path: os.PathLike):
             and exl3_config['exl3_use_per_device'] != 'None' 
             and exl3_config['exl3_use_per_device'] != ''
         ):
-            load_kwargs.update(
-                use_per_device=[
-                    int(device_id) for device_id in exl3_config['exl3_use_per_device'].split(',')
-                ]
-            )
+            try:
+                load_kwargs.update(
+                    use_per_device=[
+                        int(device_id) for device_id in exl3_config['exl3_use_per_device'].split(',')
+                    ]
+                )
+            except Exception as e:
+                handle_error_no_return("Error parsing Exl3 GPU-split config: Ensure valid numerical values provided!", e)
         else:
             load_kwargs.update(
                 device=exl3_config['exl3_device'],
