@@ -24,21 +24,56 @@ os.environ.setdefault('HF_XET_HIGH_PERFORMANCE', 'true')
 # os.environ.setdefault('TRANSFORMERS_CACHE', transformer_models_folder)
 # os.environ.setdefault('HF_HOME', transformer_models_folder)
 
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor, pipeline, TextStreamer, BitsAndBytesConfig, QuantoConfig, HqqConfig, T5EncoderModel
-from transformers import StoppingCriteria, StoppingCriteriaList
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    AutoProcessor,
+    AutoConfig,
+    pipeline,
+    TextStreamer,
+    BitsAndBytesConfig,
+    QuantoConfig,
+    HqqConfig,
+    FPQuantConfig,
+    T5EncoderModel,
+    StoppingCriteria,
+    StoppingCriteriaList
+)
 from transformers.utils import TensorType
+
 from huggingface_hub import login, snapshot_download, scan_cache_dir
 import torch
 
 try:
-    from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Tokenizer
-    from exllamav2.generator import ExLlamaV2StreamingGenerator, ExLlamaV2DynamicGenerator, ExLlamaV2Sampler, ExLlamaV2DynamicJob
-    from exllamav2 import ExLlamaV2Cache, ExLlamaV2Cache_8bit, ExLlamaV2Cache_Q4, ExLlamaV2Cache_Q6, ExLlamaV2Cache_Q8
+    from exllamav2 import (
+        ExLlamaV2,
+        ExLlamaV2Config,
+        ExLlamaV2Tokenizer,
+        ExLlamaV2Cache,
+        ExLlamaV2Cache_8bit,
+        ExLlamaV2Cache_Q4,
+        ExLlamaV2Cache_Q6,
+        ExLlamaV2Cache_Q8
+    )
+    from exllamav2.generator import (
+        ExLlamaV2DynamicGenerator,
+        ExLlamaV2Sampler,
+        ExLlamaV2DynamicJob
+    )
 except Exception as e:
     print(f"exllamav2 is not installed. Skipping import. Encountered error: {e}")
 
 try:
-    from exllamav3 import Model, Config, Cache, Tokenizer, Generator, Job, CacheLayer_fp16, CacheLayer_quant
+    from exllamav3 import (
+        Model,
+        Config,
+        Cache,
+        Tokenizer,
+        Generator,
+        Job,
+        CacheLayer_fp16,
+        CacheLayer_quant
+    )
     from exllamav3.generator.sampler import ComboSampler
 except Exception as e:
     print(f"exllamav3 is not installed. Skipping import. Encountered error: {e}")
@@ -51,7 +86,10 @@ try:
     import torch
     import queue
 except Exception as e:
-    print(f"Core dependecies for ASR pipeline are not installed, skipping import. WARNING: ASR will not work! Encountered error: {e}")
+    print(
+        "Core dependecies for ASR pipeline are not installed, skipping import. "
+        f"WARNING: ASR will not work! Encountered error: {e}"
+    )
 
 try:
     from nemo.collections.speechlm2.models import SALM
@@ -62,7 +100,10 @@ try:
     import tempfile
     import pyttsx3
 except Exception as e:
-    print(f"Optional dependecies for ASR pipeline are not installed, skipping import. WARNING: Some ASR models/features will not work! Encountered error: {e}")
+    print(
+        "Optional dependecies for ASR pipeline are not installed, skipping import. "
+        f"WARNING: Some ASR models/features will not work! Encountered error: {e}"
+    )
 
 try:
     from diffusers import FluxPipeline, FluxTransformer2DModel
@@ -77,13 +118,19 @@ except Exception as e:
 try:
     from transformers import MllamaForConditionalGeneration
 except Exception as e:
-    print(f"transformers version is below 4.45.0 required from Llama3.2-Vision. Skipping MllamaForConditionalGeneration import. Encountered error: {e}")
+    print(
+        "transformers version is below 4.45.0 required from Llama3.2-Vision. "
+        f"Skipping MllamaForConditionalGeneration import. Encountered error: {e}"
+    )
 
 try:
     import soundfile as sf
     from qwen_tts import Qwen3TTSModel
 except Exception as e:
-    print(f"qwen_tts or its dependencies are not installed. Skipping import. Encountered error: {e}")
+    print(
+        "qwen_tts or its dependencies are not installed. "
+        f"Skipping import. Encountered error: {e}"
+    )
 
 from werkzeug.utils import secure_filename
 from pdf2image import convert_from_path
@@ -123,13 +170,19 @@ from waitress import serve
 
 try:
     if not os.path.exists(os.path.join(os.getcwd(), 'exllamav2')):
-        subprocess.run(['git', 'clone', '-b', 'v0.3.2', 'https://github.com/turboderp-org/exllamav2.git'], check=True)  # check=True raises an exception on non-zero exit code
+        subprocess.run(
+            ['git', 'clone', '-b', 'v0.3.2', 'https://github.com/turboderp-org/exllamav2.git'],
+            check=True
+        )  # check=True raises an exception on non-zero exit code
 except Exception as e:
     print(f"Could not clone exllamav2, encountered error: {e}")
 
 try:
     if not os.path.exists(os.path.join(os.getcwd(), 'exllamav3')):
-        subprocess.run(['git', 'clone', '-b', 'v1.2.1', 'https://github.com/turboderp-org/exllamav3'], check=True)  # check=True raises an exception on non-zero exit code
+        subprocess.run(
+            ['git', 'clone', '-b', 'v1.2.1', 'https://github.com/turboderp-org/exllamav3'],
+            check=True
+        )  # check=True raises an exception on non-zero exit code
 except Exception as e:
     print(f"Could not clone exllamav3, encountered error: {e}")
 
@@ -141,13 +194,21 @@ CORS(app)
 @app.route('/serve_generated_image/<path:filename>')
 def serve_generated_image(filename:str):
     print(f"\n\nserving generated image: {filename}\n\n")
+    
     generated_images_folder = "generated_images"
     try:
-        generated_images_folder = read_config(['generated_images_folder'])['generated_images_folder']
+        config = read_config(['generated_images_folder'])
+        generated_images_folder = config['generated_images_folder']
     except Exception as e:
-        handle_error_no_return("Could not read generated_images_folder from hf_config.json, using default: generated_images in the current working directory. Encountered error: ", e)
+        err_str = (
+            "Could not read 'generated_images_folder' value from hf_config.json, "
+            "using default: 'generated_images' in the current working directory. "
+            f"Encountered error: {e}"
+        )
+        handle_error_no_return(err_str, e)
 
     return send_from_directory(generated_images_folder, filename)
+
 
 @app.route('/serve_uploaded_file/<path:filename>')
 def serve_uploaded_file(filename:str):
@@ -408,6 +469,8 @@ DEFAULT_CONFIG = {
     'quantize':"quanto",
     'quant_level':"int8",
     'hqq_group_size':64,
+    'fpquant_pseudoquantization':False,
+    'fpquant_forward_dtype': 'nvfp4',
     'push_to_hub':False,
     'torch_device_map':"auto", 
     'torch_dtype':"auto", 
@@ -1631,52 +1694,77 @@ def get_model_params():
 
     try:
         config = read_config([
-            'awq', 'gguf', 'gguf_model_id', 'gguf_filename',
-            'quantize', 'quant_level', 'hqq_group_size',
-            'torch_device_map', 'torch_dtype', 'pipeline_task',
-            'trust_remote_code', 'use_flash_attention_2', 'vision'
+            'awq',
+            'gguf',
+            'gguf_model_id',
+            'gguf_filename',
+            'quantize',
+            'quant_level',
+            'hqq_group_size',
+            'torch_device_map',
+            'torch_dtype',
+            'pipeline_task',
+            'trust_remote_code',
+            'use_flash_attention_2',
+            'vision',
+            'fpquant_pseudoquantization',
+            'fpquant_forward_dtype'
         ])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when trying to get model_params, encountered error: ", e)
+        handle_local_error("Error reading model config: ", e)
 
     if config['gguf']:
         print("\n\nLoading GGUF\n\n")
         try:
-            model = AutoModelForCausalLM.from_pretrained(config['gguf_model_id'], gguf_file=config['gguf_filename'])
+            model = AutoModelForCausalLM.from_pretrained(
+                config['gguf_model_id'],
+                gguf_file=config['gguf_filename']
+            )
         except Exception as e:
-            handle_local_error("Could not create AutoModelForCausalLM, encountered error: ", e)
+            handle_local_error("Error creating Auto-ModelForCausalLM: ", e)
         try:
-            tokenizer = AutoTokenizer.from_pretrained(config['gguf_model_id'], gguf_file=config['gguf_filename'])
+            tokenizer = AutoTokenizer.from_pretrained(
+                config['gguf_model_id'],
+                gguf_file=config['gguf_filename']
+            )
         except Exception as e:
-            handle_local_error("Could not set Auto-Tokenizer, encountered error: ", e)
+            handle_local_error("Error setting Auto-Tokenizer: ", e)
         try:
-            PIPE = pipeline(config['pipeline_task'], model=model, tokenizer=tokenizer)
+            PIPE = pipeline(
+                config['pipeline_task'],
+                model=model,
+                tokenizer=tokenizer
+            )
         except Exception as e:
-            handle_local_error("Could not create model PIPELINE, encountered error: ", e)
+            handle_local_error("Error creating model PIPELINE: ", e)
 
         return True
 
     if config['awq']:
-        print("Proceed to load AWQ-quantized model from the HF-Hub, setting torch_dtype=torch.float16 and quantize=n and proceeding.")
+        print(
+            "Proceed to load AWQ-quantized model from the HF-Hub, "
+            "setting torch_dtype=torch.float16 and quantize=n and proceeding."
+        )
         torch_dtype_obj = torch.float16
         quantize = "n"
     else:
         try:
             torch_dtype_obj = str_to_torch_dtype(config['torch_dtype'])
         except Exception as e:
-            handle_error_no_return("Error determining torch data-type, setting to auto and proceeding: ", e)
+            handle_error_no_return("Error determining torch data-type, proceeding with 'auto': ", e)
             torch_dtype_obj = "auto"
         
         if torch_dtype_obj is None:
-            handle_error_no_return("Could not obtain torch dtype object, check if the value passed is correct. Setting to auto and proceeding.")
+            err_str = f"Invalid torch data-type: {config['torch_dtype']}"
+            handle_error_no_return(f"{err_str}, proceeding with 'auto'.", ValueError(err_str))
             torch_dtype_obj = "auto"
 
     if config['vision']:
-        print("Vision model detected, setting torch_dtype=torch.bfloat16")
+        print("Vision model detected, setting 'torch_dtype=torch.bfloat16'")
         torch_dtype_obj = torch.bfloat16
 
     model_params = {
-        "device_map": config['torch_device_map'],
+        "device_map": config['torch_device_map'].lower().strip(),
         "torch_dtype": torch_dtype_obj,
         "trust_remote_code": config['trust_remote_code'],
     }
@@ -1694,71 +1782,75 @@ def get_model_params():
                 if quant_level == "int8":
                     print("Proceeding with BitsAndBytes-Int8 Quant")
                     quantization_config = BitsAndBytesConfig(load_in_8bit=True)
-                    model_params["quantization_config"] = quantization_config
                 elif quant_level == "int4":
                     print("Proceeding with BitsAndBytes-Int4 Quant")
                     quantization_config = BitsAndBytesConfig(load_in_4bit=True)
-                    model_params["quantization_config"] = quantization_config
                 else:
-                    print(f"Invalid quant_level setting, BitsAndBytes supports only int8 and int4 quants but you set {quant_level}; proceeding with BitsAndBytes-Int4 Quant")
-                    print("Proceeding with BitsAndBytes-Int4 Quant")
+                    print(
+                        "Invalid quant_level setting, BitsAndBytes supports only "
+                        f"int8 and int4 quants but you set {quant_level}; "
+                        "proceeding with BitsAndBytes-Int4 Quant"
+                    )
                     quantization_config = BitsAndBytesConfig(load_in_4bit=True)
-                    model_params["quantization_config"] = quantization_config
+                
+                model_params["quantization_config"] = quantization_config
+            
             elif quantize == "quanto":
                 print("Quanto-Quantizing")
                 quant_level = config['quant_level'].lower().strip()
 
-                if quant_level == "int8":
-                    print("Proceeding with Quanto-Int8 Weights")
-                    quantization_config  = QuantoConfig(weights="int8")
-                    model_params["quantization_config"] = quantization_config
-                elif quant_level == "float8":
-                    print("Proceeding with Quanto-Float8 Weights")
-                    quantization_config  = QuantoConfig(weights="float8")
-                    model_params["quantization_config"] = quantization_config
-                elif quant_level == "int4":
-                    print("Proceeding with Quanto-Int4 Weights")
-                    quantization_config  = QuantoConfig(weights="int4")
-                    model_params["quantization_config"] = quantization_config
-                elif quant_level == "int2":
-                    print("Proceeding with Quanto-Int2 Weights")
-                    quantization_config  = QuantoConfig(weights="int2")
-                    model_params["quantization_config"] = quantization_config
-                else:
-                    print(f"Invalid quant_level setting, Quanto supports only int8, int4 and int2 quants but you set {quant_level}; proceeding with Quanto-Int4 Quant")
-                    quantization_config  = QuantoConfig(weights="int4")
-                    model_params["quantization_config"] = quantization_config
+                valid_quanto_quants = ["int8", "float8", "int4", "int2"]
+                if quant_level not in valid_quanto_quants:
+                    print(
+                        "Invalid quant_level setting, Quanto supports only "
+                        f"{valid_quanto_quants} but you set {quant_level}; "
+                        "proceeding with Quanto-Int4 Quant"
+                    )
+                    quant_level = "int4"
+
+                print(
+                    "Proceeding with Quanto-Quantization with "
+                    f"quant_level: {quant_level}"
+                )
+                quantization_config  = QuantoConfig(weights=quant_level)
+                model_params["quantization_config"] = quantization_config
+
             elif quantize == "hqq":
                 print("HQQ-Quantizing - Force-setting torch_dtype to torch.bfloat16")
                 model_params["torch_dtype"] = torch.bfloat16
                 quant_level = config['quant_level'].lower().strip()
 
-                if quant_level == "int8":
-                    print("Proceeding with HQQ-Int8 Weights")
-                    quantization_config  = HqqConfig(nbits=8, group_size=config['hqq_group_size'])
-                    model_params["quantization_config"] = quantization_config
-                elif quant_level == "int4":
-                    print("Proceeding with HQQ-Int4 Weights")
-                    quantization_config  = HqqConfig(nbits=4, group_size=config['hqq_group_size'])
-                    model_params["quantization_config"] = quantization_config
-                elif quant_level == "int3":
-                    print("Proceeding with HQQ-Int3 Weights")
-                    quantization_config  = HqqConfig(nbits=3, group_size=config['hqq_group_size'])
-                    model_params["quantization_config"] = quantization_config
-                elif quant_level == "int2":
-                    print("Proceeding with HQQ-Int2 Weights")
-                    quantization_config  = HqqConfig(nbits=2, group_size=config['hqq_group_size'])
-                    model_params["quantization_config"] = quantization_config
-                elif quant_level == "int1":
-                    print("Proceeding with HQQ-Int1 Weights")
-                    quantization_config  = HqqConfig(nbits=1, group_size=config['hqq_group_size'])
-                    model_params["quantization_config"] = quantization_config
+                valid_hqq_quants = ["int8", "int4", "int3", "int2", "int1"]
+                if quant_level not in valid_hqq_quants:
+                    print(
+                        "Invalid quant_level setting, HQQ supports only "
+                        f"{valid_hqq_quants} but you set {quant_level}; "
+                        "proceeding with HQQ-Int4 Quant"
+                    )
+                    quant_level = "int4"
+                
+                print(
+                    "Proceeding with HQQ-Quantization with "
+                    f"quant_level: {quant_level}"
+                )
+                quant_level_bits = int(quant_level[-1])
+                quantization_config  = HqqConfig(
+                    nbits=quant_level_bits,
+                    group_size=config['hqq_group_size']
+                )
+                model_params["quantization_config"] = quantization_config
+
+            elif quantize == "fpquant":
+                print("Proceeding with FPQuant-Quantization")
+                if config['fpquant_pseudoquantization']:
+                    quantization_config  = FPQuantConfig(pseudoquantization=True)
                 else:
-                    print(f"Invalid quant_level setting, HQQ supports int8, int4, int3, int2 & int1 quants but you set {quant_level}; proceeding with HQQ-Int4 Quant")
-                    quantization_config  = HqqConfig(nbits=4, group_size=config['hqq_group_size'])
-                    model_params["quantization_config"] = quantization_config
+                    quantization_config  = FPQuantConfig(
+                        forward_dtype=config['fpquant_forward_dtype'].lower().strip()
+                    )
+                model_params["quantization_config"] = quantization_config
         except Exception as e:
-            handle_local_error("Could not create quantization_config when attempting to get model_params, encountered error: ", e)
+            handle_local_error("Error creating quantization_config: ", e)
 
     return model_params
 
@@ -2006,7 +2098,7 @@ def load_tts_pipeline():
     try:
         MODEL = Qwen3TTSModel.from_pretrained(
             config['model_id'],
-            device_map=config['torch_device_map'],
+            device_map=config['torch_device_map'].lower().strip(),
             dtype=torch.bfloat16,
             attn_implementation="flash_attention_2",
         )
@@ -2737,64 +2829,115 @@ def initialize_model():
     global PIPE, MODEL, AUTO_PROC_TOK
 
     try:
-        read_return = read_config(['model_id', 'trust_remote_code', 'push_to_hub', 'quant_level', 'pipeline_task', 'flux_diffusers', 'vision', 'asr', 'tts', 'exl2', 'exl3'])
+        config = read_config([
+            'model_id',
+            'trust_remote_code',
+            'push_to_hub',
+            'quant_level',
+            'pipeline_task',
+            'flux_diffusers',
+            'vision',
+            'asr',
+            'tts',
+            'exl2',
+            'exl3'
+        ])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when trying to initialize-model(), encountered error: ", e)
+        handle_local_error("Error reading config when trying to initialize-model(): ", e)
     
-    print(f"\n\nInitializing HF-Waitress LLM Server for {read_return['model_id']}\n\n")
+    print(f"\n\nInitializing HF-Waitress LLM Server for {config['model_id']}\n\n")
 
-    if read_return['flux_diffusers']:
+    if config['flux_diffusers']:
         print("\n\nFlux Diffusers Selected - Loading...\n\n")
         PIPE = load_flux_pipeline(PIPE)
 
     else:
-        # Remove explicit protobuf implementation setting to use system default
         if 'PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION' in os.environ:
-            del os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION']    # Better to delete as the default behavior is to try the C++ implementation first and fall back to Python if needed, which is more robust than simply setting it to 'cpp'.
+            '''
+            Remove any explicit protobuf implementation settings in favor of the system default.
+            Better to delete as the default behavior is to try the C++ implementation 
+            first and fall back to Python if needed, which is more robust than simply 
+            setting it to 'cpp'.
+            '''
+            del os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION']
 
-        if read_return['exl2']:
+        if config['exl2']:
             print("\n\nExLlamaV2 Selected - Loading...\n\n")
             load_exllama_pipeline()
-        elif read_return['exl3']:
+        elif config['exl3']:
             print("\n\nExLlamaV3 Selected - Loading...\n\n")
             load_exllamav3_pipeline()
         
         else:
             model_params = get_model_params()
             print(f"Setting model-parameters: {model_params}")
-            
-            if read_return['vision']:
+
+            if config['vision']:
                 print("\n\nVision Model Selected - Loading...\n\n")
                 PIPE = load_vision_pipeline(PIPE, model_params)
-            elif read_return['asr']:
+            elif config['asr']:
+                # Not all ASR models define a pipeline, those that do will 
+                # set the global PIPE via appropriate helper functions!
                 print("\n\nASR Model Selected - Loading...\n\n")
-                load_asr_pipeline() # Not all ASR models define a pipeline, those that do will set the global PIPE via appropriate helper functions!
-            elif read_return['tts']:
+                load_asr_pipeline()
+            elif config['tts']:
                 print("\n\nTTS Model Selected - Loading...\n\n")
                 load_tts_pipeline()
             else:
                 print("\nInitializing inference pipeline...")
-                MODEL = AutoModelForCausalLM.from_pretrained(read_return['model_id'], **model_params)
                 
+                auto_config = AutoConfig.from_pretrained(
+                    config['model_id'],
+                    trust_remote_code=config['trust_remote_code']
+                )
+
                 try:
-                    AUTO_PROC_TOK = PIPE = AutoProcessor.from_pretrained(read_return['model_id'], trust_remote_code=read_return['trust_remote_code'])
+                    '''
+                    Experimental: context-length truncation via Transfomers,
+                    which provides no means for such load-time modifications.
+                    NOTE: Might not work for all models!
+                    '''
+                    #auto_config.max_position_embeddings = 1024  # Truncates ctx-length
+                    print(f"Auto-Config: {auto_config.max_position_embeddings}")
                 except Exception as e:
-                    handle_error_no_return(f"Could not load Auto-Processor for {read_return['model_id']}, falling back to Auto-Tokenizer. Encountered error: ", e)
-                    AUTO_PROC_TOK = AutoTokenizer.from_pretrained(read_return['model_id'], trust_remote_code=read_return['trust_remote_code'])
-                    PIPE = pipeline(read_return['pipeline_task'], model=MODEL, tokenizer=AUTO_PROC_TOK)
+                    handle_error_no_return("Error modifying Transformers Auto-Config: ", e)
+
+                MODEL = AutoModelForCausalLM.from_pretrained(
+                    config['model_id'],
+                    config=auto_config,
+                    **model_params
+                )
+
+                try:
+                    AUTO_PROC_TOK = PIPE = AutoProcessor.from_pretrained(
+                        config['model_id'],
+                        trust_remote_code=config['trust_remote_code']
+                    )
+                except Exception as e:
+                    err_str = (
+                        f"Error loading Auto-Processor for {config['model_id']}, "
+                        "falling back to Auto-Tokenizer. "
+                    )
+                    handle_error_no_return(err_str, e)
+
+                    AUTO_PROC_TOK = AutoTokenizer.from_pretrained(
+                        config['model_id'],
+                        trust_remote_code=config['trust_remote_code']
+                    )
+                    PIPE = pipeline(config['pipeline_task'], model=MODEL, tokenizer=AUTO_PROC_TOK)
         
                 try:
                     print(f"Your model's memory footprint is: {MODEL.get_memory_footprint()}")
                 except Exception as e:
-                    handle_error_no_return("Could not determine the model's memory footprint, encountered error: ", e)
+                    handle_error_no_return("Error determining the model's memory footprint: ", e)
     
-    print(f"\n{read_return['model_id']} loaded successfully!\n")
+    print(f"\n{config['model_id']} loaded successfully!\n")
 
-    if read_return['push_to_hub']:
+    if config['push_to_hub']:
         try:
-            MODEL.push_to_hub(f"{read_return['model_id']}-{read_return['quant_level']}")
+            MODEL.push_to_hub(f"{config['model_id']}-{config['quant_level']}")
         except Exception as e:
-            handle_error_no_return("Could not push the model to your hub, encountered error: ", e)
+            handle_error_no_return("Error pushing the model to your hub: ", e)
 
     return True
 
@@ -3594,7 +3737,8 @@ def get_pipe(torch_device: str):
         model=MODEL,
         tokenizer=PROCESSOR.tokenizer,
         feature_extractor=PROCESSOR.feature_extractor,
-        torch_dtype=torch_dtype, device=torch_device
+        torch_dtype=torch_dtype,
+        device=torch_device.lower().strip()
     )
 
 
@@ -3703,12 +3847,19 @@ def transcribe_with_nv_canary_1b_v2(audio_data: np.ndarray, asr_config: dict) ->
             pass
 
 
-def transcribe_with_ibm_granite_speech_3_3(audio_data: np.ndarray, asr_config: dict) -> str:
+def transcribe_with_ibm_granite_speech_3_3(
+    audio_data: np.ndarray, 
+    asr_config: dict
+) -> str:
     # ensure mono float32 in [-1, 1]
     if audio_data.ndim > 1:
         audio_data = audio_data.mean(axis=1)
     if asr_config['asr_samplerate'] != 16000:
-        audio_data = librosa.resample(audio_data, orig_sr=asr_config['asr_samplerate'], target_sr=16000)
+        audio_data = librosa.resample(
+            audio_data,
+            orig_sr=asr_config['asr_samplerate'],
+            target_sr=16000
+        )
         asr_config['asr_samplerate'] = 16000
     audio_data = np.clip(audio_data.astype(np.float32), -1.0, 1.0)
 
@@ -3717,15 +3868,32 @@ def transcribe_with_ibm_granite_speech_3_3(audio_data: np.ndarray, asr_config: d
     wav = torch.from_numpy(audio_data).unsqueeze(0).float()
 
     try:
-        system_prompt = "Knowledge Cutoff Date: April 2024.\nToday's Date: April 9, 2025.\nYou are Granite, developed by IBM. You are a helpful AI assistant"
+        system_prompt = (
+            "Knowledge Cutoff Date: April 2024.\nToday's Date: April 9, 2025.\n"
+            "You are Granite, developed by IBM. You are a helpful AI assistant"
+        )
         user_prompt = "<|audio|>can you transcribe the speech into a written format?"
         chat = [
             dict(role="system", content=system_prompt),
             dict(role="user", content=user_prompt),
         ]
-        prompt = ASR_TOKENIZER.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
-        model_inputs = PROCESSOR(prompt, wav, device=asr_config['torch_device_map'], return_tensors="pt").to(asr_config['torch_device_map'])
-        model_outputs = MODEL.generate(**model_inputs, max_new_tokens=asr_config['asr_max_new_tokens'], do_sample=False, num_beams=1)
+        prompt = ASR_TOKENIZER.apply_chat_template(
+            chat,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+        model_inputs = PROCESSOR(
+            prompt,
+            wav,
+            device=asr_config['torch_device_map'].lower().strip(),
+            return_tensors="pt"
+        ).to(asr_config['torch_device_map'].lower().strip())
+        model_outputs = MODEL.generate(
+            **model_inputs,
+            max_new_tokens=asr_config['asr_max_new_tokens'],
+            do_sample=False,
+            num_beams=1
+        )
 
         # Transformers includes the input IDs in the response.
         num_input_tokens = model_inputs["input_ids"].shape[-1]
