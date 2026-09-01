@@ -2109,28 +2109,52 @@ def load_tts_pipeline():
     return True
 
 
-def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_path: os.PathLike) -> os.PathLike:
-    print(f"\n\nAttempting to generate measurement file for model {model_id}...\n\n")
+def generate_exllama_measurement_file_for_model(
+    model_id: str,
+    model_snapshot_path: os.PathLike
+) -> os.PathLike:
+    print(f"\n\nAttempting exl2-measurement for {model_id}...\n\n")
 
     try:
-        config = read_config(['transformer_models_folder', 'exl2_force_regenerate_measurement'])
+        config = read_config([
+            'transformer_models_folder',
+            'exl2_force_regenerate_measurement'
+        ])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting to generate-exllama_measurement_file_for_model(), encountered error: ", e)
+        handle_local_error("Error reading exl2 measurement-generation config: ", e)
 
     try:
-        temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
+        temp_dir = os.path.join(
+            os.getcwd(),
+            "exllamav2",
+            "temp-converter-files"
+        )
         os.makedirs(temp_dir, exist_ok=True)
 
-        measurement_file_path = os.path.join(config['transformer_models_folder'], model_id, "exllama-measurements-file", "measurement.json")
+        measurement_file_path = os.path.join(
+            config['transformer_models_folder'],
+            model_id,
+            "exllama-measurements-file",
+            "measurement.json"
+        )
         os.makedirs(os.path.dirname(measurement_file_path), exist_ok=True)
     except Exception as e:
-        handle_local_error("Could not create measurement file directory when attempting to generate-exllama_measurement_file_for_model(), encountered error: ", e)
+        handle_local_error("Error creating 'exllama-measurements-file' directory:", e)
     
-    if os.path.exists(measurement_file_path) and not config['exl2_force_regenerate_measurement']:
-        print(f"\nMeasurement file for {model_id} already exists. Skipping measurement file generation.\n")
+    if (
+        os.path.exists(measurement_file_path) 
+        and not config['exl2_force_regenerate_measurement']
+    ):
+        print(f"\nExl2-Measurement for {model_id} already exists. Proceeding...\n")
         return measurement_file_path
     
-    convert_script_path = os.path.normpath(os.path.join(os.getcwd(), "exllamav2", "convert.py"))
+    convert_script_path = os.path.normpath(
+        os.path.join(
+            os.getcwd(),
+            "exllamav2",
+            "convert.py"
+        )
+    )
     command = [
         'python' if platform.system() == 'Windows' else 'python3',
         convert_script_path,
@@ -2142,37 +2166,64 @@ def generate_exllama_measurement_file_for_model(model_id: str, model_snapshot_pa
 
     try:
         print(f"\nRunning ExLlamaV2 measurement file generator for {model_id}...\n")
-        subprocess.run(command, check=True) # check=True ensures that the command will raise an exception if it fails
-        print(f"\nExLlamaV2 measurement file generator for {model_id} completed successfully!\n")
+        subprocess.run(command, check=True)
+        # check=True ensures that the command will raise an exception if it fails
+        print(f"\nExLlamaV2 measurement for {model_id} generated successfully!\n")
     except Exception as e:
-        safe_remove_folder_from_filepath(temp_dir)  # Since measurement-generation errored out, restarting afresh by clearing the temp dir is safer
-        handle_local_error("Could not run ExLlamaV2 measurement file generator, encountered error: ", e)
+        # Since measurement-generation errored out, safer to
+        # clear the temp dir and start afresh next time
+        safe_remove_folder_from_filepath(temp_dir)  
+        handle_local_error("Error generating Exl2-measurement: ", e)
 
     return measurement_file_path
 
 
-def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike, model_snapshot_path: os.PathLike, exl2_bpw: float) -> os.PathLike:
-    print(f"\n\nAttempting to quantize model {model_id} to {exl2_bpw}bpw...\n\n")
+def exllama_bpw_quantize_model(
+    model_id: str,
+    measurement_file_path: os.PathLike,
+    model_snapshot_path: os.PathLike,
+    exl2_bpw: float
+) -> os.PathLike:
+    print(f"\n\nAttempting to exl2-quantize {model_id} to {exl2_bpw}bpw...\n\n")
     
     try:
         config = read_config(['transformer_models_folder'])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting to exllama-bpw_quantize_model(), encountered error: ", e)
+        handle_local_error("Error reading exl2-quantization config: ", e)
 
     try:
-        temp_dir = os.path.join(os.getcwd(), "exllamav2", "temp-converter-files")
+        temp_dir = os.path.join(
+            os.getcwd(),
+            "exllamav2",
+            "temp-converter-files"
+        )
         os.makedirs(temp_dir, exist_ok=True)
 
-        quantized_model_path = os.path.join(config['transformer_models_folder'], model_id, "exl2-qaunts", f"{exl2_bpw}bpw")
-        os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)   # Create parent directory structure - final `{exl2_bpw}bpw` directory will be created by ExLlamaV2 converter
+        '''
+        Create parent directory structure - final `{exl2_bpw}bpw` 
+        directory will be created by ExLlamaV2 converter
+        '''
+        quantized_model_path = os.path.join(
+            config['transformer_models_folder'],
+            model_id,
+            "exl2-qaunts",
+            f"{exl2_bpw}bpw"
+        )
+        os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)
     except Exception as e:
-        handle_local_error("Could not create directory to store quantized model when attempting to exllama-bpw_quantize_model(), encountered error: ", e)
+        handle_local_error("Error creating target parent directory for exl2-quant: ", e)
 
     if os.path.exists(quantized_model_path):
-        print(f"\nQuantized model for {model_id} already exists. Skipping quantization.\n")
+        print(f"\nExl2-quant for {model_id} already exists. Proceeding...\n")
         return quantized_model_path
     
-    convert_script_path = os.path.normpath(os.path.join(os.getcwd(), "exllamav2", "convert.py"))
+    convert_script_path = os.path.normpath(
+        os.path.join(
+            os.getcwd(),
+            "exllamav2",
+            "convert.py"
+        )
+    )
     command = [
         'python' if platform.system() == 'Windows' else 'python3',
         convert_script_path,
@@ -2186,7 +2237,8 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
 
     try:
         print(f"\nRunning ExLlamaV2 bpw quantizer for {model_id}...\n")
-        subprocess.run(command, check=True) # check=True ensures that the command will raise an exception if it fails
+        subprocess.run(command, check=True)
+        # check=True ensures that the command will raise an exception if it fails
         print(f"\nExLlamaV2 Conversion of {model_id} to {exl2_bpw}bpw completed successfully!\n")
     except Exception as e:
         handle_local_error("Could not run ExLlamaV2 bpw quantizer, encountered error: ", e)
@@ -2195,7 +2247,11 @@ def exllama_bpw_quantize_model(model_id: str, measurement_file_path: os.PathLike
     return quantized_model_path
 
 
-def get_exl2_cache_type(exl2_cache_type: str):  #  -> ExLlamaV2Cache; commenting out as it will cause the server to error out if ExLlamaV2 is not installed!
+def get_exl2_cache_type(exl2_cache_type: str):
+    '''
+    Returns: -> ExLlamaV2Cache; excluding type-hint above as 
+    the server will error out if ExLlamaV2 is not installed!
+    '''
     print(f"\nDetermining ExLlamaV2 cache type for {exl2_cache_type}...\n")
     try:
         if exl2_cache_type == "c8":
@@ -2209,11 +2265,21 @@ def get_exl2_cache_type(exl2_cache_type: str):  #  -> ExLlamaV2Cache; commenting
         else:
             return ExLlamaV2Cache
     except Exception as e:
-        handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
+        handle_local_error("Error getting ExLlamaV2 cache type: ", e)
 
 
-def define_exllama_generator_components(quantized_model_path: os.PathLike, exl2_no_flash_attn: bool):    # -> ExLlamaV2DynamicGenerator: commenting out as it will cause the server to error out if ExLlamaV2 is not installed!
-    print(f"\n\nAttempting to define ExLlamaV2 Generator Components for Model: {quantized_model_path}...\n\n")
+def define_exllama_generator_components(
+    quantized_model_path: os.PathLike,
+    exl2_no_flash_attn: bool
+):
+    '''
+    Returns: -> ExLlamaV2DynamicGenerator; excluding type-hint above as 
+    the server will error out if ExLlamaV2 is not installed!
+    '''
+    print(
+        "\n\nAttempting to define ExLlamaV2 Generator "
+        f"Components for Model: {quantized_model_path}...\n\n"
+    )
 
     try:
         if exl2_no_flash_attn:
@@ -2224,47 +2290,51 @@ def define_exllama_generator_components(quantized_model_path: os.PathLike, exl2_
             config = ExLlamaV2Config(quantized_model_path)
         print("\nConfig defined successfully\n")
     except Exception as e:
-        handle_local_error("Could not define ExLlamaV2 config, encountered error: ", e)
+        handle_local_error("Error defining ExLlamaV2 config: ", e)
     
     try:
         global EXL2_MODEL
         EXL2_MODEL = ExLlamaV2(config)
         print("\nModel defined successfully\n")
     except Exception as e:
-        handle_local_error("Could not define ExLlamaV2 model, encountered error: ", e)
+        handle_local_error("Error defining ExLlamaV2 model: ", e)
     
     try:
         exl2_cache_type = str(read_config(['exl2_cache_type'])['exl2_cache_type'])
         exl2_max_seq_len = int(read_config(['exl2_max_seq_len'])['exl2_max_seq_len'])
     except Exception as e:
-        handle_local_error("Could not read cache type from hf_config.json, encountered error: ", e)
+        handle_local_error("Error reading exl2-cache config: ", e)
     
     try:
         cache_type = get_exl2_cache_type(exl2_cache_type)
         print(f"\nCache type determined successfully: {cache_type}\n")
     except Exception as e:
-        handle_local_error("Could not get ExLlamaV2 cache type, encountered error: ", e)
+        handle_local_error("Error getting ExLlamaV2 cache type: ", e)
 
     try:
         global EXL2_CACHE
-        EXL2_CACHE = cache_type(EXL2_MODEL, max_seq_len = exl2_max_seq_len, lazy = True)
+        EXL2_CACHE = cache_type(
+            EXL2_MODEL,
+            max_seq_len=exl2_max_seq_len,
+            lazy = True
+        )
         print(f"\nCache defined successfully with max_seq_len: {exl2_max_seq_len}\n")
     except Exception as e:
-        handle_local_error("Could not define ExLlamaV2 cache, encountered error: ", e)
+        handle_local_error("Error defining ExLlamaV2 cache: ", e)
 
     try:
         print(f"\nLoading model...\n")
         EXL2_MODEL.load_autosplit(EXL2_CACHE, progress=True)
         print("\nModel loaded with autosplit successfully\n")
     except Exception as e:
-        handle_local_error("Could not load ExLlamaV2 model with autosplit, encountered error: ", e)
+        handle_local_error("Error loading ExLlamaV2 model with autosplit: ", e)
 
     try:
         global EXL2_TOKENIZER
         EXL2_TOKENIZER = ExLlamaV2Tokenizer(config)
         print("\nTokenizer defined successfully\n")
     except Exception as e:
-        handle_local_error("Could not define ExLlamaV2 tokenizer, encountered error: ", e)
+        handle_local_error("Error defining ExLlamaV2 tokenizer: ", e)
 
     return True
 
@@ -2276,16 +2346,29 @@ def exl2_background_worker():
     while not EXL2_WORKER_STOP_EVENT.is_set():
         if EXL2_GENERATOR and EXL2_GENERATOR.num_remaining_jobs() > 0:
             try:
-                # This single call advances ALL active requests by one step
-                results = EXL2_GENERATOR.iterate()  # results is a LIST of dictionaries, effectively meaning "Here is everything that happened on the GPU during this clock cycle."
+                results = EXL2_GENERATOR.iterate()
+                '''
+                This single call advances ALL active requests by one step:
+                `results` is a LIST of dictionaries, effectively meaning 
+                "Here is everything that happened on the GPU during this clock cycle."
+                '''
 
                 for result in results:  # 'result' is a dictionary for a specific job
                     job = result['job']
                     text = result.get('text', '')
                     eos = result.get('eos', False)
-                    # We don't care about 'stage': if 'text' is populated, we want it and if 'eos' is True, we want to signal end.
+                    '''
+                    We don't care about 'stage': 
+                    if 'text' is populated, we want it 
+                    and if 'eos' is True, we want to signal end!
+                    '''
 
-                    if hasattr(job, 'response_queue'):  # job is a ExLlamaV2DynamicJob object, and it has a response_queue attribute! It's NOT a dict key!
+                    if hasattr(job, 'response_queue'):
+                        '''
+                        job is a `ExLlamaV2DynamicJob` object, 
+                        and it has a `response_queue attribute`! 
+                        It's NOT a dict key!
+                        '''
                         if text:
                             job.response_queue.put(text)
                         if eos:
@@ -2309,7 +2392,7 @@ def define_exllama_generator():
         EXL2_GENERATOR = ExLlamaV2DynamicGenerator(EXL2_MODEL, EXL2_CACHE, EXL2_TOKENIZER)
         print("\nExLlamaV2 generator defined successfully\n")
     except Exception as e:
-        handle_local_error("Could not define ExLlamaV2 generator, encountered error: ", e)
+        handle_local_error("Error defining ExLlamaV2 generator: ", e)
 
     try:
         EXL2_WORKER_STOP_EVENT.clear()
@@ -2317,7 +2400,7 @@ def define_exllama_generator():
         EXL2_WORKER_THREAD.start()
         print("\nExLlamaV2 background worker thread started\n")
     except Exception as e:
-        handle_local_error("Could not start ExLlamaV2 background worker thread, encountered error: ", e)
+        handle_local_error("Error starting ExLlamaV2 background worker thread: ", e)
 
     return True
 
@@ -2326,61 +2409,99 @@ def load_exllama_pipeline():
     print("\n\nLoading ExLlamaV2 Pipeline\n\n")
     
     try:
-        config = read_config(['model_id', 'exl2_bpw', 'exl2_no_flash_attn', 'trust_remote_code'])
+        config = read_config([
+            'model_id',
+            'exl2_bpw',
+            'exl2_no_flash_attn',
+            'trust_remote_code'
+        ])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting to load the ExLlamaV2 pipeline, encountered error: ", e)
+        handle_local_error("Error reading ExLlamaV2 config: ", e)
 
     latest_snapshot_path = None
     try:
         latest_snapshot_path = download_model_from_hf_hub(config['model_id'])
     except Exception as e:
-        handle_error_no_return(f"Could not download {config['model_id']} from HF-Hub. Attempting to scan for pre-existing local snapshots. Encountered error: ", e)
+        err_str = (
+            f"Could not download {config['model_id']} from HF-Hub. "
+            "Attempting to scan for pre-existing local snapshots. "
+        )
+        handle_error_no_return(err_str, e)
+
         try:
             latest_revision = get_latest_revision_for_model(config['model_id'])
             latest_snapshot_path = os_sanitize_path(latest_revision.snapshot_path)
         except Exception as e:
-            handle_local_error(f"Error attempting to work with local snapshot for {config['model_id']}. Encountered error: ", e)
+            handle_local_error(f"Error with local snapshot for {config['model_id']}: ", e)
     
     if latest_snapshot_path is None:
-        handle_local_error(f"Could not find a local snapshot for {config['model_id']}. Please check your connection and access token if you're using a private model.")
+        err_str = (
+            f"Could not find a local snapshot for {config['model_id']}. "
+            "Please check your connection and access token if you're "
+            "using a private model."
+        )
+        handle_local_error(err_str, ValueError(err_str))
     
     try:
-        measurement_file_path = generate_exllama_measurement_file_for_model(config['model_id'], latest_snapshot_path)
+        measurement_file_path = generate_exllama_measurement_file_for_model(
+            config['model_id'], latest_snapshot_path
+        )
     except Exception as e:
-        handle_local_error(f"Error generating ExLlamaV2 measurement file for {config['model_id']}. Encountered error: ", e)
+        handle_local_error(f"Error exl2-measuring {config['model_id']}: ", e)
 
     try:
-        quantized_model_path = exllama_bpw_quantize_model(config['model_id'], measurement_file_path, latest_snapshot_path, float(config['exl2_bpw']))
+        quantized_model_path = exllama_bpw_quantize_model(
+            config['model_id'], measurement_file_path, 
+            latest_snapshot_path, float(config['exl2_bpw'])
+        )
     except Exception as e:
-        handle_local_error(f"Error ExLlamaV2 quantizing {config['model_id']} to {config['exl2_bpw']} bits per word. Encountered error: ", e)
+        err_str = (
+            f"Error exl2-quantizing {config['model_id']} "
+            f"to {config['exl2_bpw']} bits per word. "
+            "Please ensure that the model is compatible "
+            "with ExLlamaV2 and that you have sufficient disk space."
+        )
+        handle_local_error(err_str, e)
 
     try:
-        define_exllama_generator_components(quantized_model_path, config['exl2_no_flash_attn'])
+        define_exllama_generator_components(
+            quantized_model_path, config['exl2_no_flash_attn']
+        )
     except Exception as e:
-        handle_local_error(f"Error loading ExLlamaV2 quantized model from {quantized_model_path}. Encountered error: ", e)
+        handle_local_error(f"Error loading exl2-quant from {quantized_model_path}: ", e)
 
     try:
         define_exllama_generator()
     except Exception as e:
-        handle_local_error(f"Error defining ExLlamaV2 generator components. Encountered error: ", e)
+        handle_local_error(f"Error defining ExLlamaV2 generator: ", e)
 
     try:
-        # Using Transformers' Auto-Tokenizer as ExLlamaV2's ExLlamaV2Tokenizer does not contain an equivalent apply-chat_template() method!
+        '''
+        Using Transformers' Auto-Tokenizer as ExLlamaV2's 
+        `ExLlamaV2Tokenizer` does not contain an equivalent 
+        `apply-chat_template()` method!
+        '''
         global AUTO_PROC_TOK
-        AUTO_PROC_TOK = AutoTokenizer.from_pretrained(config['model_id'], trust_remote_code=config['trust_remote_code'])
-        print("\nTransformers-Auto-Tokenizer configured successfully for automated prompt-formatting\n")
+        AUTO_PROC_TOK = AutoTokenizer.from_pretrained(
+            config['model_id'],
+            trust_remote_code=config['trust_remote_code']
+        )
+        print("\nTransformers/Auto-Tokenizer configured successfully for Exl2\n")
     except Exception as e:
-        handle_local_error(f"Error loading Auto-Tokenizer for {config['model_id']}. Encountered error: ", e)
+        handle_local_error(f"Error loading Auto-Tokenizer for {config['model_id']}: ", e)
 
     try:
         print(f"Model's context-length (max_seq_len) is: {EXL2_MODEL.config.max_seq_len}")
     except Exception as e:
-        handle_error_no_return("Could not determine the model's context-length (max_seq_len), encountered error: ", e)
+        handle_error_no_return("Error determining context-length (max_seq_len): ", e)
     
     try:
-        print(f"Model's context-length (max_input_len per forward-pass) is: {EXL2_MODEL.config.max_input_len}")
+        print(
+            "Model's context-length (max_input_len per forward-pass) "
+            f"is: {EXL2_MODEL.config.max_input_len}"
+        )
     except Exception as e:
-        handle_error_no_return("Could not determine the model's context-length (max_input_len), encountered error: ", e)
+        handle_error_no_return("Error determining max_input_len per forward-pass: ", e)
 
     print("\n\nExLlamaV2 Pipeline Loaded Successfully!\n\n")
     return True
