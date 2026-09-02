@@ -2271,10 +2271,10 @@ def get_exl2_cache_type(exl2_cache_type: str):
 def define_exllama_generator_components(
     quantized_model_path: os.PathLike,
     exl2_no_flash_attn: bool
-):
+) -> bool:
     '''
-    Returns: -> ExLlamaV2DynamicGenerator; excluding type-hint above as 
-    the server will error out if ExLlamaV2 is not installed!
+    Sets globals and returns True if successful, 
+    otherwise raises an error / returns False
     '''
     print(
         "\n\nAttempting to define ExLlamaV2 Generator "
@@ -2507,28 +2507,51 @@ def load_exllama_pipeline():
     return True
 
 
-def exllama3_bpw_quantize_model(model_id: str, model_snapshot_path: os.PathLike, exl3_bpw: float) -> os.PathLike:
-    print(f"\n\nAttempting to quantize model {model_id} to {exl3_bpw}bpw...\n\n")
+def exllama3_bpw_quantize_model(
+    model_id: str,
+    model_snapshot_path: os.PathLike,
+    exl3_bpw: float
+) -> os.PathLike:
+    print(f"\n\nAttempting to exl3-quantize {model_id} to {exl3_bpw}bpw...\n\n")
     
     try:
         config = read_config(['transformer_models_folder', 'exl3_resume_quant_job'])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting to exllama3-bpw_quantize_model(), encountered error: ", e)
+        handle_local_error("Error reading exl3-quantization config: ", e)
 
     try:
-        temp_dir = os.path.join(os.getcwd(), "exllamav3", "temp-converter-files")
+        temp_dir = os.path.join(
+            os.getcwd(),
+            "exllamav3",
+            "temp-converter-files"
+        )
         os.makedirs(temp_dir, exist_ok=True)
 
-        quantized_model_path = os.path.join(config['transformer_models_folder'], model_id, "exl3-qaunts", f"{exl3_bpw}bpw")
-        os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)   # Create parent directory structure - final `{exl3_bpw}bpw` directory will be created by ExLlamaV3 converter
+        '''
+        Create parent directory structure - final `{exl3_bpw}bpw` 
+        directory will be created by ExLlamaV3 converter
+        '''
+        quantized_model_path = os.path.join(
+            config['transformer_models_folder'],
+            model_id,
+            "exl3-qaunts",
+            f"{exl3_bpw}bpw"
+        )
+        os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)
     except Exception as e:
-        handle_local_error("Could not create directory to store quantized model when attempting to exllama3-bpw_quantize_model(), encountered error: ", e)
+        handle_local_error("Error creating target parent directory for exl3-quant: ", e)
 
     if os.path.exists(quantized_model_path):
-        print(f"\nQuantized model for {model_id} already exists. Skipping quantization.\n")
+        print(f"\nExl3-quant for {model_id} already exists. Proceeding...\n")
         return quantized_model_path
     
-    convert_script_path = os.path.normpath(os.path.join(os.getcwd(), "exllamav3", "convert.py"))
+    convert_script_path = os.path.normpath(
+        os.path.join(
+            os.getcwd(),
+            "exllamav3",
+            "convert.py"
+        )
+    )
     if config['exl3_resume_quant_job']:
         command = [
             'python' if platform.system() == 'Windows' else 'python3',
@@ -2548,47 +2571,85 @@ def exllama3_bpw_quantize_model(model_id: str, model_snapshot_path: os.PathLike,
 
     try:
         print(f"\nRunning ExLlamaV3 bpw quantizer for {model_id}...\n")
-        subprocess.run(command, check=True) # check=True ensures that the command will raise an exception if it fails
+        subprocess.run(command, check=True)
+        # check=True ensures that the command will raise an exception if it fails
         print(f"\nExLlamaV3 Conversion of {model_id} to {exl3_bpw}bpw completed successfully!\n")
-        safe_remove_folder_from_filepath(temp_dir)  # conversion completed, deleting temp dir to free space
     except Exception as e:
-        # safe_remove_folder_from_filepath(temp_dir)  # Since conversion errored out, restarting afresh by clearing the temp dir is safer
-        handle_local_error("Could not run ExLlamaV3 bpw quantizer, encountered error: ", e)
+        handle_local_error("Error running Exl3-bpw quantizer: ", e)
 
+    safe_remove_folder_from_filepath(temp_dir)
     return quantized_model_path
 
 
-def define_exllamav3_generator_components(quantized_model_path: os.PathLike):
-    print(f"\n\nAttempting to define ExLlamaV3 Generator Components for Model: {quantized_model_path}...\n\n")
+def define_exllamav3_generator_components(
+    quantized_model_path: os.PathLike
+) -> bool:
+    '''
+    Sets globals and returns True if successful, 
+    otherwise raises an error / returns False
+    ''':
+    print(
+        "\n\nAttempting to define ExLlamaV3 Generator "
+        f"Components for Model: {quantized_model_path}...\n\n"
+    )
 
     try:
         config = Config.from_directory(quantized_model_path)
         print("\nConfig defined successfully\n")
     except Exception as e:
-        handle_local_error("Could not define ExLlamaV3 config, encountered error: ", e)
+        handle_local_error("Error defining ExLlamaV3 config: ", e)
     
     try:
         global EXL3_MODEL
         EXL3_MODEL = Model.from_config(config)
         print("\nExl3 model defined successfully\n")
     except Exception as e:
-        handle_local_error("Could not define ExLlamaV3 model, encountered error: ", e)
+        handle_local_error("Error defining ExLlamaV3 model: ", e)
     
     try:
-        exl3_config = read_config(['exl3_device', 'exl3_total_context', 'exl3_tensor_parallel', 'exl3_tp_output_device', 'exl3_use_per_device', 'exl3_max_chunk_size', 'exl3_cache_type', 'exl3_k_bits', 'exl3_v_bits'])
+        exl3_config = read_config([
+            'exl3_device',
+            'exl3_total_context',
+            'exl3_tensor_parallel',
+            'exl3_tp_output_device',
+            'exl3_use_per_device',
+            'exl3_max_chunk_size',
+            'exl3_cache_type',
+            'exl3_k_bits',
+            'exl3_v_bits'
+        ])
     except Exception as e:
-        handle_local_error("Could not read exl3-total_context from hf_config.json, encountered error: ", e)
+        handle_local_error("Error reading exl3-cache config: ", e)
 
     try:
         global EXL3_CACHE
         if exl3_config['exl3_cache_type'] == 'CacheLayer_fp16':
-            EXL3_CACHE = Cache(EXL3_MODEL, max_num_tokens = exl3_config['exl3_total_context'], layer_type = CacheLayer_fp16)
-            print(f"\nExl3 Cache defined successfully with max_num_tokens: {exl3_config['exl3_total_context']}, layer_type: {exl3_config['exl3_cache_type']}\n")
+            EXL3_CACHE = Cache(
+                EXL3_MODEL,
+                max_num_tokens=exl3_config['exl3_total_context'],
+                layer_type=CacheLayer_fp16
+            )
+            print(
+                "\nExl3 Cache defined successfully with "
+                f"max_num_tokens: {exl3_config['exl3_total_context']}, "
+                f"layer_type: {exl3_config['exl3_cache_type']}\n"
+            )
         elif exl3_config['exl3_cache_type'] == 'CacheLayer_quant':
-            EXL3_CACHE = Cache(EXL3_MODEL, max_num_tokens = exl3_config['exl3_total_context'], layer_type = CacheLayer_quant, k_bits = exl3_config['exl3_k_bits'], v_bits = exl3_config['exl3_v_bits'])
-            print(f"\nExl3 Cache defined successfully with max_num_tokens: {exl3_config['exl3_total_context']}, layer_type: {exl3_config['exl3_cache_type']}, k_bits: {exl3_config['exl3_k_bits']}, v_bits: {exl3_config['exl3_v_bits']}\n")
+            EXL3_CACHE = Cache(
+                EXL3_MODEL,
+                max_num_tokens=exl3_config['exl3_total_context'],
+                layer_type=CacheLayer_quant,
+                k_bits=exl3_config['exl3_k_bits'],
+                v_bits=exl3_config['exl3_v_bits']
+            )
+            print("\nExl3 Cache defined successfully with "
+                f"max_num_tokens: {exl3_config['exl3_total_context']}, "
+                f"layer_type: {exl3_config['exl3_cache_type']}, "
+                f"k_bits: {exl3_config['exl3_k_bits']}, "
+                f"v_bits: {exl3_config['exl3_v_bits']}\n"
+            )
     except Exception as e:
-        handle_local_error("Could not define ExLlamaV3 Cache, encountered error: ", e)
+        handle_local_error("Error defining ExLlamaV3 Cache: ", e)
 
     try:
         print(f"\nLoading model...\n")
@@ -2613,7 +2674,12 @@ def define_exllamav3_generator_components(quantized_model_path: os.PathLike):
                     ]
                 )
             except Exception as e:
-                handle_error_no_return("Error parsing Exl3 GPU-split config: Ensure valid numerical values provided!", e)
+                err_str = (
+                    "Error parsing Exl3 GPU-split config: "
+                    "Ensure valid numerical values provided! "
+                    f"Received: {exl3_config['exl3_use_per_device']}"
+                )
+                handle_error_no_return(err_str, e)
         else:
             load_kwargs.update(
                 device=exl3_config['exl3_device'],
@@ -2621,14 +2687,14 @@ def define_exllamav3_generator_components(quantized_model_path: os.PathLike):
         EXL3_MODEL.load(**load_kwargs)
         print("\nExl3 model loaded successfully\n")
     except Exception as e:
-        handle_local_error("Could not load ExLlamaV3 model, encountered error: ", e)
+        handle_local_error("Error loading ExLlamaV3 model: ", e)
 
     try:
         global EXL3_TOKENIZER
         EXL3_TOKENIZER = Tokenizer.from_config(config)
         print("\nTokenizer defined successfully\n")
     except Exception as e:
-        handle_local_error("Could not define ExLlamaV3 tokenizer, encountered error: ", e)
+        handle_local_error("Error defining ExLlamaV3 tokenizer: ", e)
 
     return True
 
@@ -2643,7 +2709,7 @@ def get_raw_stop_token_ids(quantized_model_path: os.PathLike) -> list | int:
         raw_stop_token_ids = raw_model_config['eos_token_id']
         return raw_stop_token_ids
     except Exception as e:
-        handle_local_error(f"Could not get raw stop token ids for model {quantized_model_path}, encountered error: ", e)
+        handle_local_error(f"Error getting raw stop token ids for {quantized_model_path}: ", e)
 
 
 def set_full_exl3_model_stop_token_list(raw_stop_token_ids: list | int):
@@ -2680,7 +2746,7 @@ def set_full_exl3_model_stop_token_list(raw_stop_token_ids: list | int):
         STOP_TOKENS = full_list
         return True
     except Exception as e:
-        handle_local_error("Could not set full model stop token list, encountered error: ", e)
+        handle_local_error("Error setting full model stop token list: ", e)
 
 
 def exl3_background_worker():
@@ -2691,13 +2757,23 @@ def exl3_background_worker():
         if EXL3_GENERATOR and EXL3_GENERATOR.num_remaining_jobs() > 0:
             try:
                 results = EXL3_GENERATOR.iterate()
+                '''
+                This single call advances ALL active jobs by one step:
+                `results` is a LIST of dictionaries, effectively meaning 
+                "Here is everything that happened on the GPU during this clock cycle."
+                '''
 
                 for result in results:
                     job = result['job']
                     text = result.get('text', '')
                     eos = result.get('eos', False)
 
-                    if hasattr(job, 'response_queue'):  # job is a ExLlamaV3Job object, and it has a response_queue attribute! It's NOT a dict key!
+                    if hasattr(job, 'response_queue'):
+                        '''
+                        job is a `ExLlamaV3Job` object, 
+                        and it has a `response_queue` attribute! 
+                        It's NOT a dict key!
+                        '''
                         if text:
                             job.response_queue.put(text)
                         if eos:
@@ -2718,16 +2794,16 @@ def define_exllamav3_generator(max_batch_size: int, max_chunk_size: int, show_vi
 
     try:
         EXL3_GENERATOR = Generator(
-            model = EXL3_MODEL,
-            cache = EXL3_CACHE,
-            tokenizer = EXL3_TOKENIZER,
-            max_batch_size = max_batch_size,
-            max_chunk_size = max_chunk_size,
-            show_visualizer = show_visualizer
+            model=EXL3_MODEL,
+            cache=EXL3_CACHE,
+            tokenizer=EXL3_TOKENIZER,
+            max_batch_size=max_batch_size,
+            max_chunk_size=max_chunk_size,
+            show_visualizer=show_visualizer
         )
         print("\nExLlamaV3 generator defined successfully\n")
     except Exception as e:
-        handle_local_error("Could not define ExLlamaV3 generator, encountered error: ", e)
+        handle_local_error("Error defining ExLlamaV3 generator: ", e)
 
     try:
         EXL3_WORKER_STOP_EVENT.clear()
@@ -2735,7 +2811,7 @@ def define_exllamav3_generator(max_batch_size: int, max_chunk_size: int, show_vi
         EXL3_WORKER_THREAD.start()
         print("\nExLlamaV3 background worker thread started\n")
     except Exception as e:
-        handle_local_error("Could not start ExLlamaV3 background worker thread, encountered error: ", e)
+        handle_local_error("Error starting ExLlamaV3 background worker thread: ", e)
     
     return True
 
@@ -2754,60 +2830,95 @@ def load_exllamav3_pipeline():
             'trust_remote_code'
         ])
     except Exception as e:
-        handle_local_error("Could not read values from hf_config.json when attempting to load the ExLlamaV3 pipeline, encountered error: ", e)
+        handle_local_error("Error reading ExLlamaV3 config: ", e)
 
     latest_snapshot_path = None
     try:
         latest_snapshot_path = download_model_from_hf_hub(read_return['model_id'])
     except Exception as e:
-        handle_error_no_return(f"Could not download {read_return['model_id']} from HF-Hub. Attempting to scan for pre-existing local snapshots. Encountered error: ", e)
+        err_str = (
+            f"Could not download {read_return['model_id']} from HF-Hub. "
+            "Attempting to scan for pre-existing local snapshots. "
+        )
+        handle_error_no_return(err_str, e)
+
         try:
             latest_revision = get_latest_revision_for_model(read_return['model_id'])
             latest_snapshot_path = os_sanitize_path(latest_revision.snapshot_path)
         except Exception as e:
-            handle_local_error(f"Error attempting to work with local snapshot for {read_return['model_id']}. Encountered error: ", e)
+            handle_local_error(f"Error with local snapshot for {read_return['model_id']}: ", e)
     
     if latest_snapshot_path is None:
-        handle_local_error(f"Could not find a local snapshot for {read_return['model_id']}. Please check your connection and access token if you're using a private model.")
+        err_str = (
+            f"Could not find a local snapshot for {read_return['model_id']}. "
+            "Please check your connection and access token if you're "
+            "using a private model."
+        )
+        handle_local_error(err_str, ValueError(err_str))
 
     try:
-        quantized_model_path = exllama3_bpw_quantize_model(read_return['model_id'], latest_snapshot_path, float(read_return['exl3_bpw']))
+        quantized_model_path = exllama3_bpw_quantize_model(
+            read_return['model_id'], latest_snapshot_path, 
+            float(read_return['exl3_bpw'])
+        )
     except Exception as e:
-        handle_local_error(f"Error ExLlamaV3 quantizing {read_return['model_id']} to {read_return['exl3_bpw']} bits per word. Encountered error: ", e)
+        err_str = (
+            f"Error exl3-quantizing {read_return['model_id']} "
+            f"to {read_return['exl3_bpw']} bits per word. "
+            "Please ensure that the model is compatible "
+            "with ExLlamaV3 and that you have sufficient disk space."
+        )
+        handle_local_error(err_str, e)
 
     try:
         define_exllamav3_generator_components(quantized_model_path)
     except Exception as e:
-        handle_local_error(f"Error loading ExLlamaV3 quantized model from {quantized_model_path}. Encountered error: ", e)
+        handle_local_error(f"Error loading exl3-quant from {quantized_model_path}: ", e)
 
     try:
-        define_exllamav3_generator(read_return['exl3_max_batch_size'], read_return['exl3_max_chunk_size'], read_return['exl3_show_gen_visualizer'])
+        define_exllamav3_generator(
+            read_return['exl3_max_batch_size'],
+            read_return['exl3_max_chunk_size'],
+            read_return['exl3_show_gen_visualizer']
+        )
     except Exception as e:
-        handle_local_error(f"Error defining ExLlamaV3 generator components. Encountered error: ", e)
+        handle_local_error(f"Error defining ExLlamaV3 generator: ", e)
 
     try:
-        # Using Transformers' Auto-Tokenizer as ExLlamaV3's Tokenizer does not contain an equivalent apply-chat_template() method!
+        '''
+        Using Transformers' Auto-Tokenizer as ExLlamaV3's 
+        `Tokenizer` does not contain an equivalent 
+        `apply-chat_template()` method!
+        '''
         global AUTO_PROC_TOK
-        AUTO_PROC_TOK = AutoTokenizer.from_pretrained(read_return['model_id'], trust_remote_code=True)
-        print("\nTransformers-Auto-Tokenizer configured successfully for automated prompt-formatting\n")
+        AUTO_PROC_TOK = AutoTokenizer.from_pretrained(
+            read_return['model_id'],
+            trust_remote_code=True
+        )
+        print("\nTransformers/Auto-Tokenizer configured successfully for Exl3\n")
     except Exception as e:
-        handle_local_error(f"Error loading Auto-Tokenizer for {read_return['model_id']}. Encountered error: ", e)
+        handle_local_error(f"Error loading Auto-Tokenizer for {read_return['model_id']}: ", e)
 
     try:
         raw_stop_token_ids = get_raw_stop_token_ids(quantized_model_path)
     except Exception as e:
-        handle_error_no_return(f"Error manually setting stop tokens for {read_return['model_id']}. Relying purely on EXL & Auto Tokenizers' eos_token_id's instead, good luck! Encountered error: ", e)
+        err_str = (
+            f"Error manually setting stop tokens for {read_return['model_id']}. "
+            "Relying purely on EXL & Auto Tokenizers' eos_token_id's "
+            "instead, good luck! "
+        )
+        handle_error_no_return(err_str, e)
         raw_stop_token_ids = []
 
     try:
         set_full_exl3_model_stop_token_list(raw_stop_token_ids)
     except Exception as e:
-        handle_local_error(f"Error setting full model stop token list for {read_return['model_id']}. Encountered error: ", e)
+        handle_local_error(f"Error setting full model stop token list for {read_return['model_id']}: ", e)
 
     try:
         print(f"Model's context-length (max_num_tokens) is: {read_return['exl3_total_context']}")
     except Exception as e:
-        handle_error_no_return("Could not determine the model's context-length (max_num_tokens), encountered error: ", e)
+        handle_error_no_return("Error determining context-length (max_num_tokens): ", e)
     
     print("\n\nExLlamaV3 Pipeline Loaded Successfully!\n\n")
     return True
