@@ -563,7 +563,9 @@
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl3_device">
                                                                     <td class="settings_table_setting_name">--exl3_device</td>
-                                                                    <td class="settings_table_setting_description">If specified, load to single device, e.g. "cuda:0". Ignored if tensor_parallel is enabled.</td>
+                                                                    <td class="settings_table_setting_description">If specified, load to a single device, e.g. "cuda:0".<br>
+                                                                        NOTE: Takes precedence over the `tensor_parallel` and `use_per_device` fields,
+                                                                        which are ignored if device is explicitly specified.</td>
                                                                     <td class="settings_table_setting_value"><input type="text" id="HfwExl3Device" class="settings-input-fields" value="cuda:0"></td>
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl3_cache_type">
@@ -598,8 +600,8 @@
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl3_tensor_parallel">
                                                                     <td class="settings_table_setting_name">--exl3_tensor_parallel</td>
-                                                                    <td class="settings_table_setting_description">Load in tensor-parallel mode. By default, attempt to split model according to available VRAM.
-                                                                        Allocation can be overridden with use_per_device.</td>
+                                                                    <td class="settings_table_setting_description">Load in tensor-parallel mode. By default, attempt to split model according to available VRAM.<br>
+                                                                        Allocation can be overridden with use_per_device.<br>NOTE: Ignored if `device` is explicitly specified.</td>
                                                                     <td class="settings_table_setting_value"><input type="checkbox" id="HfwExl3TensorParallel"></td>
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl3_tp_output_device">
@@ -610,8 +612,9 @@
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl3_use_per_device">
                                                                     <td class="settings_table_setting_name">--exl3_use_per_device</td>
-                                                                    <td class="settings_table_setting_description">(optional - only used if tensor_parallel is enabled) Amount of memory to use per device. Eg: use up to 23 GB on cuda:0 and 
-                                                                        cuda:2, do not load on cuda:1 and cuda:3 (if present) model.load(use_per_device = [23, 0, 23])</td>
+                                                                    <td class="settings_table_setting_description">Amount of memory to use per device. Example: '23,0,23', which translates to:<br>
+                                                                        "Use up to 23 GB on cuda:0 and cuda:2, but do not load on cuda:1<br>
+                                                                        NOTE: Ignored if `device` is explicitly specified.</td>
                                                                     <td class="settings_table_setting_value"><input type="text" id="HfwExl3UsePerDevice" class="settings-input-fields" value="None"></td>
                                                                 </tr>
                                                                 <tr class="settings-table-row" id="hf_waitress_exl3_max_chunk_size">

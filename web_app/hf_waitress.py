@@ -2699,33 +2699,52 @@ def define_exllamav3_generator_components(
             progressbar=True,
             max_chunk_size=exl3_config['exl3_max_chunk_size'],
         )
-        if exl3_config['exl3_tensor_parallel']:
-            load_kwargs.update(
-                tensor_p=True,
-                tp_output_device=exl3_config['exl3_tp_output_device']
-            )
-        elif (
-            exl3_config['exl3_use_per_device'] 
-            and exl3_config['exl3_use_per_device'] != 'None' 
-            and exl3_config['exl3_use_per_device'] != ''
+
+        '''
+        Logic below is based on assertions in ExLlamaV3's model.py 
+        / load_gen() method, which clearly state:
+        
+        "Cannot specify reserve_per_device or use_per_device when 
+        loading to single device.",
+        "Cannot use tensor_p when loading to single device.", and
+        "Cannot specify both reserve_per_device or use_per_device."
+        
+        Oddly, both `device` and `user_per_device` were accepted 
+        together by Exl3 despite the above, but better to align 
+        with the backend.
+        '''
+        if (
+            exl3_config['exl3_device']
+            and exl3_config['exl3_device'] != ''
+            and exl3_config['exl3_device'].lower().strip() != 'none'
         ):
-            try:
-                load_kwargs.update(
-                    use_per_device=[
-                        int(device_id) for device_id in exl3_config['exl3_use_per_device'].split(',')
-                    ]
-                )
-            except Exception as e:
-                err_str = (
-                    "Error parsing Exl3 GPU-split config: "
-                    "Ensure valid numerical values provided! "
-                    f"Received: {exl3_config['exl3_use_per_device']}"
-                )
-                handle_error_no_return(err_str, e)
-        else:
             load_kwargs.update(
                 device=exl3_config['exl3_device'],
             )
+        else:
+            if exl3_config['exl3_tensor_parallel']:
+                load_kwargs.update(
+                    tensor_p=True,
+                    tp_output_device=exl3_config['exl3_tp_output_device']
+                )
+            if (
+                exl3_config['exl3_use_per_device'] 
+                and exl3_config['exl3_use_per_device'] != ''
+                and exl3_config['exl3_use_per_device'].lower().strip() != 'none' 
+            ):
+                try:
+                    load_kwargs.update(
+                        use_per_device=[
+                            int(device_id) for device_id in exl3_config['exl3_use_per_device'].split(',')
+                        ]
+                    )
+                except Exception as e:
+                    err_str = (
+                        "Error parsing Exl3 GPU-split config: "
+                        "Ensure valid numerical values provided! "
+                        f"Received: {exl3_config['exl3_use_per_device']}"
+                    )
+                    handle_error_no_return(err_str, e)
         EXL3_MODEL.load(**load_kwargs)
         print("\nExl3 model loaded successfully\n")
     except Exception as e:
