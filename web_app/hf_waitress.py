@@ -2178,12 +2178,55 @@ def generate_exllama_measurement_file_for_model(
     return measurement_file_path
 
 
+def create_target_dir_for_quantized_model(
+    model_id: str,
+    parent_dir_name: str,
+    target_bpw: float
+) -> os.PathLike:
+    try:
+        config = read_config(['transformer_models_folder'])
+    except Exception as e:
+        err_str = (
+            "Error reading config - Could not create target "
+            f"dir {parent_dir_name} and quantize {model_id} "
+            f"to {target_bpw}bpw"
+        )
+        handle_local_error(err_str, e)
+
+    try:
+        '''
+        Create parent directory structure - final `{exl_bpw}bpw` 
+        directory will be created by ExLlamaV2/V3 converter
+        '''
+        quantized_model_path = os.path.join(
+            config['transformer_models_folder'],
+            model_id,
+            parent_dir_name,
+            f"{target_bpw}bpw"
+        )
+
+        os.makedirs(
+            os.path.dirname(quantized_model_path),
+            exist_ok=True
+        )
+    except Exception as e:
+        err_str = (
+            "Error creating target parent directory for "
+            f"{parent_dir_name} and quantizing {model_id} "
+            f"to {target_bpw}bpw"
+        )
+        handle_local_error(err_str, e)
+
+    return quantized_model_path
+
+
 def exllama_bpw_quantize_model(
     model_id: str,
     measurement_file_path: os.PathLike,
     model_snapshot_path: os.PathLike,
-    exl2_bpw: float
-) -> os.PathLike:
+    exl2_bpw: float,
+    quantized_model_path: os.PathLike
+) -> bool:
     print(f"\n\nAttempting to exl2-quantize {model_id} to {exl2_bpw}bpw...\n\n")
     
     try:
@@ -2193,30 +2236,15 @@ def exllama_bpw_quantize_model(
 
     try:
         temp_dir = os.path.join(
-            os.getcwd(),
+            config['transformer_models_folder'],
+            "temp-converter-files",
             "exllamav2",
-            "temp-converter-files"
+            f"{model_id.replace('/', '_')}_{exl2_bpw}bpw--{uuid.uuid4()}"
         )
         os.makedirs(temp_dir, exist_ok=True)
-
-        '''
-        Create parent directory structure - final `{exl2_bpw}bpw` 
-        directory will be created by ExLlamaV2 converter
-        '''
-        quantized_model_path = os.path.join(
-            config['transformer_models_folder'],
-            model_id,
-            "exl2-qaunts",
-            f"{exl2_bpw}bpw"
-        )
-        os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)
     except Exception as e:
         handle_local_error("Error creating target parent directory for exl2-quant: ", e)
 
-    if os.path.exists(quantized_model_path):
-        print(f"\nExl2-quant for {model_id} already exists. Proceeding...\n")
-        return quantized_model_path
-    
     convert_script_path = os.path.normpath(
         os.path.join(
             os.getcwd(),
@@ -2244,7 +2272,7 @@ def exllama_bpw_quantize_model(
         handle_local_error("Could not run ExLlamaV2 bpw quantizer, encountered error: ", e)
     
     safe_remove_folder_from_filepath(temp_dir)
-    return quantized_model_path
+    return True
 
 
 def get_exl2_cache_type(exl2_cache_type: str):
@@ -2418,50 +2446,78 @@ def load_exllama_pipeline():
     except Exception as e:
         handle_local_error("Error reading ExLlamaV2 config: ", e)
 
-    latest_snapshot_path = None
-    try:
-        latest_snapshot_path = download_model_from_hf_hub(config['model_id'])
-    except Exception as e:
-        err_str = (
-            f"Could not download {config['model_id']} from HF-Hub. "
-            "Attempting to scan for pre-existing local snapshots. "
-        )
-        handle_error_no_return(err_str, e)
+    quantized_model_path = create_target_dir_for_quantized_model(
+        config['model_id'], "exl2-qaunts", float(config['exl2_bpw'])
+    )
 
+    path = pathlib.Path(quantized_model_path)
+
+    if path.is_dir() and any(path.iterdir()):
+        print(f"\nExl2-quant for {config['model_id']} already exists...\n")
+
+    else:
+        latest_snapshot_path = None
         try:
-            latest_revision = get_latest_revision_for_model(config['model_id'])
-            latest_snapshot_path = os_sanitize_path(latest_revision.snapshot_path)
+            latest_snapshot_path = download_model_from_hf_hub(config['model_id'])
         except Exception as e:
-            handle_local_error(f"Error with local snapshot for {config['model_id']}: ", e)
-    
-    if latest_snapshot_path is None:
-        err_str = (
-            f"Could not find a local snapshot for {config['model_id']}. "
-            "Please check your connection and access token if you're "
-            "using a private model."
-        )
-        handle_local_error(err_str, ValueError(err_str))
-    
-    try:
-        measurement_file_path = generate_exllama_measurement_file_for_model(
-            config['model_id'], latest_snapshot_path
-        )
-    except Exception as e:
-        handle_local_error(f"Error exl2-measuring {config['model_id']}: ", e)
+            err_str = (
+                f"Could not download {config['model_id']} from HF-Hub. "
+                "Attempting to scan for pre-existing local snapshots. "
+            )
+            handle_error_no_return(err_str, e)
 
-    try:
-        quantized_model_path = exllama_bpw_quantize_model(
-            config['model_id'], measurement_file_path, 
-            latest_snapshot_path, float(config['exl2_bpw'])
-        )
-    except Exception as e:
-        err_str = (
-            f"Error exl2-quantizing {config['model_id']} "
-            f"to {config['exl2_bpw']} bits per word. "
-            "Please ensure that the model is compatible "
-            "with ExLlamaV2 and that you have sufficient disk space."
-        )
-        handle_local_error(err_str, e)
+            try:
+                latest_revision = get_latest_revision_for_model(config['model_id'])
+                latest_snapshot_path = os_sanitize_path(latest_revision.snapshot_path)
+            except Exception as e:
+                handle_local_error(f"Error with local snapshot for {config['model_id']}: ", e)
+        
+        if latest_snapshot_path is None:
+            err_str = (
+                f"Could not find a local snapshot for {config['model_id']}. "
+                "Please check your connection and access token if you're "
+                "using a private model."
+            )
+            handle_local_error(err_str, ValueError(err_str))
+
+        model_pre_quantized_keywords = ['exllamav2', 'exllama2', 'exl2', 'bpw']
+        if any(
+            substring in config['model_id'].lower()
+            for substring in model_pre_quantized_keywords
+        ):
+            print(
+                f"\n{config['model_id']} appears to be pre-quantized. "
+                "Skipping ExLlamaV2 measurement and quantization steps...\n"
+            )
+            safe_remove_folder_from_filepath(
+                quantized_model_path
+            )
+            quantized_model_path = latest_snapshot_path
+
+        else:
+            try:
+                measurement_file_path = generate_exllama_measurement_file_for_model(
+                    config['model_id'], latest_snapshot_path
+                )
+            except Exception as e:
+                handle_local_error(f"Error exl2-measuring {config['model_id']}: ", e)
+
+            try:
+                quantized_model_path = exllama_bpw_quantize_model(
+                    config['model_id'],
+                    measurement_file_path, 
+                    latest_snapshot_path,
+                    float(config['exl2_bpw']),
+                    quantized_model_path
+                )
+            except Exception as e:
+                err_str = (
+                    f"Error exl2-quantizing {config['model_id']} "
+                    f"to {config['exl2_bpw']} bits per word. "
+                    "Please ensure that the model is compatible "
+                    "with ExLlamaV2 and that you have sufficient disk space."
+                )
+                handle_local_error(err_str, e)
 
     try:
         define_exllama_generator_components(
@@ -2510,8 +2566,9 @@ def load_exllama_pipeline():
 def exllama3_bpw_quantize_model(
     model_id: str,
     model_snapshot_path: os.PathLike,
-    exl3_bpw: float
-) -> os.PathLike:
+    exl3_bpw: float,
+    quantized_model_path: os.PathLike,
+) -> bool:
     print(f"\n\nAttempting to exl3-quantize {model_id} to {exl3_bpw}bpw...\n\n")
     
     try:
@@ -2521,29 +2578,14 @@ def exllama3_bpw_quantize_model(
 
     try:
         temp_dir = os.path.join(
-            os.getcwd(),
+            config['transformer_models_folder'],
+            "temp-converter-files",
             "exllamav3",
-            "temp-converter-files"
+            f"{model_id.replace('/', '_')}_{exl3_bpw}bpw--{uuid.uuid4()}"
         )
         os.makedirs(temp_dir, exist_ok=True)
-
-        '''
-        Create parent directory structure - final `{exl3_bpw}bpw` 
-        directory will be created by ExLlamaV3 converter
-        '''
-        quantized_model_path = os.path.join(
-            config['transformer_models_folder'],
-            model_id,
-            "exl3-qaunts",
-            f"{exl3_bpw}bpw"
-        )
-        os.makedirs(os.path.dirname(quantized_model_path), exist_ok=True)
     except Exception as e:
         handle_local_error("Error creating target parent directory for exl3-quant: ", e)
-
-    if os.path.exists(quantized_model_path):
-        print(f"\nExl3-quant for {model_id} already exists. Proceeding...\n")
-        return quantized_model_path
     
     convert_script_path = os.path.normpath(
         os.path.join(
@@ -2578,7 +2620,7 @@ def exllama3_bpw_quantize_model(
         handle_local_error("Error running Exl3-bpw quantizer: ", e)
 
     safe_remove_folder_from_filepath(temp_dir)
-    return quantized_model_path
+    return True
 
 
 def define_exllamav3_generator_components(
@@ -2587,7 +2629,7 @@ def define_exllamav3_generator_components(
     '''
     Sets globals and returns True if successful, 
     otherwise raises an error / returns False
-    ''':
+    '''
     print(
         "\n\nAttempting to define ExLlamaV3 Generator "
         f"Components for Model: {quantized_model_path}...\n\n"
@@ -2820,7 +2862,7 @@ def load_exllamav3_pipeline():
     print("\n\nLoading ExLlamaV3 Pipeline\n\n")
 
     try:
-        read_return = read_config([
+        config = read_config([
             'model_id',
             'exl3_bpw',
             'exl3_total_context',
@@ -2832,43 +2874,71 @@ def load_exllamav3_pipeline():
     except Exception as e:
         handle_local_error("Error reading ExLlamaV3 config: ", e)
 
-    latest_snapshot_path = None
-    try:
-        latest_snapshot_path = download_model_from_hf_hub(read_return['model_id'])
-    except Exception as e:
-        err_str = (
-            f"Could not download {read_return['model_id']} from HF-Hub. "
-            "Attempting to scan for pre-existing local snapshots. "
-        )
-        handle_error_no_return(err_str, e)
+    quantized_model_path = create_target_dir_for_quantized_model(
+        config['model_id'], "exl3-qaunts", float(config['exl3_bpw'])
+    )
 
+    path = pathlib.Path(quantized_model_path)
+
+    if path.is_dir() and any(path.iterdir()):
+        print(f"\nExl3-quant for {config['model_id']} already exists...\n")
+
+    else:
+        print(
+            f"Could not find existing Exl3-quant for {config['model_id']} "
+            f"in {quantized_model_path}. Attempting to download and quantize...\n"
+        )
+        latest_snapshot_path = None
         try:
-            latest_revision = get_latest_revision_for_model(read_return['model_id'])
-            latest_snapshot_path = os_sanitize_path(latest_revision.snapshot_path)
+            latest_snapshot_path = download_model_from_hf_hub(config['model_id'])
         except Exception as e:
-            handle_local_error(f"Error with local snapshot for {read_return['model_id']}: ", e)
-    
-    if latest_snapshot_path is None:
-        err_str = (
-            f"Could not find a local snapshot for {read_return['model_id']}. "
-            "Please check your connection and access token if you're "
-            "using a private model."
-        )
-        handle_local_error(err_str, ValueError(err_str))
+            err_str = (
+                f"Could not download {config['model_id']} from HF-Hub. "
+                "Attempting to scan for pre-existing local snapshots. "
+            )
+            handle_error_no_return(err_str, e)
 
-    try:
-        quantized_model_path = exllama3_bpw_quantize_model(
-            read_return['model_id'], latest_snapshot_path, 
-            float(read_return['exl3_bpw'])
-        )
-    except Exception as e:
-        err_str = (
-            f"Error exl3-quantizing {read_return['model_id']} "
-            f"to {read_return['exl3_bpw']} bits per word. "
-            "Please ensure that the model is compatible "
-            "with ExLlamaV3 and that you have sufficient disk space."
-        )
-        handle_local_error(err_str, e)
+            try:
+                latest_revision = get_latest_revision_for_model(config['model_id'])
+                latest_snapshot_path = os_sanitize_path(latest_revision.snapshot_path)
+            except Exception as e:
+                handle_local_error(f"Error with local snapshot for {config['model_id']}: ", e)
+        
+        if latest_snapshot_path is None:
+            err_str = (
+                f"Could not find a local snapshot for {config['model_id']}. "
+                "Please check your connection and access token if you're "
+                "using a private model."
+            )
+            handle_local_error(err_str, ValueError(err_str))
+
+        model_pre_quantized_keywords = ['exllamav3', 'exllama3', 'exl3', 'bpw']
+        if any(
+            substring in config['model_id'].lower() 
+            for substring in model_pre_quantized_keywords
+        ):
+            print(f"\n{config['model_id']} is already in Exl3 format...\n")
+            safe_remove_folder_from_filepath(
+                quantized_model_path
+            )
+            quantized_model_path = latest_snapshot_path
+
+        else:
+            try:
+                exllama3_bpw_quantize_model(
+                    config['model_id'],
+                    latest_snapshot_path, 
+                    float(config['exl3_bpw']),
+                    quantized_model_path
+                )
+            except Exception as e:
+                err_str = (
+                    f"Error exl3-quantizing {config['model_id']} "
+                    f"to {config['exl3_bpw']} bits per word. "
+                    "Please ensure that the model is compatible "
+                    "with ExLlamaV3 and that you have sufficient disk space."
+                )
+                handle_local_error(err_str, e)
 
     try:
         define_exllamav3_generator_components(quantized_model_path)
@@ -2877,9 +2947,9 @@ def load_exllamav3_pipeline():
 
     try:
         define_exllamav3_generator(
-            read_return['exl3_max_batch_size'],
-            read_return['exl3_max_chunk_size'],
-            read_return['exl3_show_gen_visualizer']
+            config['exl3_max_batch_size'],
+            config['exl3_max_chunk_size'],
+            config['exl3_show_gen_visualizer']
         )
     except Exception as e:
         handle_local_error(f"Error defining ExLlamaV3 generator: ", e)
@@ -2892,18 +2962,18 @@ def load_exllamav3_pipeline():
         '''
         global AUTO_PROC_TOK
         AUTO_PROC_TOK = AutoTokenizer.from_pretrained(
-            read_return['model_id'],
+            config['model_id'],
             trust_remote_code=True
         )
         print("\nTransformers/Auto-Tokenizer configured successfully for Exl3\n")
     except Exception as e:
-        handle_local_error(f"Error loading Auto-Tokenizer for {read_return['model_id']}: ", e)
+        handle_local_error(f"Error loading Auto-Tokenizer for {config['model_id']}: ", e)
 
     try:
         raw_stop_token_ids = get_raw_stop_token_ids(quantized_model_path)
     except Exception as e:
         err_str = (
-            f"Error manually setting stop tokens for {read_return['model_id']}. "
+            f"Error manually setting stop tokens for {config['model_id']}. "
             "Relying purely on EXL & Auto Tokenizers' eos_token_id's "
             "instead, good luck! "
         )
@@ -2913,10 +2983,10 @@ def load_exllamav3_pipeline():
     try:
         set_full_exl3_model_stop_token_list(raw_stop_token_ids)
     except Exception as e:
-        handle_local_error(f"Error setting full model stop token list for {read_return['model_id']}: ", e)
+        handle_local_error(f"Error setting full model stop token list for {config['model_id']}: ", e)
 
     try:
-        print(f"Model's context-length (max_num_tokens) is: {read_return['exl3_total_context']}")
+        print(f"Model's context-length (max_num_tokens) is: {config['exl3_total_context']}")
     except Exception as e:
         handle_error_no_return("Error determining context-length (max_num_tokens): ", e)
     
