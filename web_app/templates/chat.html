@@ -693,14 +693,17 @@
                                                             </tr>
                                                             <tr class="settings-table-row" id="hf_waitress_torch_device_map">
                                                                 <td class="settings_table_setting_name">--torch_device_map</td>
-                                                                <td class="settings_table_setting_description">Select Inference Device basis appropriate PyTorch Installation. [default: auto]</td>
+                                                                <td class="settings_table_setting_description">Select Inference Device basis appropriate PyTorch Installation.<br>
+                                                                    [cuda:0 / cuda:1 etc. or simply auto, cuda, rocm, cpu etc. | default: auto]
+                                                                </td>
                                                                 <td class="settings_table_setting_value">
-                                                                    <select class="modal-selects" id="hf_waitress_torch_device_map_choice">
+                                                                    <input type="text" id="hf_waitress_torch_device_map_choice" class="settings-input-fields" value="auto">
+                                                                    <!-- <select class="modal-selects" id="hf_waitress_torch_device_map_choice">
                                                                         <option value="auto">auto (default)</option>
                                                                         <option value="cuda">CUDA</option>
                                                                         <option value="rocm">ROCm</option>
                                                                         <option value="cpu">CPU</option>
-                                                                    </select>
+                                                                    </select> -->
                                                                 </td>
                                                             </tr>
                                                             <tr class="settings-table-row" id="hf_waitress_torch_dtype">
