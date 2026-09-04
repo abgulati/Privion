@@ -5103,7 +5103,7 @@ TOOL_TAG_PAIRS = [
 ]
 
 
-def manually_parse_response(full_response: str) -> dict:
+def manually_parse_response(full_response: str, model_id: str, request_generation_config: dict) -> dict:
     '''
     DEV NOTE: Right now, `manually-extract_tool_calls_from_response` is invoked twice whereas
     a single call right at the start would do, and `collect_reasoning` could be called on the 
@@ -5117,8 +5117,19 @@ def manually_parse_response(full_response: str) -> dict:
     '''
     
     try:
-        reasoning_blocks = []
+        reasoning_text_parts = []
         all_tool_calls = []
+        
+        enable_thinking = request_generation_config.get('enable_thinking', False)
+        state = get_init_state_for_model(model_id, enable_thinking)
+        # if state = StreamState.THINKING, the model is likely missing it's openning thinking tag!
+        if (
+            state == StreamState.THINKING 
+            and '</think>' in full_response
+            and not full_response.startswith('<think>')
+        ):
+            full_response = '<think>' + full_response
+
         visible_content = full_response
 
         for start_tag, end_tag in THINKING_TAG_PAIRS:
@@ -5136,7 +5147,7 @@ def manually_parse_response(full_response: str) -> dict:
 
                 clean_thinking = tool_result.get('content', '')
                 if clean_thinking:  # avoids raw nested tool-calls in thinking content!
-                    reasoning_blocks.append({"type": "text", "text": clean_thinking})
+                    reasoning_text_parts.append(clean_thinking)
                 return ''
 
             visible_content = re.sub(
@@ -5156,8 +5167,8 @@ def manually_parse_response(full_response: str) -> dict:
         if all_tool_calls:
             message["tool_calls"] = all_tool_calls
         
-        if reasoning_blocks:
-            message["reasoning_content"] = reasoning_blocks
+        if reasoning_text_parts:
+            message["reasoning_content"] = ''.join(reasoning_text_parts)
 
         return message
 
@@ -5196,16 +5207,16 @@ def parse_with_pre_defined_response_schema(full_response: str) -> dict:
         handle_local_error(error_message, e)
 
 
-def parse_llm_response(full_response: str) -> dict:
+def parse_llm_response(full_response: str, model_id: str, request_generation_config: dict) -> dict:
     try:
         parsed_message = parse_with_pre_defined_response_schema(full_response)
     except Exception:
-        return manually_parse_response(full_response)
+        return manually_parse_response(full_response, model_id, request_generation_config)
     
     if parsed_message:
         return parsed_message
     
-    return manually_parse_response(full_response)
+    return manually_parse_response(full_response, model_id, request_generation_config)
 
 
 ###########---End of LLM Response Parsing Block---###########
@@ -5688,12 +5699,7 @@ def get_openai_reasoning_content_chunk(
             {
                 "index": 0,
                 "delta": {
-                    "reasoning_content": [
-                        {
-                            "type": "text",
-                            "text": text
-                        }
-                    ],
+                    "reasoning_content": text
                 },
                 "logprobs": None,
                 "finish_reason": None
@@ -5786,11 +5792,12 @@ def generate_openai_non_streaming_response(
     backend: str,
     full_response: str,
     prompt_token_usage: int,
-    completion_token_usage: int
+    completion_token_usage: int,
+    request_generation_config: dict
 ) -> dict:
 
     try:
-        message = parse_llm_response(full_response)
+        message = parse_llm_response(full_response, model_id, request_generation_config)
     except Exception as e:
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
         
@@ -5844,6 +5851,22 @@ THINKING_END_EVENTS = [
 TOOL_START_EVENTS = [
     (tag, "tool_start") for tag in LLM_TOOL_BLOCK_START_TAGS
 ]
+
+
+def get_init_state_for_model(model_id: str, enable_thinking: bool) -> StreamState:
+    coerce_model_families_to_think = [
+        'Qwen/Qwen3.5',
+        'Qwen/Qwen3.6',
+        'Qwen/Qwen3.8'
+    ]   # these models have trouble generating openning think tags!
+
+    if (
+        enable_thinking and 
+        any(model_id.startswith(family) for family in coerce_model_families_to_think)
+    ):
+        return StreamState.THINKING
+
+    return StreamState.CONTENT
 
 
 def tag_events_for_state(state: StreamState) -> list[tuple[str, str]]:
@@ -5954,7 +5977,8 @@ def generate_openai_stream_chunks(
     chunk_id: str,
     created: int,
     backend: str,
-    model_id: str
+    model_id: str,
+    request_generation_config: dict
 ):
     """
     Generator that consumes tokens from a queue and yields OpenAI-compatible SSE chunks.
@@ -5967,7 +5991,9 @@ def generate_openai_stream_chunks(
 
     buffer = ""
     full_response_text = ""
-    state = StreamState.CONTENT
+
+    enable_thinking = request_generation_config.get('enable_thinking', False)
+    state = get_init_state_for_model(model_id, enable_thinking)
 
     def drain(*, flush: bool):
         nonlocal buffer, state  # update outer scope variables
@@ -6115,7 +6141,8 @@ def handle_transformers_streaming_openai(req_body:dict) -> Response:
             chunk_id=chunk_id,
             created=created,
             backend="Transformers",
-            model_id=base_config['model_id']
+            model_id=base_config['model_id'],
+            request_generation_config=base_config
         )
 
         STOP_GENERATION = False
@@ -6152,7 +6179,8 @@ def handle_transformers_non_streaming_openai(req_body:dict) -> dict:
                 backend="Transformers",
                 full_response=inference_output, 
                 prompt_token_usage=prompt_tokens,
-                completion_token_usage=completion_tokens
+                completion_token_usage=completion_tokens,
+                request_generation_config=base_config
             )
         
         except Exception as e:
@@ -6179,7 +6207,8 @@ def handle_exl2_streaming_openai(req_body:dict) -> Response:
                 chunk_id=chunk_id,
                 created=created,
                 backend="ExLlamaV2",
-                model_id=base_config['model_id']
+                model_id=base_config['model_id'],
+                request_generation_config=base_config
             )
             
             print("\nOpenAI/exl2-stream done\n")
@@ -6215,7 +6244,8 @@ def handle_exl2_non_streaming_openai(req_body:dict) -> dict:
             backend="ExLlamaV2",
             full_response=full_response, 
             prompt_token_usage=prompt_tokens,
-            completion_token_usage=completion_tokens
+            completion_token_usage=completion_tokens,
+            request_generation_config=base_config
         )
 
     except Exception as e:
@@ -6242,7 +6272,8 @@ def handle_exl3_streaming_openai(req_body:dict) -> Response:
                 chunk_id=chunk_id,
                 created=created,
                 backend="ExLlamaV3",
-                model_id=base_config['model_id']
+                model_id=base_config['model_id'],
+                request_generation_config=base_config
             )
             
             print("\nexl3-stream done\n")
@@ -6278,7 +6309,8 @@ def handle_exl3_non_streaming_openai(req_body:dict) -> dict:
             backend="ExLlamaV3",
             full_response=full_response, 
             prompt_token_usage=prompt_tokens,
-            completion_token_usage=completion_tokens
+            completion_token_usage=completion_tokens,
+            request_generation_config=base_config
         )
         
     except Exception as e:
