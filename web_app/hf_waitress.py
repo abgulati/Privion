@@ -3825,7 +3825,11 @@ def completions_stream():
 
     # Streamer natively accepts both a tokenizer and a processor!
     skip_special_tokens = determine_skip_special_tokens()
-    custom_streamer = CustomTextStreamer(AUTO_PROC_TOK, skip_special_tokens=skip_special_tokens, skip_prompt=True)
+    custom_streamer = CustomTextStreamer(
+        AUTO_PROC_TOK,
+        skip_special_tokens=skip_special_tokens,
+        skip_prompt=True
+    )
     custom_streamer.callback = callback
 
     def llm_task():
@@ -3834,45 +3838,74 @@ def completions_stream():
 
         try:
             generation_config["streamer"] = custom_streamer
-            generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
+            generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])
+            '''
+            StoppingCriteriaList is a container that holds a 
+            list of StoppingCriteria objects. In our case, 
+            we have only one such object, which is our custom 
+            StoppingCriteria class, initialized with the 
+            `stop_event` object.
+            '''
             MODEL.generate(**inputs, **generation_config) # generate() is a synchronous blocking call!
         except Exception as e:
             handle_error_no_return("Response generation failed, encountered error: ", e)
             data_queue.put(f"Error: {str(e)}") # Pass error to client via queue
         finally:
             data_queue.put(None)
-            print("\n\nLLM stream done, releasing semaphore\n\n")
+            print("\n\nLLMM stream done, releasing semaphore\n\n")
             llm_semaphore.release()
 
-    def generate():        
-        
-        global STOP_GENERATION
-        STOP_GENERATION = False
+    completed = False
+    def generate():
+        nonlocal completed        
 
         try:
             thread = threading.Thread(target=llm_task)
             thread.start()
         except Exception as e:
+            llm_semaphore.release()
             handle_error_no_return("Error generating completions-stream, encountered error: ", e)
             yield f"data: {json.dumps('Error in Transformers Response-Generation Pipeline: ' + str(e))}\n\n"
             return
 
-        while True:
-            if STOP_GENERATION:
-                print("\n\nStopping generation with stop_event\n\n")
-                stop_event.set()
-                thread.join()
-                break
-            line = data_queue.get()
-            if line is None:
-                print("\n\nNone read, breaking and stopping thread\n\n")
-                thread.join()
-                break
-            yield f"data: {json.dumps(line)}\n\n"
-        
-        yield f"event: END\ndata: \"null\"\n\n"
+        try:
+            while True:
+                try:
+                    line = data_queue.get(timeout=1)
+                except queue.Empty:
+                    '''
+                    SSE heartbeat - lines starting with : are comments
+                    and are ignored by browsers' EventSource.
+                    This block is required for detecting client 
+                    disconnection when waiting on tokens: long prefill, 
+                    tool setup, model stall, upstream latency, etc.
+                    '''
+                    yield ": keepalive\n\n"
+                    continue
 
-        STOP_GENERATION = False
+                if line is None:
+                    completed = True
+                    print("\n\nNone read, breaking and stopping thread\n\n")
+                    thread.join()
+                    break
+
+                yield f"data: {json.dumps(line)}\n\n"
+            
+            yield f"event: END\ndata: \"null\"\n\n"
+
+        except GeneratorExit:
+            # Client disconnected / response iterable closed.
+            raise
+
+        finally:
+            if not completed:
+                stop_event.set()
+                try:
+                    thread.join(timeout=1)
+                except:
+                    pass
+
+        print("\ntransformers-completions-stream done\n")
             
     print("\n\nInferencing Begins!\n\n")
     return Response(generate(), content_type='text/event-stream')
@@ -4543,7 +4576,7 @@ def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
         return True # Since the above check is simplistic, an error indicates something is amiss, so best to return True to avoid infinite loops and try auto-truncation
 
 
-def prep_for_exl2_generation(req_body:dict) -> tuple[queue.Queue, dict, str]:
+def prep_and_exec_exl2_job(req_body:dict) -> tuple[queue.Queue, dict, str]:
     try:
         # 1. Setup response queue for this specific request
         user_queue = queue.Queue()
@@ -4649,41 +4682,55 @@ def exl2_stream():
     """
     Streaming text generation using ExLlamaV2 model
     
-    This endpoint provides streaming text generation using the ExLlamaV2 model with dynamic generation capabilities.
+    This endpoint provides streaming text generation using the ExLlamaV2 backend 
+    with dynamic generation capabilities.
     
-    OpenAPI 3.0.0 Specification is available in the `hfw-openapi-3-specs.yaml` file.
+    OpenAPI 3.0.0 specification is available in `hfw-openapi-3-specs.yaml`.
     """
 
     print("\n\nexl2-stream route triggered\n\n")
 
     try:
         
-        user_queue, job, _, _ = prep_for_exl2_generation(
-            request.json
-        )
+        user_queue, job, _, _ = prep_and_exec_exl2_job(request.json)
+        completed = False
 
         def generate():
+            nonlocal completed
 
-            global STOP_GENERATION
-            STOP_GENERATION = False
+            try:
+                while True:
+                    try:
+                        token = user_queue.get(timeout=0.5)
+                    except queue.Empty:
+                        '''
+                        SSE heartbeat - lines starting with : are comments
+                        and are ignored by browsers' EventSource.
+                        This block is required for detecting client 
+                        disconnection when waiting on tokens: long prefill, 
+                        tool setup, model stall, upstream latency, etc.
+                        '''
+                        yield ": keepalive\n\n"
+                        continue
 
-            while True:
-                if STOP_GENERATION: # Handle Manual Stop Signal
-                    print("\n\nStopping generation with stop_event\n\n")
+                    if token is None:
+                        completed = True
+                        break
+                    
+                    yield f"data: {json.dumps(token)}\n\n"
+                
+                yield f"event: END\ndata: \"null\"\n\n"
+            
+            except GeneratorExit:
+                # Client disconnected / response iterable closed.
+                raise
+
+            finally:
+                if not completed:
                     try:
                         EXL2_GENERATOR.cancel(job)
                     except:
                         pass
-                    STOP_GENERATION = False
-                    break
-                
-                token = user_queue.get()
-                if token is None:
-                    break
-                
-                yield f"data: {json.dumps(token)}\n\n"
-            
-            yield f"event: END\ndata: \"null\"\n\n"
 
             print("\nexl2-stream done\n")
 
@@ -4691,7 +4738,7 @@ def exl2_stream():
         return Response(generate(), content_type='text/event-stream')
 
     except Exception as e:
-        return handle_api_error("Could not generate exl2-stream, encountered error: ", e)
+        return handle_api_error("Error generating exl2-stream: ", e)
 
 
 def create_fim_content(prefix: str, suffix: str, middle: str, language: str = 'python') -> str:
@@ -4870,7 +4917,7 @@ def exl2_fim_stream():
 
 ###################################-------------Exl3 Logic Begins-------------###################################
 
-def prep_for_exl3_generation(req_body:dict) -> tuple[queue.Queue, dict, str]:
+def prep_and_exec_exl3_job(req_body:dict) -> tuple[queue.Queue, dict, str]:
     try:
         # 1. Setup response queue for this specific request
         user_queue = queue.Queue()
@@ -4942,32 +4989,45 @@ def exl3_stream():
 
     try:
         
-        user_queue, job, _, _ = prep_for_exl3_generation(
-            request.json
-        )
+        user_queue, job, _, _ = prep_and_exec_exl3_job(request.json)
+        completed = False
 
         def generate():
+            nonlocal completed
 
-            global STOP_GENERATION
-            STOP_GENERATION = False
+            try:
+                while True:
+                    try:
+                        token = user_queue.get()
+                    except queue.Empty:
+                        '''
+                        SSE heartbeat - lines starting with : are comments
+                        and are ignored by browsers' EventSource.
+                        This block is required for detecting client 
+                        disconnection when waiting on tokens: long prefill, 
+                        tool setup, model stall, upstream latency, etc.
+                        '''
+                        yield ": keepalive\n\n"
+                        continue
 
-            while True:
-                if STOP_GENERATION: # Handle Manual Stop Signal
-                    print("\n\nStopping generation with stop_event\n\n")
+                    if token is None:
+                        completed = True
+                        break
+                    
+                    yield f"data: {json.dumps(token)}\n\n"
+                
+                yield f"event: END\ndata: \"null\"\n\n"
+
+            except GeneratorExit:
+                # Client disconnected / response iterable closed.
+                raise
+
+            finally:
+                if not completed:
                     try:
                         EXL3_GENERATOR.cancel(job)
                     except:
                         pass
-                    STOP_GENERATION = False
-                    break
-                
-                token = user_queue.get()
-                if token is None:
-                    break
-                
-                yield f"data: {json.dumps(token)}\n\n"
-            
-            yield f"event: END\ndata: \"null\"\n\n"
 
             print("\nexl3-stream done\n")
 
@@ -4975,7 +5035,7 @@ def exl3_stream():
         return Response(generate(), content_type='text/event-stream')
     
     except Exception as e:
-        return handle_api_error("Could not generate exl3-stream, encountered error: ", e)
+        return handle_api_error("Error generating exl3-stream: ", e)
 
 
 @app.route('/exl3_fim_stream', methods=['POST'])
@@ -5928,7 +5988,7 @@ def tag_prefix_holdback(text: str, events: list[tuple[str, str]]) -> int:
     for tag, _ in events:
         max_prefix_len = min(len(text), len(tag) - 1)
         '''
-        max prefix can be at most tag length - 1, as the full tag would have been found by find_next_tag()
+        max prefix can be at most tag length - 1, as the full tag would have been found by find-next_tag()
         So the max we need to check is the minimum between the text length and the tag length - 1.
         Full descriptive variable name would be 'max_prefix_length_we_need_to_bother_with_here' !
         '''
@@ -6040,7 +6100,19 @@ def generate_openai_stream_chunks(
             state = apply_state_transition(state, kind) # transition based on the kind of tag found
     
     while True:
-        token = user_queue.get()
+        try:
+            token = user_queue.get(timeout=1)
+        except queue.Empty:
+            '''
+            SSE heartbeat - lines starting with : are comments
+            and are ignored by browsers' EventSource.
+            This block is required for detecting client 
+            disconnection when waiting on tokens: long prefill, 
+            tool setup, model stall, upstream latency, etc.
+            '''
+            yield ": keepalive\n\n"
+            continue
+
         if token is None:   # EOS Signal
             break
 
@@ -6102,7 +6174,11 @@ def handle_transformers_streaming_openai(req_body:dict) -> Response:
         data_queue.put(data)
 
     skip_special_tokens = determine_skip_special_tokens()
-    custom_streamer = CustomTextStreamer(AUTO_PROC_TOK, skip_special_tokens=skip_special_tokens, skip_prompt=True)
+    custom_streamer = CustomTextStreamer(
+        AUTO_PROC_TOK,
+        skip_special_tokens=skip_special_tokens,
+        skip_prompt=True
+    )
     custom_streamer.callback = callback
 
     def llm_task():
@@ -6111,7 +6187,14 @@ def handle_transformers_streaming_openai(req_body:dict) -> Response:
 
         try:
             generation_config["streamer"] = custom_streamer
-            generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])  # StoppingCriteriaList is a container that holds a list of StoppingCriteria objects. In our case, we have only one such object, which is our custom StoppingCriteria class, initialized with the stop_event object.
+            generation_config["stopping_criteria"] = StoppingCriteriaList([StopOnEvent(stop_event)])
+            '''
+            StoppingCriteriaList is a container that holds a 
+            list of StoppingCriteria objects. In our case, 
+            we have only one such object, which is our custom 
+            StoppingCriteria class, initialized with the 
+            `stop_event` object.
+            '''
             MODEL.generate(**inputs, **generation_config) # generate() is a synchronous blocking call!
         except Exception as e:
             data_queue.put(f"Error: {str(e)}") # Pass error to client via queue
@@ -6119,33 +6202,46 @@ def handle_transformers_streaming_openai(req_body:dict) -> Response:
             data_queue.put(None)
             llm_semaphore.release()
 
-    def generate():        
+    completed = False
+    def generate():
+        nonlocal completed
         
-        global STOP_GENERATION
-        STOP_GENERATION = False
-
         try:
             thread = threading.Thread(target=llm_task)
             thread.start()
         except Exception as e:
+            llm_semaphore.release()
             yield f"data: {json.dumps({'error': {'message': str(e), 'type': 'server_error'}})}\n\n"
             return
         
-        chunk_id, created, role_chunk = init_stream_with_role_chunk(
-            "Transformers", base_config['model_id']
-        )
-        yield f"data: {json.dumps(role_chunk)}\n\n"
+        try:
+            chunk_id, created, role_chunk = init_stream_with_role_chunk(
+                "Transformers", base_config['model_id']
+            )
+            yield f"data: {json.dumps(role_chunk)}\n\n"
 
-        yield from generate_openai_stream_chunks(
-            user_queue=data_queue,
-            chunk_id=chunk_id,
-            created=created,
-            backend="Transformers",
-            model_id=base_config['model_id'],
-            request_generation_config=base_config
-        )
+            yield from generate_openai_stream_chunks(
+                user_queue=data_queue,
+                chunk_id=chunk_id,
+                created=created,
+                backend="Transformers",
+                model_id=base_config['model_id'],
+                request_generation_config=base_config
+            )
 
-        STOP_GENERATION = False
+            completed = True
+
+        except GeneratorExit:
+            # Client disconnected / response iterable closed.
+            raise
+
+        finally:
+            if not completed:
+                stop_event.set()
+                try:
+                    thread.join(timeout=1)
+                except:
+                    pass
 
         print("\nOpenAI/transformers-completions-stream done\n")
             
@@ -6192,24 +6288,40 @@ def handle_exl2_streaming_openai(req_body:dict) -> Response:
     print("\n\nOpenAI/exl2-stream route triggered\n\n")
 
     try:
-        user_queue, _, base_config, _ = prep_for_exl2_generation(req_body)
+        user_queue, job, base_config, _ = prep_and_exec_exl2_job(req_body)
+        completed = False
     
         # Streaming Response Generator
         def generate():
+            nonlocal completed
             
-            chunk_id, created, role_chunk = init_stream_with_role_chunk(
-                "ExLlamaV2", base_config['model_id']
-            )
-            yield f"data: {json.dumps(role_chunk)}\n\n"
+            try:
+                chunk_id, created, role_chunk = init_stream_with_role_chunk(
+                    "ExLlamaV2", base_config['model_id']
+                )
+                yield f"data: {json.dumps(role_chunk)}\n\n"
 
-            yield from generate_openai_stream_chunks(
-                user_queue=user_queue,
-                chunk_id=chunk_id,
-                created=created,
-                backend="ExLlamaV2",
-                model_id=base_config['model_id'],
-                request_generation_config=base_config
-            )
+                yield from generate_openai_stream_chunks(
+                    user_queue=user_queue,
+                    chunk_id=chunk_id,
+                    created=created,
+                    backend="ExLlamaV2",
+                    model_id=base_config['model_id'],
+                    request_generation_config=base_config
+                )
+
+                completed = True
+
+            except GeneratorExit:
+                # Client disconnected / response iterable closed.
+                raise
+
+            finally:
+                if not completed:
+                    try:
+                        EXL2_GENERATOR.cancel(job)
+                    except:
+                        pass
             
             print("\nOpenAI/exl2-stream done\n")
 
@@ -6225,7 +6337,7 @@ def handle_exl2_non_streaming_openai(req_body:dict) -> dict:
     print("\n\nOpenAI/exl2-Non-Streaming route triggered\n\n")
 
     try:
-        user_queue, _, base_config, tokenized_messages = prep_for_exl2_generation(req_body)
+        user_queue, _, base_config, tokenized_messages = prep_and_exec_exl2_job(req_body)
 
         # Consume Queue Synchronously (Accumulate Response)
         full_response = ""
@@ -6257,24 +6369,40 @@ def handle_exl3_streaming_openai(req_body:dict) -> Response:
     print("\n\nOpenAI/exl3-stream route triggered\n\n")
 
     try:
-        user_queue, _, base_config, _ = prep_for_exl3_generation(req_body)
+        user_queue, job, base_config, _ = prep_and_exec_exl3_job(req_body)
+        completed = False
 
         # Streaming Response Generator
         def generate():
-            
-            chunk_id, created, role_chunk = init_stream_with_role_chunk(
-                "ExLlamaV3", base_config['model_id']
-            )
-            yield f"data: {json.dumps(role_chunk)}\n\n"
+            nonlocal completed
 
-            yield from generate_openai_stream_chunks(
-                user_queue=user_queue,
-                chunk_id=chunk_id,
-                created=created,
-                backend="ExLlamaV3",
-                model_id=base_config['model_id'],
-                request_generation_config=base_config
-            )
+            try:
+                chunk_id, created, role_chunk = init_stream_with_role_chunk(
+                    "ExLlamaV3", base_config['model_id']
+                )
+                yield f"data: {json.dumps(role_chunk)}\n\n"
+
+                yield from generate_openai_stream_chunks(
+                    user_queue=user_queue,
+                    chunk_id=chunk_id,
+                    created=created,
+                    backend="ExLlamaV3",
+                    model_id=base_config['model_id'],
+                    request_generation_config=base_config
+                )
+
+                completed = True
+
+            except GeneratorExit:
+                # Client disconnected / response iterable closed.
+                raise
+
+            finally:
+                if not completed:
+                    try:
+                        EXL3_GENERATOR.cancel(job)
+                    except:
+                        pass
             
             print("\nexl3-stream done\n")
 
@@ -6290,7 +6418,7 @@ def handle_exl3_non_streaming_openai(req_body:dict) -> dict:
     print("\n\nOpenAI/exl3-Non-Streaming route triggered\n\n")
 
     try:
-        user_queue, _, base_config, tokenized_messages = prep_for_exl3_generation(req_body)
+        user_queue, _, base_config, tokenized_messages = prep_and_exec_exl3_job(req_body)
 
         # Consume Queue Synchronously (Accumulate Response)
         full_response = ""
