@@ -1,24 +1,38 @@
 import os
 
-###---Complete List of HF-Transformers Environment Variables: https://huggingface.co/docs/huggingface_hub/en/package_reference/environment_variables
-# These MUST be set BEFORE `transformers`/`huggingface_hub` are imported below:
-# huggingface_hub reads them at import time (module-level constants), so setting them later has no effect on this process.
-# os.environ is platform-agnostic (Windows/Linux/macOS) - no shell (PowerShell/bash) is involved.
-#
-# We use os.environ.setdefault() so that any value the user has already exported in their
-# shell (PowerShell, bash, zsh, etc.) takes precedence over our defaults below.
-# All other standard HF_* variables (HF_HOME, HF_TOKEN, HF_HUB_DOWNLOAD_TIMEOUT, ...) are
-# never touched here, so the user can configure them purely via their shell environment.
-#
-# To override our defaults, e.g. in PowerShell:
-#   $env:HF_HUB_DISABLE_XET = "false"; $env:HF_XET_HIGH_PERFORMANCE = "true"
-# or in bash/zsh:
-#   export HF_HUB_DISABLE_XET=false HF_XET_HIGH_PERFORMANCE=true
-#
-# Default: classic HTTP downloads (Xet can misbehave). Set HF_HUB_DISABLE_XET=false in your shell to re-enable Xet.
+'''
+### Complete List of HF-Transformers Environment Variables: 
+https://huggingface.co/docs/huggingface_hub/en/package_reference/environment_variables
+
+These MUST be set BEFORE `transformers`/`huggingface_hub` are imported below:
+huggingface_hub reads them at import time (module-level constants), 
+so setting them later has no effect on this process.
+
+NOTE: `os.environ` is platform-agnostic (Windows/Linux/macOS)
+
+We use os.environ.setdefault() so that any value the user has already exported in 
+their shell (PowerShell, bash, zsh, etc.) takes precedence over our defaults below.
+
+All other standard HF_* variables (HF_HOME, HF_TOKEN, HF_HUB_DOWNLOAD_TIMEOUT, ...) are
+never touched here, so the user can configure them purely via their shell environment.
+
+To override the defaults below, e.g. in PowerShell:
+  $env:HF_HUB_DISABLE_XET = "false"; $env:HF_XET_HIGH_PERFORMANCE = "true"
+
+or in bash/zsh:
+  export HF_HUB_DISABLE_XET=false HF_XET_HIGH_PERFORMANCE=true
+
+Default: classic HTTP downloads (Xet can misbehave).
+Set HF_HUB_DISABLE_XET=false in your shell to re-enable Xet.
+
+HF_XET_HIGH_PERFORMANCE: enables high-performance Xet-based transfers 
+(replaces the deprecated HF_HUB_ENABLE_HF_TRANSFER).
+
+No-op while HF_HUB_DISABLE_XET is true, but kept as a knob: if you re-enable Xet 
+via your shell, it comes up in high-performance mode.
+'''
+
 os.environ.setdefault('HF_HUB_DISABLE_XET', 'true')
-# HF_XET_HIGH_PERFORMANCE: enables high-performance Xet-based transfers (replaces the deprecated HF_HUB_ENABLE_HF_TRANSFER).
-# No-op while HF_HUB_DISABLE_XET is true, but kept as a knob: if you re-enable Xet via your shell, it comes up in high-performance mode.
 os.environ.setdefault('HF_XET_HIGH_PERFORMANCE', 'true')
 # os.environ.setdefault('HUGGINGFACE_HUB_CACHE', transformer_models_folder)
 # os.environ.setdefault('TRANSFORMERS_CACHE', transformer_models_folder)
@@ -267,55 +281,101 @@ def _early_os_default_base_dir():
 
 
 def _early_resolve_base_and_config():
-    # Code-local bootstrap pointer (same dir as app.py)
-    bootstrap_path = os.path.join(os.getcwd(), 'waitress_storage_config.json')
+
+    bootstrap_path = os.path.join(
+        os.getcwd(), 'waitress_storage_config.json'
+    )   # Code-local bootstrap pointer (same dir as app.py)
+
     base = _early_os_default_base_dir()
-    cfg_path = os.path.join(os.getcwd(), 'hf_config.json')
+
+    cfg_path = os.path.join(
+        os.getcwd(), 'hf_config.json'
+    )
+
     if os.path.exists(bootstrap_path):
         try:
             with open(bootstrap_path, 'r') as f:
                 boot = json.load(f) or {}
+
             base = boot.get('base_directory', base)
             cfg_path = boot.get('config_path', cfg_path)
         except Exception as e:
-            print(f"Could not read waitress_storage_config.json, defaulting to base dir: {base}. Encountered error: {e}")
+            print(
+                "Could not read waitress_storage_config.json, "
+                f"defaulting to base dir: {base}. Error: {e}"
+            )
 
     try:
         os.makedirs(base, exist_ok=True)
     except Exception as e:
-        print(f"Could not create base directory: {base}. Encountered error: {e}")
+        print(f"Could not create base directory: {base}. Error: {e}")
     
     return base, cfg_path, bootstrap_path
 
+
+
 BASE_DIRECTORY, CONFIG_PATH, BOOTSTRAP_PATH = _early_resolve_base_and_config()
 
-# Create real config if missing - no error handling as an exception should stop execution!
+
+'''
+Create real config if missing - no error 
+handling as an exception should stop execution!
+'''
 if not os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, 'w') as file:
         json.dump({}, file, indent=4)
 
-# Update config with base_directory
+
 try:
-    with open(CONFIG_PATH, 'r+') as file:   # Unlike w, r+ allows updates without overwriting the whole file, but requires seek & truncation alongside the dump!
+    '''
+    Update config with base_directory
+    '''
+    with open(CONFIG_PATH, 'r+') as file:
+        '''
+        Unlike w, r+ allows updates without overwriting 
+        the whole file, but requires seek & truncation 
+        alongside the dump!
+
+        TODO: `if config.get('base_directory') != BASE_DIRECTORY:`, 
+        then move contents of old dir to new dir! 
+        Create & Invoke: 
+        `_move_contents_of_old_dir_to_new_dir(old_dir, new_dir)`
+        '''
         config = json.load(file)
-        '''
-        TODO: `if config.get('base_directory') != BASE_DIRECTORY:`, then move contents of old dir to new dir! 
-        Invoke: `_move_contents_of_old_dir_to_new_dir(old_dir, new_dir)`
-        Verify if referencing system can handle moves first!
-        '''
         config['base_directory'] = BASE_DIRECTORY
-        file.seek(0)    # move file-pointer back to the start of the file before writing!
+        file.seek(0)
         json.dump(config, file, indent=4)
-        file.truncate()    # truncate the file in case new config data is shorter than the original data! Eg: 'very_long_dir_name' -> 'short_dir_name'!
+        file.truncate()
+        '''
+        Move the file-pointer back to the start of the file before 
+        writing with seek(0), and truncate the file in case new 
+        config data is shorter than the original data, example:
+        'very_long_dir_name' -> 'short_dir_name'
+        '''
 except Exception as e:
     print(f"Could not read config.json, encountered error: {e}")
 
-# Ensure botstrap contains only base_directory (so users can move by editing this one knob!)
+
 try:
+    '''
+    Ensure botstrap contains only base_directory,
+    so users can move by editing this one knob
+    
+    NOTE: The string-casting below is required as 
+    Path.resolve() returns a pathlib.Path, and 
+    json.dump() cannot serialize Path objects. 
+    The str() cast converts it to a JSON-compatible string.
+    '''
     with open(BOOTSTRAP_PATH, 'w') as file:
-        json.dump({'base_directory': str(pathlib.Path(BASE_DIRECTORY).resolve()), 'config_path': str(pathlib.Path(CONFIG_PATH).resolve())}, file, indent=4)
+        json.dump({
+            'base_directory': str(pathlib.Path(BASE_DIRECTORY).resolve()),
+            'config_path': str(pathlib.Path(CONFIG_PATH).resolve())
+        }, file, indent=4)
 except Exception as e:
-    print(f"Could not write bootstrap storage_config.json, encountered error: {e}")
+    print(
+        "Could not write bootstrap storage_config.json, "
+        f"encountered error: {e}"
+    )
 
 #######################################################################################################
 
