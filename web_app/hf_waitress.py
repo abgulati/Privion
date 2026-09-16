@@ -270,7 +270,10 @@ def _early_os_default_base_dir():
     try:
         sysname = platform.system()
     except Exception as e:
-        print(f"Could not determine OS, defaulting to 'app' dir. Encountered error: {e}")
+        print(
+            "Could not determine OS, defaulting to 'app' dir. "
+            f"Encountered error: {e}"
+        )
         sysname = ''
     if sysname == 'Windows':
         return 'C:/waitress_storage'
@@ -3818,11 +3821,11 @@ def completions():
                 request.json
             )
 
-            input_length = inputs['input_ids'].shape[-1]
+            prompt_tokens = inputs['input_ids'].shape[-1]
 
             print("\n\nGenerating Transformers-Completions\n\n")
             outputs = MODEL.generate(**inputs, **generation_config) # generate() is a synchronous blocking call!
-            generated_tokens = outputs[0][input_length:]
+            generated_tokens = outputs[0][prompt_tokens:]
             inference_output = AUTO_PROC_TOK.decode(generated_tokens, skip_special_tokens=skip_special_tokens)
             
             print(f"\n\nFinal Output: {inference_output}\n\n")
@@ -3975,13 +3978,13 @@ def completions_stream():
 def vision_stream():
 
     llm_semaphore.acquire()
-    print("\n\nLLM semaphore acquired by /vision_stream\n\n")
+    print("\n\nLLM semaphore acquired by /vision-stream\n\n")
 
     try:
         input_text, pil_image_object_list, generation_config, filename, vision_file_present = get_input_params_for_vision_model(request)
     except Exception as e:
         llm_semaphore.release()
-        return handle_api_error("Could not get input params in vision_stream, encountered error: ", e)
+        return handle_api_error("Could not get input params in vision-stream, encountered error: ", e)
     
     if not vision_file_present:
         pil_image_object_list.append(get_blank_pil_image_object())
@@ -4636,7 +4639,7 @@ def exl2_prompt_fits_within_max_context_length(prompt: str) -> bool:
         return True # Since the above check is simplistic, an error indicates something is amiss, so best to return True to avoid infinite loops and try auto-truncation
 
 
-def prep_and_exec_exl2_job(req_body:dict) -> tuple[queue.Queue, dict, str]:
+def prep_and_exec_exl2_job(req_body:dict) -> tuple[queue.Queue, dict, dict, str, int]:
     try:
         # 1. Setup response queue for this specific request
         user_queue = queue.Queue()
@@ -4668,19 +4671,30 @@ def prep_and_exec_exl2_job(req_body:dict) -> tuple[queue.Queue, dict, str]:
             enable_thinking=base_config['enable_thinking'],
             preserve_thinking=base_config['preserve_thinking']
         )
+
+        input_ids = EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True)
+        prompt_tokens = input_ids.shape[-1]
+
+        max_new_tokens = base_config['max_new_tokens']
+        if max_new_tokens == -1:
+            exl2_context = read_config(['exl2_max_seq_len'])['exl2_max_seq_len']
+            max_new_tokens = exl2_context - prompt_tokens - 256 # Small safety buffer
+            print(f"Adjusted max_new_tokens to {max_new_tokens} based on context and prompt length")
         
         job = ExLlamaV2DynamicJob(
-            input_ids= EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = base_config['max_new_tokens'],
-            stop_conditions = stop_tokens,
-            gen_settings = gen_settings
+            input_ids=input_ids,
+            max_new_tokens=max_new_tokens,
+            stop_conditions=stop_tokens,
+            gen_settings=gen_settings
         )
         
         # 5. Attach Queue & Enqueue to Global Generator (running in background thread)
         job.response_queue = user_queue
         EXL2_GENERATOR.enqueue(job)
 
-        return user_queue, job, base_config, tokenized_messages
+        print(f"\nSuccessfully enqueued ExLlamaV2 Job with {prompt_tokens} prompt tokens\n")
+
+        return user_queue, job, base_config, tokenized_messages, prompt_tokens
     
     except Exception as e:
         handle_local_error("Could not prepare for ExLlamaV2 generation, encountered error: ", e)
@@ -4752,7 +4766,7 @@ def exl2_stream():
 
     try:
         
-        user_queue, job, _, _ = prep_and_exec_exl2_job(request.json)
+        user_queue, job, _, _, _ = prep_and_exec_exl2_job(request.json)
         completed = False
 
         def generate():
@@ -4977,7 +4991,7 @@ def exl2_fim_stream():
 
 ###################################-------------Exl3 Logic Begins-------------###################################
 
-def prep_and_exec_exl3_job(req_body:dict) -> tuple[queue.Queue, dict, str]:
+def prep_and_exec_exl3_job(req_body:dict) -> tuple[queue.Queue, dict, dict, str, int]:
     try:
         # 1. Setup response queue for this specific request
         user_queue = queue.Queue()
@@ -5017,18 +5031,30 @@ def prep_and_exec_exl3_job(req_body:dict) -> tuple[queue.Queue, dict, str]:
             preserve_thinking=base_config['preserve_thinking']
         )
 
+        input_ids = EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True)
+        prompt_tokens = input_ids.shape[-1]
+
+        max_new_tokens = base_config['max_new_tokens']
+        if max_new_tokens == -1:
+            exl3_context = read_config(['exl3_total_context'])['exl3_total_context']
+            max_new_tokens = exl3_context - prompt_tokens - 256 # Small safety buffer
+            print(f"Adjusted max_new_tokens to {max_new_tokens} based on context and prompt length")
+
         job = Job(
-            input_ids= EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True),
-            max_new_tokens = base_config['max_new_tokens'],
-            stop_conditions = stop_token_list,
-            sampler = exl3_sampler
+            input_ids=input_ids,
+            max_new_tokens=max_new_tokens,
+            stop_conditions=stop_token_list,
+            sampler=exl3_sampler,
+            stop_on_loop=(1024, 4)
         )
 
         # 5. Attach Queue & Enqueue to Global Generator (running in background thread)
         job.response_queue = user_queue
         EXL3_GENERATOR.enqueue(job)
 
-        return user_queue, job, base_config, tokenized_messages
+        print(f"\nSuccessfully enqueued ExLlamaV3 Job with {prompt_tokens} prompt tokens\n")
+
+        return user_queue, job, base_config, tokenized_messages, prompt_tokens
     
     except Exception as e:
         handle_local_error("Could not prepare for ExLlamaV3 generation, encountered error: ", e)
@@ -5049,7 +5075,7 @@ def exl3_stream():
 
     try:
         
-        user_queue, job, _, _ = prep_and_exec_exl3_job(request.json)
+        user_queue, job, _, _, _ = prep_and_exec_exl3_job(request.json)
         completed = False
 
         def generate():
@@ -5887,24 +5913,33 @@ def get_openai_stop_chunk(
     created: int,
     backend: str,
     model_id: str,
-    finish_reason: str
+    finish_reason: str,
+    prompt_token_usage: int | None = None,
+    completion_token_usage: int | None = None
 ) -> dict:
 
-    return {
+    chunk = {
         "id": chunk_id,
         "object": "chat.completion.chunk",
         "created": created,
         "model": f"{backend}-{model_id}",
         "system_fingerprint": None,
-        "choices": [
-            {
-                "index": 0,
-                "delta": {},
-                "logprobs": None,
-                "finish_reason": finish_reason
-            }
-        ]
+        "choices": [{
+            "index": 0,
+            "delta": {},
+            "logprobs": None,
+            "finish_reason": finish_reason
+        }]
     }
+
+    if prompt_token_usage is not None and completion_token_usage is not None:
+        chunk['usage'] = {
+            'prompt_tokens': prompt_token_usage,
+            'completion_tokens': completion_token_usage,
+            'total_tokens': prompt_token_usage + completion_token_usage
+        }
+
+    return chunk
 
 
 def generate_openai_non_streaming_response(
@@ -6092,13 +6127,23 @@ def emit_text(text, state, chunk_id, created, backend, model_id):
     )
 
 
+def calculate_final_token_usage(full_response_text: str, backend: str) -> int:
+    if backend == "ExLlamaV2":
+        return EXL2_TOKENIZER.encode(full_response_text, encode_special_tokens=True).shape[-1]
+    elif backend == "ExLlamaV3":
+        return EXL3_TOKENIZER.encode(full_response_text, encode_special_tokens=True).shape[-1]
+    else:
+        return len(full_response_text)  # same logic as Non-Streaming Transformers routes
+
+
 def generate_openai_stream_chunks(
     user_queue: queue.Queue,
     chunk_id: str,
     created: int,
     backend: str,
     model_id: str,
-    request_generation_config: dict
+    request_generation_config: dict,
+    prompt_tokens: int | None = None
 ):
     """
     Generator that consumes tokens from a queue and yields OpenAI-compatible SSE chunks.
@@ -6200,8 +6245,9 @@ def generate_openai_stream_chunks(
         )
         yield f"data: {json.dumps(tool_calls_chunk)}\n\n"
 
+    completion_tokens = calculate_final_token_usage(full_response_text, backend)
     final_chunk = get_openai_stop_chunk(
-        chunk_id, created, backend, model_id, finish_reason
+        chunk_id, created, backend, model_id, finish_reason, prompt_tokens, completion_tokens
     )
     yield f"data: {json.dumps(final_chunk)}\n\n"
     yield "data: [DONE]\n\n"
@@ -6223,6 +6269,7 @@ def handle_transformers_streaming_openai(req_body:dict) -> Response:
 
     try:
         generation_config, inputs, base_config = prep_for_transformers_generation(req_body)
+        prompt_tokens = inputs['input_ids'].shape[-1]
     except Exception as e:
         llm_semaphore.release()
         return jsonify(error={"message": str(e), "type": "server_error"}), 500
@@ -6286,7 +6333,8 @@ def handle_transformers_streaming_openai(req_body:dict) -> Response:
                 created=created,
                 backend="Transformers",
                 model_id=base_config['model_id'],
-                request_generation_config=base_config
+                request_generation_config=base_config,
+                prompt_tokens=prompt_tokens
             )
 
             completed = True
@@ -6320,14 +6368,13 @@ def handle_transformers_non_streaming_openai(req_body:dict) -> dict:
             generation_config, inputs, base_config = prep_for_transformers_generation(req_body)
             skip_special_tokens = determine_skip_special_tokens()
 
-            input_length = inputs['input_ids'].shape[-1]
+            prompt_tokens = inputs['input_ids'].shape[-1]
 
             outputs = MODEL.generate(**inputs, **generation_config)
-            generated_tokens = outputs[0][input_length:]
+            generated_tokens = outputs[0][prompt_tokens:]
             inference_output = AUTO_PROC_TOK.decode(generated_tokens, skip_special_tokens=skip_special_tokens)   # response_string
 
             print("\nOpenAI/transformers-completions-non-streaming done\n")
-            prompt_tokens = len(inputs['input_ids'][0])
             completion_tokens = len(inference_output)
 
             return generate_openai_non_streaming_response(
@@ -6348,7 +6395,7 @@ def handle_exl2_streaming_openai(req_body:dict) -> Response:
     print("\n\nOpenAI/exl2-stream route triggered\n\n")
 
     try:
-        user_queue, job, base_config, _ = prep_and_exec_exl2_job(req_body)
+        user_queue, job, base_config, _, prompt_tokens = prep_and_exec_exl2_job(req_body)
         completed = False
     
         # Streaming Response Generator
@@ -6367,7 +6414,8 @@ def handle_exl2_streaming_openai(req_body:dict) -> Response:
                     created=created,
                     backend="ExLlamaV2",
                     model_id=base_config['model_id'],
-                    request_generation_config=base_config
+                    request_generation_config=base_config,
+                    prompt_tokens=prompt_tokens
                 )
 
                 completed = True
@@ -6397,7 +6445,7 @@ def handle_exl2_non_streaming_openai(req_body:dict) -> dict:
     print("\n\nOpenAI/exl2-Non-Streaming route triggered\n\n")
 
     try:
-        user_queue, _, base_config, tokenized_messages = prep_and_exec_exl2_job(req_body)
+        user_queue, _, base_config, _, prompt_tokens = prep_and_exec_exl2_job(req_body)
 
         # Consume Queue Synchronously (Accumulate Response)
         full_response = ""
@@ -6408,8 +6456,7 @@ def handle_exl2_non_streaming_openai(req_body:dict) -> dict:
             full_response += token
 
         print("\nOpenAI/exl2-non-streaming done\n")
-        prompt_tokens = len(EXL2_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True))
-        completion_tokens = len(EXL2_TOKENIZER.encode(full_response, encode_special_tokens=True))
+        completion_tokens = EXL2_TOKENIZER.encode(full_response, encode_special_tokens=True).shape[-1]
 
         return generate_openai_non_streaming_response(
             model_id=base_config['model_id'],
@@ -6429,7 +6476,7 @@ def handle_exl3_streaming_openai(req_body:dict) -> Response:
     print("\n\nOpenAI/exl3-stream route triggered\n\n")
 
     try:
-        user_queue, job, base_config, _ = prep_and_exec_exl3_job(req_body)
+        user_queue, job, base_config, _, prompt_tokens = prep_and_exec_exl3_job(req_body)
         completed = False
 
         # Streaming Response Generator
@@ -6448,7 +6495,8 @@ def handle_exl3_streaming_openai(req_body:dict) -> Response:
                     created=created,
                     backend="ExLlamaV3",
                     model_id=base_config['model_id'],
-                    request_generation_config=base_config
+                    request_generation_config=base_config,
+                    prompt_tokens=prompt_tokens
                 )
 
                 completed = True
@@ -6478,7 +6526,7 @@ def handle_exl3_non_streaming_openai(req_body:dict) -> dict:
     print("\n\nOpenAI/exl3-Non-Streaming route triggered\n\n")
 
     try:
-        user_queue, _, base_config, tokenized_messages = prep_and_exec_exl3_job(req_body)
+        user_queue, _, base_config, _, prompt_tokens = prep_and_exec_exl3_job(req_body)
 
         # Consume Queue Synchronously (Accumulate Response)
         full_response = ""
@@ -6489,8 +6537,7 @@ def handle_exl3_non_streaming_openai(req_body:dict) -> dict:
             full_response += token
         
         print("\nOpenAI/exl3-non-streaming done\n")
-        prompt_tokens = len(EXL3_TOKENIZER.encode(tokenized_messages, encode_special_tokens=True))
-        completion_tokens = len(EXL3_TOKENIZER.encode(full_response, encode_special_tokens=True))
+        completion_tokens = EXL3_TOKENIZER.encode(full_response, encode_special_tokens=True).shape[-1]
         
         return generate_openai_non_streaming_response(
             model_id=base_config['model_id'],
