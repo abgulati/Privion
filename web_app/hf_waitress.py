@@ -4775,7 +4775,7 @@ def exl2_stream():
             try:
                 while True:
                     try:
-                        token = user_queue.get(timeout=0.5)
+                        token = user_queue.get(timeout=1.0)
                     except queue.Empty:
                         '''
                         SSE heartbeat - lines starting with : are comments
@@ -5084,7 +5084,7 @@ def exl3_stream():
             try:
                 while True:
                     try:
-                        token = user_queue.get()
+                        token = user_queue.get(timeout=1.0)
                     except queue.Empty:
                         '''
                         SSE heartbeat - lines starting with : are comments
@@ -6206,7 +6206,7 @@ def generate_openai_stream_chunks(
     
     while True:
         try:
-            token = user_queue.get(timeout=1)
+            token = user_queue.get(timeout=1.0)
         except queue.Empty:
             '''
             SSE heartbeat - lines starting with : are comments
