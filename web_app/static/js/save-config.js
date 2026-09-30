@@ -418,7 +418,7 @@ function getHfWaitressConfig() {
     let hf_config = {
         // 'model_id': document.getElementById('hf-waitress-llm-custom-dropdown-selected-value').textContent,
         'model_id': CustomDropdown.registry.get('llm').getSelectedValue(),
-        'torch_device_map': document.getElementById('hf_waitress_torch_device_map_choice').value,
+        'torch_device_map': document.getElementById('hf_waitress_torch_device_map_choice').value.toLowerCase(),
         'torch_dtype': document.getElementById('hf_waitress_torch_dtype_choice').value,
         'use_flash_attention_2': document.getElementById('hf_waitress_use_flash_attention_2_checkbox').checked,
         'trust_remote_code': document.getElementById('hf_waitress_trust_remote_code_yes').checked,
